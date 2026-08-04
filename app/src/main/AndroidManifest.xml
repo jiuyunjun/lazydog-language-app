@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- AI 服务与 Azure Speech 都是在线依赖。 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- 无账户、密钥存本机：禁止系统备份把本地数据带上云。 -->
     <application
         android:allowBackup="false"

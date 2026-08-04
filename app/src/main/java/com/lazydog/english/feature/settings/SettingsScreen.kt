@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -22,10 +23,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.core.data.UserPreferences
+import com.lazydog.english.core.network.OpenAiCompatClient
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -45,8 +53,33 @@ fun SettingsScreen(
             append(topics.take(2).joinToString("、"))
         }
     }
-    val aiSummary = "$aiModel · 内置本地配置"
+    val scope = rememberCoroutineScope()
+    var aiTestState by remember { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
+
+    val aiSummary = aiTestState ?: "$aiModel · 内置本地配置，点击测试连接"
     val speechSummary = "内置本地配置 · $speechRegion"
+
+    fun runAiConnectionTest() {
+        if (testing) return
+        testing = true
+        aiTestState = "正在测试连接…"
+        scope.launch {
+            val client = OpenAiCompatClient(
+                baseUrl = prefs.aiBaseUrl.first(),
+                apiKey = prefs.aiApiKey.first(),
+            )
+            val model = prefs.aiModel.first()
+            aiTestState = when (val result = client.testConnection(model)) {
+                is OpenAiCompatClient.ConnectionResult.Success ->
+                    if (result.modelListed) "连接正常，$model 可用"
+                    else "连接正常，但模型列表里没有 $model（共 ${result.modelCount} 个）"
+                is OpenAiCompatClient.ConnectionResult.Failure ->
+                    "连接失败：${result.reason}"
+            }
+            testing = false
+        }
+    }
 
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
@@ -63,7 +96,7 @@ fun SettingsScreen(
         SettingsRow(Icons.Outlined.Interests, "学习目标与兴趣", goalSummary)
 
         SettingsGroupTitle("服务")
-        SettingsRow(Icons.Outlined.SmartToy, "AI 服务", aiSummary)
+        SettingsRow(Icons.Outlined.SmartToy, "AI 服务", aiSummary, onClick = ::runAiConnectionTest)
         SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", speechSummary)
 
         SettingsGroupTitle("提醒")
@@ -89,8 +122,14 @@ private fun SettingsGroupTitle(title: String) {
 }
 
 @Composable
-private fun SettingsRow(icon: ImageVector, name: String, value: String) {
+private fun SettingsRow(
+    icon: ImageVector,
+    name: String,
+    value: String,
+    onClick: (() -> Unit)? = null,
+) {
     ListItem(
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
         headlineContent = { Text(name) },
         supportingContent = {
             Text(
