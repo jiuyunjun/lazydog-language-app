@@ -59,3 +59,9 @@
 
 - 状态：已确认
 - 决定：全部文本文件使用 UTF-8；每个完成任务形成独立 Git 提交；ChatGPT/Claude 使用标准 handoff。
+
+## D-012：本地写死服务配置（替代 D-009 的“设置页保存”部分）
+
+- 状态：已确认（2026-08-04，用户决定）
+- 决定：私人使用阶段，AI 与 Azure Speech 配置写死在 `core/config/LocalEnv.kt`，该文件被 `.gitignore` 忽略，仓库只保留 `LocalEnv.kt.example` 模板。onboarding 不再要求用户填写服务配置；DataStore 中存过的值优先于 LocalEnv，后续开放设置页手动配置时无需改读取逻辑。
+- 原因：单人使用，降低每次安装的配置成本。“不将密钥提交到 Git”的底线不变。

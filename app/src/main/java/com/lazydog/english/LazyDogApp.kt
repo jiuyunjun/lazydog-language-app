@@ -18,9 +18,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.feature.main.MainScreen
-import com.lazydog.english.feature.onboarding.AiServiceScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
-import com.lazydog.english.feature.onboarding.SpeechScreen
 import com.lazydog.english.feature.onboarding.WelcomeScreen
 import com.lazydog.english.feature.session.LearningSessionScreen
 import kotlinx.coroutines.launch
@@ -28,9 +26,7 @@ import kotlinx.coroutines.launch
 object Routes {
     const val Onboarding = "onboarding"
     const val OnboardingWelcome = "onboarding/welcome"
-    const val OnboardingAi = "onboarding/ai"
     const val OnboardingGoals = "onboarding/goals"
-    const val OnboardingSpeech = "onboarding/speech"
     const val Main = "main"
     const val Session = "session"
 }
@@ -93,20 +89,10 @@ private fun NavGraphBuilder.onboardingGraph(
 ) {
     navigation(startDestination = Routes.OnboardingWelcome, route = Routes.Onboarding) {
         composable(Routes.OnboardingWelcome) {
-            WelcomeScreen(onStart = { navigateNext(Routes.OnboardingAi) })
+            WelcomeScreen(onStart = { navigateNext(Routes.OnboardingGoals) })
         }
-        composable(Routes.OnboardingAi) {
-            val scope = rememberCoroutineScope()
-            AiServiceScreen(
-                onBack = navigateBack,
-                onNext = { baseUrl, apiKey, model ->
-                    scope.launch {
-                        prefs.saveAiConfig(baseUrl, apiKey, model)
-                        navigateNext(Routes.OnboardingGoals)
-                    }
-                },
-            )
-        }
+        // AI 服务与朗读服务改为读取 LocalEnv 写死的本地配置，不再让用户在 onboarding 里填写。
+        // 对应的 AiServiceScreen / SpeechScreen 暂时保留，后续开放手动配置时再接回来。
         composable(Routes.OnboardingGoals) {
             val scope = rememberCoroutineScope()
             GoalsScreen(
@@ -114,15 +100,9 @@ private fun NavGraphBuilder.onboardingGraph(
                 onNext = { goal, topics, minutes ->
                     scope.launch {
                         prefs.saveLearningGoals(goal, topics, minutes)
-                        navigateNext(Routes.OnboardingSpeech)
+                        finishOnboarding()
                     }
                 },
-            )
-        }
-        composable(Routes.OnboardingSpeech) {
-            SpeechScreen(
-                onBack = navigateBack,
-                onFinish = finishOnboarding,
             )
         }
     }

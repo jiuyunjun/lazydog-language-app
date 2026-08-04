@@ -35,8 +35,8 @@ fun SettingsScreen(
     val dailyMinutes by prefs.dailyMinutes.collectAsState(initial = 12)
     val goal by prefs.learningGoal.collectAsState(initial = "")
     val topics by prefs.topics.collectAsState(initial = emptySet())
-    val aiBaseUrl by prefs.aiBaseUrl.collectAsState(initial = "")
     val aiModel by prefs.aiModel.collectAsState(initial = "")
+    val speechRegion by prefs.speechRegion.collectAsState(initial = "")
 
     val goalSummary = buildString {
         append(goal.ifBlank { "未设置" })
@@ -45,7 +45,8 @@ fun SettingsScreen(
             append(topics.take(2).joinToString("、"))
         }
     }
-    val aiSummary = if (aiBaseUrl.isBlank()) "未配置" else "$aiModel · 连接测试待实现"
+    val aiSummary = "$aiModel · 内置本地配置"
+    val speechSummary = "内置本地配置 · $speechRegion"
 
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
@@ -63,7 +64,7 @@ fun SettingsScreen(
 
         SettingsGroupTitle("服务")
         SettingsRow(Icons.Outlined.SmartToy, "AI 服务", aiSummary)
-        SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", "未配置，朗读暂不可用")
+        SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", speechSummary)
 
         SettingsGroupTitle("提醒")
         SettingsRow(Icons.Outlined.Notifications, "学习提醒", "后续版本提供")

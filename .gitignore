@@ -25,3 +25,6 @@ secrets.properties
 # OS
 .DS_Store
 Thumbs.db
+
+# Local hardcoded credentials (see LocalEnv.kt.example)
+LocalEnv.kt

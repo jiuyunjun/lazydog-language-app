@@ -41,7 +41,7 @@ fun GoalsScreen(
 
     OnboardingStepScaffold(
         title = "学什么、学多久",
-        step = 3,
+        step = 2,
         onBack = onBack,
         bottomBar = {
             OnboardingBottomBar {

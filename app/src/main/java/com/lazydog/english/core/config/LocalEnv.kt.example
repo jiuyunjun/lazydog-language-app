@@ -1,0 +1,16 @@
+package com.lazydog.english.core.config
+
+/**
+ * LocalEnv 模板。复制为 LocalEnv.kt 并填入真实密钥（LocalEnv.kt 已被 .gitignore 忽略）。
+ */
+object LocalEnv {
+
+    // ===== OpenAI 兼容接口 =====
+    const val AI_BASE_URL = "https://api.openai.com/v1"
+    const val AI_API_KEY = "sk-REPLACE_ME"
+    const val AI_MODEL = "gpt-4o-mini"
+
+    // ===== Azure Speech SDK =====
+    const val SPEECH_KEY = "REPLACE_ME"
+    const val SPEECH_REGION = "eastasia"
+}

@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 fun OnboardingStepScaffold(
     title: String,
     step: Int,
-    totalSteps: Int = 4,
+    totalSteps: Int = 2,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit,
     content: @Composable () -> Unit,
