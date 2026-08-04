@@ -42,6 +42,11 @@ android {
     }
 }
 
+ksp {
+    // 导出 Room schema，给后续版本做迁移测试用。
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)

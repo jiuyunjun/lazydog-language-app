@@ -1,5 +1,8 @@
 package com.lazydog.english.core.model
 
+/** 知识项类型。数据库里存 name 字符串。 */
+enum class KnowledgeType { Vocabulary, Grammar }
+
 /** 知识项掌握阶段，五档，允许回退（ARCHITECTURE.md KnowledgeItem.stage）。 */
 enum class KnowledgeStage(val label: String) {
     Unseen("未接触"),
