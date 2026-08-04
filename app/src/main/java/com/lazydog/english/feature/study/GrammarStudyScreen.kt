@@ -70,9 +70,11 @@ fun GrammarStudyScreen(
 
     var phase by remember { mutableStateOf<GrammarPhase>(GrammarPhase.Idle) }
     var focus by rememberSaveable { mutableStateOf("") }
+    var progressChars by remember { mutableStateOf(0) }
 
     fun generate() {
         phase = GrammarPhase.Generating
+        progressChars = 0
         scope.launch {
             val known = repository.grammar.first().map { it.detail.name }.take(100)
             val result = app.contentGenerator.generateGrammarLesson(
@@ -81,6 +83,7 @@ fun GrammarStudyScreen(
                     focus = focus.trim().ifBlank { null },
                     knownGrammar = known,
                 ),
+                onProgress = { chars -> progressChars = chars },
             )
             phase = when (result) {
                 is GenerationResult.Success -> GrammarPhase.Showing(result.data, saved = false)
@@ -149,7 +152,10 @@ fun GrammarStudyScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     CircularProgressIndicator()
-                    Text("AI 正在备课…", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = if (progressChars > 0) "AI 正在备课… 已生成 $progressChars 字" else "AI 正在备课…",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
                 is GrammarPhase.Failed -> Column(
                     modifier = Modifier

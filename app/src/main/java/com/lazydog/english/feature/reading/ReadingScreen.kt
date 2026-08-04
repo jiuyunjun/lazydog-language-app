@@ -111,6 +111,9 @@ fun ReadingScreen(
         )
     }
     var tappedWord by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var tappedSentence by remember { mutableStateOf<String?>(null) }
+    var sentenceMode by rememberSaveable { mutableStateOf(false) }
+    var progressChars by remember { mutableStateOf(0) }
 
     LaunchedEffect(mode) {
         if (mode is ReadingMode.Open) {
@@ -135,6 +138,7 @@ fun ReadingScreen(
 
     fun generate(topic: String) {
         phase = ReadingPhase.Generating
+        progressChars = 0
         scope.launch {
             val now = System.currentTimeMillis()
             val vocab = app.knowledgeRepository.vocabulary.first()
@@ -159,7 +163,7 @@ fun ReadingScreen(
                 reviewGrammar = dueGrammar,
                 maxNewWords = MAX_NEW_WORDS,
             )
-            when (val result = app.contentGenerator.generateReading(request)) {
+            when (val result = app.contentGenerator.generateReading(request, onProgress = { progressChars = it })) {
                 is GenerationResult.Failure -> phase = ReadingPhase.Failed(result.reason)
                 is GenerationResult.Success -> {
                     val id = readingRepo.saveGenerated(
@@ -228,7 +232,10 @@ fun ReadingScreen(
                 ReadingPhase.PasteInput -> PasteView(onSave = ::savePasted)
                 ReadingPhase.Generating -> CenterColumn {
                     CircularProgressIndicator()
-                    Text("AI 正在写文章，会把到期复习词编进去…", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = if (progressChars > 0) "AI 正在写文章… 已生成 $progressChars 字" else "AI 正在写文章，会把到期复习词编进去…",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
                 ReadingPhase.Loading -> CenterColumn { CircularProgressIndicator() }
                 is ReadingPhase.Failed -> CenterColumn {
@@ -245,7 +252,14 @@ fun ReadingScreen(
                 }
                 is ReadingPhase.Viewing -> MaterialContent(
                     material = p.material,
-                    onWordTap = { word, sentence -> tappedWord = word to sentence },
+                    sentenceMode = sentenceMode,
+                    onModeChange = { sentenceMode = it },
+                    onWordTap = { word, sentence ->
+                        if (sentenceMode) tappedSentence = sentence else tappedWord = word to sentence
+                    },
+                    onTargetWordTap = { target ->
+                        tappedWord = target.term to target.exampleFromText.ifBlank { target.term }
+                    },
                 )
             }
         }
@@ -256,6 +270,13 @@ fun ReadingScreen(
             word = word,
             sentence = sentence,
             onDismiss = { tappedWord = null },
+        )
+    }
+
+    tappedSentence?.let { sentence ->
+        SentenceSheet(
+            sentence = sentence,
+            onDismiss = { tappedSentence = null },
         )
     }
 }
@@ -358,8 +379,15 @@ private fun PasteView(onSave: (title: String, body: String) -> Unit) {
 @Composable
 private fun MaterialContent(
     material: MaterialView,
+    sentenceMode: Boolean,
+    onModeChange: (Boolean) -> Unit,
     onWordTap: (word: String, sentence: String) -> Unit,
+    onTargetWordTap: (ReadingTargetWord) -> Unit,
 ) {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val scope = rememberCoroutineScope()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -371,7 +399,25 @@ private fun MaterialContent(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (material.cefr.isNotBlank()) Tag("难度 ${material.cefr}")
             Tag(if (material.source == ReadingRepository.SOURCE_AI) "AI 定制" else "粘贴导入")
-            Tag("点词可查")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = !sentenceMode,
+                onClick = { onModeChange(false) },
+                label = { Text("点词查词") },
+            )
+            FilterChip(
+                selected = sentenceMode,
+                onClick = { onModeChange(true) },
+                label = { Text("点句讲解") },
+            )
+            IconButton(onClick = { scope.launch { app.speechController.speak(material.body) } }) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                    contentDescription = "朗读全文",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
         ClickableBody(
             body = material.body,
@@ -380,23 +426,46 @@ private fun MaterialContent(
         )
 
         if (material.targetWords.isNotEmpty()) {
-            Text("这篇的目标词", style = MaterialTheme.typography.titleMedium)
+            Text("这篇的目标词 · 点开看讲解", style = MaterialTheme.typography.titleMedium)
             material.targetWords.forEach { target ->
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceContainer,
                     shape = MaterialTheme.shapes.medium,
+                    onClick = { onTargetWordTap(target) },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(target.term, style = MaterialTheme.typography.titleSmall)
-                            Tag(if (target.role == "new") "新词" else "复习")
+                    Row(
+                        modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(target.term, style = MaterialTheme.typography.titleSmall)
+                                Tag(if (target.role == "new") "新词" else "复习")
+                            }
+                            Text(
+                                text = target.meaningZh,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (target.exampleFromText.isNotBlank()) {
+                                Text(
+                                    text = "「${target.exampleFromText}」",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            }
                         }
-                        Text(
-                            text = target.meaningZh,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        IconButton(onClick = { scope.launch { app.speechController.speak(target.term) } }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                                contentDescription = "朗读 ${target.term}",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
                 }
             }
@@ -540,6 +609,7 @@ private fun WordSheet(
     val scope = rememberCoroutineScope()
 
     var inLibrary by remember { mutableStateOf<String?>(null) }
+    var libraryIpa by remember { mutableStateOf("") }
     var explanation by remember { mutableStateOf<WordExplanation?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
@@ -549,6 +619,7 @@ private fun WordSheet(
             .firstOrNull { it.detail.term.equals(word, ignoreCase = true) }
         if (existing != null) {
             inLibrary = existing.detail.meaningZh
+            libraryIpa = existing.detail.ipa
         } else {
             when (val result = app.contentGenerator.explainWord(word, sentence, DEFAULT_LEVEL)) {
                 is GenerationResult.Success -> explanation = result.data
@@ -564,7 +635,7 @@ private fun WordSheet(
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(word, style = MaterialTheme.typography.headlineSmall)
-                explanation?.ipa?.takeIf { it.isNotBlank() }?.let {
+                (explanation?.ipa?.takeIf { it.isNotBlank() } ?: libraryIpa.takeIf { it.isNotBlank() })?.let {
                     Text(
                         text = it,
                         style = MaterialTheme.typography.bodyMedium,
@@ -634,6 +705,80 @@ private fun WordSheet(
             }
             Text(
                 text = "「$sentence」",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(bottom = 24.dp),
+            )
+        }
+    }
+}
+
+/** 点句弹层：整句朗读 + AI 翻译与结构讲解。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SentenceSheet(
+    sentence: String,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val scope = rememberCoroutineScope()
+
+    var explanation by remember { mutableStateOf<com.lazydog.english.domain.generation.SentenceExplanation?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(sentence) {
+        when (val result = app.contentGenerator.explainSentence(sentence, DEFAULT_LEVEL)) {
+            is GenerationResult.Success -> explanation = result.data
+            is GenerationResult.Failure -> error = result.reason
+        }
+    }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = sentence,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { scope.launch { app.speechController.speak(sentence) } }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                        contentDescription = "朗读这句话",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            when {
+                explanation != null -> {
+                    Text(explanation!!.translationZh, style = MaterialTheme.typography.bodyLarge)
+                    if (explanation!!.explanationZh.isNotBlank()) {
+                        Text(
+                            text = explanation!!.explanationZh,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                error != null -> Text(
+                    text = "讲解失败：$error",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                else -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CircularProgressIndicator(modifier = Modifier.padding(4.dp))
+                    Text("AI 在翻译讲解…", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Text(
+                text = "切回「点词查词」可以查单个词。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(bottom = 24.dp),

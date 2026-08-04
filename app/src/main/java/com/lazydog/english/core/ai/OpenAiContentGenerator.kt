@@ -15,9 +15,12 @@ import com.lazydog.english.domain.generation.ReadingTargetGrammar
 import com.lazydog.english.domain.generation.ReadingTargetWord
 import com.lazydog.english.domain.generation.ReadingValidation
 import com.lazydog.english.domain.generation.WordExplanation
+import com.lazydog.english.domain.generation.SentenceExplanation
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -43,10 +46,12 @@ class OpenAiContentGenerator(
 
     override suspend fun generateNewWords(
         request: NewWordsRequest,
+        onProgress: ((Int) -> Unit)?,
     ): GenerationResult<List<GeneratedWord>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildNewWordsPrompt(request),
+            onProgress = onProgress,
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -77,10 +82,12 @@ class OpenAiContentGenerator(
 
     override suspend fun generateGrammarLesson(
         request: GrammarLessonRequest,
+        onProgress: ((Int) -> Unit)?,
     ): GenerationResult<GeneratedGrammarLesson> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildGrammarPrompt(request),
+            onProgress = onProgress,
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -99,10 +106,12 @@ class OpenAiContentGenerator(
 
     override suspend fun generateReading(
         request: ReadingGenerationRequest,
+        onProgress: ((Int) -> Unit)?,
     ): GenerationResult<GeneratedReading> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildReadingPrompt(request),
+            onProgress = onProgress,
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -148,6 +157,27 @@ class OpenAiContentGenerator(
         return GenerationResult.Success(explanation, content.model, PROMPT_VERSION)
     }
 
+    override suspend fun explainSentence(
+        sentence: String,
+        learnerLevel: String,
+    ): GenerationResult<SentenceExplanation> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildExplainSentencePrompt(sentence, learnerLevel),
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<SentenceExplanationPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val explanation = payload.toDomain()
+        if (explanation.translationZh.isBlank()) {
+            return GenerationResult.Failure("没拿到译文")
+        }
+        return GenerationResult.Success(explanation, content.model, PROMPT_VERSION)
+    }
+
     // ---- 请求执行 ----
 
     private sealed interface Completion {
@@ -155,8 +185,13 @@ class OpenAiContentGenerator(
         data class Error(val reason: String) : Completion
     }
 
-    private suspend fun complete(systemPrompt: String, userPrompt: String): Completion {
+    private suspend fun complete(
+        systemPrompt: String,
+        userPrompt: String,
+        onProgress: ((Int) -> Unit)? = null,
+    ): Completion = withContext(Dispatchers.IO) {
         val (baseUrl, apiKey, model) = config()
+        val streaming = onProgress != null
 
         val body = json.encodeToString(
             ChatRequest.serializer(),
@@ -166,6 +201,7 @@ class OpenAiContentGenerator(
                     ChatMessage("system", systemPrompt),
                     ChatMessage("user", userPrompt),
                 ),
+                stream = streaming,
             ),
         )
         val request = Request.Builder()
@@ -178,25 +214,68 @@ class OpenAiContentGenerator(
         repeat(2) { attempt ->
             try {
                 okHttpClient.newCall(request).await().use { response ->
-                    val text = response.body?.string().orEmpty()
                     if (response.isSuccessful) {
-                        val chat = decode<ChatResponse>(text)
-                        val content = chat?.choices?.firstOrNull()?.message?.content
-                        return if (content.isNullOrBlank()) {
-                            Completion.Error("AI 返回为空")
+                        return@withContext if (streaming) {
+                            readStreamed(response, model, onProgress!!)
                         } else {
-                            Completion.Content(extractJson(content), chat.model.ifBlank { model })
+                            readWhole(response, model)
                         }
                     }
                     lastReason = "HTTP ${response.code}"
-                    if (response.code !in RETRYABLE_CODES) return Completion.Error(lastReason)
+                    if (response.code !in RETRYABLE_CODES) {
+                        return@withContext Completion.Error(lastReason)
+                    }
                 }
             } catch (e: IOException) {
                 lastReason = "网络错误：${e.message ?: e.javaClass.simpleName}"
             }
             if (attempt == 0) delay(retryDelayMs)
         }
-        return Completion.Error("$lastReason（已重试 1 次）")
+        Completion.Error("$lastReason（已重试 1 次）")
+    }
+
+    private fun readWhole(response: okhttp3.Response, fallbackModel: String): Completion {
+        val text = response.body?.string().orEmpty()
+        val chat = decode<ChatResponse>(text)
+        val content = chat?.choices?.firstOrNull()?.message?.content
+        return if (content.isNullOrBlank()) {
+            Completion.Error("AI 返回为空")
+        } else {
+            Completion.Content(extractJson(content), chat.model.ifBlank { fallbackModel })
+        }
+    }
+
+    /** 读 SSE 流：每收到一段就回调累计字符数。流中断不重试（避免重复计费），直接报错。 */
+    private fun readStreamed(
+        response: okhttp3.Response,
+        fallbackModel: String,
+        onProgress: (Int) -> Unit,
+    ): Completion {
+        val source = response.body?.source() ?: return Completion.Error("AI 返回为空")
+        val builder = StringBuilder()
+        var model = ""
+        try {
+            while (true) {
+                val line = source.readUtf8Line() ?: break
+                if (!line.startsWith("data:")) continue
+                val data = line.removePrefix("data:").trim()
+                if (data == "[DONE]") break
+                val chunk = decode<StreamChunk>(data) ?: continue
+                if (model.isBlank()) model = chunk.model
+                val delta = chunk.choices.firstOrNull()?.delta?.content
+                if (!delta.isNullOrEmpty()) {
+                    builder.append(delta)
+                    onProgress(builder.length)
+                }
+            }
+        } catch (e: IOException) {
+            return Completion.Error("流式传输中断：${e.message ?: e.javaClass.simpleName}")
+        }
+        return if (builder.isBlank()) {
+            Completion.Error("AI 返回为空")
+        } else {
+            Completion.Content(extractJson(builder.toString()), model.ifBlank { fallbackModel })
+        }
     }
 
     private inline fun <reified T> decode(text: String): T? =
@@ -215,6 +294,19 @@ class OpenAiContentGenerator(
         val model: String,
         val messages: List<ChatMessage>,
         @SerialName("response_format") val responseFormat: ResponseFormat = ResponseFormat(),
+        val stream: Boolean = false,
+    )
+
+    @Serializable
+    private data class StreamDelta(val content: String = "")
+
+    @Serializable
+    private data class StreamChoice(val delta: StreamDelta = StreamDelta())
+
+    @Serializable
+    private data class StreamChunk(
+        val model: String = "",
+        val choices: List<StreamChoice> = emptyList(),
     )
 
     @Serializable
@@ -290,6 +382,14 @@ class OpenAiContentGenerator(
                 ReadingQuestion(it.promptZh.trim(), it.options, it.answerIndex, it.explanationZh.trim())
             },
         )
+    }
+
+    @Serializable
+    private data class SentenceExplanationPayload(
+        val translationZh: String = "",
+        val explanationZh: String = "",
+    ) {
+        fun toDomain() = SentenceExplanation(translationZh.trim(), explanationZh.trim())
     }
 
     @Serializable
@@ -384,6 +484,12 @@ class OpenAiContentGenerator(
                     """"targetGrammar":[{"name":"...","exampleFromText":"...","explanationZh":"..."}],""" +
                     """"comprehensionQuestions":[{"promptZh":"...","options":["..."],"answerIndex":0,"explanationZh":"..."}]}""",
             )
+        }
+
+        internal fun buildExplainSentencePrompt(sentence: String, level: String): String = buildString {
+            appendLine("把这句英文翻译成中文，并给水平 $level 的中文母语学习者用一两句话讲讲句子结构或值得注意的用法：")
+            appendLine(sentence)
+            appendLine("""输出 JSON schema：{"translationZh":"...","explanationZh":"..."}""")
         }
 
         internal fun buildExplainWordPrompt(term: String, sentence: String, level: String): String = buildString {

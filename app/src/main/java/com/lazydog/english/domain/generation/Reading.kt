@@ -51,6 +51,13 @@ data class GeneratedReading(
     val comprehensionQuestions: List<ReadingQuestion>,
 )
 
+/** 整句的翻译与讲解（点句操作用）。 */
+data class SentenceExplanation(
+    val translationZh: String,
+    /** 句子结构 / 语法点的简短说明，可空。 */
+    val explanationZh: String,
+)
+
 /** 单词在语境里的解释（点词查询用）。 */
 data class WordExplanation(
     val term: String,

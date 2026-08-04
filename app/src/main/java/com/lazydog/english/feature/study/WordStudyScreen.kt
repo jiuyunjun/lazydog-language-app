@@ -83,6 +83,7 @@ fun WordStudyScreen(
     var phase by remember { mutableStateOf<WordStudyPhase>(WordStudyPhase.Loading) }
     var reviewedCount by remember { mutableStateOf(0) }
     var newLearnedCount by remember { mutableStateOf(0) }
+    var progressChars by remember { mutableStateOf(0) }
 
     // 进来先取到期复习；没有就直接进入“要不要新词”。
     LaunchedEffect(Unit) {
@@ -106,6 +107,7 @@ fun WordStudyScreen(
 
     fun generateNewWords() {
         phase = WordStudyPhase.Generating
+        progressChars = 0
         scope.launch {
             val prefs = app.userPreferences
             val known = repository.vocabulary.first().map { it.detail.term }.take(200)
@@ -116,6 +118,7 @@ fun WordStudyScreen(
                     topics = prefs.topics.first().toList(),
                     knownTerms = known,
                 ),
+                onProgress = { chars -> progressChars = chars },
             )
             phase = when (result) {
                 is GenerationResult.Success -> WordStudyPhase.Cards(
@@ -189,7 +192,10 @@ fun WordStudyScreen(
                 WordStudyPhase.Loading -> CenterHint { CircularProgressIndicator() }
                 WordStudyPhase.Generating -> CenterHint {
                     CircularProgressIndicator()
-                    Text("AI 正在挑词…", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = if (progressChars > 0) "AI 正在挑词… 已生成 $progressChars 字" else "AI 正在挑词…",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
                 is WordStudyPhase.Cards -> {
                     val card = p.cards[p.index]

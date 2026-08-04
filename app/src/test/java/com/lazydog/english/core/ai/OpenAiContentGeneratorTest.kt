@@ -58,12 +58,19 @@ class OpenAiContentGeneratorTest {
         retryDelayMs = 1,
     )
 
-    private fun chatBody(content: String): String {
-        val escaped = content
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-        return """{"model":"gpt-test","choices":[{"message":{"role":"assistant","content":"$escaped"}}]}"""
+    private fun escape(content: String): String = content
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+
+    private fun chatBody(content: String): String =
+        """{"model":"gpt-test","choices":[{"message":{"role":"assistant","content":"${escape(content)}"}}]}"""
+
+    private fun sseBody(vararg parts: String): String = buildString {
+        parts.forEach { part ->
+            append("data: {\"model\":\"gpt-test\",\"choices\":[{\"delta\":{\"content\":\"${escape(part)}\"}}]}\n\n")
+        }
+        append("data: [DONE]\n\n")
     }
 
     private val wordsJson =
@@ -130,6 +137,25 @@ class OpenAiContentGeneratorTest {
         val failure = result as GenerationResult.Failure
         assertTrue(failure.reason.contains("401"))
         assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `streaming accumulates deltas and reports progress`() = runBlocking {
+        val half = wordsJson.length / 2
+        server.enqueue(
+            MockResponse().setBody(sseBody(wordsJson.substring(0, half), wordsJson.substring(half))),
+        )
+
+        val progress = mutableListOf<Int>()
+        val result = generator().generateNewWords(wordsRequest) { progress.add(it) }
+
+        val success = result as GenerationResult.Success
+        assertEquals(listOf("curb"), success.data.map { it.term })
+        assertEquals(2, progress.size)
+        assertTrue(progress.last() > progress.first())
+
+        val recorded = server.takeRequest()
+        assertTrue(recorded.body.readUtf8().contains("\"stream\":true"))
     }
 
     @Test

@@ -7,12 +7,22 @@ package com.lazydog.english.domain.generation
  */
 interface LearningContentGenerator {
 
-    suspend fun generateNewWords(request: NewWordsRequest): GenerationResult<List<GeneratedWord>>
+    /** [onProgress] 收到已生成的字符数，用于长请求的进度展示；实现应流式请求。 */
+    suspend fun generateNewWords(
+        request: NewWordsRequest,
+        onProgress: ((Int) -> Unit)? = null,
+    ): GenerationResult<List<GeneratedWord>>
 
-    suspend fun generateGrammarLesson(request: GrammarLessonRequest): GenerationResult<GeneratedGrammarLesson>
+    suspend fun generateGrammarLesson(
+        request: GrammarLessonRequest,
+        onProgress: ((Int) -> Unit)? = null,
+    ): GenerationResult<GeneratedGrammarLesson>
 
     /** 生成渐进式阅读短文，返回前已通过 ReadingValidation。 */
-    suspend fun generateReading(request: ReadingGenerationRequest): GenerationResult<GeneratedReading>
+    suspend fun generateReading(
+        request: ReadingGenerationRequest,
+        onProgress: ((Int) -> Unit)? = null,
+    ): GenerationResult<GeneratedReading>
 
     /** 点词解释：结合所在句子解释一个词。 */
     suspend fun explainWord(
@@ -20,6 +30,12 @@ interface LearningContentGenerator {
         sentenceContext: String,
         learnerLevel: String,
     ): GenerationResult<WordExplanation>
+
+    /** 整句翻译加讲解（阅读里的点句操作）。 */
+    suspend fun explainSentence(
+        sentence: String,
+        learnerLevel: String,
+    ): GenerationResult<SentenceExplanation>
 }
 
 data class NewWordsRequest(
