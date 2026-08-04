@@ -12,16 +12,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
 import com.lazydog.english.feature.onboarding.WelcomeScreen
 import com.lazydog.english.feature.session.LearningSessionScreen
+import com.lazydog.english.feature.reading.ReadingMode
+import com.lazydog.english.feature.reading.ReadingScreen
 import com.lazydog.english.feature.speaking.SpeakingScreen
 import com.lazydog.english.feature.study.GrammarStudyScreen
 import com.lazydog.english.feature.study.WordStudyScreen
@@ -36,6 +40,11 @@ object Routes {
     const val Speaking = "speaking"
     const val WordStudy = "study/words"
     const val GrammarStudy = "study/grammar"
+    const val ReadingGenerate = "reading/generate"
+    const val ReadingPaste = "reading/paste"
+    const val ReadingOpen = "reading/open/{materialId}"
+
+    fun readingOpen(materialId: Long) = "reading/open/$materialId"
 }
 
 @Composable
@@ -92,6 +101,9 @@ private fun AppNavHost(
                 onStartSpeaking = { navController.navigate(Routes.Speaking) },
                 onStartWordStudy = { navController.navigate(Routes.WordStudy) },
                 onStartGrammarStudy = { navController.navigate(Routes.GrammarStudy) },
+                onStartReading = { navController.navigate(Routes.ReadingGenerate) },
+                onStartReadingPaste = { navController.navigate(Routes.ReadingPaste) },
+                onOpenMaterial = { id -> navController.navigate(Routes.readingOpen(id)) },
             )
         }
 
@@ -119,6 +131,22 @@ private fun AppNavHost(
                 repository = knowledgeRepository,
                 onExit = { navController.popBackStack() },
             )
+        }
+
+        composable(Routes.ReadingGenerate) {
+            ReadingScreen(mode = ReadingMode.Generate, onExit = { navController.popBackStack() })
+        }
+
+        composable(Routes.ReadingPaste) {
+            ReadingScreen(mode = ReadingMode.Paste, onExit = { navController.popBackStack() })
+        }
+
+        composable(
+            route = Routes.ReadingOpen,
+            arguments = listOf(navArgument("materialId") { type = NavType.LongType }),
+        ) { entry ->
+            val materialId = entry.arguments?.getLong("materialId") ?: 0L
+            ReadingScreen(mode = ReadingMode.Open(materialId), onExit = { navController.popBackStack() })
         }
     }
 }

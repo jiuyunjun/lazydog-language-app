@@ -133,6 +133,44 @@ class OpenAiContentGeneratorTest {
     }
 
     @Test
+    fun `reading with missing review word is rejected`() = runBlocking {
+        val readingJson =
+            """{"schemaVersion":1,"title":"T","body":"${"word ".repeat(60)}","estimatedCefr":"A2",
+               "targetVocabulary":[],"targetGrammar":[],
+               "comprehensionQuestions":[{"promptZh":"?","options":["A","B"],"answerIndex":0,"explanationZh":"e"}]}"""
+        server.enqueue(MockResponse().setBody(chatBody(readingJson)))
+
+        val result = generator().generateReading(
+            com.lazydog.english.domain.generation.ReadingGenerationRequest(
+                learnerLevel = "A2",
+                topic = "科技",
+                targetLength = 100,
+                reviewVocabulary = listOf("curb"),
+                knownVocabulary = emptyList(),
+                reviewGrammar = emptyList(),
+                maxNewWords = 4,
+            ),
+        )
+
+        val failure = result as GenerationResult.Failure
+        assertTrue(failure.reason.contains("curb"))
+    }
+
+    @Test
+    fun `word explanation parses`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody("""{"term":"curb","ipa":"/kɜːb/","meaningZh":"v. 控制","usageNoteZh":"这里指控制车流。"}"""),
+            ),
+        )
+
+        val result = generator().explainWord("curb", "The city tried to curb traffic.", "A2")
+
+        val success = result as GenerationResult.Success
+        assertEquals("v. 控制", success.data.meaningZh)
+    }
+
+    @Test
     fun `grammar lesson parses and validates`() = runBlocking {
         val lessonJson =
             """{"schemaVersion":1,"name":"过去完成时","patternEn":"had done",

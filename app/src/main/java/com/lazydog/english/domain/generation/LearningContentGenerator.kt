@@ -10,6 +10,16 @@ interface LearningContentGenerator {
     suspend fun generateNewWords(request: NewWordsRequest): GenerationResult<List<GeneratedWord>>
 
     suspend fun generateGrammarLesson(request: GrammarLessonRequest): GenerationResult<GeneratedGrammarLesson>
+
+    /** 生成渐进式阅读短文，返回前已通过 ReadingValidation。 */
+    suspend fun generateReading(request: ReadingGenerationRequest): GenerationResult<GeneratedReading>
+
+    /** 点词解释：结合所在句子解释一个词。 */
+    suspend fun explainWord(
+        term: String,
+        sentenceContext: String,
+        learnerLevel: String,
+    ): GenerationResult<WordExplanation>
 }
 
 data class NewWordsRequest(

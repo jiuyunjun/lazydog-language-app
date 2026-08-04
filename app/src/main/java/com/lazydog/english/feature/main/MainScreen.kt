@@ -11,14 +11,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -29,7 +25,6 @@ import com.lazydog.english.feature.library.LibraryScreen
 import com.lazydog.english.feature.settings.SettingsScreen
 import com.lazydog.english.feature.study.StudyScreen
 import com.lazydog.english.feature.today.TodayScreen
-import kotlinx.coroutines.launch
 
 enum class MainTab(val label: String) {
     Today("今天"),
@@ -54,18 +49,13 @@ fun MainScreen(
     onStartSpeaking: () -> Unit,
     onStartWordStudy: () -> Unit,
     onStartGrammarStudy: () -> Unit,
+    onStartReading: () -> Unit,
+    onStartReadingPaste: () -> Unit,
+    onOpenMaterial: (Long) -> Unit,
 ) {
     var currentTab by rememberSaveable { mutableStateOf(MainTab.Today) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val showNotReady: (String) -> Unit = { feature ->
-        scope.launch {
-            snackbarHostState.showSnackbar("$feature 还没接好，后续版本会来。")
-        }
-    }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             NavigationBar {
                 MainTab.entries.forEach { tab ->
@@ -90,10 +80,12 @@ fun MainScreen(
             )
             MainTab.Study -> StudyScreen(
                 modifier = contentModifier,
-                onEntryClick = showNotReady,
                 onSpeakingClick = onStartSpeaking,
                 onWordsClick = onStartWordStudy,
                 onGrammarClick = onStartGrammarStudy,
+                onReadingClick = onStartReading,
+                onPasteClick = onStartReadingPaste,
+                onMaterialClick = onOpenMaterial,
             )
             MainTab.Library -> LibraryScreen(
                 modifier = contentModifier,

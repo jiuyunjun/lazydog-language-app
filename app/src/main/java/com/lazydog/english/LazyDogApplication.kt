@@ -4,6 +4,7 @@ import android.app.Application
 import com.lazydog.english.core.ai.AiConfig
 import com.lazydog.english.core.ai.OpenAiContentGenerator
 import com.lazydog.english.core.data.KnowledgeRepository
+import com.lazydog.english.core.data.ReadingRepository
 import kotlinx.coroutines.flow.first
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.database.AppDatabase
@@ -25,6 +26,8 @@ class LazyDogApplication : Application() {
     }
 
     val speechController: SpeechController by lazy { SpeechController(userPreferences) }
+
+    val readingRepository: ReadingRepository by lazy { ReadingRepository(database) }
 
     val contentGenerator: LearningContentGenerator by lazy {
         OpenAiContentGenerator(

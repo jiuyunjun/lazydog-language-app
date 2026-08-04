@@ -72,6 +72,30 @@ data class GrammarDetailEntity(
  * 追加式学习事件。掌握状态要能从事件流重算（AGENTS.md §6），
  * 所以事件只增不改不删。
  */
+/**
+ * 阅读材料（ARCHITECTURE.md §5 ReadingMaterial）。
+ * 目标词/语法/题目以 JSON 内嵌存储：它们只随材料整取整存，不值得拆表。
+ * 生成参数（model / promptVersion / schemaVersion / 校验备注）一并保存，便于复现排错。
+ */
+@Entity(tableName = "reading_materials")
+data class ReadingMaterialEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val body: String,
+    /** ai / pasted */
+    val source: String,
+    val topic: String,
+    val estimatedCefr: String,
+    val targetWordsJson: String,
+    val grammarJson: String,
+    val questionsJson: String,
+    val model: String,
+    val promptVersion: Int,
+    val schemaVersion: Int,
+    val validationNotes: String,
+    val createdAt: Long,
+)
+
 @Entity(
     tableName = "learning_events",
     foreignKeys = [

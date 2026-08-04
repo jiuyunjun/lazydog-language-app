@@ -20,31 +20,45 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.lazydog.english.core.model.SampleData
+import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.data.ReadingRepository
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 private data class StudyEntry(
     val icon: ImageVector,
     val name: String,
     val note: String,
-    val onClick: (() -> Unit)? = null,
+    val onClick: () -> Unit,
 )
 
 @Composable
 fun StudyScreen(
     modifier: Modifier = Modifier,
-    onEntryClick: (String) -> Unit,
     onSpeakingClick: () -> Unit,
     onWordsClick: () -> Unit,
     onGrammarClick: () -> Unit,
+    onReadingClick: () -> Unit,
+    onPasteClick: () -> Unit,
+    onMaterialClick: (Long) -> Unit,
 ) {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val recentMaterials by app.readingRepository.recent.collectAsState(initial = emptyList())
+
     val entries = listOf(
         StudyEntry(Icons.Outlined.Abc, "单词", "复习到期 + AI 上新", onClick = onWordsClick),
         StudyEntry(Icons.AutoMirrored.Outlined.Rule, "语法", "让 AI 讲一个", onClick = onGrammarClick),
-        StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "下个版本来"),
+        StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "生成一篇定制短文", onClick = onReadingClick),
         StudyEntry(Icons.Outlined.Mic, "朗读", "读一句，拿反馈", onClick = onSpeakingClick),
     )
 
@@ -71,7 +85,7 @@ fun StudyScreen(
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainer,
                             shape = MaterialTheme.shapes.large,
-                            onClick = entry.onClick ?: { onEntryClick("自由学习「${entry.name}」") },
+                            onClick = entry.onClick,
                             modifier = Modifier.weight(1f),
                         ) {
                             Column(
@@ -99,7 +113,7 @@ fun StudyScreen(
             }
         }
         OutlinedCard(
-            onClick = { onEntryClick("粘贴文本生成材料") },
+            onClick = onPasteClick,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
@@ -116,45 +130,54 @@ fun StudyScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("粘贴一段英文", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        text = "生成你能读的版本 + 生词表",
+                        text = "边读边点词查，生词顺手入库",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "最近用过的材料",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp),
-            )
-            SampleData.recentMaterials.forEach { material ->
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    shape = MaterialTheme.shapes.medium,
-                    onClick = { onEntryClick("打开材料") },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        if (recentMaterials.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "最近的材料",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+                recentMaterials.take(5).forEach { material ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        shape = MaterialTheme.shapes.medium,
+                        onClick = { onMaterialClick(material.id) },
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.Article,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(material.name, style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                text = material.note,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.Article,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
                             )
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(material.title, style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    text = buildString {
+                                        append(formatDate(material.createdAt))
+                                        append(" · ")
+                                        append(
+                                            if (material.source == ReadingRepository.SOURCE_AI) "AI 定制"
+                                            else "粘贴导入",
+                                        )
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
@@ -162,3 +185,8 @@ fun StudyScreen(
         }
     }
 }
+
+private val dateFormatter = DateTimeFormatter.ofPattern("M 月 d 日")
+
+private fun formatDate(epochMillis: Long): String =
+    Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(dateFormatter)
