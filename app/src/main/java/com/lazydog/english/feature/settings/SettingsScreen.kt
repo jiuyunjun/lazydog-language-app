@@ -57,11 +57,13 @@ import kotlinx.coroutines.launch
 
 private data class VoiceOption(val label: String, val voice: String)
 
+/** 全部使用 Azure HD（Dragon HD）音色，比上一代 neural 自然明显。 */
 private val voiceOptions = listOf(
-    VoiceOption("美音 · Jenny（女）", "en-US-JennyNeural"),
-    VoiceOption("美音 · Guy（男）", "en-US-GuyNeural"),
-    VoiceOption("英音 · Sonia（女）", "en-GB-SoniaNeural"),
-    VoiceOption("英音 · Ryan（男）", "en-GB-RyanNeural"),
+    VoiceOption("美音 · Ava（女）", "en-US-Ava:DragonHDLatestNeural"),
+    VoiceOption("美音 · Andrew（男）", "en-US-Andrew:DragonHDLatestNeural"),
+    VoiceOption("美音 · Emma（女）", "en-US-Emma:DragonHDLatestNeural"),
+    VoiceOption("英音 · Sonia（女）", "en-GB-Sonia:DragonHDLatestNeural"),
+    VoiceOption("英音 · Ryan（男）", "en-GB-Ryan:DragonHDLatestNeural"),
 )
 
 private val reminderOptions = listOf("关闭", "08:00", "12:30", "20:00", "21:30")

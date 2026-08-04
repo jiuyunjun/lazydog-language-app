@@ -26,7 +26,7 @@ import kotlinx.coroutines.withContext
 class AzureSpeechProvider(
     subscriptionKey: String,
     region: String,
-    private val voiceName: String = "en-US-JennyNeural",
+    private val voiceName: String = "en-US-Ava:DragonHDLatestNeural",
 ) : SpeechProvider {
 
     private val speechConfig: SpeechConfig =

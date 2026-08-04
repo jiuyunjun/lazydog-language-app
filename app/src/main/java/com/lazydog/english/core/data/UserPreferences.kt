@@ -92,8 +92,9 @@ class UserPreferences(private val context: Context) {
     /** system / light / dark */
     val themeMode: Flow<String> = context.dataStore.data.map { it[Keys.ThemeMode] ?: "system" }
 
-    val ttsVoice: Flow<String> =
-        context.dataStore.data.map { it[Keys.TtsVoice] ?: DEFAULT_TTS_VOICE }
+    val ttsVoice: Flow<String> = context.dataStore.data.map {
+        migrateVoice(it[Keys.TtsVoice]) ?: DEFAULT_TTS_VOICE
+    }
 
     /** 今日已完成的步骤 id；换天自动视为空集合。 */
     fun todayDoneSteps(todayDate: String): Flow<Set<String>> = context.dataStore.data.map {
@@ -191,7 +192,20 @@ class UserPreferences(private val context: Context) {
     }
 
     companion object {
-        const val DEFAULT_TTS_VOICE = "en-US-JennyNeural"
+        /** Azure HD（Dragon HD）音色，比上一代 neural 自然很多，且支持 prosody 语速。 */
+        const val DEFAULT_TTS_VOICE = "en-US-Ava:DragonHDLatestNeural"
+
+        /** 早期版本存过的标准 neural 音色，读取时换成对应的 HD 版本。 */
+        private val legacyVoices = mapOf(
+            "en-US-JennyNeural" to "en-US-Ava:DragonHDLatestNeural",
+            // Guy 没有 HD 版本，美音男声改用 Andrew。
+            "en-US-GuyNeural" to "en-US-Andrew:DragonHDLatestNeural",
+            "en-GB-SoniaNeural" to "en-GB-Sonia:DragonHDLatestNeural",
+            "en-GB-RyanNeural" to "en-GB-Ryan:DragonHDLatestNeural",
+        )
+
+        private fun migrateVoice(stored: String?): String? =
+            stored?.let { legacyVoices[it] ?: it }
     }
 }
 
