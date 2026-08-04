@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
@@ -50,8 +51,10 @@ import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.domain.speaking.AssessmentResult
 import com.lazydog.english.domain.speaking.PronunciationFeedback
 import com.lazydog.english.domain.speaking.SpeakResult
+import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.speaking.SpeechRate
 import com.lazydog.english.domain.speaking.overallComment
+import java.time.LocalDate
 import kotlinx.coroutines.launch
 
 private data class PracticeSentence(val text: String, val sourceNote: String)
@@ -94,6 +97,14 @@ fun SpeakingScreen(
 
     var uiState by remember { mutableStateOf<SpeakingUiState>(SpeakingUiState.Idle) }
     val busy = uiState is SpeakingUiState.Playing || uiState is SpeakingUiState.Listening
+
+    // 拿到过一次发音反馈就算完成今日朗读步骤。
+    LaunchedEffect(uiState is SpeakingUiState.Feedback) {
+        if (uiState is SpeakingUiState.Feedback) {
+            (context.applicationContext as LazyDogApplication).userPreferences
+                .markTodayStepDone(LocalDate.now().toString(), DailyStep.Speaking.id)
+        }
+    }
 
     fun startAssessment() {
         uiState = SpeakingUiState.Listening

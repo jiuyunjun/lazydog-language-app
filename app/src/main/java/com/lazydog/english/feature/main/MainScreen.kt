@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
+import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.feature.library.LibraryScreen
 import com.lazydog.english.feature.settings.SettingsScreen
 import com.lazydog.english.feature.study.StudyScreen
@@ -45,7 +46,6 @@ private val MainTab.icon: ImageVector
 fun MainScreen(
     prefs: UserPreferences,
     knowledgeRepository: KnowledgeRepository,
-    onStartSession: () -> Unit,
     onStartSpeaking: () -> Unit,
     onStartWordStudy: () -> Unit,
     onStartGrammarStudy: () -> Unit,
@@ -76,9 +76,15 @@ fun MainScreen(
         when (currentTab) {
             MainTab.Today -> TodayScreen(
                 modifier = contentModifier,
-                onStartSession = onStartSession,
-                onFreeStudy = { currentTab = MainTab.Study },
                 onStartAssessment = onStartAssessment,
+                onStartStep = { step ->
+                    when (step) {
+                        DailyStep.Words -> onStartWordStudy()
+                        DailyStep.Grammar -> onStartGrammarStudy()
+                        DailyStep.Reading -> onStartReading()
+                        DailyStep.Speaking -> onStartSpeaking()
+                    }
+                },
             )
             MainTab.Study -> StudyScreen(
                 modifier = contentModifier,

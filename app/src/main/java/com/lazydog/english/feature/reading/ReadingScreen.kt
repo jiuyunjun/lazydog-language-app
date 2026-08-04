@@ -57,6 +57,8 @@ import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
 import com.lazydog.english.domain.generation.ReadingTargetWord
 import com.lazydog.english.domain.generation.WordExplanation
+import com.lazydog.english.domain.planning.DailyStep
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -259,6 +261,20 @@ fun ReadingScreen(
                     onTargetWordTap = { target ->
                         tappedWord = target.term to target.exampleFromText.ifBlank { target.term }
                     },
+                    onQuestionsCompleted = {
+                        scope.launch {
+                            // 读完并答完题：今日阅读步骤完成，复习词记一次“语境里遇见”。
+                            app.userPreferences.markTodayStepDone(
+                                LocalDate.now().toString(),
+                                DailyStep.Reading.id,
+                            )
+                            val vocab = app.knowledgeRepository.vocabulary.first()
+                            p.material.targetWords.filter { it.role == "review" }.forEach { target ->
+                                vocab.firstOrNull { it.detail.term.equals(target.term, ignoreCase = true) }
+                                    ?.let { app.knowledgeRepository.recordExposure(it.item.id, "reading") }
+                            }
+                        }
+                    },
                 )
             }
         }
@@ -382,6 +398,7 @@ private fun MaterialContent(
     onModeChange: (Boolean) -> Unit,
     onWordTap: (word: String, sentence: String) -> Unit,
     onTargetWordTap: (ReadingTargetWord) -> Unit,
+    onQuestionsCompleted: () -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
@@ -472,7 +489,7 @@ private fun MaterialContent(
 
         if (material.questions.isNotEmpty()) {
             Text("读懂了吗", style = MaterialTheme.typography.titleMedium)
-            QuestionList(material.questions)
+            QuestionList(material.questions, onAllAnswered = onQuestionsCompleted)
         }
     }
 }
@@ -543,8 +560,15 @@ internal fun sentenceAround(body: String, index: Int): String {
 }
 
 @Composable
-private fun QuestionList(questions: List<ReadingQuestion>) {
+private fun QuestionList(
+    questions: List<ReadingQuestion>,
+    onAllAnswered: () -> Unit,
+) {
     val answers = remember { mutableStateMapOf<Int, Int>() }
+    val allAnswered = answers.size == questions.size && questions.isNotEmpty()
+    LaunchedEffect(allAnswered) {
+        if (allAnswered) onAllAnswered()
+    }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         questions.forEachIndexed { qIndex, question ->
             val selected = answers[qIndex]

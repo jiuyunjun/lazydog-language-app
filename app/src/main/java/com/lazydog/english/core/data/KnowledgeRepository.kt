@@ -104,6 +104,23 @@ class KnowledgeRepository(
 
     suspend fun deleteItem(itemId: Long) = dao.deleteItem(itemId)
 
+    /**
+     * 记录一次“在语境里遇见”事件（如阅读中出现了到期复习词）。
+     * 只追加事件、不改复习计划——遇见不等于想起来（AGENTS.md §6）。
+     */
+    suspend fun recordExposure(itemId: Long, source: String) {
+        dao.insertEvent(
+            LearningEventEntity(
+                itemId = itemId,
+                source = source,
+                activity = "exposure",
+                rating = null,
+                responseMillis = null,
+                occurredAt = now().toEpochMilli(),
+            ),
+        )
+    }
+
     private suspend fun insertNewItem(type: KnowledgeType): Long {
         val at = now()
         val state = MemoryState.initial(at)

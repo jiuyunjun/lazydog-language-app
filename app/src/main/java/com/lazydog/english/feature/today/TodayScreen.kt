@@ -13,45 +13,65 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.Abc
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Quiz
-import androidx.compose.material.icons.outlined.Replay
+import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material.icons.outlined.Insights
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
-import com.lazydog.english.core.model.SampleData
-import com.lazydog.english.core.model.TaskKind
-import com.lazydog.english.core.model.TodayTaskPreview
-import java.time.DayOfWeek
+import com.lazydog.english.domain.planning.DailyPlanner
+import com.lazydog.english.domain.planning.DailyStep
 import java.time.LocalDate
+import kotlinx.coroutines.launch
+
+private val DailyStep.icon: ImageVector
+    get() = when (this) {
+        DailyStep.Words -> Icons.Outlined.Abc
+        DailyStep.Grammar -> Icons.AutoMirrored.Outlined.Rule
+        DailyStep.Reading -> Icons.AutoMirrored.Outlined.Article
+        DailyStep.Speaking -> Icons.Outlined.Mic
+    }
 
 @Composable
 fun TodayScreen(
     modifier: Modifier = Modifier,
-    onStartSession: () -> Unit,
-    onFreeStudy: () -> Unit,
     onStartAssessment: () -> Unit,
+    onStartStep: (DailyStep) -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
+    val scope = rememberCoroutineScope()
+    val prefs = app.userPreferences
+    val today = remember { LocalDate.now().toString() }
+
     // 初值用占位符，避免 DataStore 首帧前横幅闪现。
-    val learnerLevel by app.userPreferences.learnerLevel.collectAsState(initial = "…")
+    val learnerLevel by prefs.learnerLevel.collectAsState(initial = "…")
+    val dailyMinutes by prefs.dailyMinutes.collectAsState(initial = 12)
+    val doneSteps by prefs.todayDoneSteps(today).collectAsState(initial = emptySet())
+    val dueVocab by app.knowledgeRepository.observeDueCount().collectAsState(initial = 0)
+
+    val plan = remember(dailyMinutes, dueVocab) {
+        DailyPlanner.plan(dailyMinutes, dueVocabCount = dueVocab, dueGrammarCount = 0)
+    }
+    val allDone = plan.isNotEmpty() && plan.all { it.step.id in doneSteps }
+    val nextStep = plan.firstOrNull { it.step.id !in doneSteps }
 
     Column(
         modifier = modifier
@@ -93,7 +113,29 @@ fun TodayScreen(
             }
         }
 
-        SummaryCard()
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = if (allDone) "今天的洋屁放完了" else "今天约 $dailyMinutes 分钟",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = if (allDone) {
+                        "复习计划已经更新，明天见。"
+                    } else if (dueVocab > 0) {
+                        "$dueVocab 个词到期。先还债，再学新的。"
+                    } else {
+                        "没有到期的复习，轻松学点新的。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         Text(
             text = "今天的顺序",
@@ -102,138 +144,93 @@ fun TodayScreen(
             modifier = Modifier.padding(top = 16.dp, bottom = 4.dp, start = 4.dp),
         )
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            SampleData.todayTasks.forEach { task -> TaskRow(task) }
-        }
-
-        Button(
-            onClick = onStartSession,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp)
-                .height(56.dp),
-        ) {
-            Icon(Icons.Outlined.PlayArrow, contentDescription = null)
-            Text(
-                text = "开始今天的学习",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(start = 10.dp),
-            )
-        }
-        TextButton(
-            onClick = onFreeStudy,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-        ) {
-            Text("自由学习")
-        }
-    }
-}
-
-@Composable
-private fun SummaryCard() {
-    Surface(
-        color = MaterialTheme.colorScheme.primaryContainer,
-        shape = MaterialTheme.shapes.extraLarge,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                text = todayDateText(),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = "放洋屁时间到了，今天大约 12 分钟。",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                SummaryStat("14", "个待复习")
-                SummaryStat("5+1", "新词 / 新语法")
-                SummaryStat("1", "篇短文")
+            plan.forEach { planned ->
+                val done = planned.step.id in doneSteps
+                Surface(
+                    onClick = { if (!done) onStartStep(planned.step) },
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (done) Icons.Outlined.CheckCircle else planned.step.icon,
+                            contentDescription = null,
+                            tint = if (done) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = planned.step.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (done) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = if (done) "完成了" else "${planned.note} · 约 ${planned.step.minutes} 分钟",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                        if (!done) {
+                            TextButton(
+                                onClick = {
+                                    scope.launch { prefs.markTodayStepDone(today, planned.step.id) }
+                                },
+                            ) {
+                                Text("跳过", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
             }
-            Text(
-                text = "最近 6 天学了 5 天。断了也没事。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
+        }
+
+        if (allDone) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.TaskAlt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Text(
+                        text = "四步走完。想加练随时去「学习」页。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+        } else if (nextStep != null) {
+            Button(
+                onClick = { onStartStep(nextStep.step) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 16.dp)
+                    .height(56.dp),
+            ) {
+                Icon(Icons.Outlined.PlayArrow, contentDescription = null)
+                Text(
+                    text = if (doneSteps.isEmpty()) "开始今天的学习" else "继续：${nextStep.step.title}",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
         }
     }
-}
-
-@Composable
-private fun SummaryStat(number: String, label: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            text = number,
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-}
-
-@Composable
-private fun TaskRow(task: TodayTaskPreview) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(
-                imageVector = task.kind.icon(),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(task.name, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = task.note,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = task.minutes,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-fun TaskKind.icon(): ImageVector = when (this) {
-    TaskKind.Review -> Icons.Outlined.Replay
-    TaskKind.NewWords -> Icons.Outlined.Abc
-    TaskKind.Grammar -> Icons.AutoMirrored.Outlined.Rule
-    TaskKind.Reading -> Icons.AutoMirrored.Outlined.Article
-    TaskKind.Speaking -> Icons.Outlined.Mic
-    TaskKind.Quiz -> Icons.Outlined.Quiz
-}
-
-private fun todayDateText(): String {
-    val today = LocalDate.now()
-    val weekday = when (today.dayOfWeek) {
-        DayOfWeek.MONDAY -> "星期一"
-        DayOfWeek.TUESDAY -> "星期二"
-        DayOfWeek.WEDNESDAY -> "星期三"
-        DayOfWeek.THURSDAY -> "星期四"
-        DayOfWeek.FRIDAY -> "星期五"
-        DayOfWeek.SATURDAY -> "星期六"
-        DayOfWeek.SUNDAY -> "星期日"
-    }
-    return "${today.monthValue} 月 ${today.dayOfMonth} 日 · $weekday"
 }

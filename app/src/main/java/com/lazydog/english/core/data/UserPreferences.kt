@@ -40,6 +40,8 @@ class UserPreferences(private val context: Context) {
         val LearnerLevelConfidence = intPreferencesKey("learner_level_confidence")
         val AssessedAt = longPreferencesKey("assessed_at")
         val AssessmentStateJson = stringPreferencesKey("assessment_state_json")
+        val TodayDate = stringPreferencesKey("today_date")
+        val TodayDoneSteps = stringSetPreferencesKey("today_done_steps")
         val Topics = stringSetPreferencesKey("topics")
         val DailyMinutes = intPreferencesKey("daily_minutes")
     }
@@ -76,6 +78,11 @@ class UserPreferences(private val context: Context) {
 
     val assessmentStateJson: Flow<String> =
         context.dataStore.data.map { it[Keys.AssessmentStateJson].orEmpty() }
+
+    /** 今日已完成的步骤 id；换天自动视为空集合。 */
+    fun todayDoneSteps(todayDate: String): Flow<Set<String>> = context.dataStore.data.map {
+        if (it[Keys.TodayDate] == todayDate) it[Keys.TodayDoneSteps] ?: emptySet() else emptySet()
+    }
     val topics: Flow<Set<String>> = context.dataStore.data.map { it[Keys.Topics] ?: emptySet() }
     val dailyMinutes: Flow<Int> = context.dataStore.data.map { it[Keys.DailyMinutes] ?: 12 }
 
@@ -128,6 +135,16 @@ class UserPreferences(private val context: Context) {
 
     suspend fun clearAssessmentState() {
         context.dataStore.edit { it.remove(Keys.AssessmentStateJson) }
+    }
+
+    /** 标记今日某步骤完成；日期变了先清空旧进度。 */
+    suspend fun markTodayStepDone(todayDate: String, stepId: String) {
+        context.dataStore.edit {
+            val sameDay = it[Keys.TodayDate] == todayDate
+            val current = if (sameDay) it[Keys.TodayDoneSteps] ?: emptySet() else emptySet()
+            it[Keys.TodayDate] = todayDate
+            it[Keys.TodayDoneSteps] = current + stepId
+        }
     }
 }
 

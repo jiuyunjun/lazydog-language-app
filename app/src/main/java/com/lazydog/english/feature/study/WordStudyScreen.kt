@@ -44,6 +44,8 @@ import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.NewWordsRequest
+import com.lazydog.english.domain.planning.DailyStep
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -83,6 +85,13 @@ fun WordStudyScreen(
     var reviewedCount by remember { mutableStateOf(0) }
     var newLearnedCount by remember { mutableStateOf(0) }
     var progressChars by remember { mutableStateOf(0) }
+
+    // 走到总结页就算完成了今日的单词步骤。
+    LaunchedEffect(phase is WordStudyPhase.Summary) {
+        if (phase is WordStudyPhase.Summary) {
+            app.userPreferences.markTodayStepDone(LocalDate.now().toString(), DailyStep.Words.id)
+        }
+    }
 
     // 进来先取到期复习；没有就直接进入“要不要新词”。
     LaunchedEffect(Unit) {

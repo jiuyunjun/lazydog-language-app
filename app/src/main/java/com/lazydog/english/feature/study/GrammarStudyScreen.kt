@@ -48,6 +48,8 @@ import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GrammarLessonRequest
+import com.lazydog.english.domain.planning.DailyStep
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -99,7 +101,10 @@ fun GrammarStudyScreen(
                 explanationZh = lesson.explanationZh,
                 exampleEn = lesson.goodExampleEn,
             )
-            if (id != null) phase = GrammarPhase.Showing(lesson, saved = true)
+            if (id != null) {
+                phase = GrammarPhase.Showing(lesson, saved = true)
+                app.userPreferences.markTodayStepDone(LocalDate.now().toString(), DailyStep.Grammar.id)
+            }
         }
     }
 
