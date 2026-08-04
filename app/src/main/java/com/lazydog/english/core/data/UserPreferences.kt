@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.lazydog.english.core.config.LocalEnv
+import com.lazydog.english.domain.speaking.SpeechRate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -31,6 +32,8 @@ class UserPreferences(private val context: Context) {
         val AiModel = stringPreferencesKey("ai_model")
         val SpeechKey = stringPreferencesKey("speech_key")
         val SpeechRegion = stringPreferencesKey("speech_region")
+        val SpeechRateName = stringPreferencesKey("speech_rate")
+        val AutoReadWords = booleanPreferencesKey("auto_read_words")
         val LearningGoal = stringPreferencesKey("learning_goal")
         val Topics = stringSetPreferencesKey("topics")
         val DailyMinutes = intPreferencesKey("daily_minutes")
@@ -49,6 +52,10 @@ class UserPreferences(private val context: Context) {
         context.dataStore.data.map { it[Keys.SpeechKey].orDefault(LocalEnv.SPEECH_KEY) }
     val speechRegion: Flow<String> =
         context.dataStore.data.map { it[Keys.SpeechRegion].orDefault(LocalEnv.SPEECH_REGION) }
+    val speechRate: Flow<SpeechRate> =
+        context.dataStore.data.map { SpeechRate.fromName(it[Keys.SpeechRateName]) }
+    val autoReadWords: Flow<Boolean> =
+        context.dataStore.data.map { it[Keys.AutoReadWords] ?: true }
     val learningGoal: Flow<String> = context.dataStore.data.map { it[Keys.LearningGoal].orEmpty() }
     val topics: Flow<Set<String>> = context.dataStore.data.map { it[Keys.Topics] ?: emptySet() }
     val dailyMinutes: Flow<Int> = context.dataStore.data.map { it[Keys.DailyMinutes] ?: 12 }
@@ -59,6 +66,14 @@ class UserPreferences(private val context: Context) {
             it[Keys.AiApiKey] = apiKey.trim()
             it[Keys.AiModel] = model.trim()
         }
+    }
+
+    suspend fun saveSpeechRate(rate: SpeechRate) {
+        context.dataStore.edit { it[Keys.SpeechRateName] = rate.name }
+    }
+
+    suspend fun setAutoReadWords(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AutoReadWords] = enabled }
     }
 
     suspend fun saveSpeechConfig(speechKey: String, region: String) {

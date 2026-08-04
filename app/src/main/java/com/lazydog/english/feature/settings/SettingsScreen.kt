@@ -10,9 +10,11 @@ import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Interests
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.Icon
@@ -33,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.network.AzureSpeechTokenClient
 import com.lazydog.english.core.network.OpenAiCompatClient
+import com.lazydog.english.domain.speaking.SpeechRate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -46,6 +49,8 @@ fun SettingsScreen(
     val topics by prefs.topics.collectAsState(initial = emptySet())
     val aiModel by prefs.aiModel.collectAsState(initial = "")
     val speechRegion by prefs.speechRegion.collectAsState(initial = "")
+    val speechRate by prefs.speechRate.collectAsState(initial = SpeechRate.Normal)
+    val autoRead by prefs.autoReadWords.collectAsState(initial = true)
 
     val goalSummary = buildString {
         append(goal.ifBlank { "未设置" })
@@ -125,6 +130,18 @@ fun SettingsScreen(
         SettingsGroupTitle("外观与音频")
         SettingsRow(Icons.Outlined.Contrast, "主题", "跟随系统")
         SettingsRow(Icons.Outlined.RecordVoiceOver, "发音口音", "美音")
+        SettingsRow(
+            Icons.Outlined.Speed,
+            "朗读语速",
+            "${speechRate.label} · 点击切换",
+            onClick = { scope.launch { prefs.saveSpeechRate(speechRate.next()) } },
+        )
+        SettingsRow(
+            Icons.AutoMirrored.Outlined.VolumeUp,
+            "自动朗读单词",
+            if (autoRead) "开 · 单词出现时自动读一遍" else "关 · 想听就点小喇叭",
+            onClick = { scope.launch { prefs.setAutoReadWords(!autoRead) } },
+        )
 
         SettingsGroupTitle("数据")
         SettingsRow(Icons.Outlined.Shield, "数据与隐私", "导出 / 导入 / 清除 · 后续版本提供")

@@ -6,7 +6,7 @@ package com.lazydog.english.domain.speaking
 interface SpeechProvider {
 
     /** 朗读一段英文示范音频，播放完成后返回。 */
-    suspend fun speak(text: String): SpeakResult
+    suspend fun speak(text: String, rate: SpeechRate = SpeechRate.Normal): SpeakResult
 
     /**
      * 从麦克风录一句朗读并对照 [referenceText] 做发音评估。
@@ -16,6 +16,21 @@ interface SpeechProvider {
 
     /** 释放底层资源。释放后实例不可再用。 */
     fun close()
+}
+
+/** 朗读语速。prosodyRate 是 SSML prosody 的取值。 */
+enum class SpeechRate(val label: String, val prosodyRate: String) {
+    Slow("慢速", "-30%"),
+    Normal("正常", "0%"),
+    Fast("快些", "+15%"),
+    ;
+
+    fun next(): SpeechRate = entries[(ordinal + 1) % entries.size]
+
+    companion object {
+        fun fromName(name: String?): SpeechRate =
+            entries.firstOrNull { it.name == name } ?: Normal
+    }
 }
 
 sealed interface SpeakResult {

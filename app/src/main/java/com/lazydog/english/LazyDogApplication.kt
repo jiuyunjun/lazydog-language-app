@@ -4,6 +4,7 @@ import android.app.Application
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.database.AppDatabase
+import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.domain.scheduling.SimpleIntervalScheduler
 
 /**
@@ -18,4 +19,6 @@ class LazyDogApplication : Application() {
     val knowledgeRepository: KnowledgeRepository by lazy {
         KnowledgeRepository(database, SimpleIntervalScheduler())
     }
+
+    val speechController: SpeechController by lazy { SpeechController(userPreferences) }
 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -31,13 +32,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
@@ -49,9 +54,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.core.model.SampleData
+import com.lazydog.english.core.speech.SpeechController
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /**
  * 第一版学习流：新词（看答案 + 四档自评）→ 语法讲解 → 小测 → 总结。
@@ -194,6 +203,17 @@ private fun WordStep(
     onGrade: (ReviewGrade) -> Unit,
 ) {
     val word = SampleData.newWords[wordIndex]
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val speech: SpeechController = app.speechController
+    val scope = rememberCoroutineScope()
+
+    // 新单词出现时自动读一遍（设置里可关）。
+    LaunchedEffect(wordIndex) {
+        if (app.userPreferences.autoReadWords.first()) speech.speak(word.word)
+    }
+
+    val speakWord: () -> Unit = { scope.launch { speech.speak(word.word) } }
     if (!revealed) {
         Column(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -205,11 +225,20 @@ private fun WordStep(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(word.word, style = MaterialTheme.typography.displayMedium)
-                Text(
-                    text = word.ipa,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = word.ipa,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    IconButton(onClick = speakWord) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                            contentDescription = "再读一遍",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     shape = MaterialTheme.shapes.small,
@@ -249,7 +278,7 @@ private fun WordStep(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Row(
-                    verticalAlignment = Alignment.Bottom,
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(word.word, style = MaterialTheme.typography.headlineLarge)
@@ -258,6 +287,13 @@ private fun WordStep(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    IconButton(onClick = speakWord) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                            contentDescription = "再读一遍",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
                 Text(word.meaningZh, style = MaterialTheme.typography.titleMedium)
                 Surface(
@@ -269,7 +305,20 @@ private fun WordStep(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text(word.exampleEn, style = MaterialTheme.typography.bodyLarge)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = word.exampleEn,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            IconButton(onClick = { scope.launch { speech.speak(word.exampleEn) } }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                                    contentDescription = "朗读例句",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                         Text(
                             text = word.exampleZh,
                             style = MaterialTheme.typography.bodyMedium,
@@ -381,6 +430,9 @@ private fun GradeCard(
 @Composable
 private fun GrammarStep(onDone: () -> Unit) {
     val extended = LazyDogTheme.extendedColors
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val scope = rememberCoroutineScope()
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -415,6 +467,11 @@ private fun GrammarStep(onDone: () -> Unit) {
                     append(" for the bus for 20 minutes.")
                 },
                 note = "还在等，而且已经等了 20 分钟。",
+                onSpeak = {
+                    scope.launch {
+                        app.speechController.speak("I have been waiting for the bus for 20 minutes.")
+                    }
+                },
             )
             ExampleCard(
                 icon = Icons.Outlined.Cancel,
@@ -463,6 +520,7 @@ private fun ExampleCard(
     labelColor: Color,
     sentence: androidx.compose.ui.text.AnnotatedString,
     note: String,
+    onSpeak: (() -> Unit)? = null,
 ) {
     Surface(
         shape = MaterialTheme.shapes.medium,
@@ -479,7 +537,22 @@ private fun ExampleCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp))
-                Text(text = label, style = MaterialTheme.typography.labelLarge, color = labelColor)
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = labelColor,
+                    modifier = Modifier.weight(1f),
+                )
+                if (onSpeak != null) {
+                    IconButton(onClick = onSpeak) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                            contentDescription = "朗读例句",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
             }
             Text(text = sentence, style = MaterialTheme.typography.bodyLarge)
             Text(

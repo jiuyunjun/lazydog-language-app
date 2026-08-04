@@ -3,6 +3,7 @@ package com.lazydog.english.core.speech
 import com.lazydog.english.domain.speaking.AssessmentResult
 import com.lazydog.english.domain.speaking.SpeakResult
 import com.lazydog.english.domain.speaking.SpeechProvider
+import com.lazydog.english.domain.speaking.SpeechRate
 import com.microsoft.cognitiveservices.speech.CancellationDetails
 import com.microsoft.cognitiveservices.speech.PropertyId
 import com.microsoft.cognitiveservices.speech.PronunciationAssessmentConfig
@@ -25,13 +26,15 @@ import kotlinx.coroutines.withContext
 class AzureSpeechProvider(
     subscriptionKey: String,
     region: String,
-    voiceName: String = "en-US-JennyNeural",
+    private val voiceName: String = "en-US-JennyNeural",
 ) : SpeechProvider {
 
     private val speechConfig: SpeechConfig =
         SpeechConfig.fromSubscription(subscriptionKey, region).apply {
             speechRecognitionLanguage = "en-US"
             speechSynthesisVoiceName = voiceName
+            // 读完停顿约 0.8 秒就收音，默认值等太久（用户实测反馈）。
+            setProperty(PropertyId.Speech_SegmentationSilenceTimeoutMs, "800")
         }
 
     private val synthesizer: SpeechSynthesizer by lazy { SpeechSynthesizer(speechConfig) }
@@ -39,11 +42,11 @@ class AzureSpeechProvider(
     @Volatile
     private var closed = false
 
-    override suspend fun speak(text: String): SpeakResult = withContext(Dispatchers.IO) {
+    override suspend fun speak(text: String, rate: SpeechRate): SpeakResult = withContext(Dispatchers.IO) {
         if (closed) return@withContext SpeakResult.Failed("服务已释放")
         var result: com.microsoft.cognitiveservices.speech.SpeechSynthesisResult? = null
         try {
-            result = synthesizer.SpeakTextAsync(text).get()
+            result = synthesizer.SpeakSsmlAsync(buildSpeechSsml(text, voiceName, rate)).get()
             when (result.reason) {
                 ResultReason.SynthesizingAudioCompleted -> SpeakResult.Done
                 ResultReason.Canceled -> {
