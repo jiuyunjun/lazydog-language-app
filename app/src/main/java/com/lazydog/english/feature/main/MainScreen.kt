@@ -52,6 +52,7 @@ fun MainScreen(
     onStartReading: () -> Unit,
     onStartReadingPaste: () -> Unit,
     onOpenMaterial: (Long) -> Unit,
+    onStartAssessment: () -> Unit,
 ) {
     var currentTab by rememberSaveable { mutableStateOf(MainTab.Today) }
 
@@ -77,6 +78,7 @@ fun MainScreen(
                 modifier = contentModifier,
                 onStartSession = onStartSession,
                 onFreeStudy = { currentTab = MainTab.Study },
+                onStartAssessment = onStartAssessment,
             )
             MainTab.Study -> StudyScreen(
                 modifier = contentModifier,
@@ -94,6 +96,7 @@ fun MainScreen(
             MainTab.Settings -> SettingsScreen(
                 modifier = contentModifier,
                 prefs = prefs,
+                onStartAssessment = onStartAssessment,
             )
         }
     }

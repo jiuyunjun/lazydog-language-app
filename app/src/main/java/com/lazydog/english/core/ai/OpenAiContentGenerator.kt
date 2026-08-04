@@ -1,6 +1,8 @@
 package com.lazydog.english.core.ai
 
 import com.lazydog.english.core.network.await
+import com.lazydog.english.domain.assessment.AssessmentQuestion
+import com.lazydog.english.domain.assessment.validateAssessmentQuestions
 import com.lazydog.english.domain.generation.ContentValidation
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GeneratedReading
@@ -176,6 +178,29 @@ class OpenAiContentGenerator(
             return GenerationResult.Failure("没拿到译文")
         }
         return GenerationResult.Success(explanation, content.model, PROMPT_VERSION)
+    }
+
+    override suspend fun generateAssessmentQuestions(
+        cefrLevel: String,
+        count: Int,
+        topics: List<String>,
+    ): GenerationResult<List<AssessmentQuestion>> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildAssessmentPrompt(cefrLevel, count, topics),
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<AssessmentPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        if (payload.schemaVersion != SCHEMA_VERSION) {
+            return GenerationResult.Failure("schema 版本不对：${payload.schemaVersion}")
+        }
+        val valid = validateAssessmentQuestions(payload.questions.map { it.toDomain() })
+        if (valid.isEmpty()) return GenerationResult.Failure("生成的题都没通过校验")
+        return GenerationResult.Success(valid, content.model, PROMPT_VERSION)
     }
 
     // ---- 请求执行 ----
@@ -385,6 +410,29 @@ class OpenAiContentGenerator(
     }
 
     @Serializable
+    private data class AssessmentQuestionPayload(
+        val skill: String = "",
+        val prompt: String = "",
+        val options: List<String> = emptyList(),
+        val answerIndex: Int = -1,
+        val explanationZh: String = "",
+    ) {
+        fun toDomain() = AssessmentQuestion(
+            skill = skill.trim(),
+            prompt = prompt.trim(),
+            options = options,
+            answerIndex = answerIndex,
+            explanationZh = explanationZh.trim(),
+        )
+    }
+
+    @Serializable
+    private data class AssessmentPayload(
+        val schemaVersion: Int = 0,
+        val questions: List<AssessmentQuestionPayload> = emptyList(),
+    )
+
+    @Serializable
     private data class SentenceExplanationPayload(
         val translationZh: String = "",
         val explanationZh: String = "",
@@ -483,6 +531,18 @@ class OpenAiContentGenerator(
                     """"targetVocabulary":[{"term":"...","meaningZh":"...","exampleFromText":"...","role":"review"}],""" +
                     """"targetGrammar":[{"name":"...","exampleFromText":"...","explanationZh":"..."}],""" +
                     """"comprehensionQuestions":[{"promptZh":"...","options":["..."],"answerIndex":0,"explanationZh":"..."}]}""",
+            )
+        }
+
+        internal fun buildAssessmentPrompt(level: String, count: Int, topics: List<String>): String = buildString {
+            appendLine("给中文母语的英语学习者出 $count 道 CEFR $level 难度的单选题，用来评估水平。")
+            appendLine("题型混合：语境选词（英文句子挖空选词，skill=\"vocab\"）和语法（skill=\"grammar\"）。")
+            if (topics.isNotEmpty()) appendLine("语料可以贴近这些主题：${topics.joinToString("、")}。")
+            appendLine("每题 3~4 个选项且不重复，只有一个正确答案，answerIndex 从 0 开始；explanationZh 一句话解析。")
+            appendLine("难度务必贴住 $level：不要为了区分度混入明显更高或更低难度的题。")
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"schemaVersion":1,"questions":[{"skill":"vocab","prompt":"...","options":["..."],"answerIndex":0,"explanationZh":"..."}]}""",
             )
         }
 

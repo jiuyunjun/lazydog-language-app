@@ -86,7 +86,6 @@ private sealed interface ReadingPhase {
     data class Viewing(val material: MaterialView) : ReadingPhase
 }
 
-private const val DEFAULT_LEVEL = "A2-B1（能力测试上线前的默认估计）"
 private const val TARGET_LENGTH = 160
 private const val MAX_NEW_WORDS = 4
 
@@ -155,7 +154,7 @@ fun ReadingScreen(
                 .take(2)
 
             val request = ReadingGenerationRequest(
-                learnerLevel = DEFAULT_LEVEL,
+                learnerLevel = app.userPreferences.learnerLevelDescription.first(),
                 topic = topic,
                 targetLength = TARGET_LENGTH,
                 reviewVocabulary = due,
@@ -621,7 +620,8 @@ private fun WordSheet(
             inLibrary = existing.detail.meaningZh
             libraryIpa = existing.detail.ipa
         } else {
-            when (val result = app.contentGenerator.explainWord(word, sentence, DEFAULT_LEVEL)) {
+            val level = app.userPreferences.learnerLevelDescription.first()
+            when (val result = app.contentGenerator.explainWord(word, sentence, level)) {
                 is GenerationResult.Success -> explanation = result.data
                 is GenerationResult.Failure -> error = result.reason
             }
@@ -728,7 +728,8 @@ private fun SentenceSheet(
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(sentence) {
-        when (val result = app.contentGenerator.explainSentence(sentence, DEFAULT_LEVEL)) {
+        val level = app.userPreferences.learnerLevelDescription.first()
+        when (val result = app.contentGenerator.explainSentence(sentence, level)) {
             is GenerationResult.Success -> explanation = result.data
             is GenerationResult.Failure -> error = result.reason
         }

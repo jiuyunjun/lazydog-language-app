@@ -24,6 +24,7 @@ import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
 import com.lazydog.english.feature.onboarding.WelcomeScreen
 import com.lazydog.english.feature.session.LearningSessionScreen
+import com.lazydog.english.feature.assessment.AssessmentScreen
 import com.lazydog.english.feature.reading.ReadingMode
 import com.lazydog.english.feature.reading.ReadingScreen
 import com.lazydog.english.feature.speaking.SpeakingScreen
@@ -40,6 +41,7 @@ object Routes {
     const val Speaking = "speaking"
     const val WordStudy = "study/words"
     const val GrammarStudy = "study/grammar"
+    const val Assessment = "assessment"
     const val ReadingGenerate = "reading/generate"
     const val ReadingPaste = "reading/paste"
     const val ReadingOpen = "reading/open/{materialId}"
@@ -104,7 +106,12 @@ private fun AppNavHost(
                 onStartReading = { navController.navigate(Routes.ReadingGenerate) },
                 onStartReadingPaste = { navController.navigate(Routes.ReadingPaste) },
                 onOpenMaterial = { id -> navController.navigate(Routes.readingOpen(id)) },
+                onStartAssessment = { navController.navigate(Routes.Assessment) },
             )
+        }
+
+        composable(Routes.Assessment) {
+            AssessmentScreen(onExit = { navController.popBackStack() })
         }
 
         composable(Routes.Session) {

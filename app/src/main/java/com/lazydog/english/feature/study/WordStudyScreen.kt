@@ -68,7 +68,6 @@ private sealed interface WordStudyPhase {
 }
 
 private const val NEW_WORDS_PER_BATCH = 5
-private const val DEFAULT_LEVEL = "A2-B1（能力测试上线前的默认估计）"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,7 +113,7 @@ fun WordStudyScreen(
             val result = app.contentGenerator.generateNewWords(
                 NewWordsRequest(
                     count = NEW_WORDS_PER_BATCH,
-                    learnerLevel = DEFAULT_LEVEL,
+                    learnerLevel = prefs.learnerLevelDescription.first(),
                     topics = prefs.topics.first().toList(),
                     knownTerms = known,
                 ),

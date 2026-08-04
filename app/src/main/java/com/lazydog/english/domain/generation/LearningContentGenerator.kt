@@ -36,6 +36,13 @@ interface LearningContentGenerator {
         sentence: String,
         learnerLevel: String,
     ): GenerationResult<SentenceExplanation>
+
+    /** 能力测试出题：指定 CEFR 等级的单选题（词汇语境 + 语法混合）。 */
+    suspend fun generateAssessmentQuestions(
+        cefrLevel: String,
+        count: Int,
+        topics: List<String>,
+    ): GenerationResult<List<com.lazydog.english.domain.assessment.AssessmentQuestion>>
 }
 
 data class NewWordsRequest(

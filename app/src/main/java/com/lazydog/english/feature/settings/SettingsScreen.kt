@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Interests
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
@@ -43,6 +44,7 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     prefs: UserPreferences,
+    onStartAssessment: () -> Unit = {},
 ) {
     val dailyMinutes by prefs.dailyMinutes.collectAsState(initial = 12)
     val goal by prefs.learningGoal.collectAsState(initial = "")
@@ -51,6 +53,8 @@ fun SettingsScreen(
     val speechRegion by prefs.speechRegion.collectAsState(initial = "")
     val speechRate by prefs.speechRate.collectAsState(initial = SpeechRate.Normal)
     val autoRead by prefs.autoReadWords.collectAsState(initial = true)
+    val learnerLevel by prefs.learnerLevel.collectAsState(initial = "")
+    val levelConfidence by prefs.learnerLevelConfidence.collectAsState(initial = 0)
 
     val goalSummary = buildString {
         append(goal.ifBlank { "未设置" })
@@ -116,6 +120,13 @@ fun SettingsScreen(
         )
 
         SettingsGroupTitle("学习节奏")
+        SettingsRow(
+            Icons.Outlined.Insights,
+            "能力画像",
+            if (learnerLevel.isBlank()) "还没测 · 点击开始 5 分钟小测"
+            else "$learnerLevel · 置信度 $levelConfidence% · 点击重测",
+            onClick = onStartAssessment,
+        )
         SettingsRow(Icons.Outlined.Timer, "每日目标时长", "$dailyMinutes 分钟")
         SettingsRow(Icons.Outlined.AddCircleOutline, "每天最多新知识", "5 个词 · 1 个语法点")
         SettingsRow(Icons.Outlined.Interests, "学习目标与兴趣", goalSummary)

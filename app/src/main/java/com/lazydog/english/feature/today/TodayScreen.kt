@@ -23,11 +23,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.model.SampleData
 import com.lazydog.english.core.model.TaskKind
 import com.lazydog.english.core.model.TodayTaskPreview
@@ -39,7 +46,13 @@ fun TodayScreen(
     modifier: Modifier = Modifier,
     onStartSession: () -> Unit,
     onFreeStudy: () -> Unit,
+    onStartAssessment: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    // 初值用占位符，避免 DataStore 首帧前横幅闪现。
+    val learnerLevel by app.userPreferences.learnerLevel.collectAsState(initial = "…")
+
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
@@ -50,6 +63,35 @@ fun TodayScreen(
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
         )
+
+        if (learnerLevel.isBlank()) {
+            OutlinedCard(
+                onClick = onStartAssessment,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Insights,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("先花 5 分钟摸个底", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            text = "测出水平后，AI 出的词、语法和文章都会更合身。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
 
         SummaryCard()
 
