@@ -1,0 +1,27 @@
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+build/
+**/build/
+local.properties
+
+# Signing and secrets
+*.jks
+*.keystore
+secrets.properties
+.env
+.env.*
+
+# Local application data
+*.db
+*.db-shm
+*.db-wal
+*.wav
+*.mp3
+
+# OS
+.DS_Store
+Thumbs.db
