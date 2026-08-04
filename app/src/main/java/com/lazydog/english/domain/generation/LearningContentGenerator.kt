@@ -1,0 +1,60 @@
+package com.lazydog.english.domain.generation
+
+/**
+ * AI 内容生成的领域接口（AI_CONTRACTS.md §2）。
+ * 领域层只依赖它；具体服务商实现在 core/ai。
+ * 实现必须返回已通过本地校验的内容——不合格的返回 Failure，不得入库。
+ */
+interface LearningContentGenerator {
+
+    suspend fun generateNewWords(request: NewWordsRequest): GenerationResult<List<GeneratedWord>>
+
+    suspend fun generateGrammarLesson(request: GrammarLessonRequest): GenerationResult<GeneratedGrammarLesson>
+}
+
+data class NewWordsRequest(
+    val count: Int,
+    /** 粗略水平描述，能力测试（M2）上线前用默认值。 */
+    val learnerLevel: String,
+    val topics: List<String>,
+    /** 已在知识库里的词，生成时避开。调用方负责截断到合理数量。 */
+    val knownTerms: List<String>,
+)
+
+data class GeneratedWord(
+    val term: String,
+    val ipa: String,
+    val meaningZh: String,
+    val exampleEn: String,
+    val exampleZh: String,
+)
+
+data class GrammarLessonRequest(
+    val learnerLevel: String,
+    /** 用户指定想学的语法点；空则由 AI 挑选。 */
+    val focus: String?,
+    val knownGrammar: List<String>,
+)
+
+data class GeneratedGrammarLesson(
+    val name: String,
+    val patternEn: String,
+    val explanationZh: String,
+    val goodExampleEn: String,
+    val goodExampleZh: String,
+    val badExampleEn: String,
+    val badExampleNoteZh: String,
+    val tipZh: String,
+)
+
+sealed interface GenerationResult<out T> {
+    data class Success<T>(
+        val data: T,
+        val model: String,
+        val promptVersion: Int,
+        /** 校验中被丢弃的条目说明，给 UI 提示或日志用。 */
+        val droppedNotes: List<String> = emptyList(),
+    ) : GenerationResult<T>
+
+    data class Failure(val reason: String) : GenerationResult<Nothing>
+}

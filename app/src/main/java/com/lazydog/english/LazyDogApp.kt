@@ -23,6 +23,8 @@ import com.lazydog.english.feature.onboarding.GoalsScreen
 import com.lazydog.english.feature.onboarding.WelcomeScreen
 import com.lazydog.english.feature.session.LearningSessionScreen
 import com.lazydog.english.feature.speaking.SpeakingScreen
+import com.lazydog.english.feature.study.GrammarStudyScreen
+import com.lazydog.english.feature.study.WordStudyScreen
 import kotlinx.coroutines.launch
 
 object Routes {
@@ -32,6 +34,8 @@ object Routes {
     const val Main = "main"
     const val Session = "session"
     const val Speaking = "speaking"
+    const val WordStudy = "study/words"
+    const val GrammarStudy = "study/grammar"
 }
 
 @Composable
@@ -86,6 +90,8 @@ private fun AppNavHost(
                 knowledgeRepository = knowledgeRepository,
                 onStartSession = { navController.navigate(Routes.Session) },
                 onStartSpeaking = { navController.navigate(Routes.Speaking) },
+                onStartWordStudy = { navController.navigate(Routes.WordStudy) },
+                onStartGrammarStudy = { navController.navigate(Routes.GrammarStudy) },
             )
         }
 
@@ -96,6 +102,20 @@ private fun AppNavHost(
         composable(Routes.Speaking) {
             SpeakingScreen(
                 prefs = prefs,
+                repository = knowledgeRepository,
+                onExit = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.WordStudy) {
+            WordStudyScreen(
+                repository = knowledgeRepository,
+                onExit = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.GrammarStudy) {
+            GrammarStudyScreen(
                 repository = knowledgeRepository,
                 onExit = { navController.popBackStack() },
             )

@@ -52,6 +52,8 @@ fun MainScreen(
     knowledgeRepository: KnowledgeRepository,
     onStartSession: () -> Unit,
     onStartSpeaking: () -> Unit,
+    onStartWordStudy: () -> Unit,
+    onStartGrammarStudy: () -> Unit,
 ) {
     var currentTab by rememberSaveable { mutableStateOf(MainTab.Today) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -90,6 +92,8 @@ fun MainScreen(
                 modifier = contentModifier,
                 onEntryClick = showNotReady,
                 onSpeakingClick = onStartSpeaking,
+                onWordsClick = onStartWordStudy,
+                onGrammarClick = onStartGrammarStudy,
             )
             MainTab.Library -> LibraryScreen(
                 modifier = contentModifier,

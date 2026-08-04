@@ -38,11 +38,13 @@ fun StudyScreen(
     modifier: Modifier = Modifier,
     onEntryClick: (String) -> Unit,
     onSpeakingClick: () -> Unit,
+    onWordsClick: () -> Unit,
+    onGrammarClick: () -> Unit,
 ) {
     val entries = listOf(
-        StudyEntry(Icons.Outlined.Abc, "单词", "12 个到期"),
-        StudyEntry(Icons.AutoMirrored.Outlined.Rule, "语法", "2 个到期"),
-        StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "现在生成一篇"),
+        StudyEntry(Icons.Outlined.Abc, "单词", "复习到期 + AI 上新", onClick = onWordsClick),
+        StudyEntry(Icons.AutoMirrored.Outlined.Rule, "语法", "让 AI 讲一个", onClick = onGrammarClick),
+        StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "下个版本来"),
         StudyEntry(Icons.Outlined.Mic, "朗读", "读一句，拿反馈", onClick = onSpeakingClick),
     )
 
