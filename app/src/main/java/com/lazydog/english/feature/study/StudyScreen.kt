@@ -26,18 +26,24 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.core.model.SampleData
 
-private data class StudyEntry(val icon: ImageVector, val name: String, val note: String)
+private data class StudyEntry(
+    val icon: ImageVector,
+    val name: String,
+    val note: String,
+    val onClick: (() -> Unit)? = null,
+)
 
 @Composable
 fun StudyScreen(
     modifier: Modifier = Modifier,
     onEntryClick: (String) -> Unit,
+    onSpeakingClick: () -> Unit,
 ) {
     val entries = listOf(
         StudyEntry(Icons.Outlined.Abc, "单词", "12 个到期"),
         StudyEntry(Icons.AutoMirrored.Outlined.Rule, "语法", "2 个到期"),
         StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "现在生成一篇"),
-        StudyEntry(Icons.Outlined.Mic, "朗读", "需要配置"),
+        StudyEntry(Icons.Outlined.Mic, "朗读", "读一句，拿反馈", onClick = onSpeakingClick),
     )
 
     Column(
@@ -63,7 +69,7 @@ fun StudyScreen(
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainer,
                             shape = MaterialTheme.shapes.large,
-                            onClick = { onEntryClick("自由学习「${entry.name}」") },
+                            onClick = entry.onClick ?: { onEntryClick("自由学习「${entry.name}」") },
                             modifier = Modifier.weight(1f),
                         ) {
                             Column(

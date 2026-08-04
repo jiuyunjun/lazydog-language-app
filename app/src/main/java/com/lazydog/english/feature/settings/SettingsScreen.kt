@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.core.data.UserPreferences
+import com.lazydog.english.core.network.AzureSpeechTokenClient
 import com.lazydog.english.core.network.OpenAiCompatClient
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -57,8 +58,10 @@ fun SettingsScreen(
     var aiTestState by remember { mutableStateOf<String?>(null) }
     var testing by remember { mutableStateOf(false) }
 
+    var speechTestState by remember { mutableStateOf<String?>(null) }
+
     val aiSummary = aiTestState ?: "$aiModel · 内置本地配置，点击测试连接"
-    val speechSummary = "内置本地配置 · $speechRegion"
+    val speechSummary = speechTestState ?: "内置本地配置 · $speechRegion · 点击测试连接"
 
     fun runAiConnectionTest() {
         if (testing) return
@@ -81,6 +84,23 @@ fun SettingsScreen(
         }
     }
 
+    fun runSpeechConnectionTest() {
+        if (testing) return
+        testing = true
+        speechTestState = "正在测试连接…"
+        scope.launch {
+            val client = AzureSpeechTokenClient(
+                subscriptionKey = prefs.speechKey.first(),
+                region = prefs.speechRegion.first(),
+            )
+            speechTestState = when (val result = client.testConnection()) {
+                is AzureSpeechTokenClient.TokenResult.Success -> "连接正常 · $speechRegion"
+                is AzureSpeechTokenClient.TokenResult.Failure -> "连接失败：${result.reason}"
+            }
+            testing = false
+        }
+    }
+
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
     ) {
@@ -97,7 +117,7 @@ fun SettingsScreen(
 
         SettingsGroupTitle("服务")
         SettingsRow(Icons.Outlined.SmartToy, "AI 服务", aiSummary, onClick = ::runAiConnectionTest)
-        SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", speechSummary)
+        SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", speechSummary, onClick = ::runSpeechConnectionTest)
 
         SettingsGroupTitle("提醒")
         SettingsRow(Icons.Outlined.Notifications, "学习提醒", "后续版本提供")

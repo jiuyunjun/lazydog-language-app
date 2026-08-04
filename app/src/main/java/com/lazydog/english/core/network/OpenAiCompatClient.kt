@@ -2,15 +2,10 @@ package com.lazydog.english.core.network
 
 import java.io.IOException
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 
 /**
  * OpenAI 兼容接口的最小客户端。M0 只提供连接测试；
@@ -82,18 +77,3 @@ class OpenAiCompatClient(
 /** 拼出 /models 地址；容忍 baseUrl 尾部斜杠。 */
 internal fun modelsUrl(baseUrl: String): String =
     baseUrl.trim().trimEnd('/') + "/models"
-
-private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
-    enqueue(object : Callback {
-        override fun onResponse(call: Call, response: Response) {
-            continuation.resume(response)
-        }
-
-        override fun onFailure(call: Call, e: IOException) {
-            if (!call.isCanceled()) {
-                continuation.resumeWith(Result.failure(e))
-            }
-        }
-    })
-    continuation.invokeOnCancellation { cancel() }
-}

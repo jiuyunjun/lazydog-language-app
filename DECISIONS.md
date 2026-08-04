@@ -65,3 +65,9 @@
 - 状态：已确认（2026-08-04，用户决定）
 - 决定：私人使用阶段，AI 与 Azure Speech 配置写死在 `core/config/LocalEnv.kt`，该文件被 `.gitignore` 忽略，仓库只保留 `LocalEnv.kt.example` 模板。onboarding 不再要求用户填写服务配置；DataStore 中存过的值优先于 LocalEnv，后续开放设置页手动配置时无需改读取逻辑。
 - 原因：单人使用，降低每次安装的配置成本。“不将密钥提交到 Git”的底线不变。
+
+## D-013：朗读（M5）提前到 M1 之后实现
+
+- 状态：已确认（2026-08-04，用户决定）
+- 决定：在 M2（能力测试）和 M3（AI 内容）之前先接入 Azure Speech 朗读：TTS 示范、录音发音评估和反馈。朗读结果反写复习计划仍留在 M6。
+- 原因：Speech 密钥已配好且可独立验证；朗读闭环不依赖 AI provider。

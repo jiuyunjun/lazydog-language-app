@@ -22,6 +22,7 @@ import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
 import com.lazydog.english.feature.onboarding.WelcomeScreen
 import com.lazydog.english.feature.session.LearningSessionScreen
+import com.lazydog.english.feature.speaking.SpeakingScreen
 import kotlinx.coroutines.launch
 
 object Routes {
@@ -30,6 +31,7 @@ object Routes {
     const val OnboardingGoals = "onboarding/goals"
     const val Main = "main"
     const val Session = "session"
+    const val Speaking = "speaking"
 }
 
 @Composable
@@ -83,11 +85,20 @@ private fun AppNavHost(
                 prefs = prefs,
                 knowledgeRepository = knowledgeRepository,
                 onStartSession = { navController.navigate(Routes.Session) },
+                onStartSpeaking = { navController.navigate(Routes.Speaking) },
             )
         }
 
         composable(Routes.Session) {
             LearningSessionScreen(onExit = { navController.popBackStack() })
+        }
+
+        composable(Routes.Speaking) {
+            SpeakingScreen(
+                prefs = prefs,
+                repository = knowledgeRepository,
+                onExit = { navController.popBackStack() },
+            )
         }
     }
 }

@@ -63,6 +63,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+    implementation(libs.azure.speech)
 
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
