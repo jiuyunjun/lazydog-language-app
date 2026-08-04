@@ -11,6 +11,7 @@ kotlinxSerialization = "1.7.3"
 kotlinxCoroutines = "1.9.0"
 room = "2.6.1"
 azureSpeech = "1.49.1"
+workManager = "2.9.1"
 ksp = "2.0.21-1.0.28"
 junit = "4.13.2"
 
@@ -34,6 +35,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 azure-speech = { group = "com.microsoft.cognitiveservices.speech", name = "client-sdk", version.ref = "azureSpeech" }
+androidx-work-runtime = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

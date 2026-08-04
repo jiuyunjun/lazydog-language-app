@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 只在用户进入朗读并按下录音时才会真正请求（SpeechScreen 的承诺）。 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 学习提醒通知，在设置里开启提醒时请求。 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- 无账户、密钥存本机：禁止系统备份把本地数据带上云。 -->
     <application

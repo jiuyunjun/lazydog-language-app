@@ -5,8 +5,16 @@ package com.lazydog.english.domain.speaking
  */
 interface SpeechProvider {
 
-    /** 朗读一段英文示范音频，播放完成后返回。 */
-    suspend fun speak(text: String, rate: SpeechRate = SpeechRate.Normal): SpeakResult
+    /**
+     * 朗读一段英文示范音频，播放完成后返回。
+     * 实现必须先打断正在播放的内容，而不是排队。
+     * [voiceName] 为空用实现的默认音色。
+     */
+    suspend fun speak(
+        text: String,
+        rate: SpeechRate = SpeechRate.Normal,
+        voiceName: String? = null,
+    ): SpeakResult
 
     /**
      * 从麦克风录一句朗读并对照 [referenceText] 做发音评估。

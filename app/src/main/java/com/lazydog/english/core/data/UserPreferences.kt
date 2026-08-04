@@ -42,6 +42,10 @@ class UserPreferences(private val context: Context) {
         val AssessmentStateJson = stringPreferencesKey("assessment_state_json")
         val TodayDate = stringPreferencesKey("today_date")
         val TodayDoneSteps = stringSetPreferencesKey("today_done_steps")
+        val MaxNewWords = intPreferencesKey("max_new_words")
+        val ReminderTime = stringPreferencesKey("reminder_time")
+        val ThemeMode = stringPreferencesKey("theme_mode")
+        val TtsVoice = stringPreferencesKey("tts_voice")
         val Topics = stringSetPreferencesKey("topics")
         val DailyMinutes = intPreferencesKey("daily_minutes")
     }
@@ -78,6 +82,18 @@ class UserPreferences(private val context: Context) {
 
     val assessmentStateJson: Flow<String> =
         context.dataStore.data.map { it[Keys.AssessmentStateJson].orEmpty() }
+
+    /** 每天最多学几个新词（语法固定 1 个）。 */
+    val maxNewWords: Flow<Int> = context.dataStore.data.map { it[Keys.MaxNewWords] ?: 5 }
+
+    /** 每日提醒时间 "HH:mm"；空字符串表示关闭。 */
+    val reminderTime: Flow<String> = context.dataStore.data.map { it[Keys.ReminderTime].orEmpty() }
+
+    /** system / light / dark */
+    val themeMode: Flow<String> = context.dataStore.data.map { it[Keys.ThemeMode] ?: "system" }
+
+    val ttsVoice: Flow<String> =
+        context.dataStore.data.map { it[Keys.TtsVoice] ?: DEFAULT_TTS_VOICE }
 
     /** 今日已完成的步骤 id；换天自动视为空集合。 */
     fun todayDoneSteps(todayDate: String): Flow<Set<String>> = context.dataStore.data.map {
@@ -137,6 +153,33 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it.remove(Keys.AssessmentStateJson) }
     }
 
+    suspend fun saveDailyMinutes(minutes: Int) {
+        context.dataStore.edit { it[Keys.DailyMinutes] = minutes }
+    }
+
+    suspend fun saveGoalAndTopics(goal: String, topics: Set<String>) {
+        context.dataStore.edit {
+            it[Keys.LearningGoal] = goal
+            it[Keys.Topics] = topics
+        }
+    }
+
+    suspend fun setMaxNewWords(count: Int) {
+        context.dataStore.edit { it[Keys.MaxNewWords] = count }
+    }
+
+    suspend fun setReminderTime(time: String) {
+        context.dataStore.edit { it[Keys.ReminderTime] = time }
+    }
+
+    suspend fun setThemeMode(mode: String) {
+        context.dataStore.edit { it[Keys.ThemeMode] = mode }
+    }
+
+    suspend fun setTtsVoice(voice: String) {
+        context.dataStore.edit { it[Keys.TtsVoice] = voice }
+    }
+
     /** 标记今日某步骤完成；日期变了先清空旧进度。 */
     suspend fun markTodayStepDone(todayDate: String, stepId: String) {
         context.dataStore.edit {
@@ -145,6 +188,10 @@ class UserPreferences(private val context: Context) {
             it[Keys.TodayDate] = todayDate
             it[Keys.TodayDoneSteps] = current + stepId
         }
+    }
+
+    companion object {
+        const val DEFAULT_TTS_VOICE = "en-US-JennyNeural"
     }
 }
 

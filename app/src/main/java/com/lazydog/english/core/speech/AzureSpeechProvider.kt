@@ -42,11 +42,16 @@ class AzureSpeechProvider(
     @Volatile
     private var closed = false
 
-    override suspend fun speak(text: String, rate: SpeechRate): SpeakResult = withContext(Dispatchers.IO) {
+    override suspend fun speak(text: String, rate: SpeechRate, voiceName: String?): SpeakResult =
+        withContext(Dispatchers.IO) {
         if (closed) return@withContext SpeakResult.Failed("服务已释放")
         var result: com.microsoft.cognitiveservices.speech.SpeechSynthesisResult? = null
         try {
-            result = synthesizer.SpeakSsmlAsync(buildSpeechSsml(text, voiceName, rate)).get()
+            // 打断正在播放的内容——点了新的就读新的，不排队。
+            runCatching { synthesizer.StopSpeakingAsync().get() }
+            result = synthesizer
+                .SpeakSsmlAsync(buildSpeechSsml(text, voiceName ?: this@AzureSpeechProvider.voiceName, rate))
+                .get()
             when (result.reason) {
                 ResultReason.SynthesizingAudioCompleted -> SpeakResult.Done
                 ResultReason.Canceled -> {

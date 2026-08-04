@@ -24,9 +24,9 @@ class SpeechController(private val prefs: UserPreferences) {
         ).also { provider = it }
     }
 
-    /** 用当前语速朗读英文。失败静默返回结果，由调用方决定是否展示。 */
+    /** 用当前语速和音色朗读英文；会打断上一次播放。失败静默返回结果，由调用方决定是否展示。 */
     suspend fun speak(text: String): SpeakResult =
-        provider().speak(text, prefs.speechRate.first())
+        provider().speak(text, prefs.speechRate.first(), prefs.ttsVoice.first())
 
     suspend fun assessReading(referenceText: String): AssessmentResult =
         provider().assessReading(referenceText)

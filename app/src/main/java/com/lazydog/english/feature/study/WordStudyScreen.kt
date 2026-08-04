@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,7 +70,6 @@ private sealed interface WordStudyPhase {
     data class Summary(val reviewedCount: Int, val newCount: Int) : WordStudyPhase
 }
 
-private const val NEW_WORDS_PER_BATCH = 5
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,6 +85,7 @@ fun WordStudyScreen(
     var reviewedCount by remember { mutableStateOf(0) }
     var newLearnedCount by remember { mutableStateOf(0) }
     var progressChars by remember { mutableStateOf(0) }
+    val maxNewWords by app.userPreferences.maxNewWords.collectAsState(initial = 5)
 
     // 走到总结页就算完成了今日的单词步骤。
     LaunchedEffect(phase is WordStudyPhase.Summary) {
@@ -121,7 +122,7 @@ fun WordStudyScreen(
             val known = repository.vocabulary.first().map { it.detail.term }.take(200)
             val result = app.contentGenerator.generateNewWords(
                 NewWordsRequest(
-                    count = NEW_WORDS_PER_BATCH,
+                    count = prefs.maxNewWords.first(),
                     learnerLevel = prefs.learnerLevelDescription.first(),
                     topics = prefs.topics.first().toList(),
                     knownTerms = known,
@@ -216,6 +217,7 @@ fun WordStudyScreen(
                 }
                 is WordStudyPhase.OfferNew -> OfferNewView(
                     reviewedCount = p.reviewedCount,
+                    newWordCount = maxNewWords,
                     onGenerate = ::generateNewWords,
                     onDone = {
                         if (p.reviewedCount > 0) {
@@ -387,7 +389,12 @@ private fun StudyCardView(
 }
 
 @Composable
-private fun OfferNewView(reviewedCount: Int, onGenerate: () -> Unit, onDone: () -> Unit) {
+private fun OfferNewView(
+    reviewedCount: Int,
+    newWordCount: Int,
+    onGenerate: () -> Unit,
+    onDone: () -> Unit,
+) {
     CenterHint {
         if (reviewedCount > 0) {
             Icon(
@@ -401,7 +408,7 @@ private fun OfferNewView(reviewedCount: Int, onGenerate: () -> Unit, onDone: () 
         }
         Button(onClick = onGenerate) {
             Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
-            Text("让 AI 来 $NEW_WORDS_PER_BATCH 个新词", modifier = Modifier.padding(start = 8.dp))
+            Text("让 AI 来 $newWordCount 个新词", modifier = Modifier.padding(start = 8.dp))
         }
         TextButton(onClick = onDone) { Text("今天到这") }
     }

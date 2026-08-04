@@ -4,6 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import com.lazydog.english.core.designsystem.LazyDogTheme
 
 class MainActivity : ComponentActivity() {
@@ -11,7 +14,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            LazyDogTheme {
+            val themeMode by (application as LazyDogApplication)
+                .userPreferences.themeMode.collectAsState(initial = "system")
+            val darkTheme = when (themeMode) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+            LazyDogTheme(darkTheme = darkTheme) {
                 LazyDogApp()
             }
         }

@@ -1,44 +1,73 @@
 package com.lazydog.english.feature.settings
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Interests
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Timer
-import androidx.compose.foundation.clickable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.core.data.UserPreferences
+import com.lazydog.english.core.model.SampleData
 import com.lazydog.english.core.network.AzureSpeechTokenClient
 import com.lazydog.english.core.network.OpenAiCompatClient
+import com.lazydog.english.core.reminder.StudyReminder
 import com.lazydog.english.domain.speaking.SpeechRate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+private data class VoiceOption(val label: String, val voice: String)
+
+private val voiceOptions = listOf(
+    VoiceOption("美音 · Jenny（女）", "en-US-JennyNeural"),
+    VoiceOption("美音 · Guy（男）", "en-US-GuyNeural"),
+    VoiceOption("英音 · Sonia（女）", "en-GB-SoniaNeural"),
+    VoiceOption("英音 · Ryan（男）", "en-GB-RyanNeural"),
+)
+
+private val reminderOptions = listOf("关闭", "08:00", "12:30", "20:00", "21:30")
+private val themeOptions = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
+
+private enum class OpenDialog { None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, Voice }
 
 @Composable
 fun SettingsScreen(
@@ -46,7 +75,11 @@ fun SettingsScreen(
     prefs: UserPreferences,
     onStartAssessment: () -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     val dailyMinutes by prefs.dailyMinutes.collectAsState(initial = 12)
+    val maxNewWords by prefs.maxNewWords.collectAsState(initial = 5)
     val goal by prefs.learningGoal.collectAsState(initial = "")
     val topics by prefs.topics.collectAsState(initial = emptySet())
     val aiModel by prefs.aiModel.collectAsState(initial = "")
@@ -55,6 +88,46 @@ fun SettingsScreen(
     val autoRead by prefs.autoReadWords.collectAsState(initial = true)
     val learnerLevel by prefs.learnerLevel.collectAsState(initial = "")
     val levelConfidence by prefs.learnerLevelConfidence.collectAsState(initial = 0)
+    val reminderTime by prefs.reminderTime.collectAsState(initial = "")
+    val themeMode by prefs.themeMode.collectAsState(initial = "system")
+    val ttsVoice by prefs.ttsVoice.collectAsState(initial = UserPreferences.DEFAULT_TTS_VOICE)
+
+    var dialog by rememberSaveable { mutableStateOf(OpenDialog.None) }
+    var pendingReminder by remember { mutableStateOf("") }
+
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { _ ->
+        // 没给权限也先记下时间：worker 触发时会再检查，一旦用户在系统里放开就能收到。
+        val time = pendingReminder
+        scope.launch {
+            prefs.setReminderTime(time)
+            StudyReminder.schedule(context, time)
+        }
+    }
+
+    fun applyReminder(option: String) {
+        if (option == "关闭") {
+            scope.launch {
+                prefs.setReminderTime("")
+                StudyReminder.cancel(context)
+            }
+            return
+        }
+        pendingReminder = option
+        if (Build.VERSION.SDK_INT >= 33) {
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            scope.launch {
+                prefs.setReminderTime(option)
+                StudyReminder.schedule(context, option)
+            }
+        }
+    }
+
+    var aiTestState by remember { mutableStateOf<String?>(null) }
+    var speechTestState by remember { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
 
     val goalSummary = buildString {
         append(goal.ifBlank { "未设置" })
@@ -63,12 +136,6 @@ fun SettingsScreen(
             append(topics.take(2).joinToString("、"))
         }
     }
-    val scope = rememberCoroutineScope()
-    var aiTestState by remember { mutableStateOf<String?>(null) }
-    var testing by remember { mutableStateOf(false) }
-
-    var speechTestState by remember { mutableStateOf<String?>(null) }
-
     val aiSummary = aiTestState ?: "$aiModel · 内置本地配置，点击测试连接"
     val speechSummary = speechTestState ?: "内置本地配置 · $speechRegion · 点击测试连接"
 
@@ -127,20 +194,50 @@ fun SettingsScreen(
             else "$learnerLevel · 置信度 $levelConfidence% · 点击重测",
             onClick = onStartAssessment,
         )
-        SettingsRow(Icons.Outlined.Timer, "每日目标时长", "$dailyMinutes 分钟")
-        SettingsRow(Icons.Outlined.AddCircleOutline, "每天最多新知识", "5 个词 · 1 个语法点")
-        SettingsRow(Icons.Outlined.Interests, "学习目标与兴趣", goalSummary)
+        SettingsRow(
+            Icons.Outlined.Timer,
+            "每日目标时长",
+            "$dailyMinutes 分钟",
+            onClick = { dialog = OpenDialog.DailyMinutes },
+        )
+        SettingsRow(
+            Icons.Outlined.AddCircleOutline,
+            "每天最多新知识",
+            "$maxNewWords 个词 · 1 个语法点",
+            onClick = { dialog = OpenDialog.MaxNewWords },
+        )
+        SettingsRow(
+            Icons.Outlined.Interests,
+            "学习目标与兴趣",
+            goalSummary,
+            onClick = { dialog = OpenDialog.Goals },
+        )
 
         SettingsGroupTitle("服务")
         SettingsRow(Icons.Outlined.SmartToy, "AI 服务", aiSummary, onClick = ::runAiConnectionTest)
         SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", speechSummary, onClick = ::runSpeechConnectionTest)
 
         SettingsGroupTitle("提醒")
-        SettingsRow(Icons.Outlined.Notifications, "学习提醒", "后续版本提供")
+        SettingsRow(
+            Icons.Outlined.Notifications,
+            "学习提醒",
+            if (reminderTime.isBlank()) "关闭" else "每天 $reminderTime 提醒（时间可能有几分钟浮动）",
+            onClick = { dialog = OpenDialog.Reminder },
+        )
 
         SettingsGroupTitle("外观与音频")
-        SettingsRow(Icons.Outlined.Contrast, "主题", "跟随系统")
-        SettingsRow(Icons.Outlined.RecordVoiceOver, "发音口音", "美音")
+        SettingsRow(
+            Icons.Outlined.Contrast,
+            "主题",
+            themeOptions.firstOrNull { it.first == themeMode }?.second ?: "跟随系统",
+            onClick = { dialog = OpenDialog.Theme },
+        )
+        SettingsRow(
+            Icons.Outlined.RecordVoiceOver,
+            "发音口音",
+            voiceOptions.firstOrNull { it.voice == ttsVoice }?.label ?: ttsVoice,
+            onClick = { dialog = OpenDialog.Voice },
+        )
         SettingsRow(
             Icons.Outlined.Speed,
             "朗读语速",
@@ -156,6 +253,169 @@ fun SettingsScreen(
 
         SettingsGroupTitle("数据")
         SettingsRow(Icons.Outlined.Shield, "数据与隐私", "导出 / 导入 / 清除 · 后续版本提供")
+    }
+
+    when (dialog) {
+        OpenDialog.None -> Unit
+        OpenDialog.DailyMinutes -> ChoiceDialog(
+            title = "每日目标时长",
+            options = listOf(5, 8, 12, 15, 20).map { "$it 分钟" },
+            selectedIndex = listOf(5, 8, 12, 15, 20).indexOf(dailyMinutes),
+            onSelect = { index ->
+                scope.launch { prefs.saveDailyMinutes(listOf(5, 8, 12, 15, 20)[index]) }
+                dialog = OpenDialog.None
+            },
+            onDismiss = { dialog = OpenDialog.None },
+        )
+        OpenDialog.MaxNewWords -> ChoiceDialog(
+            title = "每天最多新词",
+            options = listOf(3, 5, 8).map { "$it 个" },
+            selectedIndex = listOf(3, 5, 8).indexOf(maxNewWords),
+            onSelect = { index ->
+                scope.launch { prefs.setMaxNewWords(listOf(3, 5, 8)[index]) }
+                dialog = OpenDialog.None
+            },
+            onDismiss = { dialog = OpenDialog.None },
+        )
+        OpenDialog.Reminder -> ChoiceDialog(
+            title = "学习提醒",
+            options = reminderOptions,
+            selectedIndex = if (reminderTime.isBlank()) 0 else reminderOptions.indexOf(reminderTime),
+            onSelect = { index ->
+                applyReminder(reminderOptions[index])
+                dialog = OpenDialog.None
+            },
+            onDismiss = { dialog = OpenDialog.None },
+        )
+        OpenDialog.Theme -> ChoiceDialog(
+            title = "主题",
+            options = themeOptions.map { it.second },
+            selectedIndex = themeOptions.indexOfFirst { it.first == themeMode },
+            onSelect = { index ->
+                scope.launch { prefs.setThemeMode(themeOptions[index].first) }
+                dialog = OpenDialog.None
+            },
+            onDismiss = { dialog = OpenDialog.None },
+        )
+        OpenDialog.Voice -> ChoiceDialog(
+            title = "发音口音",
+            options = voiceOptions.map { it.label },
+            selectedIndex = voiceOptions.indexOfFirst { it.voice == ttsVoice },
+            onSelect = { index ->
+                scope.launch { prefs.setTtsVoice(voiceOptions[index].voice) }
+                dialog = OpenDialog.None
+            },
+            onDismiss = { dialog = OpenDialog.None },
+        )
+        OpenDialog.Goals -> GoalsDialog(
+            currentGoal = goal,
+            currentTopics = topics,
+            onConfirm = { newGoal, newTopics ->
+                scope.launch { prefs.saveGoalAndTopics(newGoal, newTopics) }
+                dialog = OpenDialog.None
+            },
+            onDismiss = { dialog = OpenDialog.None },
+        )
+    }
+}
+
+@Composable
+private fun ChoiceDialog(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                options.forEachIndexed { index, option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(index) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = index == selectedIndex, onClick = { onSelect(index) })
+                        Text(option, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("算了") }
+        },
+    )
+}
+
+@Composable
+private fun GoalsDialog(
+    currentGoal: String,
+    currentTopics: Set<String>,
+    onConfirm: (goal: String, topics: Set<String>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var goal by rememberSaveable { mutableStateOf(currentGoal) }
+    // Set 不能进 SavedState，旋转丢失可接受。
+    var topics by remember { mutableStateOf(currentTopics) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("学习目标与兴趣") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("目标", style = MaterialTheme.typography.labelLarge)
+                FlowChips(
+                    options = SampleData.goalOptions,
+                    isSelected = { it == goal },
+                    onToggle = { goal = it },
+                )
+                Text("兴趣（最多 5 个）", style = MaterialTheme.typography.labelLarge)
+                FlowChips(
+                    options = SampleData.topicOptions,
+                    isSelected = { it in topics },
+                    onToggle = {
+                        topics = if (it in topics) topics - it
+                        else if (topics.size < 5) topics + it else topics
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(goal, topics) },
+                enabled = goal.isNotBlank() && topics.isNotEmpty(),
+            ) { Text("保存") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("算了") }
+        },
+    )
+}
+
+@Composable
+private fun FlowChips(
+    options: List<String>,
+    isSelected: (String) -> Boolean,
+    onToggle: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        options.chunked(3).forEach { rowOptions ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowOptions.forEach { option ->
+                    FilterChip(
+                        selected = isSelected(option),
+                        onClick = { onToggle(option) },
+                        label = { Text(option) },
+                    )
+                }
+            }
+        }
     }
 }
 
