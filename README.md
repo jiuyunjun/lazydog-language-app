@@ -8,14 +8,16 @@
 能力测试 → 今日任务 → 学习新知识 → 渐进式阅读 → 朗读 → 测试 → 安排复习
 ```
 
-当前状态：Android 工程已初始化（M0 进行中）。已有 Compose + Material 3 主题、首启配置流程、四个一级页面壳和一条使用示例数据的学习流 demo；知识库（Room）、复习调度与 AI 接入尚未开始。
+当前状态：M0（工程基础）已完成。已有 Compose + Material 3 主题、首启流程（欢迎 → 学习目标）、四个一级页面壳、示例数据学习流 demo、网络层（OkHttp）与设置页里的 AI 连接测试；Room/KSP 依赖已接入。下一步是 M1：知识库 schema 与复习调度内核。
 
 ## 构建与运行
 
 - 要求：JDK 17+、Android SDK（compileSdk 35）。在仓库根目录创建 `local.properties` 写入 `sdk.dir`（Android Studio 会自动生成）。
+- 服务配置：复制 `app/src/main/java/com/lazydog/english/core/config/LocalEnv.kt.example` 为同目录 `LocalEnv.kt` 并填入自己的密钥（该文件被 gitignore，见 DECISIONS D-012）。不填也能启动，只是 AI 连接测试会失败。
 - 构建：`./gradlew assembleDebug`
+- 验证：`./gradlew lintDebug testDebugUnitTest`
 - 运行：Android Studio 直接运行 `app`，或 `adb install app/build/outputs/apk/debug/app-debug.apk`
-- 说明：首启的 AI 配置只保存在本机 DataStore；「测试连接」等依赖网络层的功能尚未实现，按钮会明确标注。
+- 说明：设置页点击「AI 服务」一行即可用内置配置做连接测试；朗读（Azure Speech）功能在 M5 才接入。
 
 ## 文档导航
 
