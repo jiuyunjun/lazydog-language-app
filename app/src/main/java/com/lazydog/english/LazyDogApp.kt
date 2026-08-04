@@ -16,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
+import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
@@ -34,19 +35,28 @@ object Routes {
 @Composable
 fun LazyDogApp() {
     val context = LocalContext.current
-    val prefs = remember { UserPreferences(context.applicationContext) }
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val prefs = app.userPreferences
     val onboardingCompleted by prefs.onboardingCompleted.collectAsState(initial = null)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         when (onboardingCompleted) {
             null -> Box(Modifier.fillMaxSize()) // DataStore 首帧未就绪，避免闪错页面
-            else -> AppNavHost(prefs = prefs, startAtMain = onboardingCompleted == true)
+            else -> AppNavHost(
+                prefs = prefs,
+                knowledgeRepository = app.knowledgeRepository,
+                startAtMain = onboardingCompleted == true,
+            )
         }
     }
 }
 
 @Composable
-private fun AppNavHost(prefs: UserPreferences, startAtMain: Boolean) {
+private fun AppNavHost(
+    prefs: UserPreferences,
+    knowledgeRepository: KnowledgeRepository,
+    startAtMain: Boolean,
+) {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
 
@@ -71,6 +81,7 @@ private fun AppNavHost(prefs: UserPreferences, startAtMain: Boolean) {
         composable(Routes.Main) {
             MainScreen(
                 prefs = prefs,
+                knowledgeRepository = knowledgeRepository,
                 onStartSession = { navController.navigate(Routes.Session) },
             )
         }

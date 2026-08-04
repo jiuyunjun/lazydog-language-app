@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.feature.library.LibraryScreen
 import com.lazydog.english.feature.settings.SettingsScreen
@@ -48,6 +49,7 @@ private val MainTab.icon: ImageVector
 @Composable
 fun MainScreen(
     prefs: UserPreferences,
+    knowledgeRepository: KnowledgeRepository,
     onStartSession: () -> Unit,
 ) {
     var currentTab by rememberSaveable { mutableStateOf(MainTab.Today) }
@@ -87,7 +89,10 @@ fun MainScreen(
                 modifier = contentModifier,
                 onEntryClick = showNotReady,
             )
-            MainTab.Library -> LibraryScreen(modifier = contentModifier)
+            MainTab.Library -> LibraryScreen(
+                modifier = contentModifier,
+                repository = knowledgeRepository,
+            )
             MainTab.Settings -> SettingsScreen(
                 modifier = contentModifier,
                 prefs = prefs,

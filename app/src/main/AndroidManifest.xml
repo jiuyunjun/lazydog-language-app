@@ -6,6 +6,7 @@
 
     <!-- 无账户、密钥存本机：禁止系统备份把本地数据带上云。 -->
     <application
+        android:name=".LazyDogApplication"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
