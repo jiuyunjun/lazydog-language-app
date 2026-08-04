@@ -8,7 +8,14 @@
 能力测试 → 今日任务 → 学习新知识 → 渐进式阅读 → 朗读 → 测试 → 安排复习
 ```
 
-当前状态：立项与产品设计阶段，尚未初始化 Android 工程。
+当前状态：Android 工程已初始化（M0 进行中）。已有 Compose + Material 3 主题、首启配置流程、四个一级页面壳和一条使用示例数据的学习流 demo；知识库（Room）、复习调度与 AI 接入尚未开始。
+
+## 构建与运行
+
+- 要求：JDK 17+、Android SDK（compileSdk 35）。在仓库根目录创建 `local.properties` 写入 `sdk.dir`（Android Studio 会自动生成）。
+- 构建：`./gradlew assembleDebug`
+- 运行：Android Studio 直接运行 `app`，或 `adb install app/build/outputs/apk/debug/app-debug.apk`
+- 说明：首启的 AI 配置只保存在本机 DataStore；「测试连接」等依赖网络层的功能尚未实现，按钮会明确标注。
 
 ## 文档导航
 
