@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.domain.assessment.AnswerOutcome
 import com.lazydog.english.domain.assessment.AssessmentEngine
 import com.lazydog.english.domain.assessment.AssessmentOutcome
 import com.lazydog.english.domain.assessment.AssessmentQuestion
@@ -57,6 +58,8 @@ import com.lazydog.english.domain.assessment.AssessmentSkill
 import com.lazydog.english.domain.assessment.AssessmentStage
 import com.lazydog.english.domain.assessment.AssessmentState
 import com.lazydog.english.domain.assessment.CefrLevel
+import com.lazydog.english.domain.assessment.CorrectionGrading
+import com.lazydog.english.domain.assessment.CorrectionItem
 import com.lazydog.english.domain.assessment.DeepReadingAnswer
 import com.lazydog.english.domain.assessment.DeepReadingOutcome
 import com.lazydog.english.domain.assessment.DeepReadingTask
@@ -79,17 +82,27 @@ import kotlinx.serialization.json.Json
 private val json = Json { ignoreUnknownKeys = true }
 
 /**
- * 测试流程对齐 EXT_TEST_DESIGN.md：3 题定位 → 客观题梯度自适应升降（长度不固定）
- * → 深度阅读（1 篇短文 + 4 道标签题）→ 写一段话（AI 两轮打分，不反过来影响上面的能力值）
- * → 结果页（CEFR 区间 + 加权分项画像 + 理解/输出差距提示 + 手动微调）。
+ * 测试流程对齐《CEFR 英语能力评测与个性化学习系统设计.md》：3 题定位 → 客观题梯度自适应升降
+ * （词汇/语法/阅读/语用/纠错短答五类技能，长度不固定）→ 深度阅读（1 篇短文 + 4 道标签题）
+ * → 写一段话（AI 两轮打分，不反过来影响上面的能力值）→ 结果页（CEFR 区间 + 加权分项画像 +
+ * 理解/输出差距提示 + 手动微调）。
  */
 private sealed interface AssessmentPhase {
     data object Intro : AssessmentPhase
     data class ResumeOffer(val saved: SavedAssessment) : AssessmentPhase
     data object FetchingQuestion : AssessmentPhase
-    data class Answering(val question: AssessmentQuestion, val levelScore: Double, val selected: Int?) :
-        AssessmentPhase
+    data class Answering(
+        val question: AssessmentQuestion,
+        val levelScore: Double,
+        val selected: Int?,
+        val shownAtMillis: Long,
+    ) : AssessmentPhase
     data class LadderFailed(val reason: String) : AssessmentPhase
+
+    data object FetchingCorrection : AssessmentPhase
+    data class CorrectionAnswering(val item: CorrectionItem, val levelScore: Double, val shownAtMillis: Long) :
+        AssessmentPhase
+    data class CorrectionFailed(val reason: String) : AssessmentPhase
 
     data object FetchingDeepReading : AssessmentPhase
     data class DeepReadingAnswering(val task: DeepReadingTask, val selections: Map<Int, Int>) : AssessmentPhase
@@ -116,6 +129,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
     var deepReadingOutcome by remember { mutableStateOf<DeepReadingOutcome?>(null) }
     var expressionAssessment by remember { mutableStateOf<ExpressionAssessment?>(null) }
     var writingText by rememberSaveable { mutableStateOf("") }
+    var correctionText by rememberSaveable { mutableStateOf("") }
     var checkedResume by remember { mutableStateOf(false) }
 
     suspend fun persist(stage: AssessmentStage, deepReadingTask: DeepReadingTask? = null) {
@@ -166,6 +180,25 @@ fun AssessmentScreen(onExit: () -> Unit) {
                                 question = result.data.first(),
                                 levelScore = scoreForLabel(step.level),
                                 selected = null,
+                                shownAtMillis = System.currentTimeMillis(),
+                            )
+                        }
+                    }
+                }
+            }
+            is NextLadderStep.Correction -> {
+                phase = AssessmentPhase.FetchingCorrection
+                correctionText = ""
+                scope.launch {
+                    val topics = prefs.topics.first().toList()
+                    when (val result = app.contentGenerator.generateCorrectionItem(step.level, topics)) {
+                        is GenerationResult.Failure -> phase = AssessmentPhase.CorrectionFailed(result.reason)
+                        is GenerationResult.Success -> {
+                            scope.launch { persist(AssessmentStage.Ladder) }
+                            phase = AssessmentPhase.CorrectionAnswering(
+                                item = result.data,
+                                levelScore = scoreForLabel(step.level),
+                                shownAtMillis = System.currentTimeMillis(),
                             )
                         }
                     }
@@ -178,9 +211,17 @@ fun AssessmentScreen(onExit: () -> Unit) {
         }
     }
 
-    fun onLadderAnswer(question: AssessmentQuestion, levelScore: Double, selected: Int?) {
-        val correct = selected != null && selected == question.answerIndex
-        ladderState = AssessmentEngine.record(ladderState, question.skill, levelScore, correct)
+    fun onLadderAnswer(question: AssessmentQuestion, levelScore: Double, selected: Int?, shownAtMillis: Long) {
+        val outcome = if (selected != null && selected == question.answerIndex) AnswerOutcome.Correct else AnswerOutcome.Wrong
+        val timing = AssessmentEngine.classifyTiming(System.currentTimeMillis() - shownAtMillis)
+        ladderState = AssessmentEngine.record(ladderState, question.skill, levelScore, outcome, timing)
+        advanceLadder()
+    }
+
+    fun onCorrectionAnswer(item: CorrectionItem, levelScore: Double, shownAtMillis: Long, text: String) {
+        val outcome = if (text.isBlank()) AnswerOutcome.Wrong else CorrectionGrading.grade(item, text)
+        val timing = AssessmentEngine.classifyTiming(System.currentTimeMillis() - shownAtMillis)
+        ladderState = AssessmentEngine.record(ladderState, AssessmentSkill.Correction, levelScore, outcome, timing)
         advanceLadder()
     }
 
@@ -323,8 +364,21 @@ fun AssessmentScreen(onExit: () -> Unit) {
                     currentLevel = labelForScore(ladderState.score),
                     selected = p.selected,
                     onSelect = { index -> phase = p.copy(selected = index) },
-                    onConfirm = { onLadderAnswer(p.question, p.levelScore, p.selected) },
-                    onSkip = { onLadderAnswer(p.question, p.levelScore, null) },
+                    onConfirm = { onLadderAnswer(p.question, p.levelScore, p.selected, p.shownAtMillis) },
+                    onSkip = { onLadderAnswer(p.question, p.levelScore, null, p.shownAtMillis) },
+                )
+                AssessmentPhase.FetchingCorrection -> LoadingView("正在出一道纠错题…")
+                is AssessmentPhase.CorrectionFailed -> FailedView(
+                    reason = p.reason,
+                    onRetry = { advanceLadder() },
+                    onExit = onExit,
+                )
+                is AssessmentPhase.CorrectionAnswering -> CorrectionView(
+                    item = p.item,
+                    text = correctionText,
+                    onTextChange = { correctionText = it },
+                    onConfirm = { onCorrectionAnswer(p.item, p.levelScore, p.shownAtMillis, correctionText) },
+                    onSkip = { onCorrectionAnswer(p.item, p.levelScore, p.shownAtMillis, "") },
                 )
                 AssessmentPhase.FetchingDeepReading -> LoadingView("正在准备一篇阅读短文…")
                 is AssessmentPhase.DeepReadingFailed -> FailedView(
@@ -418,7 +472,7 @@ private fun FailedView(
 @Composable
 private fun IntroView(enabled: Boolean, onStart: () -> Unit, onSkip: () -> Unit) {
     val parts = listOf(
-        Triple(Icons.Outlined.Abc, "语境词汇 + 语法", "先答 3 道定位题，再按表现自动升降难度"),
+        Triple(Icons.Outlined.Abc, "语境词汇 + 语法 + 纠错", "先答 3 道定位题，再按表现自动升降难度"),
         Triple(Icons.AutoMirrored.Outlined.Rule, "语用选择", "在真实场合该怎么回复、该怎么说"),
         Triple(Icons.AutoMirrored.Outlined.Article, "一篇阅读", "读一小段短文，答 4 道理解题"),
         Triple(Icons.Outlined.EditNote, "写一段话", "AI 打两轮分，不影响上面的难度评估"),
@@ -578,6 +632,55 @@ private fun OptionsList(options: List<String>, selected: Int?, onSelect: (Int) -
                 Text(option, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 4.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun CorrectionView(
+    item: CorrectionItem,
+    text: String,
+    onTextChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onSkip: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.small) {
+                Text(
+                    text = "纠错短答",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
+        }
+        Text("这句话有点问题，改一下：", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(item.incorrectSentence, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(14.dp))
+        }
+        OutlinedTextField(
+            value = text,
+            onValueChange = onTextChange,
+            placeholder = { Text("Write the corrected sentence…") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Button(onClick = onConfirm, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+            Text("确认")
+        }
+        TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
+            Text("不确定，下一题")
+        }
+        Text(
+            text = "改对大意就有分，不用和参考答案一字不差。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -818,7 +921,7 @@ private fun ResultView(
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("觉得估高或估低了？", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = "手动改成 A1 / A2 / B1 / B2 / C1",
+                    text = "手动改成 Pre-A1 / A1 / A2 / B1 / B2 / C1",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

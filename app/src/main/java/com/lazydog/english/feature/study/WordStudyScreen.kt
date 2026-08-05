@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
+import com.lazydog.english.core.data.VocabularyJson
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.GenerationResult
@@ -59,6 +60,8 @@ private data class StudyCard(
     val exampleEn: String,
     val exampleZh: String,
     val isNew: Boolean,
+    val pos: String = "",
+    val collocations: List<String> = emptyList(),
 )
 
 private sealed interface WordStudyPhase {
@@ -109,6 +112,8 @@ fun WordStudyScreen(
                     exampleEn = it.detail.exampleEn,
                     exampleZh = it.detail.exampleZh,
                     isNew = false,
+                    pos = it.detail.pos,
+                    collocations = VocabularyJson.decodeCollocations(it.detail.collocationsJson),
                 )
             }
         phase = if (due.isEmpty()) WordStudyPhase.OfferNew(0) else WordStudyPhase.Cards(due, 0, revealed = false)
@@ -150,6 +155,8 @@ fun WordStudyScreen(
                     ipa = card.ipa,
                     exampleEn = card.exampleEn,
                     exampleZh = card.exampleZh,
+                    pos = card.pos,
+                    collocations = card.collocations,
                 )
                 if (id != null) {
                     repository.recordReview(id, grade, source = "card")
@@ -255,6 +262,8 @@ private fun GeneratedWord.toCard() = StudyCard(
     exampleEn = exampleEn,
     exampleZh = exampleZh,
     isNew = true,
+    pos = pos,
+    collocations = collocations,
 )
 
 @Composable
@@ -311,7 +320,27 @@ private fun StudyCardView(
                 )
             }
             if (revealed) {
-                Text(card.meaningZh, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = if (card.pos.isNotBlank()) "${card.pos} ${card.meaningZh}" else card.meaningZh,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                if (card.collocations.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        card.collocations.forEach { phrase ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                shape = MaterialTheme.shapes.small,
+                            ) {
+                                Text(
+                                    text = phrase,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                )
+                            }
+                        }
+                    }
+                }
                 if (card.exampleEn.isNotBlank()) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainer,

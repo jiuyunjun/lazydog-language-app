@@ -2,6 +2,7 @@ package com.lazydog.english.core.ai
 
 import com.lazydog.english.core.network.await
 import com.lazydog.english.domain.assessment.AssessmentQuestion
+import com.lazydog.english.domain.assessment.CorrectionItem
 import com.lazydog.english.domain.assessment.DeepReadingQuestion
 import com.lazydog.english.domain.assessment.DeepReadingTask
 import com.lazydog.english.domain.assessment.DeepReadingValidation
@@ -11,6 +12,7 @@ import com.lazydog.english.domain.assessment.ExpressionRubric
 import com.lazydog.english.domain.assessment.ExpressionValidation
 import com.lazydog.english.domain.assessment.ReadingTag
 import com.lazydog.english.domain.assessment.validateAssessmentQuestions
+import com.lazydog.english.domain.assessment.validateCorrectionItem
 import com.lazydog.english.domain.generation.ContentValidation
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GeneratedReading
@@ -239,6 +241,25 @@ class OpenAiContentGenerator(
         return GenerationResult.Success(task, content.model, PROMPT_VERSION)
     }
 
+    override suspend fun generateCorrectionItem(
+        cefrLevel: String,
+        topics: List<String>,
+    ): GenerationResult<CorrectionItem> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildCorrectionItemPrompt(cefrLevel, topics),
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<CorrectionItemPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val item = payload.toDomain()
+        if (!validateCorrectionItem(item)) return GenerationResult.Failure("纠错题结构不完整，或改错前后一样")
+        return GenerationResult.Success(item, content.model, PROMPT_VERSION)
+    }
+
     override suspend fun evaluateExpressionRubric(
         taskZh: String,
         userTextEn: String,
@@ -426,8 +447,10 @@ class OpenAiContentGenerator(
         val meaningZh: String = "",
         val exampleEn: String = "",
         val exampleZh: String = "",
+        val pos: String = "",
+        val collocations: List<String> = emptyList(),
     ) {
-        fun toDomain() = GeneratedWord(term, ipa, meaningZh, exampleEn, exampleZh)
+        fun toDomain() = GeneratedWord(term, ipa, meaningZh, exampleEn, exampleZh, pos, collocations)
     }
 
     @Serializable
@@ -537,6 +560,15 @@ class OpenAiContentGenerator(
     }
 
     @Serializable
+    private data class CorrectionItemPayload(
+        val incorrectSentence: String = "",
+        val referenceCorrection: String = "",
+        val explanationZh: String = "",
+    ) {
+        fun toDomain() = CorrectionItem(incorrectSentence.trim(), referenceCorrection.trim(), explanationZh.trim())
+    }
+
+    @Serializable
     private data class DimensionScorePayload(
         val dimension: String = "",
         val score: Int = -1,
@@ -637,7 +669,7 @@ class OpenAiContentGenerator(
                 "不要 markdown 代码块，不要输出 JSON 以外的任何文字，不要添加 schema 之外的字段。"
 
         internal fun buildNewWordsPrompt(request: NewWordsRequest): String = buildString {
-            appendLine("生成 ${request.count} 个适合该学习者的英语新单词。")
+            appendLine("生成 ${request.count} 个适合该学习者的英语词义（词形+词性+具体意思，不是随便挑单词）。")
             appendLine("学习者水平：${request.learnerLevel}。")
             if (request.topics.isNotEmpty()) {
                 appendLine("兴趣主题（选词尽量贴近）：${request.topics.joinToString("、")}。")
@@ -645,9 +677,16 @@ class OpenAiContentGenerator(
             if (request.knownTerms.isNotEmpty()) {
                 appendLine("这些词已经学过，不要出现：${request.knownTerms.joinToString(", ")}。")
             }
-            appendLine("每个词给美式音标 ipa、简洁中文释义 meaningZh（含词性）、一句自然的英文例句 exampleEn（必须包含该词）和例句中文翻译 exampleZh。")
+            appendLine("大部分（八成左右）选贴近当前水平、实用高频的词义；" +
+                "可以有一两个稍高一级的，作为提前热身，但不要选到明显超纲、需要专业背景才懂的生僻词。")
+            appendLine("不要只给孤立单词——每个词给 pos（词性缩写，如 v./n./adj.）和 collocations：" +
+                "1~2 个这个词真实常用的搭配短语（比如 issue 配 \"resolve an issue\"，不是造一个不自然的短语）。")
+            appendLine("meaningZh 是这个具体词义的简洁中文释义；exampleEn 是包含该词的自然英文例句，exampleZh 是它的翻译。")
             appendLine("输出 JSON schema：")
-            appendLine("""{"schemaVersion":1,"words":[{"term":"...","ipa":"...","meaningZh":"...","exampleEn":"...","exampleZh":"..."}]}""")
+            appendLine(
+                """{"schemaVersion":1,"words":[{"term":"...","ipa":"...","pos":"v.","meaningZh":"...",""" +
+                    """"exampleEn":"...","exampleZh":"...","collocations":["..."]}]}""",
+            )
         }
 
         internal fun buildReadingPrompt(request: ReadingGenerationRequest): String = buildString {
@@ -733,6 +772,18 @@ class OpenAiContentGenerator(
             level.startsWith("B1") -> 200 to 300
             level.startsWith("B2") -> 350 to 500
             else -> 500 to 700
+        }
+
+        internal fun buildCorrectionItemPrompt(level: String, topics: List<String>): String = buildString {
+            appendLine("给中文母语的英语学习者出一道纠错改写题，CEFR 难度 $level，用于能力测评的「纠错或短答」这一类。")
+            if (topics.isNotEmpty()) appendLine("场景可以贴近：${topics.joinToString("、")}。")
+            appendLine("incorrectSentence：一句带明显语法或用词错误的英文（贴合 $level 学习者常见的错误类型，比如时态、单复数、介词、主谓一致）。")
+            appendLine("referenceCorrection：改正后的版本，只修正错误，不要顺便改写整句话的意思或结构。")
+            appendLine("explanationZh：一句话中文说明错在哪、为什么这样改。")
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"incorrectSentence":"...","referenceCorrection":"...","explanationZh":"..."}""",
+            )
         }
 
         internal fun buildExpressionRubricPrompt(

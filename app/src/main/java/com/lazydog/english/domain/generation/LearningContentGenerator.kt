@@ -56,6 +56,15 @@ interface LearningContentGenerator {
     ): GenerationResult<com.lazydog.english.domain.assessment.DeepReadingTask>
 
     /**
+     * 能力测试客观题梯度里的"纠错或短答"题（覆盖约束第 5 类技能）：
+     * 给一句带错的英文，学习者自己改，本地按相似度打部分分（不是简单对错二选一）。
+     */
+    suspend fun generateCorrectionItem(
+        cefrLevel: String,
+        topics: List<String>,
+    ): GenerationResult<com.lazydog.english.domain.assessment.CorrectionItem>
+
+    /**
      * 能力测试里开放表达的评分（EXT_TEST_DESIGN.md §六：5 维度、每维 0~4 分、要求举证）。
      * [referenceCefrLevel] 为 null 时是"盲评"（不告诉 AI 参考等级），非空时是对照量表的第二轮评分。
      * 两轮都交给 AI，但升降级判断、是否需要复核的比较逻辑都在本地做
@@ -93,6 +102,10 @@ data class GeneratedWord(
     val meaningZh: String,
     val exampleEn: String,
     val exampleZh: String,
+    /** 词性，如 "v."/"n."/"adj."（CEFR 设计文档 §6.2 的词义单位字段之一）。 */
+    val pos: String = "",
+    /** 1~2 个高价值搭配，不是孤立单词（§6.5"每个附带 1~2 个高价值搭配"）。 */
+    val collocations: List<String> = emptyList(),
 )
 
 data class GrammarLessonRequest(

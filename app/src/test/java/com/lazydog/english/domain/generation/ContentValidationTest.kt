@@ -12,7 +12,9 @@ class ContentValidationTest {
         meaning: String = "控制",
         example: String = "The city tried to curb traffic.",
         exampleZh: String = "市政府想控制车流。",
-    ) = GeneratedWord(term, "/kɜːb/", meaning, example, exampleZh)
+        pos: String = "v.",
+        collocations: List<String> = listOf("curb traffic"),
+    ) = GeneratedWord(term, "/kɜːb/", meaning, example, exampleZh, pos, collocations)
 
     @Test
     fun `valid word passes`() {
@@ -71,6 +73,17 @@ class ContentValidationTest {
             word(meaning = "长".repeat(121)),
         )
         val result = ContentValidation.validateNewWords(bad, maxCount = 5, knownTerms = emptySet())
+        assertTrue(result.valid.isEmpty())
+        assertEquals(3, result.droppedNotes.size)
+    }
+
+    @Test
+    fun `drops words missing part of speech or collocations`() {
+        val result = ContentValidation.validateNewWords(
+            listOf(word(pos = ""), word(collocations = emptyList()), word(collocations = List(3) { "x $it" })),
+            maxCount = 5,
+            knownTerms = emptySet(),
+        )
         assertTrue(result.valid.isEmpty())
         assertEquals(3, result.droppedNotes.size)
     }

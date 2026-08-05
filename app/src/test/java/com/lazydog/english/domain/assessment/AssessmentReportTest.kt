@@ -7,16 +7,16 @@ import org.junit.Test
 
 class AssessmentReportTest {
 
-    private fun state(vararg items: Triple<String, Double, Boolean>): AssessmentState =
-        AssessmentState(score = 3.0, answered = items.map { AnsweredItem(it.first, it.second, it.third) })
+    private fun state(vararg skills: String): AssessmentState =
+        AssessmentState(score = 3.0, answered = skills.map { AnsweredItem(it, 3.0, AnswerOutcome.Correct) })
 
     @Test
     fun `missing modules are reported as thin samples, not zero`() {
         val s = state(
-            Triple(AssessmentSkill.Vocab, 3.0, true),
-            Triple(AssessmentSkill.Grammar, 3.0, true),
-            Triple(AssessmentSkill.Reading, 3.0, true),
-            Triple(AssessmentSkill.Pragmatics, 3.0, true),
+            AssessmentSkill.Vocab,
+            AssessmentSkill.Grammar,
+            AssessmentSkill.Reading,
+            AssessmentSkill.Pragmatics,
         )
         val outcome = AssessmentReport.build(s, deepReading = null, expression = null)
 
@@ -28,10 +28,10 @@ class AssessmentReportTest {
     @Test
     fun `deep reading blends with ladder reading accuracy when both present`() {
         val s = state(
-            Triple(AssessmentSkill.Vocab, 3.0, true),
-            Triple(AssessmentSkill.Grammar, 3.0, true),
-            Triple(AssessmentSkill.Reading, 3.0, true), // 100% 梯度阅读正确率
-            Triple(AssessmentSkill.Pragmatics, 3.0, true),
+            AssessmentSkill.Vocab,
+            AssessmentSkill.Grammar,
+            AssessmentSkill.Reading, // 100% 梯度阅读正确率
+            AssessmentSkill.Pragmatics,
         )
         val deepReading = DeepReadingOutcome(pct = 50, correctWeight = 5)
         val outcome = AssessmentReport.build(s, deepReading, expression = null)
@@ -44,10 +44,10 @@ class AssessmentReportTest {
     @Test
     fun `large reading-over-expression gap produces a gap note`() {
         val s = state(
-            Triple(AssessmentSkill.Vocab, 3.0, true),
-            Triple(AssessmentSkill.Grammar, 3.0, true),
-            Triple(AssessmentSkill.Reading, 3.0, true),
-            Triple(AssessmentSkill.Pragmatics, 3.0, true),
+            AssessmentSkill.Vocab,
+            AssessmentSkill.Grammar,
+            AssessmentSkill.Reading,
+            AssessmentSkill.Pragmatics,
         )
         val deepReading = DeepReadingOutcome(pct = 100, correctWeight = 10)
         val weakExpression = ExpressionAssessment(
@@ -63,10 +63,10 @@ class AssessmentReportTest {
     @Test
     fun `small gap produces no gap note`() {
         val s = state(
-            Triple(AssessmentSkill.Vocab, 3.0, true),
-            Triple(AssessmentSkill.Grammar, 3.0, true),
-            Triple(AssessmentSkill.Reading, 3.0, true),
-            Triple(AssessmentSkill.Pragmatics, 3.0, true),
+            AssessmentSkill.Vocab,
+            AssessmentSkill.Grammar,
+            AssessmentSkill.Reading,
+            AssessmentSkill.Pragmatics,
         )
         val deepReading = DeepReadingOutcome(pct = 70, correctWeight = 7)
         val evenExpression = ExpressionAssessment(
@@ -81,7 +81,7 @@ class AssessmentReportTest {
 
     @Test
     fun `expression review flag propagates to the outcome`() {
-        val s = state(Triple(AssessmentSkill.Vocab, 3.0, true))
+        val s = state(AssessmentSkill.Vocab)
         val flagged = ExpressionAssessment(
             firstPass = ExpressionRubric(ExpressionDimension.all.map { DimensionScore(it, 0) }),
             secondPass = ExpressionRubric(ExpressionDimension.all.map { DimensionScore(it, 4) }),

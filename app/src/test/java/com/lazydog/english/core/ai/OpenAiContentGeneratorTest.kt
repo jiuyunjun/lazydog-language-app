@@ -75,7 +75,7 @@ class OpenAiContentGeneratorTest {
 
     private val wordsJson =
         """{"schemaVersion":1,"words":[
-           {"term":"curb","ipa":"/kɜːb/","meaningZh":"v. 控制","exampleEn":"The city tried to curb traffic.","exampleZh":"市政府想控制车流。"},
+           {"term":"curb","ipa":"/kɜːb/","pos":"v.","meaningZh":"控制","exampleEn":"The city tried to curb traffic.","exampleZh":"市政府想控制车流。","collocations":["curb traffic"]},
            {"term":"","ipa":"","meaningZh":"","exampleEn":"","exampleZh":""}
         ]}"""
 
@@ -345,6 +345,31 @@ class OpenAiContentGeneratorTest {
         server.enqueue(MockResponse().setBody(chatBody("""{"tips":[]}""")))
 
         val result = generator().explainPronunciation("text", sampleFeedback())
+
+        assertTrue(result is GenerationResult.Failure)
+    }
+
+    @Test
+    fun `correction item parses when the correction actually changes the sentence`() = runBlocking {
+        val itemJson =
+            """{"incorrectSentence":"She go to school every day.",
+               "referenceCorrection":"She goes to school every day.","explanationZh":"第三人称单数要加 s。"}"""
+        server.enqueue(MockResponse().setBody(chatBody(itemJson)))
+
+        val result = generator().generateCorrectionItem("B1", listOf("日常"))
+
+        val success = result as GenerationResult.Success
+        assertEquals("She goes to school every day.", success.data.referenceCorrection)
+    }
+
+    @Test
+    fun `correction item with a no-op correction fails`() = runBlocking {
+        val itemJson =
+            """{"incorrectSentence":"She goes to school every day.",
+               "referenceCorrection":"She goes to school every day.","explanationZh":"e"}"""
+        server.enqueue(MockResponse().setBody(chatBody(itemJson)))
+
+        val result = generator().generateCorrectionItem("B1", emptyList())
 
         assertTrue(result is GenerationResult.Failure)
     }

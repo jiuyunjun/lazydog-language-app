@@ -16,6 +16,9 @@ import com.lazydog.english.domain.scheduling.ReviewScheduler
 import com.lazydog.english.domain.scheduling.deriveStage
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 
 /**
  * 知识库读写入口。调度状态只在这里更新：
@@ -40,6 +43,8 @@ class KnowledgeRepository(
         ipa: String = "",
         exampleEn: String = "",
         exampleZh: String = "",
+        pos: String = "",
+        collocations: List<String> = emptyList(),
     ): Long? {
         val cleanTerm = term.trim()
         if (dao.vocabularyTermExists(cleanTerm)) return null
@@ -53,6 +58,8 @@ class KnowledgeRepository(
                     meaningZh = meaningZh.trim(),
                     exampleEn = exampleEn.trim(),
                     exampleZh = exampleZh.trim(),
+                    pos = pos.trim(),
+                    collocationsJson = VocabularyJson.encodeCollocations(collocations),
                 ),
             )
             id
@@ -175,3 +182,14 @@ fun MemoryState.applyTo(item: KnowledgeItemEntity, updatedAt: Instant): Knowledg
 
 fun KnowledgeItemEntity.stageOrDefault(): KnowledgeStage =
     KnowledgeStage.entries.firstOrNull { it.name == stage } ?: KnowledgeStage.Exposed
+
+/** 单词详情里 collocationsJson 字段的编解码。解码失败返回空列表，坏数据不炸页面。 */
+object VocabularyJson {
+    private val json = Json { ignoreUnknownKeys = true }
+    private val serializer = ListSerializer(String.serializer())
+
+    fun encodeCollocations(collocations: List<String>): String = json.encodeToString(serializer, collocations)
+
+    fun decodeCollocations(raw: String): List<String> =
+        runCatching { json.decodeFromString(serializer, raw) }.getOrDefault(emptyList())
+}

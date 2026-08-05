@@ -42,13 +42,18 @@ class BackupModelsTest {
 
     @Test
     fun `vocabulary detail is rebound to the new item id on restore`() {
-        val entity = VocabularyDetailEntity(itemId = 1, term = "curb", ipa = "/kɜːb/", meaningZh = "控制", exampleEn = "e", exampleZh = "z")
+        val entity = VocabularyDetailEntity(
+            itemId = 1, term = "curb", ipa = "/kɜːb/", meaningZh = "控制", exampleEn = "e", exampleZh = "z",
+            pos = "v.", collocationsJson = """["curb traffic","curb inflation"]""",
+        )
         val backup = entity.toBackup()
         assertEquals(1L, backup.itemId)
+        assertEquals("v.", backup.pos)
 
         val restored = backup.toEntity(newItemId = 99)
         assertEquals(99L, restored.itemId)
         assertEquals("curb", restored.term)
+        assertEquals("""["curb traffic","curb inflation"]""", restored.collocationsJson)
     }
 
     @Test

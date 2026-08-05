@@ -35,6 +35,8 @@ data class BackupVocabularyDetail(
     val meaningZh: String,
     val exampleEn: String,
     val exampleZh: String,
+    val pos: String = "",
+    val collocationsJson: String = "[]",
 )
 
 @Serializable
@@ -131,10 +133,11 @@ fun BackupKnowledgeItem.toEntity() = KnowledgeItemEntity(
     updatedAt = updatedAt,
 )
 
-fun VocabularyDetailEntity.toBackup() = BackupVocabularyDetail(itemId, term, ipa, meaningZh, exampleEn, exampleZh)
+fun VocabularyDetailEntity.toBackup() =
+    BackupVocabularyDetail(itemId, term, ipa, meaningZh, exampleEn, exampleZh, pos, collocationsJson)
 
 fun BackupVocabularyDetail.toEntity(newItemId: Long) =
-    VocabularyDetailEntity(newItemId, term, ipa, meaningZh, exampleEn, exampleZh)
+    VocabularyDetailEntity(newItemId, term, ipa, meaningZh, exampleEn, exampleZh, pos, collocationsJson)
 
 fun GrammarDetailEntity.toBackup() = BackupGrammarDetail(itemId, name, explanationZh, exampleEn)
 

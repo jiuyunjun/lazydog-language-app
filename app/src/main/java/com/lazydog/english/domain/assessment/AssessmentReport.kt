@@ -4,7 +4,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * 把客观题梯度 + 深度阅读 + 开放表达合成最终报告，对齐 EXT_TEST_DESIGN.md §七：
+ * 把客观题梯度 + 深度阅读 + 开放表达合成最终报告，对齐《CEFR 英语能力评测与个性化学习系统设计.md》§5：
  * 不只报总分，而是给 CEFR 区间 + 加权分项画像 + 理解/输出差距提示。
  * 没有测听力口语时，标题必须是"阅读与书面表达摸底"，不能自称"综合英语能力"。
  */
@@ -42,7 +42,13 @@ object AssessmentReport {
         deepReading: DeepReadingOutcome?,
         expression: ExpressionAssessment?,
     ): AssessmentOutcome {
-        val vocabGrammarPct = combinedAccuracy(state.answered, AssessmentSkill.Vocab, AssessmentSkill.Grammar)
+        // 纠错短答（§3.4 第 5 类覆盖技能）折进词汇语法这一项——权重表（§5.2）本身没有单列"纠错"。
+        val vocabGrammarPct = combinedAccuracy(
+            state.answered,
+            AssessmentSkill.Vocab,
+            AssessmentSkill.Grammar,
+            AssessmentSkill.Correction,
+        )
         val readingPct = readingComponentPct(state, deepReading)
         val expressionPct = expression?.let { (it.display.total.toDouble() / 20 * 100).roundToInt() }
         val pragmaticsPct = skillAccuracyPct(state.answered, AssessmentSkill.Pragmatics)
@@ -87,10 +93,18 @@ object AssessmentReport {
         return SkillProfileRow("$name（权重 ${(weight * 100).roundToInt()}%）", label, pct)
     }
 
+    /** 按平均得分率算 pct，不是简单对错计数——部分正确（纠错短答）要按 0.5 折算。 */
     private fun combinedAccuracy(answered: List<AnsweredItem>, vararg skills: String): Int? {
         val samples = answered.filter { it.skill in skills }
         if (samples.isEmpty()) return null
-        return (samples.count { it.correct }.toDouble() / samples.size * 100).roundToInt()
+        val avgCredit = samples.sumOf { it.creditFraction() } / samples.size
+        return (avgCredit * 100).roundToInt()
+    }
+
+    private fun AnsweredItem.creditFraction(): Double = when (outcome) {
+        AnswerOutcome.Correct -> 1.0
+        AnswerOutcome.Partial -> 0.5
+        AnswerOutcome.Wrong -> 0.0
     }
 
     private fun skillAccuracyPct(answered: List<AnsweredItem>, skill: String): Int? =

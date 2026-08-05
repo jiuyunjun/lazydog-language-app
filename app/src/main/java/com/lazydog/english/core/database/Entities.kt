@@ -47,6 +47,10 @@ data class VocabularyDetailEntity(
     val meaningZh: String,
     val exampleEn: String,
     val exampleZh: String,
+    /** 词性（如 "v."/"n."/"adj."），CEFR 设计文档 §6.2 的词义单位字段。 */
+    @ColumnInfo(defaultValue = "''") val pos: String = "",
+    /** 1~2 个高价值搭配，JSON 字符串数组（§6.5"每个附带 1~2 个高价值搭配"）。 */
+    @ColumnInfo(defaultValue = "'[]'") val collocationsJson: String = "[]",
 )
 
 @Entity(
