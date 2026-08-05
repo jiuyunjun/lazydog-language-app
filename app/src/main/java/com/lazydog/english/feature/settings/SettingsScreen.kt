@@ -1,6 +1,8 @@
 package com.lazydog.english.feature.settings
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +48,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
+import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.backup.AutoBackupWorker
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.model.SampleData
 import com.lazydog.english.core.network.AzureSpeechTokenClient
@@ -69,7 +74,7 @@ private val voiceOptions = listOf(
 private val reminderOptions = listOf("关闭", "08:00", "12:30", "20:00", "21:30")
 private val themeOptions = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
 
-private enum class OpenDialog { None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, Voice }
+private enum class OpenDialog { None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, Voice, ConfirmRestore }
 
 @Composable
 fun SettingsScreen(
@@ -179,6 +184,68 @@ fun SettingsScreen(
         }
     }
 
+    // ---- 数据备份到外部文件夹（重装不丢数据）----
+
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val backupFolderUri by prefs.backupFolderUri.collectAsState(initial = "")
+    var backupStatus by remember { mutableStateOf<String?>(null) }
+    var backupBusy by remember { mutableStateOf(false) }
+
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        context.contentResolver.takePersistableUriPermission(
+            uri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+        )
+        scope.launch {
+            prefs.setBackupFolderUri(uri.toString())
+            AutoBackupWorker.schedule(context)
+            backupStatus = "已选好文件夹，之后每天会自动备份一次"
+        }
+    }
+
+    val backupFolderName = remember(backupFolderUri) {
+        if (backupFolderUri.isBlank()) null
+        else runCatching { DocumentFile.fromTreeUri(context, Uri.parse(backupFolderUri))?.name }.getOrNull()
+    }
+
+    fun runBackupNow() {
+        if (backupBusy || backupFolderUri.isBlank()) return
+        backupBusy = true
+        backupStatus = "正在备份…"
+        scope.launch {
+            val payload = app.backupRepository.export()
+            backupStatus = app.backupFileStore.write(backupFolderUri, payload).fold(
+                onSuccess = { "已备份 · ${payload.knowledgeItems.size} 条知识记录" },
+                onFailure = { "备份失败：${it.message}" },
+            )
+            backupBusy = false
+        }
+    }
+
+    fun runRestoreNow() {
+        if (backupBusy || backupFolderUri.isBlank()) return
+        backupBusy = true
+        backupStatus = "正在恢复…"
+        scope.launch {
+            app.backupFileStore.read(backupFolderUri).fold(
+                onSuccess = { payload ->
+                    app.backupRepository.restore(payload)
+                    backupStatus = "已恢复 · ${payload.knowledgeItems.size} 条知识记录"
+                },
+                onFailure = { backupStatus = "恢复失败：${it.message}" },
+            )
+            backupBusy = false
+        }
+    }
+
+    val backupSummary = backupStatus ?: when {
+        backupFolderUri.isBlank() -> "还没设置 · 点击选一个文件夹"
+        else -> "${backupFolderName ?: "已选文件夹"} · 每天自动备份一次"
+    }
+
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
     ) {
@@ -253,8 +320,33 @@ fun SettingsScreen(
             onClick = { scope.launch { prefs.setAutoReadWords(!autoRead) } },
         )
 
-        SettingsGroupTitle("数据")
-        SettingsRow(Icons.Outlined.Shield, "数据与隐私", "导出 / 导入 / 清除 · 后续版本提供")
+        SettingsGroupTitle("数据备份")
+        SettingsRow(
+            Icons.Outlined.Shield,
+            "备份文件夹",
+            backupSummary,
+            onClick = { folderPicker.launch(null) },
+        )
+        if (backupFolderUri.isNotBlank()) {
+            SettingsRow(
+                Icons.Outlined.Shield,
+                "立即备份",
+                "把当前的知识库和学习偏好写一份到这个文件夹",
+                onClick = ::runBackupNow,
+            )
+            SettingsRow(
+                Icons.Outlined.Shield,
+                "从这个文件夹恢复",
+                "会先清空本机现有数据，再按备份内容重建",
+                onClick = { dialog = OpenDialog.ConfirmRestore },
+            )
+        }
+        Text(
+            text = "没有账号，也不往云上传东西。备份只存在你选的这个文件夹里，密钥不会被导出。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+        )
     }
 
     when (dialog) {
@@ -317,6 +409,22 @@ fun SettingsScreen(
                 dialog = OpenDialog.None
             },
             onDismiss = { dialog = OpenDialog.None },
+        )
+        OpenDialog.ConfirmRestore -> AlertDialog(
+            onDismissRequest = { dialog = OpenDialog.None },
+            title = { Text("确定要恢复吗？") },
+            text = { Text("会先清空这台手机上现有的单词、语法和学习记录，再换成备份文件夹里的内容。这一步做完撤不回去。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        dialog = OpenDialog.None
+                        runRestoreNow()
+                    },
+                ) { Text("清空并恢复") }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialog = OpenDialog.None }) { Text("算了") }
+            },
         )
     }
 }

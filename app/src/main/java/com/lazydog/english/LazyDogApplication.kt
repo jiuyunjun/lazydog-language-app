@@ -3,6 +3,8 @@ package com.lazydog.english
 import android.app.Application
 import com.lazydog.english.core.ai.AiConfig
 import com.lazydog.english.core.ai.OpenAiContentGenerator
+import com.lazydog.english.core.backup.BackupFileStore
+import com.lazydog.english.core.backup.BackupRepository
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.ReadingRepository
 import kotlinx.coroutines.flow.first
@@ -28,6 +30,10 @@ class LazyDogApplication : Application() {
     val speechController: SpeechController by lazy { SpeechController(userPreferences) }
 
     val readingRepository: ReadingRepository by lazy { ReadingRepository(database) }
+
+    val backupRepository: BackupRepository by lazy { BackupRepository(database, userPreferences) }
+
+    val backupFileStore: BackupFileStore by lazy { BackupFileStore(this) }
 
     val contentGenerator: LearningContentGenerator by lazy {
         OpenAiContentGenerator(

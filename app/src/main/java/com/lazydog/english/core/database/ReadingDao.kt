@@ -19,4 +19,12 @@ interface ReadingDao {
 
     @Query("DELETE FROM reading_materials WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    // ---- 备份 / 恢复（core/backup/BackupRepository）----
+
+    @Query("SELECT * FROM reading_materials")
+    suspend fun getAllMaterials(): List<ReadingMaterialEntity>
+
+    @Query("DELETE FROM reading_materials")
+    suspend fun clearAll()
 }

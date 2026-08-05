@@ -61,4 +61,22 @@ interface KnowledgeDao {
 
     @Query("DELETE FROM knowledge_items WHERE id = :id")
     suspend fun deleteItem(id: Long)
+
+    // ---- 备份 / 恢复（core/backup/BackupRepository）----
+
+    @Query("SELECT * FROM knowledge_items")
+    suspend fun getAllItems(): List<KnowledgeItemEntity>
+
+    @Query("SELECT * FROM vocabulary_details")
+    suspend fun getAllVocabularyDetails(): List<VocabularyDetailEntity>
+
+    @Query("SELECT * FROM grammar_details")
+    suspend fun getAllGrammarDetails(): List<GrammarDetailEntity>
+
+    @Query("SELECT * FROM learning_events")
+    suspend fun getAllEvents(): List<LearningEventEntity>
+
+    /** 级联删除 vocabulary_details / grammar_details / learning_events（外键 CASCADE）。 */
+    @Query("DELETE FROM knowledge_items")
+    suspend fun clearAll()
 }

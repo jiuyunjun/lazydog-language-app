@@ -177,7 +177,9 @@ interface ReadingSource {
 
 ## 9. 数据备份
 
-无账户服务时，长期学习记录是最重要资产。MVP 后期至少提供一种用户主动触发的本地导出/导入方式。导出格式必须带 schema 版本，并避免默认包含密钥与录音。
+无账户服务时，长期学习记录是最重要资产。导出格式带 schema 版本（`core/backup/BackupModels.kt` 的 `BackupPayload`），不含密钥与录音。
+
+实现方式见 D-014：用户在设置里通过 SAF（`ACTION_OPEN_DOCUMENT_TREE`）选一个外部文件夹并持久授权，`core/backup/BackupFileStore.kt` 在这个文件夹里读写固定文件名的 JSON；`core/backup/AutoBackupWorker.kt` 每天自动写一次；`core/backup/BackupRepository.kt` 负责整体导出/恢复（恢复是覆盖式的，知识项 id 会重新分配，通过旧 id → 新 id 的映射接回明细和事件）。首次启动的欢迎页也接入了同一套恢复流程，换手机或重装后选回同一个文件夹即可继续。
 
 ## 10. 测试策略
 

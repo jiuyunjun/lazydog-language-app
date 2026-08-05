@@ -159,7 +159,10 @@ private fun NavGraphBuilder.onboardingGraph(
 ) {
     navigation(startDestination = Routes.OnboardingWelcome, route = Routes.Onboarding) {
         composable(Routes.OnboardingWelcome) {
-            WelcomeScreen(onStart = { navigateNext(Routes.OnboardingGoals) })
+            WelcomeScreen(
+                onStart = { navigateNext(Routes.OnboardingGoals) },
+                onRestored = finishOnboarding,
+            )
         }
         // AI 服务与朗读服务改为读取 LocalEnv 写死的本地配置，不再让用户在 onboarding 里填写。
         // 对应的 AiServiceScreen / SpeechScreen 暂时保留，后续开放手动配置时再接回来。

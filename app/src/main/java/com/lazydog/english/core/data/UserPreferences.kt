@@ -48,6 +48,7 @@ class UserPreferences(private val context: Context) {
         val TtsVoice = stringPreferencesKey("tts_voice")
         val Topics = stringSetPreferencesKey("topics")
         val DailyMinutes = intPreferencesKey("daily_minutes")
+        val BackupFolderUri = stringPreferencesKey("backup_folder_uri")
     }
 
     val onboardingCompleted: Flow<Boolean> =
@@ -102,6 +103,9 @@ class UserPreferences(private val context: Context) {
     }
     val topics: Flow<Set<String>> = context.dataStore.data.map { it[Keys.Topics] ?: emptySet() }
     val dailyMinutes: Flow<Int> = context.dataStore.data.map { it[Keys.DailyMinutes] ?: 12 }
+
+    /** SAF 选定的备份文件夹（content:// tree URI 字符串）；空表示还没选。 */
+    val backupFolderUri: Flow<String> = context.dataStore.data.map { it[Keys.BackupFolderUri].orEmpty() }
 
     suspend fun saveAiConfig(baseUrl: String, apiKey: String, model: String) {
         context.dataStore.edit {
@@ -188,6 +192,42 @@ class UserPreferences(private val context: Context) {
             val current = if (sameDay) it[Keys.TodayDoneSteps] ?: emptySet() else emptySet()
             it[Keys.TodayDate] = todayDate
             it[Keys.TodayDoneSteps] = current + stepId
+        }
+    }
+
+    suspend fun setBackupFolderUri(uri: String) {
+        context.dataStore.edit { it[Keys.BackupFolderUri] = uri }
+    }
+
+    /**
+     * 从备份恢复偏好设置。只覆盖备份里带的这些学习偏好字段，
+     * AI/Speech 配置和备份文件夹本身不受影响（备份里本来就不含密钥）。
+     */
+    suspend fun restoreFromBackup(
+        learningGoal: String,
+        topics: Set<String>,
+        dailyMinutes: Int,
+        maxNewWords: Int,
+        learnerLevel: String,
+        learnerLevelConfidence: Int,
+        reminderTime: String,
+        themeMode: String,
+        ttsVoice: String,
+        autoReadWords: Boolean,
+        speechRateName: String,
+    ) {
+        context.dataStore.edit {
+            it[Keys.LearningGoal] = learningGoal
+            it[Keys.Topics] = topics
+            it[Keys.DailyMinutes] = dailyMinutes
+            it[Keys.MaxNewWords] = maxNewWords
+            it[Keys.LearnerLevel] = learnerLevel
+            it[Keys.LearnerLevelConfidence] = learnerLevelConfidence
+            it[Keys.ReminderTime] = reminderTime
+            it[Keys.ThemeMode] = themeMode
+            if (ttsVoice.isNotBlank()) it[Keys.TtsVoice] = ttsVoice
+            it[Keys.AutoReadWords] = autoReadWords
+            if (speechRateName.isNotBlank()) it[Keys.SpeechRateName] = speechRateName
         }
     }
 
