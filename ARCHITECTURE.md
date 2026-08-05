@@ -99,6 +99,19 @@ app/
 
 单词和语法的详细内容分别存储，不强迫使用同一张超宽表。
 
+`grammar_details` 对语法内容分层保存：
+
+- `name`：兼容旧版本的唯一键；新记录与 `patternEn` 相同。
+- `patternEn`：英文结构公式，也是记忆卡和记录列表的唯一主标题。
+- `labelZh`：短中文语法标签。
+- `summaryZh`：列表使用的一句话用途。
+- `explanationZh`：完整使用说明。
+- `exampleEn` / `exampleZh`：正确例句及翻译。
+- `badExampleEn` / `badExampleNoteZh`：易错例及原因。
+- `tipZh`：易混提醒。
+
+数据库 v5 只为旧表增加带默认值的列。旧记录不强制重写：展示层会从混合 `name` 中提取开头的英文形式，并优先把剩余中文作为简洁用途；新生成内容必须完整填写分层字段。
+
 ### LearningSession
 
 - 状态：planned / active / paused / completed / abandoned

@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.ReadingJson
 import com.lazydog.english.core.data.ReadingRepository
+import com.lazydog.english.core.data.displayPattern
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.domain.generation.GenerationResult
@@ -140,7 +141,7 @@ fun ReadingScreen(
                 .take(30)
             val dueGrammar = app.knowledgeRepository.grammar.first()
                 .filter { (it.item.nextReviewAt ?: Long.MAX_VALUE) <= now }
-                .map { it.detail.name }
+                .map { it.detail.displayPattern() }
                 .take(2)
 
             val request = ReadingGenerationRequest(

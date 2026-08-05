@@ -91,8 +91,9 @@ class ContentValidationTest {
     @Test
     fun `grammar lesson validation catches gaps`() {
         val lesson = GeneratedGrammarLesson(
-            name = "现在完成进行时",
-            patternEn = "have been doing",
+            patternEn = "have/has been + verb-ing",
+            labelZh = "现在完成进行时",
+            summaryZh = "表示过去开始并持续至今的动作",
             explanationZh = "一直在做的事。",
             goodExampleEn = "I have been waiting.",
             goodExampleZh = "我一直在等。",
@@ -102,10 +103,13 @@ class ContentValidationTest {
         )
         assertEquals(null, ContentValidation.validateGrammarLesson(lesson, emptySet()))
         assertTrue(
-            ContentValidation.validateGrammarLesson(lesson, setOf("现在完成进行时")) != null,
+            ContentValidation.validateGrammarLesson(lesson, setOf("have/has been + verb-ing")) != null,
         )
         assertTrue(
             ContentValidation.validateGrammarLesson(lesson.copy(goodExampleEn = ""), emptySet()) != null,
+        )
+        assertTrue(
+            ContentValidation.validateGrammarLesson(lesson.copy(patternEn = "have been doing 表示持续"), emptySet()) != null,
         )
     }
 }

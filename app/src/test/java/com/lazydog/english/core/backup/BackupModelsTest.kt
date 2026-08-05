@@ -58,8 +58,21 @@ class BackupModelsTest {
 
     @Test
     fun `grammar detail and learning event rebind to the new item id`() {
-        val grammar = GrammarDetailEntity(itemId = 1, name = "现在完成时", explanationZh = "e", exampleEn = "I have done it.")
-        assertEquals(99L, grammar.toBackup().toEntity(newItemId = 99).itemId)
+        val grammar = GrammarDetailEntity(
+            itemId = 1,
+            name = "have/has + past participle",
+            patternEn = "have/has + past participle",
+            labelZh = "现在完成时",
+            summaryZh = "表示过去动作与现在有关",
+            explanationZh = "e",
+            exampleEn = "I have done it.",
+            exampleZh = "我已经做完了。",
+            tipZh = "不要和一般过去时混用。",
+        )
+        val restoredGrammar = grammar.toBackup().toEntity(newItemId = 99)
+        assertEquals(99L, restoredGrammar.itemId)
+        assertEquals("表示过去动作与现在有关", restoredGrammar.summaryZh)
+        assertEquals("我已经做完了。", restoredGrammar.exampleZh)
 
         val event = LearningEventEntity(id = 5, itemId = 1, source = "card", activity = "review", rating = "Good", responseMillis = 800, occurredAt = 123)
         val restoredEvent = event.toBackup().toEntity(newItemId = 99)

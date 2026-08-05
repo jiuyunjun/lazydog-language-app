@@ -64,14 +64,21 @@ object ContentValidation {
 
     /** 语法讲解整体校验：关键字段缺一不可。@return 失败原因，null 表示通过。 */
     fun validateGrammarLesson(lesson: GeneratedGrammarLesson, knownGrammar: Collection<String>): String? {
-        val known = knownGrammar.map { it.trim() }.toSet()
+        val known = knownGrammar.map { normalizeGrammarPattern(it) }.toSet()
         return when {
-            lesson.name.isBlank() || lesson.name.length > 60 -> "语法点名称缺失或过长"
-            lesson.name.trim() in known -> "这个语法点已经学过"
+            lesson.patternEn.isBlank() || lesson.patternEn.length > 80 -> "语法结构缺失或过长"
+            !lesson.patternEn.any { it in 'A'..'Z' || it in 'a'..'z' } -> "语法结构必须包含英文形式"
+            Regex("[\\u4E00-\\u9FFF]").containsMatchIn(lesson.patternEn) -> "语法结构不能混入中文说明"
+            normalizeGrammarPattern(lesson.patternEn) in known -> "这个语法点已经学过"
+            lesson.labelZh.isBlank() || lesson.labelZh.length > 40 -> "中文语法标签缺失或过长"
+            lesson.summaryZh.isBlank() || lesson.summaryZh.length > 36 -> "一句话用途缺失或过长"
             lesson.explanationZh.isBlank() || lesson.explanationZh.length > 500 -> "讲解缺失或过长"
             lesson.goodExampleEn.isBlank() || lesson.goodExampleEn.length > 200 -> "正确例句缺失或过长"
             lesson.goodExampleZh.isBlank() -> "正确例句缺少译文"
             else -> null
         }
     }
+
+    private fun normalizeGrammarPattern(value: String): String =
+        value.lowercase().replace(Regex("\\s+"), " ").trim()
 }

@@ -44,8 +44,15 @@ data class BackupVocabularyDetail(
 data class BackupGrammarDetail(
     val itemId: Long,
     val name: String,
+    val patternEn: String = "",
+    val labelZh: String = "",
+    val summaryZh: String = "",
     val explanationZh: String,
     val exampleEn: String,
+    val exampleZh: String = "",
+    val badExampleEn: String = "",
+    val badExampleNoteZh: String = "",
+    val tipZh: String = "",
 )
 
 @Serializable
@@ -151,10 +158,34 @@ fun VocabularyDetailEntity.toBackup() =
 fun BackupVocabularyDetail.toEntity(newItemId: Long) =
     VocabularyDetailEntity(newItemId, term, ipa, meaningZh, exampleEn, exampleZh, pos, collocationsJson)
 
-fun GrammarDetailEntity.toBackup() = BackupGrammarDetail(itemId, name, explanationZh, exampleEn)
+fun GrammarDetailEntity.toBackup() = BackupGrammarDetail(
+    itemId = itemId,
+    name = name,
+    patternEn = patternEn,
+    labelZh = labelZh,
+    summaryZh = summaryZh,
+    explanationZh = explanationZh,
+    exampleEn = exampleEn,
+    exampleZh = exampleZh,
+    badExampleEn = badExampleEn,
+    badExampleNoteZh = badExampleNoteZh,
+    tipZh = tipZh,
+)
 
 fun BackupGrammarDetail.toEntity(newItemId: Long) =
-    GrammarDetailEntity(newItemId, name, explanationZh, exampleEn)
+    GrammarDetailEntity(
+        itemId = newItemId,
+        name = name,
+        patternEn = patternEn,
+        labelZh = labelZh,
+        summaryZh = summaryZh,
+        explanationZh = explanationZh,
+        exampleEn = exampleEn,
+        exampleZh = exampleZh,
+        badExampleEn = badExampleEn,
+        badExampleNoteZh = badExampleNoteZh,
+        tipZh = tipZh,
+    )
 
 fun LearningEventEntity.toBackup() = BackupLearningEvent(itemId, source, activity, rating, responseMillis, occurredAt)
 

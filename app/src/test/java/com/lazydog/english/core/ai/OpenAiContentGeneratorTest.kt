@@ -37,6 +37,20 @@ class ExtractJsonTest {
     }
 }
 
+class GrammarPromptTest {
+    @Test
+    fun `grammar prompt separates pattern summary and explanation`() {
+        val prompt = OpenAiContentGenerator.buildGrammarPrompt(
+            GrammarLessonRequest("A2-B1", focus = "将来计划", knownGrammar = emptyList()),
+        )
+
+        assertTrue(prompt.contains("patternEn 是唯一主标题"))
+        assertTrue(prompt.contains("不得含中文"))
+        assertTrue(prompt.contains("summaryZh"))
+        assertTrue(prompt.contains("be going to + base verb"))
+    }
+}
+
 /** AI_CONTRACTS 契约测试：合法返回、缺字段、坏 JSON、限流重试。 */
 class OpenAiContentGeneratorTest {
 
@@ -214,8 +228,8 @@ class OpenAiContentGeneratorTest {
     @Test
     fun `grammar lesson parses and validates`() = runBlocking {
         val lessonJson =
-            """{"schemaVersion":1,"name":"过去完成时","patternEn":"had done",
-               "explanationZh":"过去的过去。","goodExampleEn":"I had left before she arrived.",
+            """{"schemaVersion":1,"patternEn":"had + past participle","labelZh":"过去完成时","summaryZh":"表示过去某时之前已完成的动作",
+               "explanationZh":"用于说明过去的过去。","goodExampleEn":"I had left before she arrived.",
                "goodExampleZh":"她到之前我已经走了。","badExampleEn":"I left before she had arrived.",
                "badExampleNoteZh":"先后关系反了。","tipZh":"先发生的用 had done。"}"""
         server.enqueue(MockResponse().setBody(chatBody(lessonJson)))
@@ -225,19 +239,20 @@ class OpenAiContentGeneratorTest {
         )
 
         val success = result as GenerationResult.Success
-        assertEquals("过去完成时", success.data.name)
+        assertEquals("had + past participle", success.data.patternEn)
+        assertEquals("表示过去某时之前已完成的动作", success.data.summaryZh)
     }
 
     @Test
     fun `known grammar point is rejected by validation`() = runBlocking {
         val lessonJson =
-            """{"schemaVersion":1,"name":"现在完成时","patternEn":"have done",
-               "explanationZh":"讲过了。","goodExampleEn":"I have done it.","goodExampleZh":"我做完了。",
+            """{"schemaVersion":1,"patternEn":"have/has + past participle","labelZh":"现在完成时","summaryZh":"表示过去动作与现在有关",
+               "explanationZh":"动作发生在过去，但结果与现在有关。","goodExampleEn":"I have done it.","goodExampleZh":"我做完了。",
                "badExampleEn":"","badExampleNoteZh":"","tipZh":""}"""
         server.enqueue(MockResponse().setBody(chatBody(lessonJson)))
 
         val result = generator().generateGrammarLesson(
-            GrammarLessonRequest("A2-B1", focus = null, knownGrammar = listOf("现在完成时")),
+            GrammarLessonRequest("A2-B1", focus = null, knownGrammar = listOf("have/has + past participle")),
         )
 
         assertTrue(result is GenerationResult.Failure)

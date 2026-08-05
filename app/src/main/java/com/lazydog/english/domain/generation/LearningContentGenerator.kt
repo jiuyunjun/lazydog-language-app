@@ -139,8 +139,13 @@ data class GrammarLessonRequest(
 )
 
 data class GeneratedGrammarLesson(
-    val name: String,
+    /** 可直接套用的英文结构公式，如 "be going to + base verb"。 */
     val patternEn: String,
+    /** 中文语法标签，如“be going to 将来表达”。不作为卡片主标题。 */
+    val labelZh: String,
+    /** 列表和记忆卡第一眼看到的一句话用途。 */
+    val summaryZh: String,
+    /** 何时使用、语气和易混区别等完整讲解。 */
     val explanationZh: String,
     val goodExampleEn: String,
     val goodExampleZh: String,

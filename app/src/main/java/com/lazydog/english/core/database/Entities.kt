@@ -67,9 +67,17 @@ data class VocabularyDetailEntity(
 )
 data class GrammarDetailEntity(
     @PrimaryKey val itemId: Long,
+    /** 唯一键；新数据等于 patternEn，旧数据保留原 name。 */
     val name: String,
+    @ColumnInfo(defaultValue = "''") val patternEn: String = "",
+    @ColumnInfo(defaultValue = "''") val labelZh: String = "",
+    @ColumnInfo(defaultValue = "''") val summaryZh: String = "",
     val explanationZh: String,
     val exampleEn: String,
+    @ColumnInfo(defaultValue = "''") val exampleZh: String = "",
+    @ColumnInfo(defaultValue = "''") val badExampleEn: String = "",
+    @ColumnInfo(defaultValue = "''") val badExampleNoteZh: String = "",
+    @ColumnInfo(defaultValue = "''") val tipZh: String = "",
 )
 
 /**

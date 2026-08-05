@@ -40,10 +40,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
+import com.lazydog.english.core.data.displayPattern
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
@@ -79,7 +81,7 @@ fun GrammarStudyScreen(
         phase = GrammarPhase.Generating
         progressChars = 0
         scope.launch {
-            val known = repository.grammar.first().map { it.detail.name }.take(100)
+            val known = repository.grammar.first().map { it.detail.displayPattern() }.take(100)
             val result = app.contentGenerator.generateGrammarLesson(
                 GrammarLessonRequest(
                     learnerLevel = app.userPreferences.learnerLevelDescription.first(),
@@ -98,9 +100,15 @@ fun GrammarStudyScreen(
     fun saveLesson(lesson: GeneratedGrammarLesson) {
         scope.launch {
             val id = repository.addGrammar(
-                name = lesson.name,
+                patternEn = lesson.patternEn,
+                labelZh = lesson.labelZh,
+                summaryZh = lesson.summaryZh,
                 explanationZh = lesson.explanationZh,
                 exampleEn = lesson.goodExampleEn,
+                exampleZh = lesson.goodExampleZh,
+                badExampleEn = lesson.badExampleEn,
+                badExampleNoteZh = lesson.badExampleNoteZh,
+                tipZh = lesson.tipZh,
             )
             if (id != null) {
                 phase = GrammarPhase.Showing(lesson, saved = true)
@@ -206,20 +214,29 @@ private fun LessonView(
     val extended = LazyDogTheme.extendedColors
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
-        Text(lesson.name, style = MaterialTheme.typography.headlineSmall)
-        if (lesson.patternEn.isNotBlank()) {
-            InteractiveEnglishText(
-                text = lesson.patternEn,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        InteractiveEnglishText(
+            text = lesson.patternEn,
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Text(
+            text = lesson.labelZh,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
     Text(
-        text = lesson.explanationZh,
+        text = lesson.summaryZh,
         style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.Medium,
     )
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("怎么用", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Text(
+            text = lesson.explanationZh,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     ExampleBlock(
         icon = Icons.Outlined.CheckCircle,
         tint = extended.correct,
@@ -244,12 +261,14 @@ private fun LessonView(
             shape = MaterialTheme.shapes.medium,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(
-                text = lesson.tipZh,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(14.dp),
-            )
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("易混提醒", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    text = lesson.tipZh,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
     Button(

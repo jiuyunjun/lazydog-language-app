@@ -1,6 +1,8 @@
 package com.lazydog.english.feature.library
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +54,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
+import com.lazydog.english.core.data.displayPattern
+import com.lazydog.english.core.data.displaySummary
 import com.lazydog.english.core.data.stageOrDefault
 import com.lazydog.english.core.database.GrammarRecord
 import com.lazydog.english.core.database.KnowledgeItemEntity
@@ -165,14 +169,19 @@ fun LibraryScreen(
                 scope.launch {
                     val id = when (tabIndex) {
                         0 -> repository.addVocabulary(term = title, meaningZh = explanation, exampleEn = example)
-                        else -> repository.addGrammar(name = title, explanationZh = explanation, exampleEn = example)
+                        else -> repository.addGrammar(
+                            patternEn = title,
+                            summaryZh = explanation,
+                            explanationZh = explanation,
+                            exampleEn = example,
+                        )
                     }
                     if (id != null) showAddDialog = false
                 }
             },
             isDuplicate = { title ->
                 if (tabIndex == 0) vocab.any { it.detail.term.equals(title.trim(), ignoreCase = true) }
-                else grammar.any { it.detail.name == title.trim() }
+                else grammar.any { it.detail.displayPattern().equals(title.trim(), ignoreCase = true) }
             },
         )
     }
@@ -188,21 +197,19 @@ fun LibraryScreen(
         if (app.userPreferences.autoReadWords.first()) speech.speak(term)
     }
 
-    if (selectedVocab != null || selectedGrammar != null) {
+    if (selectedVocab != null) {
         val example = when {
             selectedExpression != null -> ""
             selectedWord != null -> selectedWord.detail.exampleEn
-            else -> selectedGrammar?.detail?.exampleEn.orEmpty()
+            else -> ""
         }
         ItemDetailSheet(
-            title = selectedVocab?.detail?.term ?: selectedGrammar?.detail?.name.orEmpty(),
-            ipa = selectedVocab?.detail?.ipa.orEmpty(),
-            explanation = selectedVocab?.detail?.meaningZh ?: selectedGrammar?.detail?.explanationZh.orEmpty(),
+            title = selectedVocab.detail.term,
+            ipa = selectedVocab.detail.ipa,
+            explanation = selectedVocab.detail.meaningZh,
             example = example,
-            item = (selectedVocab?.item ?: selectedGrammar?.item)!!,
-            onSpeakWord = selectedVocab?.let { record ->
-                { scope.launch { speech.speak(record.detail.term) } }
-            },
+            item = selectedVocab.item,
+            onSpeakWord = { scope.launch { speech.speak(selectedVocab.detail.term) } },
             speakDescription = if (selectedExpression != null) "朗读这条表达" else "朗读这个词",
             onSpeakExample = example.takeIf { it.isNotBlank() }?.let { text ->
                 { scope.launch { speech.speak(text) } }
@@ -219,6 +226,28 @@ fun LibraryScreen(
                 val id = selectedItemId ?: return@ItemDetailSheet
                 scope.launch {
                     repository.deleteItem(id)
+                    selectedItemId = null
+                }
+            },
+        )
+    }
+
+    selectedGrammar?.let { record ->
+        GrammarDetailSheet(
+            record = record,
+            onSpeakExample = record.detail.exampleEn.takeIf { it.isNotBlank() }?.let { text ->
+                { scope.launch { speech.speak(text) } }
+            },
+            onDismiss = { selectedItemId = null },
+            onReview = { grade ->
+                scope.launch {
+                    repository.recordReview(record.item.id, grade)
+                    selectedItemId = null
+                }
+            },
+            onDelete = {
+                scope.launch {
+                    repository.deleteItem(record.item.id)
                     selectedItemId = null
                 }
             },
@@ -281,10 +310,11 @@ private fun GrammarRecords(
         LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
             items(records, key = { it.item.id }) { record ->
                 LibraryRow(
-                    title = record.detail.name,
-                    subtitle = record.detail.explanationZh,
+                    title = record.detail.displayPattern(),
+                    subtitle = record.detail.displaySummary(),
                     item = record.item,
                     now = now,
+                    stackedSubtitle = true,
                     onClick = { onSelect(record.item.id) },
                 )
             }
@@ -379,6 +409,95 @@ private fun LibraryRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun GrammarDetailSheet(
+    record: GrammarRecord,
+    onSpeakExample: (() -> Unit)?,
+    onDismiss: () -> Unit,
+    onReview: (ReviewGrade) -> Unit,
+    onDelete: () -> Unit,
+) {
+    val detail = record.detail
+    val pattern = detail.displayPattern()
+    val summary = detail.displaySummary()
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            InteractiveEnglishText(
+                text = pattern,
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            if (detail.labelZh.isNotBlank()) {
+                Text(detail.labelZh, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+            if (summary.isNotBlank()) {
+                Text(summary, style = MaterialTheme.typography.bodyLarge)
+            }
+            if (detail.explanationZh.isNotBlank() && detail.explanationZh != summary) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("详细说明", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(detail.explanationZh, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (detail.exampleEn.isNotBlank()) {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("例句", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            InteractiveEnglishText(detail.exampleEn, modifier = Modifier.weight(1f))
+                            if (onSpeakExample != null) {
+                                IconButton(onClick = onSpeakExample) {
+                                    Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = "朗读例句")
+                                }
+                            }
+                        }
+                        if (detail.exampleZh.isNotBlank()) {
+                            Text(detail.exampleZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            if (detail.badExampleEn.isNotBlank()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("容易说错", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                    InteractiveEnglishText(detail.badExampleEn)
+                    if (detail.badExampleNoteZh.isNotBlank()) {
+                        Text(detail.badExampleNoteZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (detail.tipZh.isNotBlank()) {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.medium) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("易混提醒", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(detail.tipZh, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            RecordReviewControls(record.item, onReview)
+            TextButton(onClick = { confirmDelete = true }) {
+                Text("删除这条记录", color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+
+    if (confirmDelete) {
+        DeleteRecordDialog(pattern, onDismiss = { confirmDelete = false }) {
+            confirmDelete = false
+            onDelete()
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun ItemDetailSheet(
     title: String,
     ipa: String,
@@ -447,32 +566,7 @@ private fun ItemDetailSheet(
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StageChip(item.stageOrDefault())
-                Text(
-                    text = "复习 ${item.reviewCount} 次 · 忘过 ${item.lapseCount} 次 · " +
-                        dueLabel(item.nextReviewAt, System.currentTimeMillis()),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-            }
-
-            Text(
-                text = "现在想到它，什么感觉？",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                ReviewGrade.entries.forEach { grade ->
-                    OutlinedButton(
-                        onClick = { onReview(grade) },
-                        modifier = Modifier.weight(1f),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                    ) {
-                        Text(grade.label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                    }
-                }
-            }
+            RecordReviewControls(item, onReview)
 
             TextButton(onClick = { confirmDelete = true }) {
                 Text("删除这条记录", color = MaterialTheme.colorScheme.error)
@@ -481,20 +575,48 @@ private fun ItemDetailSheet(
     }
 
     if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("删除「$title」？") },
-            text = { Text("它的复习计划和学习事件会一起删除，删了就找不回来。") },
-            confirmButton = {
-                TextButton(onClick = { confirmDelete = false; onDelete() }) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("留着") }
-            },
+        DeleteRecordDialog(title, onDismiss = { confirmDelete = false }) {
+            confirmDelete = false
+            onDelete()
+        }
+    }
+}
+
+@Composable
+private fun RecordReviewControls(item: KnowledgeItemEntity, onReview: (ReviewGrade) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        StageChip(item.stageOrDefault())
+        Text(
+            text = "复习 ${item.reviewCount} 次 · 忘过 ${item.lapseCount} 次 · " + dueLabel(item.nextReviewAt, System.currentTimeMillis()),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
         )
     }
+    Text("现在想到它，什么感觉？", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 4.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        ReviewGrade.entries.forEach { grade ->
+            OutlinedButton(
+                onClick = { onReview(grade) },
+                modifier = Modifier.weight(1f),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+            ) {
+                Text(grade.label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteRecordDialog(title: String, onDismiss: () -> Unit, onDelete: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("删除「$title」？") },
+        text = { Text("它的复习计划和学习事件会一起删除，删了就找不回来。") },
+        confirmButton = {
+            TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("留着") } },
+    )
 }
 
 @Composable
@@ -509,6 +631,8 @@ private fun AddItemDialog(
     var example by rememberSaveable { mutableStateOf("") }
     val duplicate = title.isNotBlank() && isDuplicate(title)
     val isVocab = type == KnowledgeType.Vocabulary
+    val invalidGrammarPattern = !isVocab && title.isNotBlank() &&
+        (!title.any { it in 'A'..'Z' || it in 'a'..'z' } || title.any { it.code in 0x4E00..0x9FFF })
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -518,12 +642,17 @@ private fun AddItemDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text(if (isVocab) "单词" else "语法点名称") },
-                    isError = duplicate,
-                    supportingText = if (duplicate) {
-                        { Text("已经记过它了") }
+                    label = { Text(if (isVocab) "单词" else "结构公式") },
+                    placeholder = if (!isVocab) {
+                        { Text("例如 be going to + base verb") }
                     } else {
                         null
+                    },
+                    isError = duplicate || invalidGrammarPattern,
+                    supportingText = when {
+                        duplicate -> ({ Text("已经记过它了") })
+                        invalidGrammarPattern -> ({ Text("这里只写英文结构公式，中文用途放下一栏") })
+                        else -> null
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -531,7 +660,7 @@ private fun AddItemDialog(
                 OutlinedTextField(
                     value = explanation,
                     onValueChange = { explanation = it },
-                    label = { Text(if (isVocab) "中文意思" else "一句话说明（可不填）") },
+                    label = { Text(if (isVocab) "中文意思" else "一句话用途（可不填）") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
@@ -545,7 +674,7 @@ private fun AddItemDialog(
         confirmButton = {
             Button(
                 onClick = { onConfirm(title, explanation, example) },
-                enabled = title.isNotBlank() && !duplicate && (!isVocab || explanation.isNotBlank()),
+                enabled = title.isNotBlank() && !duplicate && !invalidGrammarPattern && (!isVocab || explanation.isNotBlank()),
             ) {
                 Text("记下")
             }

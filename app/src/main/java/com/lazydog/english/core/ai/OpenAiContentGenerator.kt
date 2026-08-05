@@ -132,7 +132,7 @@ class OpenAiContentGenerator(
         val lesson = payload.toDomain()
         val problem = ContentValidation.validateGrammarLesson(lesson, request.knownGrammar)
         if (problem != null) return GenerationResult.Failure("讲解没通过校验：$problem")
-        return GenerationResult.Success(lesson, content.model, PROMPT_VERSION)
+        return GenerationResult.Success(lesson, content.model, GRAMMAR_PROMPT_VERSION)
     }
 
     override suspend fun generateReading(
@@ -835,8 +835,9 @@ class OpenAiContentGenerator(
     @Serializable
     private data class GrammarPayload(
         val schemaVersion: Int = 0,
-        val name: String = "",
         val patternEn: String = "",
+        val labelZh: String = "",
+        val summaryZh: String = "",
         val explanationZh: String = "",
         val goodExampleEn: String = "",
         val goodExampleZh: String = "",
@@ -845,8 +846,9 @@ class OpenAiContentGenerator(
         val tipZh: String = "",
     ) {
         fun toDomain() = GeneratedGrammarLesson(
-            name = name.trim(),
             patternEn = patternEn.trim(),
+            labelZh = labelZh.trim(),
+            summaryZh = summaryZh.trim(),
             explanationZh = explanationZh.trim(),
             goodExampleEn = goodExampleEn.trim(),
             goodExampleZh = goodExampleZh.trim(),
@@ -859,6 +861,7 @@ class OpenAiContentGenerator(
     companion object {
         const val SCHEMA_VERSION = 1
         const val PROMPT_VERSION = 1
+        const val GRAMMAR_PROMPT_VERSION = 2
         const val SCENARIO_PROMPT_VERSION = 1
         private const val RETRY_DELAY_MS = 1200L
         private val RETRYABLE_CODES = setOf(429) + (500..599)
@@ -1160,12 +1163,16 @@ class OpenAiContentGenerator(
             if (request.knownGrammar.isNotEmpty()) {
                 appendLine("这些语法点已经学过，不要重复：${request.knownGrammar.joinToString("、")}。")
             }
-            appendLine("要求：name 是语法点中文名；patternEn 是结构公式（如 have been doing）；")
-            appendLine("explanationZh 用两三句大白话讲清楚什么时候用；goodExampleEn/goodExampleZh 一个正确例句和翻译；")
+            appendLine("字段必须严格分工，不要把标题和讲解揉在一起：")
+            appendLine("patternEn 是唯一主标题，只写可套用的英文结构公式，不得含中文或完整例句。")
+            appendLine("例如：be going to + base verb；have/has + past participle；if + past simple, would + base verb。")
+            appendLine("labelZh 是 2～12 字的中文语法标签；summaryZh 是不超过 18 个汉字的一句话用途，如“表示已有计划或打算”。")
+            appendLine("explanationZh 用两三句大白话讲清何时用、语气以及和易混结构的区别，不要重复 summaryZh；")
+            appendLine("goodExampleEn/goodExampleZh 给一个正确例句和翻译；")
             appendLine("badExampleEn 一个中国学习者容易写错的句子，badExampleNoteZh 说明错在哪；tipZh 一句易混点提醒。")
             appendLine("输出 JSON schema：")
             appendLine(
-                """{"schemaVersion":1,"name":"...","patternEn":"...","explanationZh":"...",""" +
+                """{"schemaVersion":1,"patternEn":"...","labelZh":"...","summaryZh":"...","explanationZh":"...",""" +
                     """"goodExampleEn":"...","goodExampleZh":"...","badExampleEn":"...","badExampleNoteZh":"...","tipZh":"..."}""",
             )
         }

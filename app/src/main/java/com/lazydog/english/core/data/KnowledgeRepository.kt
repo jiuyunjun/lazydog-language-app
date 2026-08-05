@@ -75,17 +75,37 @@ class KnowledgeRepository(
     }
 
     /** @return 新知识项 id；同名语法点已存在时返回 null。 */
-    suspend fun addGrammar(name: String, explanationZh: String = "", exampleEn: String = ""): Long? {
-        val cleanName = name.trim()
-        if (dao.grammarNameExists(cleanName)) return null
+    suspend fun addGrammar(
+        patternEn: String,
+        labelZh: String = "",
+        summaryZh: String = "",
+        explanationZh: String = "",
+        exampleEn: String = "",
+        exampleZh: String = "",
+        badExampleEn: String = "",
+        badExampleNoteZh: String = "",
+        tipZh: String = "",
+    ): Long? {
+        val cleanPattern = patternEn.trim()
+        if (cleanPattern.isBlank() || !cleanPattern.any { it in 'A'..'Z' || it in 'a'..'z' } ||
+            cleanPattern.any { it.code in 0x4E00..0x9FFF }
+        ) return null
+        if (dao.grammarNameExists(cleanPattern)) return null
         return database.withTransaction {
             val id = insertNewItem(KnowledgeType.Grammar)
             dao.insertGrammarDetail(
                 GrammarDetailEntity(
                     itemId = id,
-                    name = cleanName,
+                    name = cleanPattern,
+                    patternEn = cleanPattern,
+                    labelZh = labelZh.trim(),
+                    summaryZh = summaryZh.trim(),
                     explanationZh = explanationZh.trim(),
                     exampleEn = exampleEn.trim(),
+                    exampleZh = exampleZh.trim(),
+                    badExampleEn = badExampleEn.trim(),
+                    badExampleNoteZh = badExampleNoteZh.trim(),
+                    tipZh = tipZh.trim(),
                 ),
             )
             id
@@ -206,6 +226,25 @@ class KnowledgeRepository(
 
 private fun VocabularyDetailEntity.isExpression(): Boolean =
     pos.equals("expression", ignoreCase = true) || pos.equals("phrase", ignoreCase = true)
+
+/** 新数据直接读分层字段；旧数据尽量从混合标题和说明中提取一个可读回退。 */
+fun GrammarDetailEntity.displayPattern(): String {
+    if (patternEn.isNotBlank()) return patternEn
+    val englishPrefix = name.substringBeforeFirstHan().trim().trimEnd('-', '—', ':', '：')
+    return englishPrefix.ifBlank { name }
+}
+
+fun GrammarDetailEntity.displaySummary(): String {
+    if (summaryZh.isNotBlank()) return summaryZh
+    val titleChinese = name.dropWhile { it.code !in 0x4E00..0x9FFF }.trim()
+    if (titleChinese.isNotBlank()) return titleChinese.take(36)
+    return explanationZh.substringBefore('。').substringBefore('\n').trim().take(36)
+}
+
+private fun String.substringBeforeFirstHan(): String {
+    val index = indexOfFirst { it.code in 0x4E00..0x9FFF }
+    return if (index < 0) this else substring(0, index)
+}
 
 fun KnowledgeItemEntity.toMemoryState(): MemoryState = MemoryState(
     stability = stability,

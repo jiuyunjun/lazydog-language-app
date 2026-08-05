@@ -54,7 +54,31 @@ interface LearningContentGenerator {
 
 不要把整个知识库无上限塞入上下文。本地程序应先选择与本次任务有关的子集，并对“已掌握词汇”采用等级、频率边界或压缩摘要。
 
-## 4. 阅读输出草案
+## 4. 语法输出契约
+
+语法字段必须各司其职：
+
+```json
+{
+  "schemaVersion": 1,
+  "patternEn": "be going to + base verb",
+  "labelZh": "计划将来表达",
+  "summaryZh": "表示已有计划或打算",
+  "explanationZh": "用于说话前已经决定的计划……",
+  "goodExampleEn": "I am going to call her tonight.",
+  "goodExampleZh": "我今晚打算给她打电话。",
+  "badExampleEn": "I am going to calling her.",
+  "badExampleNoteZh": "to 后接动词原形。",
+  "tipZh": "临时决定通常用 will。"
+}
+```
+
+- `patternEn` 是卡片唯一主标题，只能是含英文的可套用结构公式，不得混入中文说明或完整例句。
+- `labelZh` 是短中文语法标签；`summaryZh` 是不超过 36 字的一句话用途，只用于列表和快速回忆。
+- `explanationZh` 才承载使用条件、语气和易混区别，不得挤进标题或列表副标题。
+- 本地校验拒绝中文混入 `patternEn`、缺少英文形式、用途过长、必要例句缺失以及已学结构重复。
+
+## 5. 阅读输出草案
 
 ```json
 {
@@ -92,7 +116,7 @@ interface LearningContentGenerator {
 
 这是设计草案，不是最终 Kotlin schema。实现前必须为每种题型定义严格字段和长度限制。
 
-## 5. 本地校验
+## 6. 本地校验
 
 阅读入库前至少检查：
 
@@ -106,21 +130,21 @@ interface LearningContentGenerator {
 
 语法是否真正符合目标很难用规则完全判断；首版可以采用规则检查加 AI 二次校验，但要记录其不确定性。
 
-## 6. 能力测试
+## 7. 能力测试
 
 - AI 可以按难度约束生成题目，但标准答案必须在展示前通过格式和一致性检查。
 - 自适应升降级由本地程序控制。
 - CEFR 结果应附置信度，不把一次测试包装成精确结论。
 - 开放表达反馈需要区分原文、建议修改、错误类型和简短解释。
 
-## 7. 提示词安全与隐私
+## 8. 提示词安全与隐私
 
 - 用户粘贴的内容属于不可信输入，应与系统指令明确分隔。
 - 不允许网页正文或用户文章改变输出 schema、工具或应用行为。
 - 默认不向 AI 发送真实姓名、密钥、完整学习数据库或录音。
 - 调试日志应隐藏 Authorization、订阅密钥和用户长文本。
 
-## 8. 待实现时确定
+## 9. 待实现时确定
 
 - 实际 AI provider 与模型选择
 - 结构化输出能力和客户端库
