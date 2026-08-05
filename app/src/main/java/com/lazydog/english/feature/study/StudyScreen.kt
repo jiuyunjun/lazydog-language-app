@@ -3,6 +3,7 @@ package com.lazydog.english.feature.study
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.Abc
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -49,6 +51,7 @@ fun StudyScreen(
     onGrammarClick: () -> Unit,
     onReadingClick: () -> Unit,
     onPasteClick: () -> Unit,
+    onScenarioClick: () -> Unit,
     onMaterialClick: (Long) -> Unit,
 ) {
     val context = LocalContext.current
@@ -60,6 +63,7 @@ fun StudyScreen(
         StudyEntry(Icons.AutoMirrored.Outlined.Rule, "语法", "让 AI 讲一个", onClick = onGrammarClick),
         StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "生成一篇定制短文", onClick = onReadingClick),
         StudyEntry(Icons.Outlined.Mic, "朗读", "读一句，拿反馈", onClick = onSpeakingClick),
+        StudyEntry(Icons.Outlined.RecordVoiceOver, "情景演练", "和难说话的人练一轮", onClick = onScenarioClick),
     )
 
     Column(
@@ -109,6 +113,7 @@ fun StudyScreen(
                             }
                         }
                     }
+                    if (rowEntries.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }

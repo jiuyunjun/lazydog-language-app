@@ -22,6 +22,9 @@ interface SpeechProvider {
      */
     suspend fun assessReading(referenceText: String): AssessmentResult
 
+    /** 从麦克风听写一句英文，只转成文字，不做口语评分。 */
+    suspend fun transcribeOnce(): TranscriptionResult
+
     /** 释放底层资源。释放后实例不可再用。 */
     fun close()
 }
@@ -51,6 +54,12 @@ sealed interface AssessmentResult {
     /** 没听清 / 没说话。 */
     data object NothingRecognized : AssessmentResult
     data class Failed(val reason: String) : AssessmentResult
+}
+
+sealed interface TranscriptionResult {
+    data class Done(val text: String) : TranscriptionResult
+    data object NothingRecognized : TranscriptionResult
+    data class Failed(val reason: String) : TranscriptionResult
 }
 
 /** 发音反馈，分数为百分制。 */

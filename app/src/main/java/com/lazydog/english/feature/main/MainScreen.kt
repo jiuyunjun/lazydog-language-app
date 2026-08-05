@@ -51,6 +51,7 @@ fun MainScreen(
     onStartGrammarStudy: () -> Unit,
     onStartReading: () -> Unit,
     onStartReadingPaste: () -> Unit,
+    onStartScenario: () -> Unit,
     onOpenMaterial: (Long) -> Unit,
     onStartAssessment: () -> Unit,
 ) {
@@ -93,6 +94,7 @@ fun MainScreen(
                 onGrammarClick = onStartGrammarStudy,
                 onReadingClick = onStartReading,
                 onPasteClick = onStartReadingPaste,
+                onScenarioClick = onStartScenario,
                 onMaterialClick = onOpenMaterial,
             )
             MainTab.Library -> LibraryScreen(

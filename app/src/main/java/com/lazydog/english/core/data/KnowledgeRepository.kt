@@ -84,6 +84,31 @@ class KnowledgeRepository(
         }
     }
 
+    /**
+     * 把情景演练里留下的可复用表达放进统一复习计划。
+     * 短语复用 vocabulary_details，pos 标为 phrase；已存在时复用原知识项。
+     */
+    suspend fun saveScenarioExpression(
+        expressionEn: String,
+        meaningZh: String,
+        exampleEn: String = "",
+    ): Long? {
+        val clean = expressionEn.trim()
+        if (clean.isBlank()) return null
+        val existing = dao.getVocabularyByTerm(clean)
+        val id = existing?.item?.id ?: addVocabulary(
+            term = clean,
+            meaningZh = meaningZh.trim(),
+            ipa = "",
+            exampleEn = exampleEn.ifBlank { clean },
+            exampleZh = meaningZh.trim(),
+            pos = "phrase",
+            collocations = emptyList(),
+        ) ?: dao.getVocabularyByTerm(clean)?.item?.id
+        if (id != null) recordReview(id, ReviewGrade.Good, source = "scenario")
+        return id
+    }
+
     /** 记录一次四档自评复习，返回更新后的状态；知识项不存在返回 null。 */
     suspend fun recordReview(
         itemId: Long,

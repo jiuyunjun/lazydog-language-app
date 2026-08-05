@@ -1,0 +1,842 @@
+package com.lazydog.english.feature.scenario
+
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Casino
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.SyncProblem
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.scenario.CommunicationFailure
+import com.lazydog.english.domain.scenario.ScenarioBrief
+import com.lazydog.english.domain.scenario.ScenarioDifficulty
+import com.lazydog.english.domain.scenario.ScenarioGenerationRequest
+import com.lazydog.english.domain.scenario.ScenarioImprovement
+import com.lazydog.english.domain.scenario.ScenarioJudgement
+import com.lazydog.english.domain.scenario.ScenarioMessage
+import com.lazydog.english.domain.scenario.ScenarioReplyOption
+import com.lazydog.english.domain.scenario.ScenarioSource
+import com.lazydog.english.domain.scenario.ScenarioSpeaker
+import com.lazydog.english.domain.scenario.ScenarioSummary
+import com.lazydog.english.domain.scenario.ScenarioSummaryRequest
+import com.lazydog.english.domain.scenario.ScenarioTurn
+import com.lazydog.english.domain.scenario.ScenarioTurnRequest
+import com.lazydog.english.domain.speaking.TranscriptionResult
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+
+private enum class ScenarioPhase { Pick, Brief, Conversation, Summary, Replay, Finish }
+private enum class ReplyMode { Options, Free }
+
+private data class ScenarioSeed(
+    val title: String,
+    val who: String,
+    val seed: String,
+    val icon: ImageVector,
+)
+
+private val recommendedSeeds = listOf(
+    ScenarioSeed("酒店房型订错了", "和不太松口的前台经理谈", "酒店给错房型，争取升级或退差价", Icons.Outlined.AutoAwesome),
+    ScenarioSeed("账单里多了一项", "请餐厅经理核对并处理", "餐厅账单多收费，礼貌指出并达成解决方案", Icons.Outlined.AutoAwesome),
+    ScenarioSeed("面试时间撞了", "和招聘人员重新约时间", "工作面试时间冲突，需要说明情况并改约", Icons.Outlined.AutoAwesome),
+    ScenarioSeed("房东一直不修东西", "催一位拖延的房东", "出租屋设备坏了，要求房东明确维修时间", Icons.Outlined.AutoAwesome),
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ScenarioScreen(onExit: () -> Unit) {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val scope = rememberCoroutineScope()
+
+    var phase by remember { mutableStateOf(ScenarioPhase.Pick) }
+    var customSeed by remember { mutableStateOf("") }
+    var selectedSeed by remember { mutableStateOf<ScenarioSeed?>(recommendedSeeds.first()) }
+    var brief by remember { mutableStateOf<ScenarioBrief?>(null) }
+    var difficultyTier by remember { mutableStateOf(2) }
+    var messages by remember { mutableStateOf<List<ScenarioMessage>>(emptyList()) }
+    var options by remember { mutableStateOf<List<ScenarioReplyOption>>(emptyList()) }
+    var hint by remember { mutableStateOf("") }
+    var replyMode by remember { mutableStateOf(ReplyMode.Options) }
+    var input by remember { mutableStateOf("") }
+    var achievedGoals by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    var communicationFailure by remember { mutableStateOf<CommunicationFailure?>(null) }
+    var readyToFinish by remember { mutableStateOf(false) }
+    var summary by remember { mutableStateOf<ScenarioSummary?>(null) }
+    var replayIndex by remember { mutableStateOf(0) }
+    var savedPhraseCount by remember { mutableStateOf(0) }
+    var busy by remember { mutableStateOf(false) }
+    var transcribing by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var goalsExpanded by remember { mutableStateOf(false) }
+
+    fun transcribe() {
+        if (transcribing) return
+        transcribing = true
+        error = null
+        scope.launch {
+            when (val result = app.speechController.transcribeOnce()) {
+                is TranscriptionResult.Done -> input = listOf(input.trim(), result.text).filter { it.isNotBlank() }.joinToString(" ")
+                TranscriptionResult.NothingRecognized -> error = "没听清，再说一次试试。"
+                is TranscriptionResult.Failed -> error = result.reason
+            }
+            transcribing = false
+        }
+    }
+
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) transcribe() else error = "需要麦克风权限才能把语音转成文字。"
+    }
+
+    fun requestTranscription() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            transcribe()
+        } else {
+            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    fun createScenario(source: ScenarioSource, seed: String, harder: Boolean = false) {
+        if (busy) return
+        if (source != ScenarioSource.Random && seed.isBlank()) {
+            error = "先写一个情况，或者选下面推荐的一个。"
+            return
+        }
+        val requestedTier = if (harder) (difficultyTier + 1).coerceAtMost(3) else difficultyTier
+        difficultyTier = requestedTier
+        busy = true
+        error = null
+        scope.launch {
+            val tier = requestedTier
+            val result = app.contentGenerator.generateScenario(
+                ScenarioGenerationRequest(
+                    source = source,
+                    seedZh = seed,
+                    learnerLevel = app.userPreferences.learnerLevelDescription.first(),
+                    learningGoal = app.userPreferences.learningGoal.first(),
+                    topics = app.userPreferences.topics.first().toList(),
+                    difficulty = ScenarioDifficulty(
+                        informationLoad = tier,
+                        cooperation = (4 - tier).coerceIn(1, 3),
+                        followUpPressure = tier,
+                        requiresPoliteRefusal = tier >= 2,
+                        includesMisunderstanding = tier >= 3,
+                    ),
+                    excludedScenarioIds = app.userPreferences.recentScenarioIds(),
+                ),
+            )
+            when (result) {
+                is GenerationResult.Success -> {
+                    brief = result.data
+                    phase = ScenarioPhase.Brief
+                }
+                is GenerationResult.Failure -> error = result.reason
+            }
+            busy = false
+        }
+    }
+
+    fun startConversation() {
+        val current = brief ?: return
+        scope.launch { app.userPreferences.recordScenarioPlayed(current.scenarioId) }
+        messages = listOf(
+            ScenarioMessage(0, ScenarioSpeaker.Opponent, current.openingLineEn, current.openingSubtextZh),
+        )
+        options = current.initialReplyOptions
+        achievedGoals = emptyMap()
+        communicationFailure = null
+        readyToFinish = false
+        phase = ScenarioPhase.Conversation
+    }
+
+    fun submitReply(reply: String) {
+        val current = brief ?: return
+        val cleanReply = reply.trim()
+        if (cleanReply.isBlank() || busy) return
+        busy = true
+        error = null
+        val transcriptBefore = messages
+        val request = ScenarioTurnRequest(current, transcriptBefore, cleanReply)
+        scope.launch {
+            val pair = coroutineScope {
+                val turnCall = async { app.contentGenerator.generateScenarioTurn(request) }
+                val judgeCall = async { app.contentGenerator.judgeScenarioTurn(request) }
+                turnCall.await() to judgeCall.await()
+            }
+            val turn = (pair.first as? GenerationResult.Success<ScenarioTurn>)?.data
+            val judgement = (pair.second as? GenerationResult.Success<ScenarioJudgement>)?.data
+            if (turn == null || judgement == null) {
+                error = listOfNotNull(
+                    (pair.first as? GenerationResult.Failure)?.reason,
+                    (pair.second as? GenerationResult.Failure)?.reason,
+                ).joinToString("；").ifBlank { "这一轮没生成好，请重试。" }
+            } else {
+                val userTurn = transcriptBefore.count { it.speaker == ScenarioSpeaker.User } + 1
+                messages = transcriptBefore +
+                    ScenarioMessage(userTurn, ScenarioSpeaker.User, cleanReply) +
+                    ScenarioMessage(userTurn, ScenarioSpeaker.Opponent, turn.opponentReplyEn, turn.opponentSubtextZh)
+                val updatedGoals = achievedGoals + judgement.achievedGoalIds.associateWith { userTurn }
+                achievedGoals = updatedGoals
+                communicationFailure = judgement.communicationFailure
+                options = turn.replyOptions
+                hint = turn.halfSentenceHintEn
+                input = ""
+                readyToFinish = turn.naturalEnding || updatedGoals.size == current.goals.size || userTurn >= 10
+            }
+            busy = false
+        }
+    }
+
+    fun finishConversation() {
+        val current = brief ?: return
+        if (busy) return
+        busy = true
+        error = null
+        scope.launch {
+            when (val result = app.contentGenerator.summarizeScenario(
+                ScenarioSummaryRequest(current, messages, achievedGoals.keys),
+            )) {
+                is GenerationResult.Success -> {
+                    summary = result.data
+                    phase = ScenarioPhase.Summary
+                }
+                is GenerationResult.Failure -> error = result.reason
+            }
+            busy = false
+        }
+    }
+
+    fun savePhrases() {
+        val currentSummary = summary ?: return
+        if (busy) return
+        busy = true
+        scope.launch {
+            savedPhraseCount = currentSummary.keepPhrases.count { phrase ->
+                app.knowledgeRepository.saveScenarioExpression(
+                    expressionEn = phrase.en,
+                    meaningZh = phrase.zh,
+                    exampleEn = phrase.en,
+                ) != null
+            }
+            busy = false
+            phase = ScenarioPhase.Finish
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            if (phase !in setOf(ScenarioPhase.Summary, ScenarioPhase.Finish)) {
+                TopAppBar(
+                    title = { Text(if (phase == ScenarioPhase.Brief) "开演前" else "情景演练") },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            if (phase == ScenarioPhase.Pick) onExit() else phase = ScenarioPhase.Pick
+                        }) {
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                )
+            }
+        },
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when (phase) {
+                ScenarioPhase.Pick -> ScenarioPicker(
+                    customSeed = customSeed,
+                    onCustomSeedChange = { customSeed = it; selectedSeed = null },
+                    selectedSeed = selectedSeed,
+                    onSelectSeed = { selectedSeed = it; customSeed = "" },
+                    busy = busy,
+                    error = error,
+                    onUse = {
+                        val custom = customSeed.isNotBlank()
+                        createScenario(
+                            if (custom) ScenarioSource.Custom else ScenarioSource.Recommended,
+                            if (custom) customSeed else selectedSeed?.seed.orEmpty(),
+                        )
+                    },
+                    onRandom = { createScenario(ScenarioSource.Random, "给一个适合我学习目标的真实场景") },
+                )
+                ScenarioPhase.Brief -> brief?.let { current ->
+                    ScenarioBriefView(
+                        brief = current,
+                        busy = busy,
+                        error = error,
+                        onStart = ::startConversation,
+                        onHarder = { createScenario(ScenarioSource.Recommended, current.situationZh, harder = true) },
+                    )
+                }
+                ScenarioPhase.Conversation -> brief?.let { current ->
+                    ScenarioConversation(
+                        brief = current,
+                        messages = messages,
+                        options = options,
+                        achievedGoals = achievedGoals,
+                        goalsExpanded = goalsExpanded,
+                        onToggleGoals = { goalsExpanded = !goalsExpanded },
+                        replyMode = replyMode,
+                        onReplyModeChange = { replyMode = it },
+                        input = input,
+                        onInputChange = { input = it },
+                        hint = hint,
+                        failure = communicationFailure,
+                        onUseRepair = { repair -> communicationFailure = null; submitReply(repair) },
+                        onRewriteRepair = { communicationFailure = null; replyMode = ReplyMode.Free; input = "" },
+                        busy = busy,
+                        transcribing = transcribing,
+                        error = error,
+                        readyToFinish = readyToFinish,
+                        onSubmit = ::submitReply,
+                        onMic = ::requestTranscription,
+                        onFinish = ::finishConversation,
+                    )
+                }
+                ScenarioPhase.Summary -> summary?.let { value ->
+                    ScenarioSummaryView(
+                        brief = brief!!,
+                        summary = value,
+                        achievedGoals = achievedGoals,
+                        turnCount = messages.count { it.speaker == ScenarioSpeaker.User },
+                        busy = busy,
+                        error = error,
+                        onReplay = { replayIndex = 0; input = ""; phase = ScenarioPhase.Replay },
+                        onSave = ::savePhrases,
+                    )
+                }
+                ScenarioPhase.Replay -> summary?.let { value ->
+                    val items = value.improvements.take(3)
+                    ScenarioReplayView(
+                        improvement = items[replayIndex],
+                        index = replayIndex,
+                        total = items.size,
+                        input = input,
+                        onInputChange = { input = it },
+                        transcribing = transcribing,
+                        onMic = ::requestTranscription,
+                        onNext = {
+                            if (replayIndex + 1 < items.size) {
+                                replayIndex += 1
+                                input = ""
+                            } else savePhrases()
+                        },
+                        onSkip = ::savePhrases,
+                    )
+                }
+                ScenarioPhase.Finish -> ScenarioFinishView(
+                    summary = summary!!,
+                    savedCount = savedPhraseCount,
+                    onDone = onExit,
+                    onAgain = {
+                        phase = ScenarioPhase.Pick
+                        brief = null
+                        summary = null
+                        customSeed = ""
+                        selectedSeed = recommendedSeeds.first()
+                        error = null
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScenarioPicker(
+    customSeed: String,
+    onCustomSeedChange: (String) -> Unit,
+    selectedSeed: ScenarioSeed?,
+    onSelectSeed: (ScenarioSeed) -> Unit,
+    busy: Boolean,
+    error: String?,
+    onUse: () -> Unit,
+    onRandom: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text("给个情况，我来当那个不太好说话的人。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedTextField(
+            value = customSeed,
+            onValueChange = onCustomSeedChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("自己写一个情况") },
+            placeholder = { Text("比如：下周跟房东说提前退租，想拿回押金") },
+            minLines = 2,
+            maxLines = 4,
+        )
+        Text("按你的目标推荐", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        recommendedSeeds.forEach { seed ->
+            val selected = seed == selectedSeed
+            Card(
+                onClick = { onSelectSeed(seed) },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainer,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(seed.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        Text(seed.title, style = MaterialTheme.typography.titleSmall)
+                        Text(seed.who, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(
+                        if (selected) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                        contentDescription = if (selected) "已选择" else null,
+                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    )
+                }
+            }
+        }
+        ErrorText(error)
+        Button(onClick = onUse, enabled = !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            if (busy) SmallProgress() else Text("用这个练")
+        }
+        TextButton(onClick = onRandom, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Outlined.Casino, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("随便给我一个")
+        }
+    }
+}
+
+@Composable
+private fun ScenarioBriefView(
+    brief: ScenarioBrief,
+    busy: Boolean,
+    error: String?,
+    onStart: () -> Unit,
+    onHarder: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.large) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("你的处境", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(brief.situationZh, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("${brief.opponentName} · ${brief.opponentRoleZh}", style = MaterialTheme.typography.titleMedium)
+                Text(brief.opponentPersonalityZh, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Text("要做到这 ${brief.goals.size} 件事", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        brief.goals.forEach { GoalRow(it.textZh, false, null) }
+        OutlinedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("难度 · ${difficultyLabel(brief.difficulty)}", style = MaterialTheme.typography.titleSmall)
+                DifficultyRow("信息量", brief.difficulty.informationLoad, "${brief.difficulty.informationLoad}/3")
+                DifficultyRow("对方合作度", brief.difficulty.cooperation, "${brief.difficulty.cooperation}/3")
+                DifficultyRow("追问强度", brief.difficulty.followUpPressure, "${brief.difficulty.followUpPressure}/3")
+                Text(
+                    listOfNotNull(
+                        "礼貌拒绝".takeIf { brief.difficulty.requiresPoliteRefusal },
+                        "可能有误解".takeIf { brief.difficulty.includesMisunderstanding },
+                    ).joinToString(" · ").ifBlank { "没有额外机关" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        ErrorText(error)
+        Spacer(Modifier.weight(1f))
+        Button(onClick = onStart, enabled = !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("开始") }
+        TextButton(onClick = onHarder, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            if (busy) SmallProgress() else Text("换个更难的对手")
+        }
+    }
+}
+
+@Composable
+private fun ScenarioConversation(
+    brief: ScenarioBrief,
+    messages: List<ScenarioMessage>,
+    options: List<ScenarioReplyOption>,
+    achievedGoals: Map<String, Int>,
+    goalsExpanded: Boolean,
+    onToggleGoals: () -> Unit,
+    replyMode: ReplyMode,
+    onReplyModeChange: (ReplyMode) -> Unit,
+    input: String,
+    onInputChange: (String) -> Unit,
+    hint: String,
+    failure: CommunicationFailure?,
+    onUseRepair: (String) -> Unit,
+    onRewriteRepair: () -> Unit,
+    busy: Boolean,
+    transcribing: Boolean,
+    error: String?,
+    readyToFinish: Boolean,
+    onSubmit: (String) -> Unit,
+    onMic: () -> Unit,
+    onFinish: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        Surface(onClick = onToggleGoals, color = MaterialTheme.colorScheme.secondaryContainer) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${brief.opponentName} · ${brief.opponentRoleZh}", style = MaterialTheme.typography.titleSmall)
+                    Text(brief.titleZh, style = MaterialTheme.typography.bodySmall)
+                }
+                Text("${achievedGoals.size}/${brief.goals.size}", style = MaterialTheme.typography.labelLarge)
+                Icon(if (goalsExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, contentDescription = "展开目标")
+            }
+        }
+        if (goalsExpanded) {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    brief.goals.forEach { GoalRow(it.textZh, it.id in achievedGoals, achievedGoals[it.id]) }
+                }
+            }
+        }
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(messages) { message -> MessageBubble(message) }
+            failure?.let { currentFailure ->
+                item {
+                    CommunicationFailureCard(
+                        failure = currentFailure,
+                        onUse = { onUseRepair(currentFailure.suggestedRewriteEn) },
+                        onRewrite = onRewriteRepair,
+                    )
+                }
+            }
+            if (busy) item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { SmallProgress() } }
+        }
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ErrorText(error)
+            if (failure == null && !readyToFinish) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (replyMode == ReplyMode.Options) "挑一句说" else "自己说 · 不用怕说错", style = MaterialTheme.typography.labelMedium)
+                    TextButton(onClick = { onReplyModeChange(if (replyMode == ReplyMode.Options) ReplyMode.Free else ReplyMode.Options) }) {
+                        Icon(if (replyMode == ReplyMode.Options) Icons.Outlined.Keyboard else Icons.AutoMirrored.Outlined.List, contentDescription = null)
+                        Spacer(Modifier.size(4.dp))
+                        Text(if (replyMode == ReplyMode.Options) "自己说" else "给我选项")
+                    }
+                }
+                if (replyMode == ReplyMode.Options) {
+                    options.forEach { option ->
+                        OutlinedCard(onClick = { onSubmit(option.en) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                Text(option.en)
+                                Text(option.zh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = onInputChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        placeholder = { Text("用英文接着说") },
+                        trailingIcon = {
+                            IconButton(onClick = { onSubmit(input) }, enabled = input.isNotBlank() && !busy) {
+                                Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = "发送")
+                            }
+                        },
+                    )
+                    Row {
+                        TextButton(onClick = onMic, enabled = !transcribing && !busy) {
+                            if (transcribing) SmallProgress() else Icon(Icons.Outlined.Mic, contentDescription = null)
+                            Spacer(Modifier.size(4.dp))
+                            Text(if (transcribing) "在听…" else "语音转文字")
+                        }
+                        TextButton(onClick = { if (input.isBlank()) onInputChange(hint) else onInputChange("$input $hint") }) {
+                            Icon(Icons.Outlined.Lightbulb, contentDescription = null)
+                            Spacer(Modifier.size(4.dp))
+                            Text("半句提示")
+                        }
+                    }
+                }
+            }
+            if (readyToFinish && failure == null) {
+                Text("这段沟通已经可以收尾了。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick = onFinish, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                    if (busy) SmallProgress() else Text("结束并看总结")
+                }
+            } else if (messages.count { it.speaker == ScenarioSpeaker.User } >= 3 && failure == null) {
+                TextButton(onClick = onFinish, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("先演到这里") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageBubble(message: ScenarioMessage) {
+    val user = message.speaker == ScenarioSpeaker.User
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
+        Surface(
+            color = if (user) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
+            contentColor = if (user) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.fillMaxWidth(0.84f),
+        ) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(message.textEn, style = MaterialTheme.typography.bodyLarge)
+                if (!user && message.subtextZh.isNotBlank()) {
+                    Text(message.subtextZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommunicationFailureCard(
+    failure: CommunicationFailure,
+    onUse: () -> Unit,
+    onRewrite: () -> Unit,
+) {
+    OutlinedCard(colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.SyncProblem, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                Spacer(Modifier.size(8.dp))
+                Text("他理解反了", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+            Text("他听成了：${failure.heardAsZh}", color = MaterialTheme.colorScheme.onErrorContainer)
+            Text(failure.explanationZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
+                Text(failure.suggestedRewriteEn, Modifier.padding(12.dp))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onUse, modifier = Modifier.weight(1f)) { Text("就这么说") }
+                OutlinedButton(onClick = onRewrite, modifier = Modifier.weight(1f)) { Text("我自己重说") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScenarioSummaryView(
+    brief: ScenarioBrief,
+    summary: ScenarioSummary,
+    achievedGoals: Map<String, Int>,
+    turnCount: Int,
+    busy: Boolean,
+    error: String?,
+    onReplay: () -> Unit,
+    onSave: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(summary.outcomeTitleZh, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("${brief.goals.size} 件事做到 ${achievedGoals.size} 件，用了 $turnCount 轮。${summary.overviewZh}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                brief.goals.forEach { goal -> GoalRow(goal.textZh, goal.id in achievedGoals, achievedGoals[goal.id]) }
+            }
+        }
+        Text("最值得改的三个", style = MaterialTheme.typography.titleMedium)
+        summary.improvements.forEachIndexed { index, improvement -> ImprovementCard(index + 1, improvement) }
+        ErrorText(error)
+        Button(onClick = onReplay, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("把关键那几句重说一遍") }
+        TextButton(onClick = onSave, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            if (busy) SmallProgress() else Text("收下这 ${summary.keepPhrases.size} 个表达就行")
+        }
+    }
+}
+
+@Composable
+private fun ImprovementCard(number: Int, item: ScenarioImprovement) {
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("$number  ${item.titleZh}", style = MaterialTheme.typography.titleSmall)
+            Text("你说的", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            Text(item.originalEn, textDecoration = TextDecoration.LineThrough, color = MaterialTheme.colorScheme.error)
+            Text("改成", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text(item.improvedEn, color = MaterialTheme.colorScheme.primary)
+            Text("为什么：${item.reasonZh}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun ScenarioReplayView(
+    improvement: ScenarioImprovement,
+    index: Int,
+    total: Int,
+    input: String,
+    onInputChange: (String) -> Unit,
+    transcribing: Boolean,
+    onMic: () -> Unit,
+    onNext: () -> Unit,
+    onSkip: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("重说关键句", style = MaterialTheme.typography.titleLarge)
+            Text("${index + 1} / $total", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
+            Text(improvement.replayContextZh, Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        MessageBubble(ScenarioMessage(0, ScenarioSpeaker.Opponent, improvement.opponentLineEn))
+        Text("你上次说的", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+        Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.medium) {
+            Text(improvement.originalEn, Modifier.padding(13.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+        }
+        OutlinedTextField(
+            value = input,
+            onValueChange = onInputChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("这次怎么说") },
+            placeholder = { Text(improvement.promptZh) },
+            minLines = 3,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            IconButton(onClick = onMic, enabled = !transcribing) {
+                if (transcribing) SmallProgress() else Icon(Icons.Outlined.Mic, contentDescription = "语音转文字")
+            }
+            improvement.phraseHints.forEach { phrase ->
+                OutlinedButton(onClick = { onInputChange(listOf(input, phrase).filter { it.isNotBlank() }.joinToString(" ")) }) {
+                    Text(phrase, maxLines = 1)
+                }
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        Button(onClick = onNext, enabled = input.isNotBlank(), modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Text(if (index + 1 < total) "下一句" else "收下这些表达")
+        }
+        TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) { Text("跳过，直接收表达") }
+    }
+}
+
+@Composable
+private fun ScenarioFinishView(summary: ScenarioSummary, savedCount: Int, onDone: () -> Unit, onAgain: () -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("这些表达以后能直接用", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("已把 $savedCount 个表达排进复习。下次可能在别的场景里让你再用一遍。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        summary.keepPhrases.forEach { phrase ->
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
+                Column(Modifier.fillMaxWidth().padding(13.dp)) {
+                    Text(phrase.en)
+                    Text(phrase.zh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
+            Text("同一个场景一周内不会重复。下次会换个处境，或者换一个更难缠的对手。", Modifier.padding(14.dp))
+        }
+        Spacer(Modifier.weight(1f))
+        Button(onClick = onDone, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("收工") }
+        TextButton(onClick = onAgain, modifier = Modifier.fillMaxWidth()) { Text("再来一个场景") }
+    }
+}
+
+@Composable
+private fun GoalRow(text: String, achieved: Boolean, turn: Int?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            if (achieved) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+            contentDescription = if (achieved) "已完成" else "未完成",
+            tint = if (achieved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(19.dp),
+        )
+        Text(text, Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.bodyMedium)
+        if (turn != null) Text("第 $turn 轮", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun DifficultyRow(label: String, level: Int, trailing: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.fillMaxWidth(0.35f), style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            repeat(3) { index ->
+                Surface(
+                    color = if (index < level) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.weight(1f).height(6.dp),
+                ) {}
+            }
+        }
+        Text(trailing, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+private fun difficultyLabel(value: ScenarioDifficulty): String = when {
+    value.followUpPressure >= 3 -> "偏难"
+    value.followUpPressure == 2 -> "中等"
+    else -> "轻松"
+}
+
+@Composable
+private fun ErrorText(error: String?) {
+    if (!error.isNullOrBlank()) {
+        Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    }
+}
+
+@Composable
+private fun SmallProgress() {
+    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+}

@@ -27,6 +27,7 @@ import com.lazydog.english.feature.assessment.AssessmentScreen
 import com.lazydog.english.feature.reading.ReadingMode
 import com.lazydog.english.feature.reading.ReadingScreen
 import com.lazydog.english.feature.speaking.SpeakingScreen
+import com.lazydog.english.feature.scenario.ScenarioScreen
 import com.lazydog.english.feature.study.GrammarStudyScreen
 import com.lazydog.english.feature.study.WordStudyScreen
 import kotlinx.coroutines.launch
@@ -40,6 +41,7 @@ object Routes {
     const val WordStudy = "study/words"
     const val GrammarStudy = "study/grammar"
     const val Assessment = "assessment"
+    const val Scenario = "scenario"
     const val ReadingGenerate = "reading/generate"
     const val ReadingPaste = "reading/paste"
     const val ReadingOpen = "reading/open/{materialId}"
@@ -102,6 +104,7 @@ private fun AppNavHost(
                 onStartGrammarStudy = { navController.navigate(Routes.GrammarStudy) },
                 onStartReading = { navController.navigate(Routes.ReadingGenerate) },
                 onStartReadingPaste = { navController.navigate(Routes.ReadingPaste) },
+                onStartScenario = { navController.navigate(Routes.Scenario) },
                 onOpenMaterial = { id -> navController.navigate(Routes.readingOpen(id)) },
                 onStartAssessment = { navController.navigate(Routes.Assessment) },
             )
@@ -117,6 +120,10 @@ private fun AppNavHost(
                 repository = knowledgeRepository,
                 onExit = { navController.popBackStack() },
             )
+        }
+
+        composable(Routes.Scenario) {
+            ScenarioScreen(onExit = { navController.popBackStack() })
         }
 
         composable(Routes.WordStudy) {

@@ -11,6 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.lazydog.english.core.config.LocalEnv
 import com.lazydog.english.domain.speaking.SpeechRate
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "user_preferences")
@@ -49,6 +50,7 @@ class UserPreferences(private val context: Context) {
         val Topics = stringSetPreferencesKey("topics")
         val DailyMinutes = intPreferencesKey("daily_minutes")
         val BackupFolderUri = stringPreferencesKey("backup_folder_uri")
+        val ScenarioHistory = stringSetPreferencesKey("scenario_history")
     }
 
     val onboardingCompleted: Flow<Boolean> =
@@ -197,6 +199,33 @@ class UserPreferences(private val context: Context) {
 
     suspend fun setBackupFolderUri(uri: String) {
         context.dataStore.edit { it[Keys.BackupFolderUri] = uri }
+    }
+
+    /** 返回最近 [days] 天练过的语义场景 id，供生成器去重。 */
+    suspend fun recentScenarioIds(days: Int = 7, nowMillis: Long = System.currentTimeMillis()): Set<String> {
+        val cutoff = nowMillis - days.coerceAtLeast(1) * 24L * 60 * 60 * 1000
+        return context.dataStore.data.first()[Keys.ScenarioHistory].orEmpty()
+            .mapNotNull { entry ->
+                val split = entry.lastIndexOf('|')
+                if (split <= 0) return@mapNotNull null
+                val at = entry.substring(split + 1).toLongOrNull() ?: return@mapNotNull null
+                entry.substring(0, split).takeIf { at >= cutoff }
+            }
+            .toSet()
+    }
+
+    /** 开始演练时记录；顺手清掉七天前的历史，避免 DataStore 集合无限增长。 */
+    suspend fun recordScenarioPlayed(scenarioId: String, nowMillis: Long = System.currentTimeMillis()) {
+        val cleanId = scenarioId.trim()
+        if (cleanId.isBlank()) return
+        val cutoff = nowMillis - 7L * 24 * 60 * 60 * 1000
+        context.dataStore.edit { prefs ->
+            val recent = prefs[Keys.ScenarioHistory].orEmpty().filter { entry ->
+                val at = entry.substringAfterLast('|', "").toLongOrNull()
+                at != null && at >= cutoff && !entry.startsWith("$cleanId|")
+            }
+            prefs[Keys.ScenarioHistory] = (recent + "$cleanId|$nowMillis").toSet()
+        }
     }
 
     /**

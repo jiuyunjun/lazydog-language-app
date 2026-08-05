@@ -7,6 +7,26 @@ package com.lazydog.english.domain.generation
  */
 interface LearningContentGenerator {
 
+    /** 生成场景简报、对手和 4～6 条可判定目标。 */
+    suspend fun generateScenario(
+        request: com.lazydog.english.domain.scenario.ScenarioGenerationRequest,
+    ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioBrief>
+
+    /** 只扮演对手并推进对话；不得纠错或评价用户。 */
+    suspend fun generateScenarioTurn(
+        request: com.lazydog.english.domain.scenario.ScenarioTurnRequest,
+    ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioTurn>
+
+    /** 与对话生成分开的目标判定调用；只返回命中目标和沟通失败。 */
+    suspend fun judgeScenarioTurn(
+        request: com.lazydog.english.domain.scenario.ScenarioTurnRequest,
+    ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioJudgement>
+
+    /** 对话结束后集中生成固定三条表达改进与待复习表达。 */
+    suspend fun summarizeScenario(
+        request: com.lazydog.english.domain.scenario.ScenarioSummaryRequest,
+    ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioSummary>
+
     /** [onProgress] 收到已生成的字符数，用于长请求的进度展示；实现应流式请求。 */
     suspend fun generateNewWords(
         request: NewWordsRequest,

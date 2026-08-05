@@ -56,6 +56,10 @@ interface KnowledgeDao {
     @Query("SELECT EXISTS(SELECT 1 FROM vocabulary_details WHERE term = :term)")
     suspend fun vocabularyTermExists(term: String): Boolean
 
+    @Transaction
+    @Query("SELECT * FROM knowledge_items WHERE id = (SELECT itemId FROM vocabulary_details WHERE term = :term LIMIT 1)")
+    suspend fun getVocabularyByTerm(term: String): VocabularyRecord?
+
     @Query("SELECT EXISTS(SELECT 1 FROM grammar_details WHERE name = :name)")
     suspend fun grammarNameExists(name: String): Boolean
 

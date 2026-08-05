@@ -4,6 +4,7 @@ import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.domain.speaking.AssessmentResult
 import com.lazydog.english.domain.speaking.SpeakResult
 import com.lazydog.english.domain.speaking.SpeechProvider
+import com.lazydog.english.domain.speaking.TranscriptionResult
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -30,4 +31,6 @@ class SpeechController(private val prefs: UserPreferences) {
 
     suspend fun assessReading(referenceText: String): AssessmentResult =
         provider().assessReading(referenceText)
+
+    suspend fun transcribeOnce(): TranscriptionResult = provider().transcribeOnce()
 }

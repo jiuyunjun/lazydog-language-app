@@ -4,6 +4,7 @@ import com.lazydog.english.domain.speaking.AssessmentResult
 import com.lazydog.english.domain.speaking.SpeakResult
 import com.lazydog.english.domain.speaking.SpeechProvider
 import com.lazydog.english.domain.speaking.SpeechRate
+import com.lazydog.english.domain.speaking.TranscriptionResult
 import com.microsoft.cognitiveservices.speech.CancellationDetails
 import com.microsoft.cognitiveservices.speech.PropertyId
 import com.microsoft.cognitiveservices.speech.PronunciationAssessmentConfig
@@ -95,6 +96,34 @@ class AzureSpeechProvider(
                 runCatching { audioConfig?.close() }
             }
         }
+
+    override suspend fun transcribeOnce(): TranscriptionResult = withContext(Dispatchers.IO) {
+        if (closed) return@withContext TranscriptionResult.Failed("服务已释放")
+        var audioConfig: AudioConfig? = null
+        var recognizer: SpeechRecognizer? = null
+        var result: SpeechRecognitionResult? = null
+        try {
+            audioConfig = AudioConfig.fromDefaultMicrophoneInput()
+            recognizer = SpeechRecognizer(speechConfig, audioConfig)
+            result = recognizer.recognizeOnceAsync().get()
+            when (result.reason) {
+                ResultReason.RecognizedSpeech -> result.text?.trim()?.takeIf { it.isNotBlank() }
+                    ?.let(TranscriptionResult::Done) ?: TranscriptionResult.NothingRecognized
+                ResultReason.NoMatch -> TranscriptionResult.NothingRecognized
+                ResultReason.Canceled -> {
+                    val details = CancellationDetails.fromResult(result)
+                    TranscriptionResult.Failed("听写中断：${details.errorDetails ?: details.reason}")
+                }
+                else -> TranscriptionResult.Failed("听写失败：${result.reason}")
+            }
+        } catch (e: Exception) {
+            TranscriptionResult.Failed("听写失败：${e.message ?: e.javaClass.simpleName}")
+        } finally {
+            runCatching { result?.close() }
+            runCatching { recognizer?.close() }
+            runCatching { audioConfig?.close() }
+        }
+    }
 
     private fun toAssessmentResult(result: SpeechRecognitionResult): AssessmentResult =
         when (result.reason) {
