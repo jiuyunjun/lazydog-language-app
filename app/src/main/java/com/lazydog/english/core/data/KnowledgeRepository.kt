@@ -16,6 +16,7 @@ import com.lazydog.english.domain.scheduling.ReviewScheduler
 import com.lazydog.english.domain.scheduling.deriveStage
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -31,7 +32,14 @@ class KnowledgeRepository(
 ) {
     private val dao = database.knowledgeDao()
 
-    val vocabulary: Flow<List<VocabularyRecord>> = dao.observeVocabulary()
+    private val vocabularyRecords: Flow<List<VocabularyRecord>> = dao.observeVocabulary()
+    /** 真正的单词；完整短语和句子单独显示在“表达”里。 */
+    val vocabulary: Flow<List<VocabularyRecord>> = vocabularyRecords.map { records ->
+        records.filterNot { it.detail.isExpression() }
+    }
+    val expressions: Flow<List<VocabularyRecord>> = vocabularyRecords.map { records ->
+        records.filter { it.detail.isExpression() }
+    }
     val grammar: Flow<List<GrammarRecord>> = dao.observeGrammar()
 
     fun observeDueCount(at: Instant = now()): Flow<Int> = dao.observeDueCount(at.toEpochMilli())
@@ -84,9 +92,26 @@ class KnowledgeRepository(
         }
     }
 
+    /** 把可复用短语或完整句子存为“表达”，不混进单词列表。 */
+    suspend fun addExpression(
+        expressionEn: String,
+        meaningZh: String,
+        contextEn: String = "",
+    ): Long? {
+        val clean = expressionEn.trim()
+        if (clean.isBlank()) return null
+        return addVocabulary(
+            term = clean,
+            meaningZh = meaningZh.trim(),
+            exampleEn = contextEn.trim().ifBlank { clean },
+            exampleZh = meaningZh.trim(),
+            pos = EXPRESSION_POS,
+        )
+    }
+
     /**
      * 把情景演练里留下的可复用表达放进统一复习计划。
-     * 短语复用 vocabulary_details，pos 标为 phrase；已存在时复用原知识项。
+     * 表达复用 vocabulary_details，pos 标为 expression；已存在时复用原知识项。
      */
     suspend fun saveScenarioExpression(
         expressionEn: String,
@@ -96,15 +121,8 @@ class KnowledgeRepository(
         val clean = expressionEn.trim()
         if (clean.isBlank()) return null
         val existing = dao.getVocabularyByTerm(clean)
-        val id = existing?.item?.id ?: addVocabulary(
-            term = clean,
-            meaningZh = meaningZh.trim(),
-            ipa = "",
-            exampleEn = exampleEn.ifBlank { clean },
-            exampleZh = meaningZh.trim(),
-            pos = "phrase",
-            collocations = emptyList(),
-        ) ?: dao.getVocabularyByTerm(clean)?.item?.id
+        val id = existing?.item?.id ?: addExpression(clean, meaningZh, exampleEn)
+            ?: dao.getVocabularyByTerm(clean)?.item?.id
         if (id != null) recordReview(id, ReviewGrade.Good, source = "scenario")
         return id
     }
@@ -182,7 +200,14 @@ class KnowledgeRepository(
         )
         return id
     }
+
+    private companion object {
+        const val EXPRESSION_POS = "expression"
+    }
 }
+
+private fun VocabularyDetailEntity.isExpression(): Boolean =
+    pos.equals("expression", ignoreCase = true) || pos.equals("phrase", ignoreCase = true)
 
 fun KnowledgeItemEntity.toMemoryState(): MemoryState = MemoryState(
     stability = stability,

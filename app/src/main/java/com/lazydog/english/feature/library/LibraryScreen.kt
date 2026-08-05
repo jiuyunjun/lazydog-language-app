@@ -53,6 +53,7 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.stageOrDefault
 import com.lazydog.english.core.database.KnowledgeItemEntity
+import com.lazydog.english.core.database.VocabularyRecord
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.model.KnowledgeStage
@@ -74,6 +75,7 @@ fun LibraryScreen(
     val speech = app.speechController
     val vocab by repository.vocabulary.collectAsState(initial = emptyList())
     val grammar by repository.grammar.collectAsState(initial = emptyList())
+    val expressions by repository.expressions.collectAsState(initial = emptyList())
 
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     var dueTodayOnly by rememberSaveable { mutableStateOf(false) }
@@ -106,64 +108,67 @@ fun LibraryScreen(
                     onClick = { tabIndex = 1 },
                     text = { Text("语法 ${grammar.size}") },
                 )
+                Tab(
+                    selected = tabIndex == 2,
+                    onClick = { tabIndex = 2 },
+                    text = { Text("表达 ${expressions.size}") },
+                )
             }
-            if (tabIndex == 0) {
-                Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    FilterChip(
-                        selected = dueTodayOnly,
-                        onClick = { dueTodayOnly = !dueTodayOnly },
-                        label = { Text("今天到期") },
-                        leadingIcon = if (dueTodayOnly) {
-                            { Icon(Icons.Outlined.Check, contentDescription = null) }
-                        } else {
-                            null
-                        },
-                    )
-                }
-                if (visibleVocab.isEmpty()) {
-                    EmptyHint(
-                        if (vocab.isEmpty()) "还没有记过单词。点右下角加一个，或等学习流程自动加入。"
-                        else "今天没有到期的单词，懒狗可以歇会儿。",
-                    )
-                } else {
-                    LazyColumn {
-                        items(visibleVocab, key = { it.item.id }) { record ->
-                            LibraryRow(
-                                title = record.detail.term,
-                                subtitle = record.detail.meaningZh,
-                                item = record.item,
-                                now = now,
-                                onClick = { selectedItemId = record.item.id },
-                            )
+            when (tabIndex) {
+                0 -> WordRecords(
+                    records = visibleVocab,
+                    allWordsEmpty = vocab.isEmpty(),
+                    dueTodayOnly = dueTodayOnly,
+                    onDueTodayChange = { dueTodayOnly = it },
+                    now = now,
+                    onSelect = { selectedItemId = it },
+                )
+                1 -> {
+                    if (grammar.isEmpty()) {
+                        EmptyHint("还没有记过语法点。点右下角加一个。")
+                    } else {
+                        LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
+                            items(grammar, key = { it.item.id }) { record ->
+                                LibraryRow(
+                                    title = record.detail.name,
+                                    subtitle = record.detail.explanationZh,
+                                    item = record.item,
+                                    now = now,
+                                    onClick = { selectedItemId = record.item.id },
+                                )
+                            }
                         }
                     }
                 }
-            } else {
-                if (grammar.isEmpty()) {
-                    EmptyHint("还没有记过语法点。点右下角加一个。")
-                } else {
-                    LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
-                        items(grammar, key = { it.item.id }) { record ->
-                            LibraryRow(
-                                title = record.detail.name,
-                                subtitle = record.detail.explanationZh,
-                                item = record.item,
-                                now = now,
-                                onClick = { selectedItemId = record.item.id },
-                            )
+                else -> {
+                    if (expressions.isEmpty()) {
+                        EmptyHint("还没有摘下表达。情景总结或句子讲解里遇到想复用的句子，可以收进这里。")
+                    } else {
+                        LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
+                            items(expressions, key = { it.item.id }) { record ->
+                                LibraryRow(
+                                    title = record.detail.term,
+                                    subtitle = record.detail.meaningZh,
+                                    item = record.item,
+                                    now = now,
+                                    onClick = { selectedItemId = record.item.id },
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        FloatingActionButton(
-            onClick = { showAddDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-        ) {
-            Icon(Icons.Outlined.Add, contentDescription = "添加${if (tabIndex == 0) "单词" else "语法点"}")
+        if (tabIndex < 2) {
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+            ) {
+                Icon(Icons.Outlined.Add, contentDescription = "添加${if (tabIndex == 0) "单词" else "语法点"}")
+            }
         }
     }
 
@@ -187,7 +192,7 @@ fun LibraryScreen(
         )
     }
 
-    val selectedVocab = vocab.firstOrNull { it.item.id == selectedItemId }
+    val selectedVocab = (vocab + expressions).firstOrNull { it.item.id == selectedItemId }
     val selectedGrammar = grammar.firstOrNull { it.item.id == selectedItemId }
 
     // 打开单词详情时自动读一遍（设置里可关）。
@@ -226,6 +231,49 @@ fun LibraryScreen(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun WordRecords(
+    records: List<VocabularyRecord>,
+    allWordsEmpty: Boolean,
+    dueTodayOnly: Boolean,
+    onDueTodayChange: (Boolean) -> Unit,
+    now: Long,
+    onSelect: (Long) -> Unit,
+) {
+    Column {
+        Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            FilterChip(
+                selected = dueTodayOnly,
+                onClick = { onDueTodayChange(!dueTodayOnly) },
+                label = { Text("今天到期") },
+                leadingIcon = if (dueTodayOnly) {
+                    { Icon(Icons.Outlined.Check, contentDescription = null) }
+                } else {
+                    null
+                },
+            )
+        }
+        if (records.isEmpty()) {
+            EmptyHint(
+                if (allWordsEmpty) "还没有记过单词。点右下角加一个，或等学习流程自动加入。"
+                else "今天没有到期的单词，懒狗可以歇会儿。",
+            )
+        } else {
+            LazyColumn {
+                items(records, key = { it.item.id }) { record ->
+                    LibraryRow(
+                        title = record.detail.term,
+                        subtitle = record.detail.meaningZh,
+                        item = record.item,
+                        now = now,
+                        onClick = { onSelect(record.item.id) },
+                    )
+                }
+            }
+        }
     }
 }
 

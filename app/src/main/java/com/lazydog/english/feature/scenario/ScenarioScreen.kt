@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -694,6 +695,15 @@ private fun ScenarioConversation(
     onMic: () -> Unit,
     onFinish: () -> Unit,
 ) {
+    val conversationListState = rememberLazyListState()
+    LaunchedEffect(messages.size, busy, failure) {
+        val itemCount = messages.size + (if (failure != null) 1 else 0) + (if (busy) 1 else 0)
+        if (itemCount > 0) {
+            delay(40)
+            conversationListState.animateScrollToItem(itemCount - 1)
+        }
+    }
+
     Column(Modifier.fillMaxSize()) {
         Surface(onClick = onToggleGoals, color = MaterialTheme.colorScheme.secondaryContainer) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -713,6 +723,7 @@ private fun ScenarioConversation(
             }
         }
         LazyColumn(
+            state = conversationListState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),

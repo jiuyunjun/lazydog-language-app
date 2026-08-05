@@ -49,12 +49,15 @@ interface LearningContentGenerator {
         term: String,
         sentenceContext: String,
         learnerLevel: String,
+        /** 已接收的原始结构化文本；用于在最终校验完成前逐步展示讲解。 */
+        onProgress: ((String) -> Unit)? = null,
     ): GenerationResult<WordExplanation>
 
     /** 整句翻译加讲解（阅读里的点句操作）。 */
     suspend fun explainSentence(
         sentence: String,
         learnerLevel: String,
+        onProgress: ((String) -> Unit)? = null,
     ): GenerationResult<SentenceExplanation>
 
     /**

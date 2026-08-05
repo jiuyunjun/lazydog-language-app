@@ -28,7 +28,9 @@ interface LearningContentGenerator {
 1. `generateScenario`：生成处境、对手、难度和 4～6 条目标。
 2. `generateScenarioTurn`：只扮演对手并给下一轮四个选项，不纠错、不评分。
 3. `judgeScenarioTurn`：独立判断本轮命中的目标和是否发生沟通失败，不生成对话。
-4. `summarizeScenario`：结束后固定生成三条表达改进和 1～4 条待复习表达。
+4. `summarizeScenario`：结束后固定生成三条表达改进和 1～4 条待复习表达；这些内容保存为“表达”，不得混入单词列表。
+
+`explainWord` 与 `explainSentence` 支持 SSE 增量回调。增量文本只用于加载期间展示；只有完整 JSON 解析和校验成功后，保存按钮才可使用。
 
 对话和判定可以并行请求，但只有两者都通过 schema 与业务校验后，该轮才进入本地状态。判定器返回的目标 id 必须属于场景目标；沟通失败提示必须同时包含“听成了什么、为什么走反、建议改写”。
 

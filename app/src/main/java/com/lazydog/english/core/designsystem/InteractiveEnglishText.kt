@@ -172,6 +172,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
     var inLibrary by remember { mutableStateOf<String?>(null) }
     var libraryIpa by remember { mutableStateOf("") }
     var explanation by remember { mutableStateOf<WordExplanation?>(null) }
+    var streamedJson by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
 
@@ -186,6 +187,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                 word,
                 sentence,
                 app.userPreferences.learnerLevelDescription.first(),
+                onProgress = { streamedJson = it },
             )) {
                 is GenerationResult.Success -> explanation = result.data
                 is GenerationResult.Failure -> error = result.reason
@@ -233,6 +235,15 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                     }
                 }
                 error != null -> Text("查询失败：$error", color = MaterialTheme.colorScheme.error)
+                streamedJson.isNotBlank() -> {
+                    val meaning = partialJsonStringValue(streamedJson, "meaningZh")
+                    val usage = partialJsonStringValue(streamedJson, "usageNoteZh")
+                    StreamingLabel("正在生成词汇讲解…")
+                    if (meaning.isNotBlank()) Text(meaning)
+                    if (usage.isNotBlank()) {
+                        Text(usage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 else -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                     Text("AI 正在结合这句话查词…")
@@ -250,12 +261,17 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
     var explanation by remember { mutableStateOf<com.lazydog.english.domain.generation.SentenceExplanation?>(null) }
+    var streamedJson by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var saved by remember { mutableStateOf(false) }
 
     LaunchedEffect(sentence) {
+        saved = app.knowledgeRepository.expressions.first()
+            .any { it.detail.term.equals(sentence, ignoreCase = true) }
         when (val result = app.contentGenerator.explainSentence(
             sentence,
             app.userPreferences.learnerLevelDescription.first(),
+            onProgress = { streamedJson = it },
         )) {
             is GenerationResult.Success -> explanation = result.data
             is GenerationResult.Failure -> error = result.reason
@@ -276,8 +292,30 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
                     if (explanation!!.explanationZh.isNotBlank()) {
                         Text(explanation!!.explanationZh, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                app.knowledgeRepository.addExpression(
+                                    expressionEn = sentence,
+                                    meaningZh = explanation!!.translationZh,
+                                )
+                                saved = true
+                            }
+                        },
+                        enabled = !saved,
+                    ) {
+                        Icon(Icons.Outlined.LibraryAdd, contentDescription = null)
+                        Text(if (saved) "已在表达里" else "摘下这句", Modifier.padding(start = 8.dp))
+                    }
                 }
                 error != null -> Text("讲解失败：$error", color = MaterialTheme.colorScheme.error)
+                streamedJson.isNotBlank() -> {
+                    val translation = partialJsonStringValue(streamedJson, "translationZh")
+                    val detail = partialJsonStringValue(streamedJson, "explanationZh")
+                    StreamingLabel("正在生成句子讲解…")
+                    if (translation.isNotBlank()) Text(translation, style = MaterialTheme.typography.bodyLarge)
+                    if (detail.isNotBlank()) Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 else -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                     Text("AI 正在翻译并拆解这句话…")
@@ -286,4 +324,52 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
             Text("提示：快速双击查单词，快速三击讲整句。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 24.dp))
         }
     }
+}
+
+@Composable
+private fun StreamingLabel(text: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/** 从尚未闭合的 JSON 字符串字段中提取已到达的文本，供 SSE 增量展示。 */
+internal fun partialJsonStringValue(jsonText: String, key: String): String {
+    val markerIndex = jsonText.indexOf("\"$key\"")
+    if (markerIndex < 0) return ""
+    val colonIndex = jsonText.indexOf(':', markerIndex + key.length + 2)
+    if (colonIndex < 0) return ""
+    val quoteIndex = jsonText.indexOf('"', colonIndex + 1)
+    if (quoteIndex < 0) return ""
+
+    val result = StringBuilder()
+    var index = quoteIndex + 1
+    while (index < jsonText.length) {
+        val char = jsonText[index]
+        if (char == '"') break
+        if (char != '\\') {
+            result.append(char)
+            index++
+            continue
+        }
+        if (index + 1 >= jsonText.length) break
+        when (val escaped = jsonText[index + 1]) {
+            '"', '\\', '/' -> result.append(escaped)
+            'b' -> result.append('\b')
+            'f' -> result.append('\u000C')
+            'n' -> result.append('\n')
+            'r' -> result.append('\r')
+            't' -> result.append('\t')
+            'u' -> {
+                if (index + 5 >= jsonText.length) break
+                val code = jsonText.substring(index + 2, index + 6).toIntOrNull(16) ?: break
+                result.append(code.toChar())
+                index += 4
+            }
+            else -> result.append(escaped)
+        }
+        index += 2
+    }
+    return result.toString()
 }

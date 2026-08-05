@@ -20,4 +20,20 @@ class InteractiveEnglishTextTest {
             sentenceAround(text, text.indexOf("refund")),
         )
     }
+
+    @Test
+    fun `partial json value is readable before response finishes`() {
+        assertEquals(
+            "这里指控制\n车流",
+            partialJsonStringValue(
+                """```json {"meaningZh":"控制","usageNoteZh":"这里指控制\n车流"""",
+                "usageNoteZh",
+            ),
+        )
+    }
+
+    @Test
+    fun `partial json value tolerates fields not received yet`() {
+        assertEquals("", partialJsonStringValue("""{"translationZh":"译文"}""", "explanationZh"))
+    }
 }

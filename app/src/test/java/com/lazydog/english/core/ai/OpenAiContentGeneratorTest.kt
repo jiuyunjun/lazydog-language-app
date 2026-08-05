@@ -197,6 +197,21 @@ class OpenAiContentGeneratorTest {
     }
 
     @Test
+    fun `word explanation streams accumulated content`() = runBlocking {
+        val json = """{"term":"curb","ipa":"/kɜːb/","meaningZh":"v. 控制","usageNoteZh":"这里指控制车流。"}"""
+        val half = json.length / 2
+        server.enqueue(MockResponse().setBody(sseBody(json.substring(0, half), json.substring(half))))
+
+        val progress = mutableListOf<String>()
+        val result = generator().explainWord("curb", "We should curb traffic.", "A2") { progress += it }
+
+        assertTrue(result is GenerationResult.Success)
+        assertEquals(2, progress.size)
+        assertEquals(json, progress.last())
+        assertTrue(server.takeRequest().body.readUtf8().contains("\"stream\":true"))
+    }
+
+    @Test
     fun `grammar lesson parses and validates`() = runBlocking {
         val lessonJson =
             """{"schemaVersion":1,"name":"过去完成时","patternEn":"had done",

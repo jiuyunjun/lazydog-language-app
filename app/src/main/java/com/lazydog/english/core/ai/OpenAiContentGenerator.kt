@@ -170,10 +170,12 @@ class OpenAiContentGenerator(
         term: String,
         sentenceContext: String,
         learnerLevel: String,
+        onProgress: ((String) -> Unit)?,
     ): GenerationResult<WordExplanation> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExplainWordPrompt(term, sentenceContext, learnerLevel),
+            onTextProgress = onProgress,
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -191,10 +193,12 @@ class OpenAiContentGenerator(
     override suspend fun explainSentence(
         sentence: String,
         learnerLevel: String,
+        onProgress: ((String) -> Unit)?,
     ): GenerationResult<SentenceExplanation> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExplainSentencePrompt(sentence, learnerLevel),
+            onTextProgress = onProgress,
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -392,9 +396,10 @@ class OpenAiContentGenerator(
         systemPrompt: String,
         userPrompt: String,
         onProgress: ((Int) -> Unit)? = null,
+        onTextProgress: ((String) -> Unit)? = null,
     ): Completion = withContext(Dispatchers.IO) {
         val (baseUrl, apiKey, model) = config()
-        val streaming = onProgress != null
+        val streaming = onProgress != null || onTextProgress != null
 
         val body = json.encodeToString(
             ChatRequest.serializer(),
@@ -419,7 +424,7 @@ class OpenAiContentGenerator(
                 okHttpClient.newCall(request).await().use { response ->
                     if (response.isSuccessful) {
                         return@withContext if (streaming) {
-                            readStreamed(response, model, onProgress!!)
+                            readStreamed(response, model, onProgress, onTextProgress)
                         } else {
                             readWhole(response, model)
                         }
@@ -452,7 +457,8 @@ class OpenAiContentGenerator(
     private fun readStreamed(
         response: okhttp3.Response,
         fallbackModel: String,
-        onProgress: (Int) -> Unit,
+        onProgress: ((Int) -> Unit)?,
+        onTextProgress: ((String) -> Unit)?,
     ): Completion {
         val source = response.body?.source() ?: return Completion.Error("AI 返回为空")
         val builder = StringBuilder()
@@ -468,7 +474,8 @@ class OpenAiContentGenerator(
                 val delta = chunk.choices.firstOrNull()?.delta?.content
                 if (!delta.isNullOrEmpty()) {
                     builder.append(delta)
-                    onProgress(builder.length)
+                    onProgress?.invoke(builder.length)
+                    onTextProgress?.invoke(builder.toString())
                 }
             }
         } catch (e: IOException) {
