@@ -227,4 +227,52 @@ class OpenAiContentGeneratorTest {
 
         assertTrue(result is GenerationResult.Failure)
     }
+
+    @Test
+    fun `assessment reading question without passage is dropped, others pass`() = runBlocking {
+        val assessmentJson =
+            """{"schemaVersion":1,"questions":[
+                 {"skill":"vocab","prompt":"He was ___ to help.","options":["reluctant","eager","vivid"],"answerIndex":0,"explanationZh":"e"},
+                 {"skill":"reading","prompt":"Where did it happen?","options":["A","B","C"],"answerIndex":1,"explanationZh":"e","passage":"A short story about a trip."}
+               ]}"""
+        server.enqueue(MockResponse().setBody(chatBody(assessmentJson)))
+
+        val result = generator().generateAssessmentQuestions("B1", 2, listOf("旅行"))
+
+        val success = result as GenerationResult.Success
+        assertEquals(2, success.data.size)
+        assertTrue(success.data.any { it.skill == "reading" && it.passage != null })
+    }
+
+    @Test
+    fun `expression feedback parses good rating`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody(
+                    """{"suggestion":"I traveled to Kyoto last spring.","issueZh":"没有明显问题",
+                       "explanationZh":"表达清楚，时态也对。","rating":"good"}""",
+                ),
+            ),
+        )
+
+        val result = generator().evaluateExpression("写一写你的旅行", "I travel to Kyoto last spring.", "B1")
+
+        val success = result as GenerationResult.Success
+        assertEquals("没有明显问题", success.data.issueZh)
+    }
+
+    @Test
+    fun `expression feedback with unknown rating fails`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody(
+                    """{"suggestion":"x","issueZh":"y","explanationZh":"z","rating":"excellent"}""",
+                ),
+            ),
+        )
+
+        val result = generator().evaluateExpression("task", "text", "B1")
+
+        assertTrue(result is GenerationResult.Failure)
+    }
 }

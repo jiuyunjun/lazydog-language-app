@@ -2,6 +2,8 @@ package com.lazydog.english.core.ai
 
 import com.lazydog.english.core.network.await
 import com.lazydog.english.domain.assessment.AssessmentQuestion
+import com.lazydog.english.domain.assessment.ExpressionFeedback
+import com.lazydog.english.domain.assessment.ExpressionRating
 import com.lazydog.english.domain.assessment.validateAssessmentQuestions
 import com.lazydog.english.domain.generation.ContentValidation
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
@@ -201,6 +203,38 @@ class OpenAiContentGenerator(
         val valid = validateAssessmentQuestions(payload.questions.map { it.toDomain() })
         if (valid.isEmpty()) return GenerationResult.Failure("生成的题都没通过校验")
         return GenerationResult.Success(valid, content.model, PROMPT_VERSION)
+    }
+
+    override suspend fun evaluateExpression(
+        taskZh: String,
+        userTextEn: String,
+        cefrLevel: String,
+    ): GenerationResult<ExpressionFeedback> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildExpressionEvalPrompt(taskZh, userTextEn, cefrLevel),
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<ExpressionFeedbackPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val rating = when (payload.rating.trim()) {
+            "good" -> ExpressionRating.Good
+            "needs_work" -> ExpressionRating.NeedsWork
+            else -> return GenerationResult.Failure("rating 字段不是预期取值：${payload.rating}")
+        }
+        if (payload.suggestion.isBlank() || payload.issueZh.isBlank() || payload.explanationZh.isBlank()) {
+            return GenerationResult.Failure("反馈字段不完整")
+        }
+        val feedback = ExpressionFeedback(
+            suggestionEn = payload.suggestion.trim(),
+            issueZh = payload.issueZh.trim(),
+            explanationZh = payload.explanationZh.trim(),
+            rating = rating,
+        )
+        return GenerationResult.Success(feedback, content.model, PROMPT_VERSION)
     }
 
     // ---- 请求执行 ----
@@ -416,6 +450,7 @@ class OpenAiContentGenerator(
         val options: List<String> = emptyList(),
         val answerIndex: Int = -1,
         val explanationZh: String = "",
+        val passage: String? = null,
     ) {
         fun toDomain() = AssessmentQuestion(
             skill = skill.trim(),
@@ -423,6 +458,7 @@ class OpenAiContentGenerator(
             options = options,
             answerIndex = answerIndex,
             explanationZh = explanationZh.trim(),
+            passage = passage?.trim()?.ifBlank { null },
         )
     }
 
@@ -430,6 +466,14 @@ class OpenAiContentGenerator(
     private data class AssessmentPayload(
         val schemaVersion: Int = 0,
         val questions: List<AssessmentQuestionPayload> = emptyList(),
+    )
+
+    @Serializable
+    private data class ExpressionFeedbackPayload(
+        val suggestion: String = "",
+        val issueZh: String = "",
+        val explanationZh: String = "",
+        val rating: String = "",
     )
 
     @Serializable
@@ -536,14 +580,28 @@ class OpenAiContentGenerator(
 
         internal fun buildAssessmentPrompt(level: String, count: Int, topics: List<String>): String = buildString {
             appendLine("给中文母语的英语学习者出 $count 道 CEFR $level 难度的单选题，用来评估水平。")
-            appendLine("题型混合：语境选词（英文句子挖空选词，skill=\"vocab\"）和语法（skill=\"grammar\"）。")
+            appendLine("题型三选一，这批题里尽量都覆盖到，不要全出同一种：")
+            appendLine("- 语境选词（英文句子挖空选词，skill=\"vocab\"）")
+            appendLine("- 语法（skill=\"grammar\"）")
+            appendLine("- 分级阅读（skill=\"reading\"）：先给一段 3~5 句的英文短文放进 passage 字段，prompt 是关于这段短文的理解题（其它两种题型 passage 留空或不要这个字段）")
             if (topics.isNotEmpty()) appendLine("语料可以贴近这些主题：${topics.joinToString("、")}。")
             appendLine("每题 3~4 个选项且不重复，只有一个正确答案，answerIndex 从 0 开始；explanationZh 一句话解析。")
             appendLine("难度务必贴住 $level：不要为了区分度混入明显更高或更低难度的题。")
             appendLine("输出 JSON schema：")
             appendLine(
-                """{"schemaVersion":1,"questions":[{"skill":"vocab","prompt":"...","options":["..."],"answerIndex":0,"explanationZh":"..."}]}""",
+                """{"schemaVersion":1,"questions":[{"skill":"vocab","prompt":"...","options":["..."],"answerIndex":0,"explanationZh":"...","passage":null}]}""",
             )
+        }
+
+        internal fun buildExpressionEvalPrompt(taskZh: String, userTextEn: String, level: String): String = buildString {
+            appendLine("学习者水平 $level。写作任务：$taskZh")
+            appendLine("学习者写的英文原文：\"$userTextEn\"")
+            appendLine("请评估表达是否清楚、语法有没有明显问题：")
+            appendLine("- suggestion：英文润色/修改版；如果原文已经不错，就给一个语气相近的润色版本，不要大改")
+            appendLine("- issueZh：一句话指出主要问题类型；如果没有明显问题，写“没有明显问题”")
+            appendLine("- explanationZh：一两句中文解释，语气平和，不要打击")
+            appendLine("- rating：整体是否达到该水平该有的表达水准，只能是 \"good\" 或 \"needs_work\"")
+            appendLine("""输出 JSON schema：{"suggestion":"...","issueZh":"...","explanationZh":"...","rating":"good"}""")
         }
 
         internal fun buildExplainSentencePrompt(sentence: String, level: String): String = buildString {

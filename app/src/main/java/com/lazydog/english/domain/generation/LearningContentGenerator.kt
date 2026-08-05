@@ -37,12 +37,22 @@ interface LearningContentGenerator {
         learnerLevel: String,
     ): GenerationResult<SentenceExplanation>
 
-    /** 能力测试出题：指定 CEFR 等级的单选题（词汇语境 + 语法混合）。 */
+    /** 能力测试出题：指定 CEFR 等级的单选题（词汇语境 / 语法 / 分级阅读混合）。 */
     suspend fun generateAssessmentQuestions(
         cefrLevel: String,
         count: Int,
         topics: List<String>,
     ): GenerationResult<List<com.lazydog.english.domain.assessment.AssessmentQuestion>>
+
+    /**
+     * 能力测试里“写一句话”的开放表达评估。题面本地模板生成，不需要 AI；
+     * 只有评估这一步交给 AI（AI_CONTRACTS.md §6：不参与等级升降，只做反馈）。
+     */
+    suspend fun evaluateExpression(
+        taskZh: String,
+        userTextEn: String,
+        cefrLevel: String,
+    ): GenerationResult<com.lazydog.english.domain.assessment.ExpressionFeedback>
 }
 
 data class NewWordsRequest(
