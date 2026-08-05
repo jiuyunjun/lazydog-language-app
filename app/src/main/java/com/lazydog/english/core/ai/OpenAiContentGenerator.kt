@@ -677,8 +677,10 @@ class OpenAiContentGenerator(
             if (request.knownTerms.isNotEmpty()) {
                 appendLine("这些词已经学过，不要出现：${request.knownTerms.joinToString(", ")}。")
             }
-            appendLine("大部分（八成左右）选贴近当前水平、实用高频的词义；" +
-                "可以有一两个稍高一级的，作为提前热身，但不要选到明显超纲、需要专业背景才懂的生僻词。")
+            appendLine("认真按${request.learnerLevel}这个具体水平选词，不要因为「求稳」就默认给更基础、" +
+                "更常见的词——这个水平的学习者应该已经掌握了入门词汇，选的应该是他们大概率还不认识、" +
+                "但达到这个水平该会用的词。大部分（八成左右）贴着这个水平走，可以有一两个稍高一级的" +
+                "作为提前热身，但不要选到明显超纲、需要专业背景才懂的生僻词。")
             appendLine("不要只给孤立单词——每个词给 pos（词性缩写，如 v./n./adj.）和 collocations：" +
                 "1~2 个这个词真实常用的搭配短语（比如 issue 配 \"resolve an issue\"，不是造一个不自然的短语）。")
             appendLine("meaningZh 是这个具体词义的简洁中文释义；exampleEn 是包含该词的自然英文例句，exampleZh 是它的翻译。")

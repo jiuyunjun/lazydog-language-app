@@ -145,9 +145,14 @@ object AssessmentEngine {
     /** 探顶：题目难度比当前能力值高出这么多，才算真正"够着上限"的探测。 */
     private const val PROBE_MARGIN = 0.8
 
-    /** "用时正常"的粗略区间：太快像瞎蒙，太慢像卡住/查资料，都只算弱证据（§3.2）。 */
-    private const val NORMAL_TIMING_MIN_MS = 2_000L
-    private const val NORMAL_TIMING_MAX_MS = 20_000L
+    /**
+     * "用时正常"的粗略区间：太快像瞎蒙，太慢像卡住/查资料，都只算弱证据（§3.2）。
+     * 上限要留够读完形微文本（2~4 句短文）+ 选答案的时间——之前定的 20s 太紧，
+     * 大量认真作答的题会被误判成"异常"，涨分打折，整场测下来能力值会被系统性低估
+     * （用户反馈"给的单词太简单"就是这个问题：等级测低了，出的词自然也简单）。
+     */
+    private const val NORMAL_TIMING_MIN_MS = 1_000L
+    private const val NORMAL_TIMING_MAX_MS = 45_000L
 
     fun initial(): AssessmentState = AssessmentState(score = 3.0, answered = emptyList())
 
