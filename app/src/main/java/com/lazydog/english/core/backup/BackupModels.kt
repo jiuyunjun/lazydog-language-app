@@ -4,6 +4,7 @@ import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
 import com.lazydog.english.core.database.ReadingMaterialEntity
+import com.lazydog.english.core.database.ScenarioSessionEntity
 import com.lazydog.english.core.database.VocabularyDetailEntity
 import kotlinx.serialization.Serializable
 
@@ -74,6 +75,16 @@ data class BackupReadingMaterial(
     val createdAt: Long,
 )
 
+@Serializable
+data class BackupScenarioSession(
+    val scenarioId: String,
+    val titleZh: String,
+    val stage: String,
+    val snapshotJson: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
 /** 只备份学习偏好；AI/Speech 密钥和 Base URL 一律不导出（AGENTS.md §6）。 */
 @Serializable
 data class BackupPreferences(
@@ -99,6 +110,7 @@ data class BackupPayload(
     val grammarDetails: List<BackupGrammarDetail> = emptyList(),
     val learningEvents: List<BackupLearningEvent> = emptyList(),
     val readingMaterials: List<BackupReadingMaterial> = emptyList(),
+    val scenarioSessions: List<BackupScenarioSession> = emptyList(),
     val preferences: BackupPreferences = BackupPreferences(),
 )
 
@@ -180,4 +192,23 @@ fun BackupReadingMaterial.toEntity() = ReadingMaterialEntity(
     schemaVersion = schemaVersion,
     validationNotes = validationNotes,
     createdAt = createdAt,
+)
+
+fun ScenarioSessionEntity.toBackup() = BackupScenarioSession(
+    scenarioId = scenarioId,
+    titleZh = titleZh,
+    stage = stage,
+    snapshotJson = snapshotJson,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
+
+fun BackupScenarioSession.toEntity() = ScenarioSessionEntity(
+    id = 0,
+    scenarioId = scenarioId,
+    titleZh = titleZh,
+    stage = stage,
+    snapshotJson = snapshotJson,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
 )

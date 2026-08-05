@@ -41,12 +41,14 @@ object Routes {
     const val WordStudy = "study/words"
     const val GrammarStudy = "study/grammar"
     const val Assessment = "assessment"
-    const val Scenario = "scenario"
+    const val Scenario = "scenario/new"
+    const val ScenarioOpen = "scenario/open/{sessionId}"
     const val ReadingGenerate = "reading/generate"
     const val ReadingPaste = "reading/paste"
     const val ReadingOpen = "reading/open/{materialId}"
 
     fun readingOpen(materialId: Long) = "reading/open/$materialId"
+    fun scenarioOpen(sessionId: Long) = "scenario/open/$sessionId"
 }
 
 @Composable
@@ -105,6 +107,7 @@ private fun AppNavHost(
                 onStartReading = { navController.navigate(Routes.ReadingGenerate) },
                 onStartReadingPaste = { navController.navigate(Routes.ReadingPaste) },
                 onStartScenario = { navController.navigate(Routes.Scenario) },
+                onOpenScenario = { id -> navController.navigate(Routes.scenarioOpen(id)) },
                 onOpenMaterial = { id -> navController.navigate(Routes.readingOpen(id)) },
                 onStartAssessment = { navController.navigate(Routes.Assessment) },
             )
@@ -123,7 +126,17 @@ private fun AppNavHost(
         }
 
         composable(Routes.Scenario) {
-            ScenarioScreen(onExit = { navController.popBackStack() })
+            ScenarioScreen(sessionId = null, onExit = { navController.popBackStack() })
+        }
+
+        composable(
+            route = Routes.ScenarioOpen,
+            arguments = listOf(navArgument("sessionId") { type = NavType.LongType }),
+        ) { entry ->
+            ScenarioScreen(
+                sessionId = entry.arguments?.getLong("sessionId"),
+                onExit = { navController.popBackStack() },
+            )
         }
 
         composable(Routes.WordStudy) {

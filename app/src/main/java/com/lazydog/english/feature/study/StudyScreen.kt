@@ -43,6 +43,14 @@ private data class StudyEntry(
     val onClick: () -> Unit,
 )
 
+private sealed interface RecentStudyItem {
+    val title: String
+    val timestamp: Long
+
+    data class Reading(val id: Long, override val title: String, override val timestamp: Long, val source: String) : RecentStudyItem
+    data class Scenario(val id: Long, override val title: String, override val timestamp: Long, val stage: String) : RecentStudyItem
+}
+
 @Composable
 fun StudyScreen(
     modifier: Modifier = Modifier,
@@ -52,11 +60,19 @@ fun StudyScreen(
     onReadingClick: () -> Unit,
     onPasteClick: () -> Unit,
     onScenarioClick: () -> Unit,
+    onScenarioSessionClick: (Long) -> Unit,
     onMaterialClick: (Long) -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val recentMaterials by app.readingRepository.recent.collectAsState(initial = emptyList())
+    val recentScenarios by app.scenarioSessionRepository.recent.collectAsState(initial = emptyList())
+    val recentItems = remember(recentMaterials, recentScenarios) {
+        (
+            recentMaterials.map { RecentStudyItem.Reading(it.id, it.title, it.createdAt, it.source) } +
+                recentScenarios.map { RecentStudyItem.Scenario(it.id, it.titleZh, it.updatedAt, it.stage) }
+            ).sortedByDescending { it.timestamp }.take(8)
+    }
 
     val entries = listOf(
         StudyEntry(Icons.Outlined.Abc, "单词", "复习到期 + AI 上新", onClick = onWordsClick),
@@ -135,14 +151,14 @@ fun StudyScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("粘贴一段英文", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        text = "边读边点词查，生词顺手入库",
+                        text = "双击查词、三击讲句，生词顺手入库",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         }
-        if (recentMaterials.isNotEmpty()) {
+        if (recentItems.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "最近的材料",
@@ -150,11 +166,16 @@ fun StudyScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
                 )
-                recentMaterials.take(5).forEach { material ->
+                recentItems.forEach { item ->
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainer,
                         shape = MaterialTheme.shapes.medium,
-                        onClick = { onMaterialClick(material.id) },
+                        onClick = {
+                            when (item) {
+                                is RecentStudyItem.Reading -> onMaterialClick(item.id)
+                                is RecentStudyItem.Scenario -> onScenarioSessionClick(item.id)
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
@@ -163,20 +184,28 @@ fun StudyScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.Article,
+                                imageVector = if (item is RecentStudyItem.Reading) {
+                                    Icons.AutoMirrored.Outlined.Article
+                                } else {
+                                    Icons.Outlined.RecordVoiceOver
+                                },
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp),
                             )
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(material.title, style = MaterialTheme.typography.bodyLarge)
+                                Text(item.title, style = MaterialTheme.typography.bodyLarge)
                                 Text(
                                     text = buildString {
-                                        append(formatDate(material.createdAt))
+                                        append(formatDate(item.timestamp))
                                         append(" · ")
                                         append(
-                                            if (material.source == ReadingRepository.SOURCE_AI) "AI 定制"
-                                            else "粘贴导入",
+                                            when (item) {
+                                                is RecentStudyItem.Reading ->
+                                                    if (item.source == ReadingRepository.SOURCE_AI) "AI 定制" else "粘贴导入"
+                                                is RecentStudyItem.Scenario ->
+                                                    if (item.stage == "Finished") "情景演练 · 已完成" else "情景演练 · 继续"
+                                            },
                                         )
                                     },
                                     style = MaterialTheme.typography.bodySmall,

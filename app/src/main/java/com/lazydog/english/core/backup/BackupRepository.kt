@@ -17,6 +17,7 @@ class BackupRepository(
     suspend fun export(): BackupPayload {
         val knowledgeDao = database.knowledgeDao()
         val readingDao = database.readingDao()
+        val scenarioDao = database.scenarioSessionDao()
         return BackupPayload(
             exportedAt = System.currentTimeMillis(),
             knowledgeItems = knowledgeDao.getAllItems().map { it.toBackup() },
@@ -24,6 +25,7 @@ class BackupRepository(
             grammarDetails = knowledgeDao.getAllGrammarDetails().map { it.toBackup() },
             learningEvents = knowledgeDao.getAllEvents().map { it.toBackup() },
             readingMaterials = readingDao.getAllMaterials().map { it.toBackup() },
+            scenarioSessions = scenarioDao.getAll().map { it.toBackup() },
             preferences = BackupPreferences(
                 learningGoal = prefs.learningGoal.first(),
                 topics = prefs.topics.first(),
@@ -43,9 +45,11 @@ class BackupRepository(
     suspend fun restore(payload: BackupPayload) {
         val knowledgeDao = database.knowledgeDao()
         val readingDao = database.readingDao()
+        val scenarioDao = database.scenarioSessionDao()
         database.withTransaction {
             knowledgeDao.clearAll()
             readingDao.clearAll()
+            scenarioDao.clearAll()
 
             val idMap = mutableMapOf<Long, Long>()
             for (item in payload.knowledgeItems) {
@@ -65,6 +69,9 @@ class BackupRepository(
             }
             for (material in payload.readingMaterials) {
                 readingDao.insert(material.toEntity())
+            }
+            for (session in payload.scenarioSessions) {
+                scenarioDao.save(session.toEntity())
             }
         }
 

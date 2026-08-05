@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.domain.assessment.AnswerOutcome
 import com.lazydog.english.domain.assessment.AssessmentEngine
 import com.lazydog.english.domain.assessment.AssessmentOutcome
@@ -591,14 +592,14 @@ private fun QuestionView(
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(
+                InteractiveEnglishText(
                     text = question.passage,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(14.dp),
                 )
             }
         }
-        Text(question.prompt, style = MaterialTheme.typography.titleLarge)
+        InteractiveEnglishText(question.prompt, style = MaterialTheme.typography.titleLarge)
         OptionsList(options = question.options, selected = selected, onSelect = onSelect)
         Button(onClick = onConfirm, enabled = selected != null, modifier = Modifier.fillMaxWidth()) {
             Text("确认")
@@ -629,7 +630,12 @@ private fun OptionsList(options: List<String>, selected: Int?, onSelect: (Int) -
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RadioButton(selected = isSelected, onClick = { onSelect(index) })
-                Text(option, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 4.dp))
+                InteractiveEnglishText(
+                    option,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(start = 4.dp),
+                    onSingleTap = { onSelect(index) },
+                )
             }
         }
     }
@@ -660,7 +666,7 @@ private fun CorrectionView(
             shape = MaterialTheme.shapes.medium,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(item.incorrectSentence, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(14.dp))
+            InteractiveEnglishText(item.incorrectSentence, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(14.dp))
         }
         OutlinedTextField(
             value = text,
@@ -705,7 +711,7 @@ private fun DeepReadingView(
             shape = MaterialTheme.shapes.medium,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(task.passage, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(16.dp))
+            InteractiveEnglishText(task.passage, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(16.dp))
         }
         task.questions.forEachIndexed { index, question ->
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -717,7 +723,7 @@ private fun DeepReadingView(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     )
                 }
-                Text(question.prompt, style = MaterialTheme.typography.titleMedium)
+                InteractiveEnglishText(question.prompt, style = MaterialTheme.typography.titleMedium)
                 OptionsList(
                     options = question.options,
                     selected = selections[index],

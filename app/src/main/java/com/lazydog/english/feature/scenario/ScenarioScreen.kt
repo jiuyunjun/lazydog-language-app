@@ -3,6 +3,7 @@ package com.lazydog.english.feature.scenario
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Casino
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -49,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,9 +64,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.data.ScenarioReplyMode
+import com.lazydog.english.core.data.ScenarioSessionSnapshot
+import com.lazydog.english.core.data.ScenarioStage
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.scenario.CommunicationFailure
 import com.lazydog.english.domain.scenario.ScenarioBrief
@@ -81,11 +90,11 @@ import com.lazydog.english.domain.scenario.ScenarioTurnRequest
 import com.lazydog.english.domain.speaking.TranscriptionResult
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private enum class ScenarioPhase { Pick, Brief, Conversation, Summary, Replay, Finish }
-private enum class ReplyMode { Options, Free }
+private enum class ScenarioPhase { Loading, Pick, Brief, Conversation, Summary, Replay, Finish }
 
 private data class ScenarioSeed(
     val title: String,
@@ -103,12 +112,14 @@ private val recommendedSeeds = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScenarioScreen(onExit: () -> Unit) {
+fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
 
-    var phase by remember { mutableStateOf(ScenarioPhase.Pick) }
+    val sessionRepository = app.scenarioSessionRepository
+    var currentSessionId by remember { mutableStateOf(sessionId) }
+    var phase by remember { mutableStateOf(if (sessionId == null) ScenarioPhase.Pick else ScenarioPhase.Loading) }
     var customSeed by remember { mutableStateOf("") }
     var selectedSeed by remember { mutableStateOf<ScenarioSeed?>(recommendedSeeds.first()) }
     var brief by remember { mutableStateOf<ScenarioBrief?>(null) }
@@ -116,7 +127,7 @@ fun ScenarioScreen(onExit: () -> Unit) {
     var messages by remember { mutableStateOf<List<ScenarioMessage>>(emptyList()) }
     var options by remember { mutableStateOf<List<ScenarioReplyOption>>(emptyList()) }
     var hint by remember { mutableStateOf("") }
-    var replyMode by remember { mutableStateOf(ReplyMode.Options) }
+    var replyMode by remember { mutableStateOf(ScenarioReplyMode.Options) }
     var input by remember { mutableStateOf("") }
     var achievedGoals by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var communicationFailure by remember { mutableStateOf<CommunicationFailure?>(null) }
@@ -128,6 +139,89 @@ fun ScenarioScreen(onExit: () -> Unit) {
     var transcribing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var goalsExpanded by remember { mutableStateOf(false) }
+
+    fun snapshot(stage: ScenarioStage, briefValue: ScenarioBrief = brief ?: kotlin.error("brief required")) =
+        ScenarioSessionSnapshot(
+            brief = briefValue,
+            stage = stage,
+            messages = messages,
+            options = options,
+            hint = hint,
+            replyMode = replyMode,
+            input = input,
+            achievedGoals = achievedGoals,
+            communicationFailure = communicationFailure,
+            readyToFinish = readyToFinish,
+            summary = summary,
+            replayIndex = replayIndex,
+            savedPhraseCount = savedPhraseCount,
+        )
+
+    suspend fun persist(value: ScenarioSessionSnapshot) {
+        currentSessionId = sessionRepository.save(currentSessionId, value)
+    }
+
+    fun persistAndExit() {
+        val current = brief
+        if (current == null) {
+            onExit()
+            return
+        }
+        val stage = when (phase) {
+            ScenarioPhase.Brief -> ScenarioStage.Brief
+            ScenarioPhase.Conversation -> ScenarioStage.Conversation
+            ScenarioPhase.Summary -> ScenarioStage.Summary
+            ScenarioPhase.Replay -> ScenarioStage.Replay
+            ScenarioPhase.Finish -> ScenarioStage.Finished
+            else -> null
+        }
+        if (stage == null) onExit() else scope.launch {
+            persist(snapshot(stage, current))
+            onExit()
+        }
+    }
+
+    BackHandler(enabled = phase != ScenarioPhase.Loading) { persistAndExit() }
+
+    LaunchedEffect(sessionId) {
+        if (sessionId == null) return@LaunchedEffect
+        val saved = sessionRepository.get(sessionId)
+        if (saved == null) {
+            error = "找不到这次演练，可能已经被清理。"
+            phase = ScenarioPhase.Pick
+            return@LaunchedEffect
+        }
+        brief = saved.brief
+        messages = saved.messages
+        options = saved.options
+        hint = saved.hint
+        replyMode = saved.replyMode
+        input = saved.input
+        achievedGoals = saved.achievedGoals
+        communicationFailure = saved.communicationFailure
+        readyToFinish = saved.readyToFinish
+        summary = saved.summary
+        replayIndex = saved.replayIndex.coerceIn(0, saved.summary?.improvements?.lastIndex?.coerceAtLeast(0) ?: 0)
+        savedPhraseCount = saved.savedPhraseCount
+        phase = when (saved.stage) {
+            ScenarioStage.Brief -> ScenarioPhase.Brief
+            ScenarioStage.Conversation -> ScenarioPhase.Conversation
+            ScenarioStage.Summary -> ScenarioPhase.Summary
+            ScenarioStage.Replay -> ScenarioPhase.Replay
+            ScenarioStage.Finished -> ScenarioPhase.Finish
+        }
+    }
+
+    LaunchedEffect(input) {
+        if (input.isBlank() || brief == null) return@LaunchedEffect
+        val stage = when (phase) {
+            ScenarioPhase.Conversation -> ScenarioStage.Conversation
+            ScenarioPhase.Replay -> ScenarioStage.Replay
+            else -> return@LaunchedEffect
+        }
+        delay(600)
+        persist(snapshot(stage).copy(input = input))
+    }
 
     fun transcribe() {
         if (transcribing) return
@@ -187,6 +281,12 @@ fun ScenarioScreen(onExit: () -> Unit) {
             when (result) {
                 is GenerationResult.Success -> {
                     brief = result.data
+                    persist(
+                        ScenarioSessionSnapshot(
+                            brief = result.data,
+                            stage = ScenarioStage.Brief,
+                        ),
+                    )
                     phase = ScenarioPhase.Brief
                 }
                 is GenerationResult.Failure -> error = result.reason
@@ -198,14 +298,25 @@ fun ScenarioScreen(onExit: () -> Unit) {
     fun startConversation() {
         val current = brief ?: return
         scope.launch { app.userPreferences.recordScenarioPlayed(current.scenarioId) }
-        messages = listOf(
+        val openingMessages = listOf(
             ScenarioMessage(0, ScenarioSpeaker.Opponent, current.openingLineEn, current.openingSubtextZh),
         )
+        messages = openingMessages
         options = current.initialReplyOptions
         achievedGoals = emptyMap()
         communicationFailure = null
         readyToFinish = false
         phase = ScenarioPhase.Conversation
+        scope.launch {
+            persist(
+                ScenarioSessionSnapshot(
+                    brief = current,
+                    stage = ScenarioStage.Conversation,
+                    messages = openingMessages,
+                    options = current.initialReplyOptions,
+                ),
+            )
+        }
     }
 
     fun submitReply(reply: String) {
@@ -231,16 +342,32 @@ fun ScenarioScreen(onExit: () -> Unit) {
                 ).joinToString("；").ifBlank { "这一轮没生成好，请重试。" }
             } else {
                 val userTurn = transcriptBefore.count { it.speaker == ScenarioSpeaker.User } + 1
-                messages = transcriptBefore +
+                val updatedMessages = transcriptBefore +
                     ScenarioMessage(userTurn, ScenarioSpeaker.User, cleanReply) +
                     ScenarioMessage(userTurn, ScenarioSpeaker.Opponent, turn.opponentReplyEn, turn.opponentSubtextZh)
+                messages = updatedMessages
                 val updatedGoals = achievedGoals + judgement.achievedGoalIds.associateWith { userTurn }
                 achievedGoals = updatedGoals
-                communicationFailure = judgement.communicationFailure
+                val updatedFailure = judgement.communicationFailure
+                communicationFailure = updatedFailure
                 options = turn.replyOptions
                 hint = turn.halfSentenceHintEn
                 input = ""
-                readyToFinish = turn.naturalEnding || updatedGoals.size == current.goals.size || userTurn >= 10
+                val updatedReady = turn.naturalEnding || updatedGoals.size == current.goals.size || userTurn >= 10
+                readyToFinish = updatedReady
+                persist(
+                    ScenarioSessionSnapshot(
+                        brief = current,
+                        stage = ScenarioStage.Conversation,
+                        messages = updatedMessages,
+                        options = turn.replyOptions,
+                        hint = turn.halfSentenceHintEn,
+                        replyMode = replyMode,
+                        achievedGoals = updatedGoals,
+                        communicationFailure = updatedFailure,
+                        readyToFinish = updatedReady,
+                    ),
+                )
             }
             busy = false
         }
@@ -257,6 +384,7 @@ fun ScenarioScreen(onExit: () -> Unit) {
             )) {
                 is GenerationResult.Success -> {
                     summary = result.data
+                    persist(snapshot(ScenarioStage.Summary).copy(summary = result.data))
                     phase = ScenarioPhase.Summary
                 }
                 is GenerationResult.Failure -> error = result.reason
@@ -277,6 +405,7 @@ fun ScenarioScreen(onExit: () -> Unit) {
                     exampleEn = phrase.en,
                 ) != null
             }
+            persist(snapshot(ScenarioStage.Finished).copy(savedPhraseCount = savedPhraseCount))
             busy = false
             phase = ScenarioPhase.Finish
         }
@@ -289,7 +418,7 @@ fun ScenarioScreen(onExit: () -> Unit) {
                     title = { Text(if (phase == ScenarioPhase.Brief) "开演前" else "情景演练") },
                     navigationIcon = {
                         IconButton(onClick = {
-                            if (phase == ScenarioPhase.Pick) onExit() else phase = ScenarioPhase.Pick
+                            persistAndExit()
                         }) {
                             Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                         }
@@ -300,6 +429,11 @@ fun ScenarioScreen(onExit: () -> Unit) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (phase) {
+                ScenarioPhase.Loading -> FriendlyLoading(
+                    title = "把上次演到一半的场景捡回来…",
+                    detail = "对话、目标进度和没写完的输入都会恢复。",
+                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                )
                 ScenarioPhase.Pick -> ScenarioPicker(
                     customSeed = customSeed,
                     onCustomSeedChange = { customSeed = it; selectedSeed = null },
@@ -334,13 +468,16 @@ fun ScenarioScreen(onExit: () -> Unit) {
                         goalsExpanded = goalsExpanded,
                         onToggleGoals = { goalsExpanded = !goalsExpanded },
                         replyMode = replyMode,
-                        onReplyModeChange = { replyMode = it },
+                        onReplyModeChange = {
+                            replyMode = it
+                            scope.launch { persist(snapshot(ScenarioStage.Conversation).copy(replyMode = it)) }
+                        },
                         input = input,
                         onInputChange = { input = it },
                         hint = hint,
                         failure = communicationFailure,
                         onUseRepair = { repair -> communicationFailure = null; submitReply(repair) },
-                        onRewriteRepair = { communicationFailure = null; replyMode = ReplyMode.Free; input = "" },
+                        onRewriteRepair = { communicationFailure = null; replyMode = ScenarioReplyMode.Free; input = "" },
                         busy = busy,
                         transcribing = transcribing,
                         error = error,
@@ -358,7 +495,12 @@ fun ScenarioScreen(onExit: () -> Unit) {
                         turnCount = messages.count { it.speaker == ScenarioSpeaker.User },
                         busy = busy,
                         error = error,
-                        onReplay = { replayIndex = 0; input = ""; phase = ScenarioPhase.Replay },
+                        onReplay = {
+                            replayIndex = 0
+                            input = ""
+                            phase = ScenarioPhase.Replay
+                            scope.launch { persist(snapshot(ScenarioStage.Replay).copy(replayIndex = 0, input = "")) }
+                        },
                         onSave = ::savePhrases,
                     )
                 }
@@ -376,6 +518,9 @@ fun ScenarioScreen(onExit: () -> Unit) {
                             if (replayIndex + 1 < items.size) {
                                 replayIndex += 1
                                 input = ""
+                                scope.launch {
+                                    persist(snapshot(ScenarioStage.Replay).copy(replayIndex = replayIndex, input = ""))
+                                }
                             } else savePhrases()
                         },
                         onSkip = ::savePhrases,
@@ -387,6 +532,7 @@ fun ScenarioScreen(onExit: () -> Unit) {
                     onDone = onExit,
                     onAgain = {
                         phase = ScenarioPhase.Pick
+                        currentSessionId = null
                         brief = null
                         summary = null
                         customSeed = ""
@@ -450,6 +596,12 @@ private fun ScenarioPicker(
             }
         }
         ErrorText(error)
+        if (busy) {
+            FriendlyLoading(
+                title = "正在搭场景和对手…",
+                detail = "会先准备完成清单，再给四种开场说法。",
+            )
+        }
         Button(onClick = onUse, enabled = !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
             if (busy) SmallProgress() else Text("用这个练")
         }
@@ -504,6 +656,12 @@ private fun ScenarioBriefView(
             }
         }
         ErrorText(error)
+        if (busy) {
+            FriendlyLoading(
+                title = "正在换一个更难缠的对手…",
+                detail = "词汇难度不变，只增加信息量、追问和阻力。",
+            )
+        }
         Spacer(Modifier.weight(1f))
         Button(onClick = onStart, enabled = !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("开始") }
         TextButton(onClick = onHarder, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
@@ -520,8 +678,8 @@ private fun ScenarioConversation(
     achievedGoals: Map<String, Int>,
     goalsExpanded: Boolean,
     onToggleGoals: () -> Unit,
-    replyMode: ReplyMode,
-    onReplyModeChange: (ReplyMode) -> Unit,
+    replyMode: ScenarioReplyMode,
+    onReplyModeChange: (ScenarioReplyMode) -> Unit,
     input: String,
     onInputChange: (String) -> Unit,
     hint: String,
@@ -569,25 +727,38 @@ private fun ScenarioConversation(
                     )
                 }
             }
-            if (busy) item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { SmallProgress() } }
+            if (busy) item {
+                FriendlyLoading(
+                    title = "对手正在想怎么回…",
+                    detail = "同时检查你完成了哪些目标，不会在中途纠错。",
+                )
+            }
         }
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ErrorText(error)
             if (failure == null && !readyToFinish) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (replyMode == ReplyMode.Options) "挑一句说" else "自己说 · 不用怕说错", style = MaterialTheme.typography.labelMedium)
-                    TextButton(onClick = { onReplyModeChange(if (replyMode == ReplyMode.Options) ReplyMode.Free else ReplyMode.Options) }) {
-                        Icon(if (replyMode == ReplyMode.Options) Icons.Outlined.Keyboard else Icons.AutoMirrored.Outlined.List, contentDescription = null)
+                    Text(if (replyMode == ScenarioReplyMode.Options) "挑一句说" else "自己说 · 不用怕说错", style = MaterialTheme.typography.labelMedium)
+                    TextButton(onClick = { onReplyModeChange(if (replyMode == ScenarioReplyMode.Options) ScenarioReplyMode.Free else ScenarioReplyMode.Options) }) {
+                        Icon(if (replyMode == ScenarioReplyMode.Options) Icons.Outlined.Keyboard else Icons.AutoMirrored.Outlined.List, contentDescription = null)
                         Spacer(Modifier.size(4.dp))
-                        Text(if (replyMode == ReplyMode.Options) "自己说" else "给我选项")
+                        Text(if (replyMode == ScenarioReplyMode.Options) "自己说" else "给我选项")
                     }
                 }
-                if (replyMode == ReplyMode.Options) {
-                    options.forEach { option ->
-                        OutlinedCard(onClick = { onSubmit(option.en) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                                Text(option.en)
-                                Text(option.zh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (replyMode == ScenarioReplyMode.Options) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        options.forEach { option ->
+                            OutlinedCard(onClick = { onSubmit(option.en) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                    InteractiveEnglishText(
+                                        text = option.en,
+                                        onSingleTap = { onSubmit(option.en) },
+                                    )
+                                    Text(option.zh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
                         }
                     }
@@ -632,6 +803,9 @@ private fun ScenarioConversation(
 
 @Composable
 private fun MessageBubble(message: ScenarioMessage) {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val scope = rememberCoroutineScope()
     val user = message.speaker == ScenarioSpeaker.User
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
         Surface(
@@ -641,7 +815,23 @@ private fun MessageBubble(message: ScenarioMessage) {
             modifier = Modifier.fillMaxWidth(0.84f),
         ) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(message.textEn, style = MaterialTheme.typography.bodyLarge)
+                Row(verticalAlignment = Alignment.Top) {
+                    InteractiveEnglishText(
+                        text = message.textEn,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = { scope.launch { app.speechController.speak(message.textEn) } },
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.VolumeUp,
+                            contentDescription = "朗读这句话",
+                            modifier = Modifier.size(19.dp),
+                        )
+                    }
+                }
                 if (!user && message.subtextZh.isNotBlank()) {
                     Text(message.subtextZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -666,7 +856,7 @@ private fun CommunicationFailureCard(
             Text("他听成了：${failure.heardAsZh}", color = MaterialTheme.colorScheme.onErrorContainer)
             Text(failure.explanationZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
             Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
-                Text(failure.suggestedRewriteEn, Modifier.padding(12.dp))
+                InteractiveEnglishText(failure.suggestedRewriteEn, Modifier.padding(12.dp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onUse, modifier = Modifier.weight(1f)) { Text("就这么说") }
@@ -711,9 +901,13 @@ private fun ImprovementCard(number: Int, item: ScenarioImprovement) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("$number  ${item.titleZh}", style = MaterialTheme.typography.titleSmall)
             Text("你说的", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-            Text(item.originalEn, textDecoration = TextDecoration.LineThrough, color = MaterialTheme.colorScheme.error)
+            InteractiveEnglishText(
+                item.originalEn,
+                textDecoration = TextDecoration.LineThrough,
+                color = MaterialTheme.colorScheme.error,
+            )
             Text("改成", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-            Text(item.improvedEn, color = MaterialTheme.colorScheme.primary)
+            InteractiveEnglishText(item.improvedEn, color = MaterialTheme.colorScheme.primary)
             Text("为什么：${item.reasonZh}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -742,7 +936,11 @@ private fun ScenarioReplayView(
         MessageBubble(ScenarioMessage(0, ScenarioSpeaker.Opponent, improvement.opponentLineEn))
         Text("你上次说的", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
         Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.medium) {
-            Text(improvement.originalEn, Modifier.padding(13.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+            InteractiveEnglishText(
+                improvement.originalEn,
+                Modifier.padding(13.dp),
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
         }
         OutlinedTextField(
             value = input,
@@ -778,7 +976,7 @@ private fun ScenarioFinishView(summary: ScenarioSummary, savedCount: Int, onDone
         summary.keepPhrases.forEach { phrase ->
             Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
                 Column(Modifier.fillMaxWidth().padding(13.dp)) {
-                    Text(phrase.en)
+                    InteractiveEnglishText(phrase.en)
                     Text(phrase.zh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -833,6 +1031,27 @@ private fun difficultyLabel(value: ScenarioDifficulty): String = when {
 private fun ErrorText(error: String?) {
     if (!error.isNullOrBlank()) {
         Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    }
+}
+
+@Composable
+private fun FriendlyLoading(title: String, detail: String, modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 

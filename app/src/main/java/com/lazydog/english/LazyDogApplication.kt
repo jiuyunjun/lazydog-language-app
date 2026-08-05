@@ -7,6 +7,7 @@ import com.lazydog.english.core.backup.BackupFileStore
 import com.lazydog.english.core.backup.BackupRepository
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.ReadingRepository
+import com.lazydog.english.core.data.ScenarioSessionRepository
 import kotlinx.coroutines.flow.first
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.database.AppDatabase
@@ -30,6 +31,8 @@ class LazyDogApplication : Application() {
     val speechController: SpeechController by lazy { SpeechController(userPreferences) }
 
     val readingRepository: ReadingRepository by lazy { ReadingRepository(database) }
+
+    val scenarioSessionRepository: ScenarioSessionRepository by lazy { ScenarioSessionRepository(database) }
 
     val backupRepository: BackupRepository by lazy { BackupRepository(database, userPreferences) }
 

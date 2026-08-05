@@ -57,6 +57,7 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.designsystem.LazyDogTheme
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.speaking.AssessmentResult
@@ -309,18 +310,12 @@ fun SpeakingScreen(
 @Composable
 private fun HighlightedSentence(text: String, problemWords: Set<String>) {
     val extended = LazyDogTheme.extendedColors
-    val annotated = buildAnnotatedString {
-        Regex("[A-Za-z']+|[^A-Za-z']+").findAll(text).forEach { match ->
-            val token = match.value
-            val bare = token.trim(',', '.', '!', '?', ';', ':').lowercase()
-            if (bare.isNotEmpty() && bare in problemWords) {
-                withStyle(SpanStyle(background = extended.attentionContainer)) { append(token) }
-            } else {
-                append(token)
-            }
-        }
-    }
-    Text(annotated, style = MaterialTheme.typography.titleLarge)
+    InteractiveEnglishText(
+        text = text,
+        style = MaterialTheme.typography.titleLarge,
+        highlightWords = problemWords,
+        highlightStyle = SpanStyle(background = extended.attentionContainer),
+    )
 }
 
 @Composable

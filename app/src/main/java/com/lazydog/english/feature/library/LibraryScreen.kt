@@ -54,6 +54,7 @@ import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.stageOrDefault
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.designsystem.LazyDogTheme
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.KnowledgeType
 import com.lazydog.english.core.model.ReviewGrade
@@ -248,7 +249,7 @@ private fun LibraryRow(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(title, style = MaterialTheme.typography.bodyLarge)
+                    InteractiveEnglishText(title, style = MaterialTheme.typography.bodyLarge, onSingleTap = onClick)
                     if (subtitle.isNotBlank()) {
                         Text(
                             text = subtitle,
@@ -302,7 +303,7 @@ private fun ItemDetailSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(title, style = MaterialTheme.typography.headlineSmall)
+                InteractiveEnglishText(title, style = MaterialTheme.typography.headlineSmall)
                 if (ipa.isNotBlank()) {
                     Text(
                         text = ipa,
@@ -325,7 +326,7 @@ private fun ItemDetailSheet(
             }
             if (example.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
+                    InteractiveEnglishText(
                         text = example,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

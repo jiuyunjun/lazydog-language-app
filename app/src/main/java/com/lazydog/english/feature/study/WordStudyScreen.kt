@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.VocabularyJson
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.GenerationResult
@@ -293,7 +294,7 @@ private fun StudyCardView(
             horizontalAlignment = if (revealed) Alignment.Start else Alignment.CenterHorizontally,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
+                InteractiveEnglishText(
                     text = card.term,
                     style = if (revealed) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayMedium,
                 )
@@ -331,7 +332,7 @@ private fun StudyCardView(
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 shape = MaterialTheme.shapes.small,
                             ) {
-                                Text(
+                                InteractiveEnglishText(
                                     text = phrase,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary,
@@ -355,7 +356,7 @@ private fun StudyCardView(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                Text(
+                                InteractiveEnglishText(
                                     text = card.exampleEn,
                                     style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier.weight(1f, fill = false),

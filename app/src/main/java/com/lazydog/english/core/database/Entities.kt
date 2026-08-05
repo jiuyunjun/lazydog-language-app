@@ -124,3 +124,19 @@ data class LearningEventEntity(
     @ColumnInfo(defaultValue = "NULL") val responseMillis: Long?,
     val occurredAt: Long,
 )
+
+/** 可中断恢复的情景演练。具体快照作为一个整体存 JSON，避免每轮对话拆成多张表。 */
+@Entity(
+    tableName = "scenario_sessions",
+    indices = [Index(value = ["updatedAt"]), Index(value = ["scenarioId"])],
+)
+data class ScenarioSessionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val scenarioId: String,
+    val titleZh: String,
+    /** Brief / Conversation / Summary / Replay / Finished */
+    val stage: String,
+    val snapshotJson: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+)

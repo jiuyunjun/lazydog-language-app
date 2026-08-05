@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.designsystem.LazyDogTheme
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GrammarLessonRequest
@@ -207,7 +208,7 @@ private fun LessonView(
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
         Text(lesson.name, style = MaterialTheme.typography.headlineSmall)
         if (lesson.patternEn.isNotBlank()) {
-            Text(
+            InteractiveEnglishText(
                 text = lesson.patternEn,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -308,7 +309,7 @@ private fun ExampleBlock(
                     }
                 }
             }
-            Text(text = sentence, style = MaterialTheme.typography.bodyLarge)
+            InteractiveEnglishText(text = sentence, style = MaterialTheme.typography.bodyLarge)
             if (note.isNotBlank()) {
                 Text(
                     text = note,

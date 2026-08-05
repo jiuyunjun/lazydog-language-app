@@ -1,9 +1,13 @@
 package com.lazydog.english.domain.scenario
 
+import kotlinx.serialization.Serializable
+
 /** 情景来源。推荐与随机都由 AI 生成，自定义会把用户原文作为约束。 */
+@Serializable
 enum class ScenarioSource { Custom, Recommended, Random }
 
 /** 难度只控制沟通阻力；词汇等级由 learnerLevel 独立传入。 */
+@Serializable
 data class ScenarioDifficulty(
     val informationLoad: Int,
     val cooperation: Int,
@@ -18,6 +22,7 @@ data class ScenarioDifficulty(
     )
 }
 
+@Serializable
 data class ScenarioGenerationRequest(
     val source: ScenarioSource,
     val seedZh: String,
@@ -29,10 +34,13 @@ data class ScenarioGenerationRequest(
     val excludedScenarioIds: Set<String>,
 )
 
+@Serializable
 data class ScenarioGoal(val id: String, val textZh: String)
 
+@Serializable
 data class ScenarioReplyOption(val en: String, val zh: String)
 
+@Serializable
 data class ScenarioBrief(
     /** 由模型给出的稳定语义 id，例如 hotel-wrong-room；用于一周去重。 */
     val scenarioId: String,
@@ -48,8 +56,10 @@ data class ScenarioBrief(
     val initialReplyOptions: List<ScenarioReplyOption>,
 )
 
+@Serializable
 enum class ScenarioSpeaker { User, Opponent }
 
+@Serializable
 data class ScenarioMessage(
     val turn: Int,
     val speaker: ScenarioSpeaker,
@@ -57,12 +67,14 @@ data class ScenarioMessage(
     val subtextZh: String = "",
 )
 
+@Serializable
 data class ScenarioTurnRequest(
     val brief: ScenarioBrief,
     val transcript: List<ScenarioMessage>,
     val userReplyEn: String,
 )
 
+@Serializable
 data class ScenarioTurn(
     val opponentReplyEn: String,
     val opponentSubtextZh: String,
@@ -72,23 +84,27 @@ data class ScenarioTurn(
 )
 
 /** 独立判定调用的唯一输出，不含语法、用词或风格评分。 */
+@Serializable
 data class ScenarioJudgement(
     val achievedGoalIds: Set<String>,
     val communicationFailure: CommunicationFailure?,
 )
 
+@Serializable
 data class CommunicationFailure(
     val heardAsZh: String,
     val explanationZh: String,
     val suggestedRewriteEn: String,
 )
 
+@Serializable
 data class ScenarioSummaryRequest(
     val brief: ScenarioBrief,
     val transcript: List<ScenarioMessage>,
     val achievedGoalIds: Set<String>,
 )
 
+@Serializable
 data class ScenarioImprovement(
     val turn: Int,
     val titleZh: String,
@@ -101,11 +117,13 @@ data class ScenarioImprovement(
     val phraseHints: List<String>,
 )
 
+@Serializable
 data class ScenarioKeepPhrase(
     val en: String,
     val zh: String,
 )
 
+@Serializable
 data class ScenarioSummary(
     val outcomeTitleZh: String,
     val overviewZh: String,
