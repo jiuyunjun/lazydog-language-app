@@ -310,4 +310,42 @@ class OpenAiContentGeneratorTest {
 
         assertTrue(result is GenerationResult.Failure)
     }
+
+    private fun sampleFeedback() = com.lazydog.english.domain.speaking.PronunciationFeedback(
+        recognizedText = "The smell of coffee lingered in the kitchen.",
+        accuracyScore = 78,
+        fluencyScore = 82,
+        completenessScore = 100,
+        pronunciationScore = 80,
+        words = listOf(
+            com.lazydog.english.domain.speaking.WordFeedback(
+                "kitchen", 45, com.lazydog.english.domain.speaking.WordErrorType.Mispronunciation,
+            ),
+        ),
+    )
+
+    @Test
+    fun `pronunciation tips parse and drop unknown kind`() = runBlocking {
+        val tipsJson =
+            """{"tips":[
+                 {"kind":"good","titleZh":"整句听得懂","bodyZh":"节奏也挺稳。"},
+                 {"kind":"attention","titleZh":"kitchen 读音不太准","bodyZh":"重音在前面那一节。"},
+                 {"kind":"excellent","titleZh":"x","bodyZh":"y"}
+               ]}"""
+        server.enqueue(MockResponse().setBody(chatBody(tipsJson)))
+
+        val result = generator().explainPronunciation("The smell of coffee lingered in the kitchen.", sampleFeedback())
+
+        val success = result as GenerationResult.Success
+        assertEquals(2, success.data.size)
+    }
+
+    @Test
+    fun `pronunciation tips with no valid entries fails`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody("""{"tips":[]}""")))
+
+        val result = generator().explainPronunciation("text", sampleFeedback())
+
+        assertTrue(result is GenerationResult.Failure)
+    }
 }

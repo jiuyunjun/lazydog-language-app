@@ -26,6 +26,10 @@ import com.lazydog.english.domain.generation.ReadingTargetWord
 import com.lazydog.english.domain.generation.ReadingValidation
 import com.lazydog.english.domain.generation.WordExplanation
 import com.lazydog.english.domain.generation.SentenceExplanation
+import com.lazydog.english.domain.speaking.PronunciationFeedback
+import com.lazydog.english.domain.speaking.PronunciationTip
+import com.lazydog.english.domain.speaking.TipKind
+import com.lazydog.english.domain.speaking.validatePronunciationTips
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -254,6 +258,25 @@ class OpenAiContentGenerator(
         val failure = ExpressionValidation.validate(rubric)
         if (failure != null) return GenerationResult.Failure("评分没通过校验：$failure")
         return GenerationResult.Success(rubric, content.model, PROMPT_VERSION)
+    }
+
+    override suspend fun explainPronunciation(
+        referenceText: String,
+        feedback: PronunciationFeedback,
+    ): GenerationResult<List<PronunciationTip>> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildPronunciationTipsPrompt(referenceText, feedback),
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<PronunciationTipsPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val tips = validatePronunciationTips(payload.tips.mapNotNull { it.toDomain() })
+        if (tips.isEmpty()) return GenerationResult.Failure("生成的提示都没通过校验")
+        return GenerationResult.Success(tips, content.model, PROMPT_VERSION)
     }
 
     // ---- 请求执行 ----
@@ -530,6 +553,27 @@ class OpenAiContentGenerator(
     }
 
     @Serializable
+    private data class PronunciationTipPayload(
+        val kind: String = "",
+        val titleZh: String = "",
+        val bodyZh: String = "",
+    ) {
+        fun toDomain(): PronunciationTip? {
+            val k = when (kind.trim()) {
+                "good" -> TipKind.Good
+                "attention" -> TipKind.Attention
+                else -> return null
+            }
+            return PronunciationTip(k, titleZh.trim(), bodyZh.trim())
+        }
+    }
+
+    @Serializable
+    private data class PronunciationTipsPayload(
+        val tips: List<PronunciationTipPayload> = emptyList(),
+    )
+
+    @Serializable
     private data class SentenceExplanationPayload(
         val translationZh: String = "",
         val explanationZh: String = "",
@@ -715,6 +759,26 @@ class OpenAiContentGenerator(
             appendLine(
                 """{"dimensions":[{"dimension":"task_completion","score":3,"evidenceZh":["..."]}]}""",
             )
+        }
+
+        internal fun buildPronunciationTipsPrompt(
+            referenceText: String,
+            feedback: PronunciationFeedback,
+        ): String = buildString {
+            appendLine("学习者朗读了这句英文，Azure Speech 给出了发音评估。原句：\"$referenceText\"")
+            appendLine("系统识别到的内容：\"${feedback.recognizedText}\"")
+            appendLine("总体：准确度 ${feedback.accuracyScore}、流利度 ${feedback.fluencyScore}、完整度 ${feedback.completenessScore}（0~100 分，仅供你参考，不要在提示里直接报数字）。")
+            appendLine("逐词情况：")
+            feedback.words.forEach { w ->
+                appendLine("- ${w.word}：准确度 ${w.accuracyScore}，${w.errorType.name}")
+            }
+            appendLine("请给出 1~3 条给中文母语学习者看的朗读提示，每条二选一：")
+            appendLine("- kind=\"good\"：值得肯定的地方，比如整体清楚、某个词读得准")
+            appendLine("- kind=\"attention\"：最值得改进的 1~2 个具体问题（挑准确度最低或有 Omission/Insertion 的词）")
+            appendLine("每条 titleZh 一句话点出是什么（可以带具体的词或音节），bodyZh 一句话说怎么调整，语气平和、不打击。")
+            appendLine("绝对不要在 titleZh/bodyZh 里出现任何数字分数；重点讲发音、连读、重音这些具体现象，不要泛泛而谈。")
+            appendLine("如果整体读得不错，可以只给 1 条 good；不需要凑够 3 条。")
+            appendLine("""输出 JSON schema：{"tips":[{"kind":"good","titleZh":"...","bodyZh":"..."}]}""")
         }
 
         internal fun buildExplainSentencePrompt(sentence: String, level: String): String = buildString {

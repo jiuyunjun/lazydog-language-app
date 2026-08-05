@@ -10,13 +10,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,16 +48,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
+import com.lazydog.english.core.designsystem.LazyDogTheme
+import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.speaking.AssessmentResult
 import com.lazydog.english.domain.speaking.PronunciationFeedback
+import com.lazydog.english.domain.speaking.PronunciationTip
 import com.lazydog.english.domain.speaking.SpeakResult
-import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.speaking.SpeechRate
+import com.lazydog.english.domain.speaking.TipKind
+import com.lazydog.english.domain.speaking.localPronunciationTips
 import com.lazydog.english.domain.speaking.overallComment
 import java.time.LocalDate
 import kotlinx.coroutines.launch
@@ -66,11 +79,16 @@ private val fallbackSentences = listOf(
     PracticeSentence("The city tried to curb traffic downtown.", "内置练习句"),
 )
 
+/**
+ * 朗读反馈只给少量可理解提示，不显示综合分数（DESIGN.md 屏 19、PRODUCT.md §6.5）。
+ * 有问题的词直接在原句里标出来，而不是另列一份带数字的清单。
+ */
 private sealed interface SpeakingUiState {
     data object Idle : SpeakingUiState
     data object Playing : SpeakingUiState
     data object Listening : SpeakingUiState
-    data class Feedback(val feedback: PronunciationFeedback) : SpeakingUiState
+    data object GeneratingTips : SpeakingUiState
+    data class Feedback(val feedback: PronunciationFeedback, val tips: List<PronunciationTip>) : SpeakingUiState
     data class Error(val message: String) : SpeakingUiState
 }
 
@@ -83,7 +101,8 @@ fun SpeakingScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val speech = remember { (context.applicationContext as LazyDogApplication).speechController }
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val speech = remember { app.speechController }
     val speechRate by prefs.speechRate.collectAsState(initial = SpeechRate.Normal)
 
     val vocab by repository.vocabulary.collectAsState(initial = emptyList())
@@ -96,24 +115,33 @@ fun SpeakingScreen(
     val sentence = sentences[sentenceIndex % sentences.size]
 
     var uiState by remember { mutableStateOf<SpeakingUiState>(SpeakingUiState.Idle) }
-    val busy = uiState is SpeakingUiState.Playing || uiState is SpeakingUiState.Listening
+    var showPermissionRationale by rememberSaveable { mutableStateOf(false) }
+    val busy = uiState is SpeakingUiState.Playing ||
+        uiState is SpeakingUiState.Listening ||
+        uiState is SpeakingUiState.GeneratingTips
 
     // 拿到过一次发音反馈就算完成今日朗读步骤。
     LaunchedEffect(uiState is SpeakingUiState.Feedback) {
         if (uiState is SpeakingUiState.Feedback) {
-            (context.applicationContext as LazyDogApplication).userPreferences
-                .markTodayStepDone(LocalDate.now().toString(), DailyStep.Speaking.id)
+            app.userPreferences.markTodayStepDone(LocalDate.now().toString(), DailyStep.Speaking.id)
         }
     }
 
     fun startAssessment() {
         uiState = SpeakingUiState.Listening
         scope.launch {
-            uiState = when (val result = speech.assessReading(sentence.text)) {
-                is AssessmentResult.Done -> SpeakingUiState.Feedback(result.feedback)
+            when (val result = speech.assessReading(sentence.text)) {
+                is AssessmentResult.Done -> {
+                    uiState = SpeakingUiState.GeneratingTips
+                    val tips = when (val tipsResult = app.contentGenerator.explainPronunciation(sentence.text, result.feedback)) {
+                        is GenerationResult.Success -> tipsResult.data
+                        is GenerationResult.Failure -> localPronunciationTips(result.feedback)
+                    }
+                    uiState = SpeakingUiState.Feedback(result.feedback, tips)
+                }
                 AssessmentResult.NothingRecognized ->
-                    SpeakingUiState.Error("没听清。凑近一点，读完整句再停。")
-                is AssessmentResult.Failed -> SpeakingUiState.Error(result.reason)
+                    uiState = SpeakingUiState.Error("没听清。凑近一点，读完整句再停。")
+                is AssessmentResult.Failed -> uiState = SpeakingUiState.Error(result.reason)
             }
         }
     }
@@ -129,7 +157,7 @@ fun SpeakingScreen(
         val granted = ContextCompat.checkSelfPermission(
             context, Manifest.permission.RECORD_AUDIO,
         ) == PackageManager.PERMISSION_GRANTED
-        if (granted) startAssessment() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        if (granted) startAssessment() else showPermissionRationale = true
     }
 
     fun onPlaySample() {
@@ -162,6 +190,11 @@ fun SpeakingScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            val problemWords = remember(uiState) {
+                ((uiState as? SpeakingUiState.Feedback)?.feedback?.problemWords ?: emptyList())
+                    .map { it.word.lowercase() }
+                    .toSet()
+            }
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 shape = MaterialTheme.shapes.large,
@@ -171,7 +204,7 @@ fun SpeakingScreen(
                     modifier = Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(sentence.text, style = MaterialTheme.typography.titleLarge)
+                    HighlightedSentence(sentence.text, problemWords)
                     Text(
                         text = sentence.sourceNote,
                         style = MaterialTheme.typography.bodySmall,
@@ -207,7 +240,7 @@ fun SpeakingScreen(
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = null)
-                    Text("听示范", modifier = Modifier.padding(start = 8.dp))
+                    Text("听标准音", modifier = Modifier.padding(start = 8.dp))
                 }
                 Button(
                     onClick = ::onRecordClick,
@@ -225,14 +258,15 @@ fun SpeakingScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                SpeakingUiState.Playing -> BusyHint("正在播放示范…")
+                SpeakingUiState.Playing -> BusyHint("正在播放标准音…")
                 SpeakingUiState.Listening -> BusyHint("在听你读…读完停一下就好")
+                SpeakingUiState.GeneratingTips -> BusyHint("正在想怎么跟你说…")
                 is SpeakingUiState.Error -> Text(
                     text = state.message,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                 )
-                is SpeakingUiState.Feedback -> FeedbackSection(state.feedback)
+                is SpeakingUiState.Feedback -> FeedbackSection(state.feedback, state.tips)
             }
 
             TextButton(
@@ -247,12 +281,52 @@ fun SpeakingScreen(
             }
         }
     }
+
+    if (showPermissionRationale) {
+        AlertDialog(
+            onDismissRequest = { showPermissionRationale = false },
+            icon = { Icon(Icons.Outlined.Mic, contentDescription = null) },
+            title = { Text("允许「懒狗放洋屁」录音？") },
+            text = {
+                Text("用来判断你这句读得怎么样。录音只会实时传给语音服务做这一次评估，不会保存在手机上，也不会用于其他用途。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPermissionRationale = false
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                ) { Text("允许") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionRationale = false }) { Text("不用了") }
+            },
+        )
+    }
+}
+
+/** 有问题的词直接标底色，不另列数字分数（DESIGN.md 屏 19）。 */
+@Composable
+private fun HighlightedSentence(text: String, problemWords: Set<String>) {
+    val extended = LazyDogTheme.extendedColors
+    val annotated = buildAnnotatedString {
+        Regex("[A-Za-z']+|[^A-Za-z']+").findAll(text).forEach { match ->
+            val token = match.value
+            val bare = token.trim(',', '.', '!', '?', ';', ':').lowercase()
+            if (bare.isNotEmpty() && bare in problemWords) {
+                withStyle(SpanStyle(background = extended.attentionContainer)) { append(token) }
+            } else {
+                append(token)
+            }
+        }
+    }
+    Text(annotated, style = MaterialTheme.typography.titleLarge)
 }
 
 @Composable
 private fun BusyHint(text: String) {
     Row(
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         CircularProgressIndicator(modifier = Modifier.padding(4.dp))
@@ -261,51 +335,53 @@ private fun BusyHint(text: String) {
 }
 
 @Composable
-private fun FeedbackSection(feedback: PronunciationFeedback) {
+private fun FeedbackSection(feedback: PronunciationFeedback, tips: List<PronunciationTip>) {
+    val extended = LazyDogTheme.extendedColors
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = overallComment(feedback.pronunciationScore),
             style = MaterialTheme.typography.titleMedium,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ScoreChip("总分", feedback.pronunciationScore)
-            ScoreChip("准确", feedback.accuracyScore)
-            ScoreChip("流利", feedback.fluencyScore)
-            ScoreChip("完整", feedback.completenessScore)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            tips.forEach { tip ->
+                val (icon, color) = when (tip.kind) {
+                    TipKind.Good -> Icons.Outlined.CheckCircle to extended.correct
+                    TipKind.Attention -> Icons.Outlined.RecordVoiceOver to extended.attention
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(tip.titleZh, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = tip.bodyZh,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
         }
-        if (feedback.recognizedText.isNotBlank()) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(
+                Icons.Outlined.MicOff,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
             Text(
-                text = "听到的是：${feedback.recognizedText}",
+                text = "这次朗读没有保存录音。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        val problems = feedback.problemWords
-        if (problems.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("值得再看一眼的词", style = MaterialTheme.typography.labelLarge)
-                problems.forEach { word ->
-                    Text(
-                        text = "${word.word} · ${word.errorType.labelZh} · 准确度 ${word.accuracyScore}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScoreChip(label: String, score: Int) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = MaterialTheme.shapes.small,
-    ) {
-        Text(
-            text = "$label $score",
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-        )
     }
 }
