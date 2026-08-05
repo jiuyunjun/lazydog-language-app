@@ -9,148 +9,170 @@ import org.junit.Test
 class AssessmentEngineTest {
 
     @Test
-    fun `starts at A2 with no answers`() {
+    fun `starts at B1 baseline with no answers`() {
         val state = AssessmentEngine.initial()
-        assertEquals(CefrLevel.A2, state.currentLevel)
+        assertEquals(3.0, state.score, 0.001)
         assertTrue(state.answered.isEmpty())
     }
 
     @Test
-    fun `two consecutive correct answers level up and reset streak`() {
-        var state = AssessmentEngine.initial()
-        state = AssessmentEngine.record(state, AssessmentSkill.Vocab, correct = true)
-        assertEquals(CefrLevel.A2, state.currentLevel)
-        assertEquals(1, state.streak)
-        state = AssessmentEngine.record(state, AssessmentSkill.Vocab, correct = true)
-        assertEquals(CefrLevel.B1, state.currentLevel)
-        assertEquals(0, state.streak)
+    fun `first three questions are the fixed placement items`() {
+        val state = AssessmentEngine.initial()
+        assertEquals(NextLadderStep.Question(AssessmentSkill.Vocab, "A2"), AssessmentEngine.nextStep(state))
+        val s1 = AssessmentEngine.record(state, AssessmentSkill.Vocab, itemLevelScore = 2.0, correct = true)
+        assertEquals(NextLadderStep.Question(AssessmentSkill.Grammar, "B1"), AssessmentEngine.nextStep(s1))
+        val s2 = AssessmentEngine.record(s1, AssessmentSkill.Grammar, itemLevelScore = 3.0, correct = true)
+        assertEquals(NextLadderStep.Question(AssessmentSkill.Reading, "B1"), AssessmentEngine.nextStep(s2))
     }
 
     @Test
-    fun `wrong answer levels down immediately`() {
-        var state = AssessmentEngine.initial()
-        state = AssessmentEngine.record(state, AssessmentSkill.Grammar, correct = false)
-        assertEquals(CefrLevel.A1, state.currentLevel)
+    fun `placement table sets the starting score from correct count`() {
+        fun placementScore(vararg correctness: Boolean): Double {
+            var state = AssessmentEngine.initial()
+            correctness.forEach { state = AssessmentEngine.record(state, AssessmentSkill.Vocab, 3.0, it) }
+            return state.score
+        }
+        assertEquals(1.5, placementScore(false, false, false), 0.001)
+        assertEquals(2.0, placementScore(true, false, false), 0.001)
+        assertEquals(3.0, placementScore(true, true, false), 0.001)
+        assertEquals(4.0, placementScore(true, true, true), 0.001)
     }
 
     @Test
-    fun `levels clamp at both ends`() {
+    fun `three correct placement answers force an immediate C1 probe`() {
         var state = AssessmentEngine.initial()
-        repeat(5) { state = AssessmentEngine.record(state, AssessmentSkill.Vocab, correct = false) }
-        assertEquals(CefrLevel.A1, state.currentLevel)
+        repeat(3) { state = AssessmentEngine.record(state, AssessmentSkill.Vocab, 3.0, correct = true) }
+        val step = AssessmentEngine.nextStep(state) as NextLadderStep.Question
+        assertEquals("C1", step.level)
+    }
+
+    @Test
+    fun `correct and wrong answers move the continuous score up and down`() {
+        // 2/3 定位题答对 -> 起点 3.0（3/3 会立刻探 C1，干扰这里想测的加减逻辑）。
+        var state = AssessmentEngine.initial()
+        state = AssessmentEngine.record(state, AssessmentSkill.Vocab, 3.0, correct = true)
+        state = AssessmentEngine.record(state, AssessmentSkill.Grammar, 3.0, correct = true)
+        state = AssessmentEngine.record(state, AssessmentSkill.Reading, 3.0, correct = false)
+        assertEquals(3.0, state.score, 0.001)
+
+        val afterCorrect = AssessmentEngine.record(state, AssessmentSkill.Grammar, 3.0, correct = true)
+        assertEquals(3.4, afterCorrect.score, 0.001)
+        val afterWrong = AssessmentEngine.record(state, AssessmentSkill.Grammar, 3.0, correct = false)
+        assertEquals(2.6, afterWrong.score, 0.001)
+    }
+
+    @Test
+    fun `score clamps between 1_0 and 5_0`() {
+        var down = AssessmentEngine.initial()
+        repeat(3) { down = AssessmentEngine.record(down, AssessmentSkill.Vocab, 1.0, correct = false) } // -> 1.5
+        repeat(20) { down = AssessmentEngine.record(down, AssessmentSkill.Vocab, 1.0, correct = false) }
+        assertEquals(1.0, down.score, 0.001)
 
         var up = AssessmentEngine.initial()
-        repeat(12) { up = AssessmentEngine.record(up, AssessmentSkill.Vocab, correct = true) }
-        assertEquals(CefrLevel.C1, up.currentLevel)
+        repeat(3) { up = AssessmentEngine.record(up, AssessmentSkill.Vocab, 5.0, correct = true) } // -> 4.0
+        repeat(20) { up = AssessmentEngine.record(up, AssessmentSkill.Vocab, 5.0, correct = true) }
+        assertEquals(5.0, up.score, 0.001)
     }
 
     @Test
-    fun `does not complete before MIN_QUESTIONS even if very consistent`() {
+    fun `label adds a plus sign for the upper half of a band`() {
+        assertEquals("B1", labelForScore(3.0))
+        assertEquals("B1", labelForScore(3.2))
+        assertEquals("B1+", labelForScore(3.5))
+        assertEquals("B2", labelForScore(3.9))
+        assertEquals("A1", labelForScore(0.5))
+        assertEquals("C1", labelForScore(5.5))
+    }
+
+    @Test
+    fun `does not complete before MIN_QUESTIONS`() {
         var state = AssessmentEngine.initial()
-        // 前 7 题全对（会不断升级），还没到 MIN_QUESTIONS，不该提前结束。
         repeat(AssessmentEngine.MIN_QUESTIONS - 1) {
-            state = AssessmentEngine.record(state, AssessmentSkill.Vocab, correct = true)
+            val skill = AssessmentSkill.ladderSkills[it % AssessmentSkill.ladderSkills.size]
+            state = AssessmentEngine.record(state, skill, state.score, correct = true)
             assertFalse(AssessmentEngine.isComplete(state))
         }
     }
 
     @Test
-    fun `stops early once past MIN_QUESTIONS and recent answers are consistent`() {
+    fun `coverage constraint forces all four ladder skills to appear`() {
+        // 驱动逻辑本身不会主动选 pragmatics（vocab/grammar/reading 已经被定位题覆盖过），
+        // 覆盖约束应该让它在停止前至少出现一次。
         var state = AssessmentEngine.initial()
-        // 冲到顶再稳定作答：一旦过了 MIN_QUESTIONS，最近几题的一致度应该已经很高，可以提前结束。
-        while (!AssessmentEngine.isComplete(state) && state.answered.size < 20) {
-            state = AssessmentEngine.record(state, AssessmentSkill.Vocab, correct = true)
+        val seenSkills = mutableSetOf<String>()
+        while (!AssessmentEngine.isComplete(state) && state.answered.size < AssessmentEngine.MAX_QUESTIONS) {
+            val step = AssessmentEngine.nextStep(state) as? NextLadderStep.Question ?: break
+            seenSkills += step.skill
+            state = AssessmentEngine.record(state, step.skill, scoreForLabel(step.level), correct = true)
         }
-        assertTrue(AssessmentEngine.isComplete(state))
-        assertTrue(state.answered.size in AssessmentEngine.MIN_QUESTIONS..AssessmentEngine.MAX_QUESTIONS)
-        assertTrue("expected early stop before MAX_QUESTIONS", state.answered.size < AssessmentEngine.MAX_QUESTIONS)
+        assertTrue("覆盖约束应该让四类技能都出现过", seenSkills.containsAll(AssessmentSkill.ladderSkills))
     }
 
     @Test
     fun `always completes by MAX_QUESTIONS even with erratic answers`() {
         var state = AssessmentEngine.initial()
-        repeat(AssessmentEngine.MAX_QUESTIONS) {
-            state = AssessmentEngine.record(state, AssessmentSkill.Grammar, correct = it % 2 == 0)
+        var i = 0
+        while (!AssessmentEngine.isComplete(state) && state.answered.size < AssessmentEngine.MAX_QUESTIONS) {
+            val step = AssessmentEngine.nextStep(state) as NextLadderStep.Question
+            state = AssessmentEngine.record(state, step.skill, scoreForLabel(step.level), correct = i % 2 == 0)
+            i++
         }
         assertTrue(AssessmentEngine.isComplete(state))
-        assertEquals(AssessmentEngine.MAX_QUESTIONS, state.answered.size)
+        assertTrue(state.answered.size <= AssessmentEngine.MAX_QUESTIONS)
     }
 
     @Test
-    fun `steady performance yields high confidence`() {
-        // 在 B1 上下稳定：升到 B1 后一直对错交替会抖动；改为总是答对到 C1 顶层再全对。
+    fun `stops only after probing one level above the stable score`() {
         var state = AssessmentEngine.initial()
-        repeat(12) { state = AssessmentEngine.record(state, AssessmentSkill.Vocab, correct = true) }
-        val outcome = AssessmentEngine.result(state, expression = null)
-        assertEquals(CefrLevel.C1, outcome.level)
-        assertTrue(outcome.confidencePercent >= 75)
-        assertEquals(12, outcome.correctCount)
-    }
-
-    @Test
-    fun `erratic answers yield lower confidence than steady ones`() {
-        var erratic = AssessmentEngine.initial()
-        repeat(12) { erratic = AssessmentEngine.record(erratic, AssessmentSkill.Vocab, correct = it % 2 == 0) }
-        var steady = AssessmentEngine.initial()
-        repeat(12) { steady = AssessmentEngine.record(steady, AssessmentSkill.Vocab, correct = true) }
-        assertTrue(
-            AssessmentEngine.result(erratic, null).confidencePercent <
-                AssessmentEngine.result(steady, null).confidencePercent,
-        )
-    }
-
-    @Test
-    fun `profile rows report thin sample as unmeasured`() {
-        var state = AssessmentEngine.initial()
-        // 只答语法题，词汇 / 阅读没有样本。
-        repeat(AssessmentEngine.MIN_QUESTIONS) {
-            state = AssessmentEngine.record(state, AssessmentSkill.Grammar, correct = true)
+        while (!AssessmentEngine.isComplete(state) && state.answered.size < AssessmentEngine.MAX_QUESTIONS) {
+            val step = AssessmentEngine.nextStep(state) as NextLadderStep.Question
+            state = AssessmentEngine.record(state, step.skill, scoreForLabel(step.level), correct = true)
         }
-        val outcome = AssessmentEngine.result(state, expression = null)
-        val vocabRow = outcome.profile.first { it.name == "词汇广度" }
-        val grammarRow = outcome.profile.first { it.name.startsWith("语法") }
-        val expressionRow = outcome.profile.first { it.name == "表达" }
-        assertEquals("样本不足", vocabRow.label)
-        assertEquals(0, vocabRow.pct)
-        assertTrue(grammarRow.pct > 0)
-        assertEquals("样本不足", expressionRow.label)
-        assertTrue(outcome.watchNoteZh.contains("词汇广度"))
+        assertTrue(AssessmentEngine.isComplete(state))
+        assertTrue(state.probedHigher)
     }
 
     @Test
-    fun `expression feedback feeds the expression profile row`() {
+    fun `moves to deep reading once the ladder is complete`() {
         var state = AssessmentEngine.initial()
-        repeat(AssessmentEngine.MIN_QUESTIONS) {
-            state = AssessmentEngine.record(state, AssessmentSkill.Vocab, correct = true)
+        while (!AssessmentEngine.isComplete(state) && state.answered.size < AssessmentEngine.MAX_QUESTIONS) {
+            val step = AssessmentEngine.nextStep(state) as NextLadderStep.Question
+            state = AssessmentEngine.record(state, step.skill, scoreForLabel(step.level), correct = true)
         }
-        val good = AssessmentEngine.result(
-            state,
-            ExpressionFeedback("suggestion", "没有明显问题", "写得不错", ExpressionRating.Good),
-        )
-        assertEquals("基本达标", good.profile.first { it.name == "表达" }.label)
-
-        val needsWork = AssessmentEngine.result(
-            state,
-            ExpressionFeedback("suggestion", "时态不对", "再看看时态", ExpressionRating.NeedsWork),
-        )
-        assertEquals("还需要多练", needsWork.profile.first { it.name == "表达" }.label)
+        assertEquals(NextLadderStep.MoveToDeepReading, AssessmentEngine.nextStep(state))
     }
 
     @Test
-    fun `vocab range grows with level`() {
-        assertEquals("500～1000", AssessmentEngine.vocabRangeText(CefrLevel.A1))
-        assertEquals("5000～8000", AssessmentEngine.vocabRangeText(CefrLevel.C1))
+    fun `plausible range narrows as confidence grows`() {
+        var state = AssessmentEngine.initial()
+        repeat(3) { state = AssessmentEngine.record(state, AssessmentSkill.Vocab, 3.0, correct = true) }
+        val early = AssessmentEngine.plausibleRange(state)
+        repeat(10) { state = AssessmentEngine.record(state, AssessmentSkill.Vocab, state.score, correct = true) }
+        val stable = AssessmentEngine.plausibleRange(state)
+        assertTrue(early.isNotBlank())
+        assertTrue(stable.isNotBlank())
+    }
+
+    @Test
+    fun `vocab range grows with score`() {
+        assertEquals("500～1000", AssessmentEngine.vocabRangeText(1.0))
+        assertEquals("5000～8000", AssessmentEngine.vocabRangeText(5.0))
+    }
+
+    @Test
+    fun `skill profile row reports thin sample as unmeasured`() {
+        val row = AssessmentEngine.skillProfileRow("阅读理解", AssessmentSkill.Reading, emptyList(), 3.0)
+        assertEquals("样本不足", row.label)
+        assertEquals(0, row.pct)
     }
 
     @Test
     fun `saved assessment survives json round trip`() {
         var state = AssessmentEngine.initial()
-        state = AssessmentEngine.record(state, AssessmentSkill.Vocab, correct = true)
+        state = AssessmentEngine.record(state, AssessmentSkill.Vocab, 2.0, correct = true)
         val saved = SavedAssessment(
             state = state,
-            queue = listOf(AssessmentQuestion("vocab", "Pick one ___.", listOf("a", "b", "c"), 1, "解析")),
-            expressionTaskZh = "用两三句英文写写你今天做了什么。",
-            expressionDone = false,
+            stage = AssessmentStage.Ladder,
         )
         val json = Json.encodeToString(SavedAssessment.serializer(), saved)
         assertEquals(saved, Json.decodeFromString(SavedAssessment.serializer(), json))

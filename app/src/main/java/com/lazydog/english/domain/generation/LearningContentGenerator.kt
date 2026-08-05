@@ -37,22 +37,35 @@ interface LearningContentGenerator {
         learnerLevel: String,
     ): GenerationResult<SentenceExplanation>
 
-    /** 能力测试出题：指定 CEFR 等级的单选题（词汇语境 / 语法 / 分级阅读混合）。 */
+    /**
+     * 能力测试客观题出题：指定 CEFR 等级的单选题。[skillFilter] 非空时只出该技能
+     * （vocab / grammar / reading / pragmatics，见 AssessmentSkill），用于定位题、
+     * 覆盖约束强制换技能、探顶题这些需要精确指定的场景。
+     */
     suspend fun generateAssessmentQuestions(
         cefrLevel: String,
         count: Int,
         topics: List<String>,
+        skillFilter: String? = null,
     ): GenerationResult<List<com.lazydog.english.domain.assessment.AssessmentQuestion>>
 
+    /** 能力测试的独立阅读模块：一篇按等级定长的短文 + 4 道分技能标签的理解题。 */
+    suspend fun generateDeepReading(
+        cefrLevel: String,
+        topics: List<String>,
+    ): GenerationResult<com.lazydog.english.domain.assessment.DeepReadingTask>
+
     /**
-     * 能力测试里“写一句话”的开放表达评估。题面本地模板生成，不需要 AI；
-     * 只有评估这一步交给 AI（AI_CONTRACTS.md §6：不参与等级升降，只做反馈）。
+     * 能力测试里开放表达的评分（EXT_TEST_DESIGN.md §六：5 维度、每维 0~4 分、要求举证）。
+     * [referenceCefrLevel] 为 null 时是"盲评"（不告诉 AI 参考等级），非空时是对照量表的第二轮评分。
+     * 两轮都交给 AI，但升降级判断、是否需要复核的比较逻辑都在本地做
+     * （AI_CONTRACTS.md §6：AI 不直接决定结论）。
      */
-    suspend fun evaluateExpression(
+    suspend fun evaluateExpressionRubric(
         taskZh: String,
         userTextEn: String,
-        cefrLevel: String,
-    ): GenerationResult<com.lazydog.english.domain.assessment.ExpressionFeedback>
+        referenceCefrLevel: String?,
+    ): GenerationResult<com.lazydog.english.domain.assessment.ExpressionRubric>
 }
 
 data class NewWordsRequest(

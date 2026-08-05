@@ -4,70 +4,74 @@ import kotlin.math.roundToInt
 import kotlinx.serialization.Serializable
 
 /**
- * 能力测试的自适应内核（AI_CONTRACTS.md §6：升降级由本地程序控制，AI 只出题）。
- * 阶梯规则：同级连对 2 题升一级，答错立刻降一级；从 A2 开始。
- * 长度不固定（DESIGN.md）：最少 [MIN_QUESTIONS] 题，最近几题若已经很稳定可提前结束，
- * 最多 [MAX_QUESTIONS] 题封顶。纯函数 + 可序列化状态，支持中断恢复和单测。
+ * 能力测试的客观题梯度内核，对齐 EXT_TEST_DESIGN.md 一、二节：
+ * - 连续能力值（1.0 A1 ～ 5.0 C1）代替离散等级台阶，支持 "B1+" 这样的过渡标签。
+ * - 前 3 题是固定难度的定位题，答完一次性确定起点（见 §2 表格）。
+ * - 之后每题按当前能力值出题，答对/答错微调分值；覆盖约束避免连续同技能；
+ *   停止前必须确认过一次"当前等级 +1"的探顶题，且置信度达到约 75%。
+ * 纯函数 + 可序列化状态，支持中断恢复和单测。
  */
-@Serializable
-enum class CefrLevel(val label: String) {
-    A1("A1"), A2("A2"), B1("B1"), B2("B2"), C1("C1");
-
-    fun up(): CefrLevel = entries.getOrElse(ordinal + 1) { this }
-    fun down(): CefrLevel = entries.getOrElse(ordinal - 1) { this }
-}
-
-/** 三种客观题技能；"分级阅读" 附带一段短文（[AssessmentQuestion.passage]）。 */
 object AssessmentSkill {
     const val Vocab = "vocab"
     const val Grammar = "grammar"
     const val Reading = "reading"
+    const val Pragmatics = "pragmatics"
+
+    /** 客观题梯度覆盖的四类技能（开放表达和深度阅读是独立模块，不参与这个覆盖约束）。 */
+    val ladderSkills = listOf(Vocab, Grammar, Reading, Pragmatics)
+}
+
+/** CEFR 锚点，score 是该等级在 1.0(A1)～5.0(C1) 连续能力值上的锚定值。 */
+enum class CefrLevel(val label: String, val score: Double) {
+    A1("A1", 1.0), A2("A2", 2.0), B1("B1", 3.0), B2("B2", 4.0), C1("C1", 5.0),
+}
+
+/** 把连续能力值换算成"B1"/"B1+"这样的展示标签。 */
+fun labelForScore(score: Double): String {
+    val clamped = score.coerceIn(1.0, 5.0)
+    val levels = CefrLevel.entries
+    val lower = levels.last { it.score <= clamped }
+    val idx = levels.indexOf(lower)
+    val frac = clamped - lower.score
+    return when {
+        frac < 0.25 -> lower.label
+        frac < 0.75 -> "${lower.label}+"
+        else -> levels.getOrElse(idx + 1) { lower }.label
+    }
+}
+
+/**
+ * [labelForScore] 的近似逆运算：把请求给 AI 的等级字符串（"A2".."C1"，可能带 "+"）
+ * 换回一个数值，用于记录"这道题的难度大概在哪"，供一致度/置信度计算。
+ */
+fun scoreForLabel(label: String): Double {
+    val plus = label.endsWith("+")
+    val base = CefrLevel.entries.firstOrNull { it.label == label.removeSuffix("+") } ?: CefrLevel.B1
+    return if (plus) (base.score + 0.5).coerceAtMost(5.0) else base.score
 }
 
 @Serializable
-data class AnsweredQuestion(val level: CefrLevel, val skill: String, val correct: Boolean)
+data class AnsweredItem(val skill: String, val itemLevelScore: Double, val correct: Boolean)
 
 @Serializable
 data class AssessmentState(
-    val currentLevel: CefrLevel,
-    val answered: List<AnsweredQuestion>,
-    /** 当前等级上的连对数。 */
-    val streak: Int,
+    val score: Double,
+    val answered: List<AnsweredItem>,
+    val probedHigher: Boolean = false,
+    /** 定位题 3/3 全对时，下一题强制探 C1；消费一次即清空。 */
+    val pendingProbeLevel: String? = null,
 )
-
-/** 单项技能在结果页的展示行：词汇广度 / 语法 / 阅读理解 / 表达。 */
-data class SkillProfileRow(val name: String, val label: String, val pct: Int)
-
-data class AssessmentOutcome(
-    val level: CefrLevel,
-    /** 0..100，最近作答与最终等级的一致程度。 */
-    val confidencePercent: Int,
-    val correctCount: Int,
-    val totalCount: Int,
-    /** 按 CEFR 等级估算的词汇量区间，纯粹是经验区间，不是精确测量。 */
-    val vocabRangeText: String,
-    val profile: List<SkillProfileRow>,
-    /** “还看不太准的”：哪些技能样本太少，测完的第一版画像里格外不确定。 */
-    val watchNoteZh: String,
-) {
-    val confidenceLabel: String
-        get() = when {
-            confidencePercent >= 75 -> "较有把握"
-            confidencePercent >= 50 -> "大致靠谱"
-            else -> "只是初步估计"
-        }
-}
 
 /** 一道客观题。AI 生成，展示前必须过 [validateAssessmentQuestions]。 */
 @Serializable
 data class AssessmentQuestion(
-    /** vocab / grammar / reading，见 [AssessmentSkill]。 */
+    /** vocab / grammar / reading / pragmatics，见 [AssessmentSkill]。 */
     val skill: String,
     val prompt: String,
     val options: List<String>,
     val answerIndex: Int,
     val explanationZh: String,
-    /** 仅 reading 技能非空：题目所依附的一小段短文。 */
+    /** 仅 reading 技能非空：题目所依附的一小段短文（完形微文本 / 短阅读）。 */
     val passage: String? = null,
 )
 
@@ -82,144 +86,155 @@ fun validateAssessmentQuestions(questions: List<AssessmentQuestion>): List<Asses
             (question.skill != AssessmentSkill.Reading || !question.passage.isNullOrBlank())
     }
 
-/** 开放表达任务：本地模板出题，AI 只负责评估（不参与等级升降）。 */
-enum class ExpressionRating { Good, NeedsWork }
+/** 下一步该做什么：出一道指定技能/难度的客观题，还是进入深度阅读模块（客观题梯度已经问够）。 */
+sealed interface NextLadderStep {
+    data class Question(val skill: String, val level: String) : NextLadderStep
+    data object MoveToDeepReading : NextLadderStep
+}
 
-data class ExpressionFeedback(
-    val suggestionEn: String,
-    val issueZh: String,
-    val explanationZh: String,
-    val rating: ExpressionRating,
-)
-
-/** 中断恢复用的持久化快照。 */
-@Serializable
-data class SavedAssessment(
-    val state: AssessmentState,
-    val queue: List<AssessmentQuestion>,
-    /** 客观题梯度测完后，写一句话的题面；为空表示还没生成过。 */
-    val expressionTaskZh: String? = null,
-    /** 写一句话这一步是否已经结束（提交成功或用户跳过）。 */
-    val expressionDone: Boolean = false,
-)
+/** 单项技能在结果页的展示行。 */
+data class SkillProfileRow(val name: String, val label: String, val pct: Int)
 
 object AssessmentEngine {
 
     const val MIN_QUESTIONS = 8
     const val MAX_QUESTIONS = 16
     private const val EARLY_STOP_WINDOW = 6
-    private const val EARLY_STOP_CONFIDENCE = 80
+    private const val EARLY_STOP_CONFIDENCE = 75
+    private const val CORRECT_DELTA = 0.4
+    private const val WRONG_DELTA = -0.4
+    /** 探顶：题目难度比当前能力值高出这么多，才算真正"够着上限"的探测。 */
+    private const val PROBE_MARGIN = 0.8
 
-    /** 写一句话的题面，出题不依赖 AI（评估才用 AI），本地固定模板即可。 */
-    val expressionPrompts = listOf(
-        "用两三句英文写一写你今天做了什么，或者最近在忙什么。",
-        "用两三句英文说说你对一个感兴趣话题的看法，随便哪个都行。",
-        "用两三句英文描述一次让你印象深的旅行或经历。",
-        "用两三句英文说说你周末一般怎么过。",
-    )
-
-    fun initial(): AssessmentState = AssessmentState(CefrLevel.A2, emptyList(), 0)
-
-    fun record(state: AssessmentState, skill: String, correct: Boolean): AssessmentState {
-        val answered = state.answered + AnsweredQuestion(state.currentLevel, skill, correct)
-        return if (correct) {
-            val streak = state.streak + 1
-            if (streak >= 2) {
-                AssessmentState(state.currentLevel.up(), answered, 0)
-            } else {
-                state.copy(answered = answered, streak = streak)
-            }
-        } else {
-            AssessmentState(state.currentLevel.down(), answered, 0)
-        }
-    }
+    fun initial(): AssessmentState = AssessmentState(score = 3.0, answered = emptyList())
 
     /**
-     * 客观题梯度是否已经问够：至少 [MIN_QUESTIONS] 题，且满足其一才停——
-     * 已经封顶 [MAX_QUESTIONS]，或最近几题的表现已经和当前等级很一致（提前结束，长度不固定）。
+     * 记录一次作答。前 3 题是定位题：只累积，不动态调分；答完第 3 题按
+     * EXT_TEST_DESIGN.md 的表格一次性确定起点（0/1/2/3 对 → 1.5/2.0/3.0/4.0，
+     * 3/3 全对额外标记"下一题强制探 C1"）。第 4 题起按连续能力值微调。
      */
+    fun record(state: AssessmentState, skill: String, itemLevelScore: Double, correct: Boolean): AssessmentState {
+        val answered = state.answered + AnsweredItem(skill, itemLevelScore, correct)
+
+        if (answered.size <= 3) {
+            if (answered.size < 3) return state.copy(answered = answered)
+            val correctCount = answered.count { it.correct }
+            val startScore = when (correctCount) {
+                0 -> 1.5
+                1 -> 2.0
+                2 -> 3.0
+                else -> 4.0
+            }
+            return AssessmentState(
+                score = startScore,
+                answered = answered,
+                probedHigher = false,
+                pendingProbeLevel = if (correctCount == 3) CefrLevel.C1.label else null,
+            )
+        }
+
+        val delta = if (correct) CORRECT_DELTA else WRONG_DELTA
+        val newScore = (state.score + delta).coerceIn(1.0, 5.0)
+        val wasProbe = state.pendingProbeLevel != null || itemLevelScore >= state.score + PROBE_MARGIN
+        return state.copy(
+            score = newScore,
+            answered = answered,
+            probedHigher = state.probedHigher || wasProbe,
+            pendingProbeLevel = null,
+        )
+    }
+
+    /** 客观题梯度是否已经问够，见 EXT_TEST_DESIGN.md §2"建议停止条件"。 */
     fun isComplete(state: AssessmentState): Boolean {
         val n = state.answered.size
         if (n >= MAX_QUESTIONS) return true
         if (n < MIN_QUESTIONS) return false
-        return levelConfidence(state.answered, state.currentLevel) >= EARLY_STOP_CONFIDENCE
+        val coveredSkills = state.answered.map { it.skill }.distinct().size
+        return coveredSkills >= AssessmentSkill.ladderSkills.size &&
+            confidence(state) >= EARLY_STOP_CONFIDENCE &&
+            state.probedHigher
     }
 
-    private fun levelConsistent(answer: AnsweredQuestion, level: CefrLevel): Boolean = when {
-        answer.level.ordinal < level.ordinal -> answer.correct
-        answer.level.ordinal > level.ordinal -> !answer.correct
-        else -> answer.correct
+    /** 下一步：定位题固定技能/难度；之后按覆盖约束选技能，按能力值（或强制探顶）选难度。 */
+    fun nextStep(state: AssessmentState): NextLadderStep {
+        return when (state.answered.size) {
+            0 -> NextLadderStep.Question(AssessmentSkill.Vocab, "A2")
+            1 -> NextLadderStep.Question(AssessmentSkill.Grammar, "B1")
+            2 -> NextLadderStep.Question(AssessmentSkill.Reading, "B1")
+            else -> {
+                if (isComplete(state)) return NextLadderStep.MoveToDeepReading
+                val readyToStopExceptProbe = state.answered.size >= MIN_QUESTIONS &&
+                    state.answered.map { it.skill }.distinct().size >= AssessmentSkill.ladderSkills.size &&
+                    confidence(state) >= EARLY_STOP_CONFIDENCE &&
+                    !state.probedHigher
+                val level = when {
+                    state.pendingProbeLevel != null -> state.pendingProbeLevel
+                    readyToStopExceptProbe -> labelForScore((state.score + 1.0).coerceAtMost(5.0))
+                    else -> labelForScore(state.score)
+                }
+                NextLadderStep.Question(forcedOrNextSkill(state.answered), level)
+            }
+        }
     }
 
-    private fun levelConfidence(answered: List<AnsweredQuestion>, level: CefrLevel): Int {
-        val recent = answered.takeLast(EARLY_STOP_WINDOW)
+    /** 连续 4 题同技能就强制换一个；否则优先补还没覆盖过的技能。都不成立时交给调用方自选。 */
+    private fun forcedOrNextSkill(answered: List<AnsweredItem>): String {
+        val recent = answered.takeLast(4).map { it.skill }
+        if (recent.size == 4 && recent.distinct().size == 1) {
+            return AssessmentSkill.ladderSkills.first { it != recent.first() }
+        }
+        val covered = answered.map { it.skill }.toSet()
+        return AssessmentSkill.ladderSkills.firstOrNull { it !in covered }
+            ?: AssessmentSkill.ladderSkills.random()
+    }
+
+    /** 一致度：最近几题里，"题目难度明显高于/低于当前能力值"的预期结果，和实际作答是否一致。 */
+    fun confidence(state: AssessmentState): Int {
+        val recent = state.answered.takeLast(EARLY_STOP_WINDOW)
         if (recent.isEmpty()) return 0
-        val consistent = recent.count { levelConsistent(it, level) }
+        val consistent = recent.count { isConsistent(it, state.score) }
         return consistent * 100 / recent.size
     }
 
-    /**
-     * 结果：最终等级取收尾等级；置信度看最近几题里有多少题“符合”该等级。
-     * [expression] 为 null 表示写一句话被跳过，表达那一行记为“样本不足”。
-     */
-    fun result(state: AssessmentState, expression: ExpressionFeedback?): AssessmentOutcome {
-        val level = state.currentLevel
-        val confidence = levelConfidence(state.answered, level)
-
-        val profile = listOf(
-            skillRow("词汇广度", AssessmentSkill.Vocab, state.answered, level),
-            skillRow("语法（时态 / 从句）", AssessmentSkill.Grammar, state.answered, level),
-            skillRow("阅读理解", AssessmentSkill.Reading, state.answered, level),
-            expressionRow(expression),
-        )
-
-        val thinSkills = profile.filter { it.pct == 0 }.map { it.name }
-        val watchNote = if (thinSkills.isEmpty()) {
-            "各项都测到了几次，接下来两周的表现还会继续修正它。"
-        } else {
-            "${thinSkills.joinToString("、")}样本还太少，前几天会多留意，别太当真。"
+    private fun isConsistent(answer: AnsweredItem, score: Double): Boolean {
+        val diff = answer.itemLevelScore - score
+        return when {
+            diff > 0.4 -> !answer.correct
+            diff < -0.4 -> answer.correct
+            else -> true
         }
-
-        return AssessmentOutcome(
-            level = level,
-            confidencePercent = confidence,
-            correctCount = state.answered.count { it.correct },
-            totalCount = state.answered.size,
-            vocabRangeText = vocabRangeText(level),
-            profile = profile,
-            watchNoteZh = watchNote,
-        )
     }
 
-    private fun skillRow(
-        name: String,
-        skill: String,
-        answered: List<AnsweredQuestion>,
-        level: CefrLevel,
-    ): SkillProfileRow {
+    /** CEFR 等级对应的经验词汇量区间，只是估计，不是精确测量。 */
+    fun vocabRangeText(score: Double): String = when {
+        score < 1.5 -> "500～1000"
+        score < 2.5 -> "1000～2000"
+        score < 3.5 -> "2000～3250"
+        score < 4.5 -> "3250～5000"
+        else -> "5000～8000"
+    }
+
+    /** 合理区间（如"B1–B2"）：置信度越低，区间越宽。 */
+    fun plausibleRange(state: AssessmentState): String {
+        val width = when {
+            confidence(state) >= 75 -> 0.4
+            confidence(state) >= 50 -> 0.7
+            else -> 1.0
+        }
+        val low = labelForScore(state.score - width)
+        val high = labelForScore(state.score + width)
+        return if (low == high) low else "$low–$high"
+    }
+
+    fun skillProfileRow(name: String, skill: String, answered: List<AnsweredItem>, score: Double): SkillProfileRow {
         val samples = answered.filter { it.skill == skill }
         if (samples.isEmpty()) return SkillProfileRow(name, "样本不足", 0)
         val accuracy = samples.count { it.correct }.toDouble() / samples.size
         val label = when {
-            accuracy >= 0.75 -> "${level.label} 偏上"
-            accuracy >= 0.45 -> level.label
-            else -> "${level.label} 偏下"
+            accuracy >= 0.75 -> "${labelForScore(score)} 偏上"
+            accuracy >= 0.45 -> labelForScore(score)
+            else -> "${labelForScore(score)} 偏下"
         }
         return SkillProfileRow(name, label, (accuracy * 100).roundToInt())
-    }
-
-    private fun expressionRow(expression: ExpressionFeedback?): SkillProfileRow = when {
-        expression == null -> SkillProfileRow("表达", "样本不足", 0)
-        expression.rating == ExpressionRating.Good -> SkillProfileRow("表达", "基本达标", 78)
-        else -> SkillProfileRow("表达", "还需要多练", 42)
-    }
-
-    /** CEFR 等级对应的经验词汇量区间，只是估计，不是精确测量。 */
-    fun vocabRangeText(level: CefrLevel): String = when (level) {
-        CefrLevel.A1 -> "500～1000"
-        CefrLevel.A2 -> "1000～2000"
-        CefrLevel.B1 -> "2000～3250"
-        CefrLevel.B2 -> "3250～5000"
-        CefrLevel.C1 -> "5000～8000"
     }
 }

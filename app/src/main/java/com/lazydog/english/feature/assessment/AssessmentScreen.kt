@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
@@ -18,6 +17,7 @@ import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.Abc
 import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
@@ -52,12 +52,25 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.domain.assessment.AssessmentEngine
 import com.lazydog.english.domain.assessment.AssessmentOutcome
 import com.lazydog.english.domain.assessment.AssessmentQuestion
+import com.lazydog.english.domain.assessment.AssessmentReport
 import com.lazydog.english.domain.assessment.AssessmentSkill
+import com.lazydog.english.domain.assessment.AssessmentStage
 import com.lazydog.english.domain.assessment.AssessmentState
 import com.lazydog.english.domain.assessment.CefrLevel
-import com.lazydog.english.domain.assessment.ExpressionFeedback
-import com.lazydog.english.domain.assessment.ExpressionRating
+import com.lazydog.english.domain.assessment.DeepReadingAnswer
+import com.lazydog.english.domain.assessment.DeepReadingOutcome
+import com.lazydog.english.domain.assessment.DeepReadingTask
+import com.lazydog.english.domain.assessment.DeepReadingValidation
+import com.lazydog.english.domain.assessment.ExpressionAssessment
+import com.lazydog.english.domain.assessment.ExpressionDimension
+import com.lazydog.english.domain.assessment.ExpressionValidation
+import com.lazydog.english.domain.assessment.NextLadderStep
+import com.lazydog.english.domain.assessment.ReadingTag
 import com.lazydog.english.domain.assessment.SavedAssessment
+import com.lazydog.english.domain.assessment.WritingTask
+import com.lazydog.english.domain.assessment.WritingTaskLibrary
+import com.lazydog.english.domain.assessment.labelForScore
+import com.lazydog.english.domain.assessment.scoreForLabel
 import com.lazydog.english.domain.generation.GenerationResult
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -66,19 +79,27 @@ import kotlinx.serialization.json.Json
 private val json = Json { ignoreUnknownKeys = true }
 
 /**
- * 测试流程：客观题梯度（词汇 / 语法 / 阅读，长度不固定）→ 写一句话（AI 只评估，不参与升降级）→ 结果。
- * 对齐 DESIGN.md 05-07：测试中不显示总题数、不倒计时；结果页给出词汇区间、分项画像和手动微调入口。
+ * 测试流程对齐 EXT_TEST_DESIGN.md：3 题定位 → 客观题梯度自适应升降（长度不固定）
+ * → 深度阅读（1 篇短文 + 4 道标签题）→ 写一段话（AI 两轮打分，不反过来影响上面的能力值）
+ * → 结果页（CEFR 区间 + 加权分项画像 + 理解/输出差距提示 + 手动微调）。
  */
 private sealed interface AssessmentPhase {
     data object Intro : AssessmentPhase
     data class ResumeOffer(val saved: SavedAssessment) : AssessmentPhase
-    data object FetchingQuestions : AssessmentPhase
-    data class Answering(val question: AssessmentQuestion, val selected: Int?) : AssessmentPhase
-    data class Failed(val reason: String) : AssessmentPhase
-    data class ExpressionPrompt(val task: String) : AssessmentPhase
-    data object ExpressionSubmitting : AssessmentPhase
-    data class ExpressionFailed(val task: String, val reason: String) : AssessmentPhase
-    data class ExpressionResult(val feedback: ExpressionFeedback) : AssessmentPhase
+    data object FetchingQuestion : AssessmentPhase
+    data class Answering(val question: AssessmentQuestion, val levelScore: Double, val selected: Int?) :
+        AssessmentPhase
+    data class LadderFailed(val reason: String) : AssessmentPhase
+
+    data object FetchingDeepReading : AssessmentPhase
+    data class DeepReadingAnswering(val task: DeepReadingTask, val selections: Map<Int, Int>) : AssessmentPhase
+    data class DeepReadingFailed(val reason: String) : AssessmentPhase
+
+    data class WritingPrompt(val task: WritingTask) : AssessmentPhase
+    data object WritingSubmitting : AssessmentPhase
+    data class WritingFailed(val reason: String) : AssessmentPhase
+    data class WritingResult(val assessment: ExpressionAssessment) : AssessmentPhase
+
     data class Result(val outcome: AssessmentOutcome, val saved: Boolean) : AssessmentPhase
 }
 
@@ -91,122 +112,156 @@ fun AssessmentScreen(onExit: () -> Unit) {
     val prefs = app.userPreferences
 
     var phase by remember { mutableStateOf<AssessmentPhase>(AssessmentPhase.Intro) }
-    var engineState by remember { mutableStateOf(AssessmentEngine.initial()) }
-    var queue by remember { mutableStateOf<List<AssessmentQuestion>>(emptyList()) }
-    var expressionText by rememberSaveable { mutableStateOf("") }
+    var ladderState by remember { mutableStateOf(AssessmentEngine.initial()) }
+    var deepReadingOutcome by remember { mutableStateOf<DeepReadingOutcome?>(null) }
+    var expressionAssessment by remember { mutableStateOf<ExpressionAssessment?>(null) }
+    var writingText by rememberSaveable { mutableStateOf("") }
     var checkedResume by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        val savedJson = prefs.assessmentStateJson.first()
-        if (savedJson.isNotBlank()) {
-            runCatching { json.decodeFromString<SavedAssessment>(savedJson) }.getOrNull()?.let { saved ->
-                when {
-                    !AssessmentEngine.isComplete(saved.state) -> phase = AssessmentPhase.ResumeOffer(saved)
-                    !saved.expressionDone -> {
-                        engineState = saved.state
-                        phase = AssessmentPhase.ExpressionPrompt(
-                            saved.expressionTaskZh ?: AssessmentEngine.expressionPrompts.random(),
-                        )
-                    }
-                    else -> Unit
-                }
-            }
-        }
-        checkedResume = true
-    }
-
-    suspend fun persist(
-        state: AssessmentState,
-        remaining: List<AssessmentQuestion>,
-        expressionTaskZh: String? = null,
-        expressionDone: Boolean = false,
-    ) {
+    suspend fun persist(stage: AssessmentStage, deepReadingTask: DeepReadingTask? = null) {
         prefs.saveAssessmentState(
-            json.encodeToString(
-                SavedAssessment.serializer(),
-                SavedAssessment(state, remaining, expressionTaskZh, expressionDone),
-            ),
+            json.encodeToString(SavedAssessment.serializer(), SavedAssessment(ladderState, stage, deepReadingTask)),
         )
     }
 
-    fun startExpressionStep() {
-        val task = AssessmentEngine.expressionPrompts.random()
-        expressionText = ""
-        phase = AssessmentPhase.ExpressionPrompt(task)
-        scope.launch { persist(engineState, emptyList(), expressionTaskZh = task, expressionDone = false) }
+    fun startWriting() {
+        writingText = ""
+        phase = AssessmentPhase.WritingPrompt(WritingTaskLibrary.taskFor(ladderState.score))
     }
 
-    fun finishAssessment(state: AssessmentState, expressionFeedback: ExpressionFeedback?) {
-        val outcome = AssessmentEngine.result(state, expressionFeedback)
+    fun fetchDeepReading() {
+        phase = AssessmentPhase.FetchingDeepReading
+        scope.launch {
+            val topics = prefs.topics.first().toList()
+            when (
+                val result = app.contentGenerator.generateDeepReading(labelForScore(ladderState.score), topics)
+            ) {
+                is GenerationResult.Failure -> phase = AssessmentPhase.DeepReadingFailed(result.reason)
+                is GenerationResult.Success -> {
+                    persist(AssessmentStage.DeepReading, result.data)
+                    phase = AssessmentPhase.DeepReadingAnswering(result.data, emptyMap())
+                }
+            }
+        }
+    }
+
+    fun advanceLadder() {
+        when (val step = AssessmentEngine.nextStep(ladderState)) {
+            is NextLadderStep.Question -> {
+                phase = AssessmentPhase.FetchingQuestion
+                scope.launch {
+                    val topics = prefs.topics.first().toList()
+                    when (
+                        val result = app.contentGenerator.generateAssessmentQuestions(
+                            cefrLevel = step.level,
+                            count = 1,
+                            topics = topics,
+                            skillFilter = step.skill,
+                        )
+                    ) {
+                        is GenerationResult.Failure -> phase = AssessmentPhase.LadderFailed(result.reason)
+                        is GenerationResult.Success -> {
+                            scope.launch { persist(AssessmentStage.Ladder) }
+                            phase = AssessmentPhase.Answering(
+                                question = result.data.first(),
+                                levelScore = scoreForLabel(step.level),
+                                selected = null,
+                            )
+                        }
+                    }
+                }
+            }
+            NextLadderStep.MoveToDeepReading -> {
+                scope.launch { persist(AssessmentStage.DeepReading) }
+                fetchDeepReading()
+            }
+        }
+    }
+
+    fun onLadderAnswer(question: AssessmentQuestion, levelScore: Double, selected: Int?) {
+        val correct = selected != null && selected == question.answerIndex
+        ladderState = AssessmentEngine.record(ladderState, question.skill, levelScore, correct)
+        advanceLadder()
+    }
+
+    fun finishAssessment() {
+        val outcome = AssessmentReport.build(ladderState, deepReadingOutcome, expressionAssessment)
         phase = AssessmentPhase.Result(outcome, saved = false)
         scope.launch {
-            prefs.saveLearnerProfile(outcome.level.label, outcome.confidencePercent)
+            prefs.saveLearnerProfile(outcome.levelLabel, outcome.confidencePercent)
             prefs.clearAssessmentState()
             (phase as? AssessmentPhase.Result)?.let { phase = it.copy(saved = true) }
         }
     }
 
-    fun advance(state: AssessmentState, remaining: List<AssessmentQuestion>) {
-        engineState = state
-        if (AssessmentEngine.isComplete(state)) {
-            startExpressionStep()
-            return
-        }
-        // 队列里的题必须匹配当前等级，等级变了就重新出题。
-        val next = remaining.firstOrNull()
-        if (next != null) {
-            queue = remaining
-            phase = AssessmentPhase.Answering(next, selected = null)
-            scope.launch { persist(state, remaining) }
-        } else {
-            phase = AssessmentPhase.FetchingQuestions
-            scope.launch {
-                val topics = prefs.topics.first().toList()
-                when (
-                    val result = app.contentGenerator.generateAssessmentQuestions(
-                        cefrLevel = state.currentLevel.label,
-                        count = 3,
-                        topics = topics,
-                    )
-                ) {
-                    is GenerationResult.Failure -> phase = AssessmentPhase.Failed(result.reason)
-                    is GenerationResult.Success -> {
-                        queue = result.data
-                        persist(state, result.data)
-                        phase = AssessmentPhase.Answering(result.data.first(), selected = null)
-                    }
-                }
-            }
-        }
+    fun finishDeepReading(task: DeepReadingTask, selections: Map<Int, Int>) {
+        val answers = task.questions.mapIndexed { index, q -> DeepReadingAnswer(q, selections.getValue(index)) }
+        deepReadingOutcome = DeepReadingValidation.score(answers)
+        scope.launch { persist(AssessmentStage.Writing) }
+        startWriting()
     }
 
-    fun onAnswerConfirmed(question: AssessmentQuestion, selected: Int?) {
-        val correct = selected != null && selected == question.answerIndex
-        val newState = AssessmentEngine.record(engineState, question.skill, correct)
-        val remaining = queue.drop(1)
-        // 等级变了，剩下的题难度不再匹配，丢弃重出。
-        val usable = if (newState.currentLevel == engineState.currentLevel) remaining else emptyList()
-        advance(newState, usable)
+    fun skipDeepReading() {
+        deepReadingOutcome = null
+        scope.launch { persist(AssessmentStage.Writing) }
+        startWriting()
     }
 
-    fun submitExpression(task: String, text: String) {
-        phase = AssessmentPhase.ExpressionSubmitting
+    fun submitWriting(task: WritingTask, text: String) {
+        phase = AssessmentPhase.WritingSubmitting
         scope.launch {
-            when (
-                val result = app.contentGenerator.evaluateExpression(task, text, engineState.currentLevel.label)
-            ) {
-                is GenerationResult.Failure -> phase = AssessmentPhase.ExpressionFailed(task, result.reason)
-                is GenerationResult.Success -> {
-                    persist(engineState, emptyList(), expressionTaskZh = task, expressionDone = true)
-                    phase = AssessmentPhase.ExpressionResult(result.data)
+            val firstResult = app.contentGenerator.evaluateExpressionRubric(task.promptZh, text, referenceCefrLevel = null)
+            val first = when (firstResult) {
+                is GenerationResult.Failure -> {
+                    phase = AssessmentPhase.WritingFailed(firstResult.reason)
+                    return@launch
                 }
+                is GenerationResult.Success -> firstResult.data
             }
+            val secondResult = app.contentGenerator.evaluateExpressionRubric(
+                task.promptZh,
+                text,
+                labelForScore(ladderState.score),
+            )
+            val second = when (secondResult) {
+                is GenerationResult.Failure -> {
+                    phase = AssessmentPhase.WritingFailed(secondResult.reason)
+                    return@launch
+                }
+                is GenerationResult.Success -> secondResult.data
+            }
+            val assessment = ExpressionValidation.assess(first, second)
+            expressionAssessment = assessment
+            phase = AssessmentPhase.WritingResult(assessment)
         }
     }
 
-    fun skipExpression() {
-        scope.launch { persist(engineState, emptyList(), expressionTaskZh = null, expressionDone = true) }
-        finishAssessment(engineState, expressionFeedback = null)
+    fun skipWriting() {
+        expressionAssessment = null
+        finishAssessment()
+    }
+
+    LaunchedEffect(Unit) {
+        val savedJson = prefs.assessmentStateJson.first()
+        if (savedJson.isNotBlank()) {
+            runCatching { json.decodeFromString<SavedAssessment>(savedJson) }.getOrNull()?.let { saved ->
+                ladderState = saved.state
+                when (saved.stage) {
+                    AssessmentStage.Ladder -> phase = AssessmentPhase.ResumeOffer(saved)
+                    AssessmentStage.DeepReading -> {
+                        val task = saved.deepReadingTask
+                        if (task != null) {
+                            phase = AssessmentPhase.DeepReadingAnswering(task, emptyMap())
+                        } else {
+                            fetchDeepReading()
+                        }
+                    }
+                    AssessmentStage.Writing -> startWriting()
+                    AssessmentStage.Done -> Unit
+                }
+            }
+        }
+        checkedResume = true
     }
 
     Scaffold(
@@ -219,9 +274,9 @@ fun AssessmentScreen(onExit: () -> Unit) {
                     }
                 },
                 actions = {
-                    if (phase is AssessmentPhase.Answering || phase is AssessmentPhase.FetchingQuestions) {
+                    if (phase is AssessmentPhase.Answering || phase is AssessmentPhase.FetchingQuestion) {
                         Text(
-                            text = "已答 ${engineState.answered.size} 题 · 难度还在调",
+                            text = "已答 ${ladderState.answered.size} 题 · 难度还在调",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(end = 16.dp),
@@ -243,93 +298,69 @@ fun AssessmentScreen(onExit: () -> Unit) {
                 AssessmentPhase.Intro -> IntroView(
                     enabled = checkedResume,
                     onStart = {
-                        engineState = AssessmentEngine.initial()
-                        advance(engineState, emptyList())
+                        ladderState = AssessmentEngine.initial()
+                        advanceLadder()
                     },
                     onSkip = onExit,
                 )
                 is AssessmentPhase.ResumeOffer -> ResumeView(
                     saved = p.saved,
-                    onResume = {
-                        engineState = p.saved.state
-                        advance(p.saved.state, p.saved.queue)
-                    },
+                    onResume = { advanceLadder() },
                     onRestart = {
                         scope.launch { prefs.clearAssessmentState() }
-                        engineState = AssessmentEngine.initial()
-                        advance(engineState, emptyList())
+                        ladderState = AssessmentEngine.initial()
+                        advanceLadder()
                     },
                 )
-                AssessmentPhase.FetchingQuestions -> Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    CircularProgressIndicator()
-                    Text(
-                        text = "正在出 ${engineState.currentLevel.label} 难度的题…",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-                is AssessmentPhase.Failed -> Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(
-                        text = "出题失败：${p.reason}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                    )
-                    Button(onClick = { advance(engineState, emptyList()) }) { Text("再试一次") }
-                    TextButton(onClick = onExit) { Text("先退出（进度已保存）") }
-                }
+                AssessmentPhase.FetchingQuestion -> LoadingView("正在出 ${labelForScore(ladderState.score)} 难度的题…")
+                is AssessmentPhase.LadderFailed -> FailedView(
+                    reason = p.reason,
+                    onRetry = { advanceLadder() },
+                    onExit = onExit,
+                )
                 is AssessmentPhase.Answering -> QuestionView(
                     question = p.question,
-                    currentLevel = engineState.currentLevel,
+                    currentLevel = labelForScore(ladderState.score),
                     selected = p.selected,
                     onSelect = { index -> phase = p.copy(selected = index) },
-                    onConfirm = { onAnswerConfirmed(p.question, p.selected) },
-                    onSkip = { onAnswerConfirmed(p.question, null) },
+                    onConfirm = { onLadderAnswer(p.question, p.levelScore, p.selected) },
+                    onSkip = { onLadderAnswer(p.question, p.levelScore, null) },
                 )
-                is AssessmentPhase.ExpressionPrompt -> ExpressionPromptView(
+                AssessmentPhase.FetchingDeepReading -> LoadingView("正在准备一篇阅读短文…")
+                is AssessmentPhase.DeepReadingFailed -> FailedView(
+                    reason = p.reason,
+                    onRetry = { fetchDeepReading() },
+                    onExit = { skipDeepReading() },
+                    skipLabel = "跳过阅读，直接写一段话",
+                )
+                is AssessmentPhase.DeepReadingAnswering -> DeepReadingView(
                     task = p.task,
-                    text = expressionText,
-                    onTextChange = { expressionText = it },
-                    onSubmit = { submitExpression(p.task, expressionText) },
-                    onSkip = { skipExpression() },
+                    selections = p.selections,
+                    onSelect = { qIndex, optIndex ->
+                        phase = p.copy(selections = p.selections + (qIndex to optIndex))
+                    },
+                    onSubmit = { finishDeepReading(p.task, p.selections) },
                 )
-                AssessmentPhase.ExpressionSubmitting -> Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    CircularProgressIndicator()
-                    Text("AI 正在看你写的这几句…", style = MaterialTheme.typography.bodyMedium)
-                }
-                is AssessmentPhase.ExpressionFailed -> Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(
-                        text = "评估失败：${p.reason}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                    )
-                    Text(
-                        text = "刚才学的都已经存好了，一个字没丢。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Button(onClick = { submitExpression(p.task, expressionText) }) { Text("再试一次") }
-                    TextButton(onClick = { skipExpression() }) { Text("跳过这题，直接看结果") }
-                }
-                is AssessmentPhase.ExpressionResult -> ExpressionResultView(
-                    feedback = p.feedback,
-                    onContinue = { finishAssessment(engineState, p.feedback) },
+                is AssessmentPhase.WritingPrompt -> WritingPromptView(
+                    task = p.task,
+                    text = writingText,
+                    onTextChange = { writingText = it },
+                    onSubmit = { submitWriting(p.task, writingText) },
+                    onSkip = { skipWriting() },
+                )
+                AssessmentPhase.WritingSubmitting -> LoadingView("AI 正在评两轮分…")
+                is AssessmentPhase.WritingFailed -> FailedView(
+                    reason = p.reason,
+                    onRetry = {
+                        val task = WritingTaskLibrary.taskFor(ladderState.score)
+                        submitWriting(task, writingText)
+                    },
+                    onExit = { skipWriting() },
+                    skipLabel = "跳过这题，直接看结果",
+                )
+                is AssessmentPhase.WritingResult -> WritingResultView(
+                    assessment = p.assessment,
+                    onContinue = { finishAssessment() },
                 )
                 is AssessmentPhase.Result -> ResultView(
                     outcome = p.outcome,
@@ -345,12 +376,52 @@ fun AssessmentScreen(onExit: () -> Unit) {
 }
 
 @Composable
+private fun LoadingView(message: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        CircularProgressIndicator()
+        Text(message, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun FailedView(
+    reason: String,
+    onRetry: () -> Unit,
+    onExit: () -> Unit,
+    skipLabel: String = "先退出（进度已保存）",
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = "没成功：$reason",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = "前面答的都已经存好了，一个字没丢。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(onClick = onRetry) { Text("再试一次") }
+        TextButton(onClick = onExit) { Text(skipLabel) }
+    }
+}
+
+@Composable
 private fun IntroView(enabled: Boolean, onStart: () -> Unit, onSkip: () -> Unit) {
     val parts = listOf(
-        Triple(Icons.Outlined.Abc, "认词", "看词选意思"),
-        Triple(Icons.AutoMirrored.Outlined.Rule, "语法", "选句子 / 填空"),
-        Triple(Icons.AutoMirrored.Outlined.Article, "分级阅读", "读一小段短文再答题"),
-        Triple(Icons.Outlined.EditNote, "写一句话", "AI 辅助判断表达，不影响客观题的难度评估"),
+        Triple(Icons.Outlined.Abc, "语境词汇 + 语法", "先答 3 道定位题，再按表现自动升降难度"),
+        Triple(Icons.AutoMirrored.Outlined.Rule, "语用选择", "在真实场合该怎么回复、该怎么说"),
+        Triple(Icons.AutoMirrored.Outlined.Article, "一篇阅读", "读一小段短文，答 4 道理解题"),
+        Triple(Icons.Outlined.EditNote, "写一段话", "AI 打两轮分，不影响上面的难度评估"),
     )
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(
@@ -360,7 +431,7 @@ private fun IntroView(enabled: Boolean, onStart: () -> Unit, onSkip: () -> Unit)
         )
         Text("先摸个底", style = MaterialTheme.typography.headlineSmall)
         Text(
-            text = "大概 6～8 分钟。答得好会变难，答不出会变简单，所以答错完全不用心虚。",
+            text = "大概 15～25 分钟。客观题答得好会变难、答不出会变简单，答错完全不用心虚。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -377,11 +448,7 @@ private fun IntroView(enabled: Boolean, onStart: () -> Unit, onSkip: () -> Unit)
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
+                        Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(name, style = MaterialTheme.typography.bodyLarge)
                             Text(
@@ -394,6 +461,11 @@ private fun IntroView(enabled: Boolean, onStart: () -> Unit, onSkip: () -> Unit)
                 }
             }
         }
+        Text(
+            text = "这次先只测阅读和书面表达，不含听力和口语，结果页会说清楚。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
             shape = MaterialTheme.shapes.medium,
@@ -419,7 +491,7 @@ private fun ResumeView(saved: SavedAssessment, onResume: () -> Unit, onRestart: 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("上次测到一半", style = MaterialTheme.typography.headlineSmall)
         Text(
-            text = "已答 ${saved.state.answered.size} 题，当前难度 ${saved.state.currentLevel.label}。",
+            text = "已答 ${saved.state.answered.size} 题客观题，当前难度 ${labelForScore(saved.state.score)}。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -431,16 +503,17 @@ private fun ResumeView(saved: SavedAssessment, onResume: () -> Unit, onRestart: 
 @Composable
 private fun QuestionView(
     question: AssessmentQuestion,
-    currentLevel: CefrLevel,
+    currentLevel: String,
     selected: Int?,
     onSelect: (Int) -> Unit,
     onConfirm: () -> Unit,
     onSkip: () -> Unit,
 ) {
     val skillLabel = when (question.skill) {
-        AssessmentSkill.Grammar -> "语法"
-        AssessmentSkill.Reading -> "分级阅读"
-        else -> "语境选词"
+        AssessmentSkill.Grammar -> "语法与句意"
+        AssessmentSkill.Reading -> "完形微文本"
+        AssessmentSkill.Pragmatics -> "语用选择"
+        else -> "语境词汇"
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -453,7 +526,7 @@ private fun QuestionView(
                 )
             }
             Text(
-                text = "${currentLevel.label} 附近",
+                text = "$currentLevel 附近",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.outline,
             )
@@ -472,34 +545,12 @@ private fun QuestionView(
             }
         }
         Text(question.prompt, style = MaterialTheme.typography.titleLarge)
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            question.options.forEachIndexed { index, option ->
-                val isSelected = index == selected
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .selectable(selected = isSelected, onClick = { onSelect(index) })
-                        .padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(selected = isSelected, onClick = { onSelect(index) })
-                    Text(
-                        text = option,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(start = 4.dp),
-                    )
-                }
-            }
-        }
-        Button(
-            onClick = onConfirm,
-            enabled = selected != null,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+        OptionsList(options = question.options, selected = selected, onSelect = onSelect)
+        Button(onClick = onConfirm, enabled = selected != null, modifier = Modifier.fillMaxWidth()) {
             Text("确认")
         }
         TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
-            Text("不认识，下一题")
+            Text("不确定，下一题")
         }
         Text(
             text = "测试中不显示对错，免得越测越慌。",
@@ -512,37 +563,109 @@ private fun QuestionView(
 }
 
 @Composable
-private fun ExpressionPromptView(
-    task: String,
+private fun OptionsList(options: List<String>, selected: Int?, onSelect: (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        options.forEachIndexed { index, option ->
+            val isSelected = index == selected
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = isSelected, onClick = { onSelect(index) })
+                    .padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = isSelected, onClick = { onSelect(index) })
+                Text(option, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 4.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeepReadingView(
+    task: DeepReadingTask,
+    selections: Map<Int, Int>,
+    onSelect: (questionIndex: Int, optionIndex: Int) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.Article,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Text("读一段短文", style = MaterialTheme.typography.headlineSmall)
+        }
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(task.passage, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(16.dp))
+        }
+        task.questions.forEachIndexed { index, question ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.small) {
+                    Text(
+                        text = ReadingTag.label(question.tag),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
+                Text(question.prompt, style = MaterialTheme.typography.titleMedium)
+                OptionsList(
+                    options = question.options,
+                    selected = selections[index],
+                    onSelect = { optIndex -> onSelect(index, optIndex) },
+                )
+            }
+        }
+        Button(
+            onClick = onSubmit,
+            enabled = selections.size == task.questions.size,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("提交这篇")
+        }
+    }
+}
+
+@Composable
+private fun WritingPromptView(
+    task: WritingTask,
     text: String,
     onTextChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onSkip: () -> Unit,
 ) {
+    val wordCount = Regex("[A-Za-z'\\-]+").findAll(text).count()
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.EditNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Text("最后写一句话", style = MaterialTheme.typography.headlineSmall)
+            Text("最后写一段话", style = MaterialTheme.typography.headlineSmall)
         }
-        Text(task, style = MaterialTheme.typography.bodyLarge)
+        Text(task.promptZh, style = MaterialTheme.typography.bodyLarge)
         Text(
-            text = "这题只是让 AI 看看你的表达习惯，不参与上面的难度评估，写多写少都行。",
+            text = "这题只是让 AI 看看你的表达习惯，不参与上面的难度评估。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         OutlinedTextField(
             value = text,
             onValueChange = onTextChange,
-            placeholder = { Text("Write two or three sentences in English…") },
+            placeholder = { Text("Write in English…") },
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 120.dp),
+                .heightIn(min = 160.dp),
         )
-        Button(
-            onClick = onSubmit,
-            enabled = text.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+        Text(
+            text = "$wordCount 词 · 建议 ${task.minWords}~${task.maxWords} 词，不用太精确",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(onClick = onSubmit, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
             Text("提交")
         }
         TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
@@ -552,32 +675,41 @@ private fun ExpressionPromptView(
 }
 
 @Composable
-private fun ExpressionResultView(feedback: ExpressionFeedback, onContinue: () -> Unit) {
+private fun WritingResultView(assessment: ExpressionAssessment, onContinue: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(
-            text = if (feedback.rating == ExpressionRating.Good) "写得不错" else "还有提升空间",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("AI 看完了", style = MaterialTheme.typography.headlineSmall)
+        if (assessment.needsReview) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text(
-                    text = "AI 润色版",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                    text = "两轮打分有点不一致，这次评分仅供参考。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(14.dp),
                 )
-                Text(feedback.suggestionEn, style = MaterialTheme.typography.bodyLarge)
             }
         }
-        Text(feedback.issueZh, style = MaterialTheme.typography.bodyMedium)
-        Text(
-            text = feedback.explanationZh,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        assessment.display.dimensions.forEach { dim ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(ExpressionDimension.label(dim.dimension), style = MaterialTheme.typography.bodyLarge)
+                    Text("${dim.score} / 4", style = MaterialTheme.typography.bodyLarge)
+                }
+                dim.evidenceZh.forEach { evidence ->
+                    Text(
+                        text = "· $evidence",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
         Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) { Text("看结果") }
     }
 }
@@ -589,12 +721,17 @@ private fun ResultView(
     onOverrideLevel: (CefrLevel) -> Unit,
     onExit: () -> Unit,
 ) {
-    var overrideLevel by rememberSaveable { mutableStateOf<CefrLevel?>(null) }
+    var overrideLabel by rememberSaveable { mutableStateOf<String?>(null) }
     var showLevelPicker by rememberSaveable { mutableStateOf(false) }
-    val displayLevel = overrideLevel ?: outcome.level
+    val displayLabel = overrideLabel ?: outcome.levelLabel
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("你现在大概在这里", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            text = "英语阅读与书面表达能力摸底结果，不含听力和口语。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
             shape = MaterialTheme.shapes.large,
@@ -602,20 +739,15 @@ private fun ResultView(
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(displayLabel, style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     Text(
-                        text = displayLevel.label,
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Text(
-                        text = if (overrideLevel != null) "自己调的" else outcome.confidenceLabel,
+                        text = if (overrideLabel != null) "自己调的" else outcome.confidenceLabel,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
                 Text(
-                    text = "词汇量估计 ${AssessmentEngine.vocabRangeText(displayLevel)}。" +
-                        "这只是起点，接下来两周的表现会持续修正它。",
+                    text = "合理区间 ${outcome.plausibleRange} · 词汇量估计 ${outcome.vocabRangeText}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -624,10 +756,7 @@ private fun ResultView(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             outcome.profile.forEach { row ->
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(row.name, style = MaterialTheme.typography.bodyMedium)
                         Text(
                             text = row.label,
@@ -637,9 +766,23 @@ private fun ResultView(
                     }
                     LinearProgressIndicator(
                         progress = { row.pct / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(8.dp),
+                    )
+                }
+            }
+        }
+        if (outcome.gapNoteZh != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Outlined.Forum, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = outcome.gapNoteZh,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -656,6 +799,13 @@ private fun ResultView(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (outcome.expressionNeedsReview) {
+                    Text(
+                        text = "开放表达那项两轮打分不太一致，仅供参考。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
         Row(
@@ -676,7 +826,7 @@ private fun ResultView(
             Icon(Icons.Outlined.Tune, contentDescription = "手动调整等级", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(
-            text = "答对 ${outcome.correctCount} / ${outcome.totalCount} 道客观题。一次测试只是初始估计，不用太当真。",
+            text = "客观题答对 ${outcome.correctCount} / ${outcome.totalCount} 道。一次测试只是初始估计，不用太当真。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -701,9 +851,9 @@ private fun ResultView(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .selectable(
-                                    selected = level == displayLevel,
+                                    selected = level.label == displayLabel,
                                     onClick = {
-                                        overrideLevel = level
+                                        overrideLabel = level.label
                                         onOverrideLevel(level)
                                         showLevelPicker = false
                                     },
@@ -711,7 +861,7 @@ private fun ResultView(
                                 .padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            RadioButton(selected = level == displayLevel, onClick = null)
+                            RadioButton(selected = level.label == displayLabel, onClick = null)
                             Text(level.label, modifier = Modifier.padding(start = 8.dp))
                         }
                     }

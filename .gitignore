@@ -2,6 +2,9 @@
 .idea/
 *.iml
 
+# VS Code Local History extension
+.history/
+
 # Gradle
 .gradle/
 build/

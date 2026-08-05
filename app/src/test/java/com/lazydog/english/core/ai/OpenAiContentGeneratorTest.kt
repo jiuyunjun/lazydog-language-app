@@ -245,33 +245,68 @@ class OpenAiContentGeneratorTest {
     }
 
     @Test
-    fun `expression feedback parses good rating`() = runBlocking {
-        server.enqueue(
-            MockResponse().setBody(
-                chatBody(
-                    """{"suggestion":"I traveled to Kyoto last spring.","issueZh":"没有明显问题",
-                       "explanationZh":"表达清楚，时态也对。","rating":"good"}""",
-                ),
-            ),
-        )
+    fun `deep reading with duplicate tags is rejected`() = runBlocking {
+        val readingJson =
+            """{"schemaVersion":1,"passage":"${"word ".repeat(250)}",
+               "questions":[
+                 {"tag":"main_idea","prompt":"p1","options":["a","b","c"],"answerIndex":0,"explanationZh":"e"},
+                 {"tag":"main_idea","prompt":"p2","options":["a","b","c"],"answerIndex":0,"explanationZh":"e"},
+                 {"tag":"inference","prompt":"p3","options":["a","b","c"],"answerIndex":0,"explanationZh":"e"},
+                 {"tag":"vocab_reference","prompt":"p4","options":["a","b","c"],"answerIndex":0,"explanationZh":"e"}
+               ]}"""
+        server.enqueue(MockResponse().setBody(chatBody(readingJson)))
 
-        val result = generator().evaluateExpression("写一写你的旅行", "I travel to Kyoto last spring.", "B1")
+        val result = generator().generateDeepReading("B1", listOf("科技"))
 
-        val success = result as GenerationResult.Success
-        assertEquals("没有明显问题", success.data.issueZh)
+        val failure = result as GenerationResult.Failure
+        assertTrue(failure.reason.contains("主旨") || failure.reason.contains("main_idea"))
     }
 
     @Test
-    fun `expression feedback with unknown rating fails`() = runBlocking {
-        server.enqueue(
-            MockResponse().setBody(
-                chatBody(
-                    """{"suggestion":"x","issueZh":"y","explanationZh":"z","rating":"excellent"}""",
-                ),
-            ),
-        )
+    fun `deep reading with four distinct tags passes`() = runBlocking {
+        val readingJson =
+            """{"schemaVersion":1,"passage":"${"word ".repeat(250)}",
+               "questions":[
+                 {"tag":"main_idea","prompt":"p1","options":["a","b","c"],"answerIndex":0,"explanationZh":"e"},
+                 {"tag":"detail","prompt":"p2","options":["a","b","c"],"answerIndex":0,"explanationZh":"e"},
+                 {"tag":"inference","prompt":"p3","options":["a","b","c"],"answerIndex":0,"explanationZh":"e"},
+                 {"tag":"vocab_reference","prompt":"p4","options":["a","b","c"],"answerIndex":0,"explanationZh":"e"}
+               ]}"""
+        server.enqueue(MockResponse().setBody(chatBody(readingJson)))
 
-        val result = generator().evaluateExpression("task", "text", "B1")
+        val result = generator().generateDeepReading("B1", listOf("科技"))
+
+        val success = result as GenerationResult.Success
+        assertEquals(4, success.data.questions.size)
+    }
+
+    @Test
+    fun `expression rubric parses five dimensions with evidence`() = runBlocking {
+        val rubricJson =
+            """{"dimensions":[
+                 {"dimension":"task_completion","score":3,"evidenceZh":["回答了要求的三点"]},
+                 {"dimension":"organization","score":3,"evidenceZh":["顺序清楚"]},
+                 {"dimension":"grammar_control","score":2,"evidenceZh":["有时态错误但不影响理解"]},
+                 {"dimension":"vocabulary","score":3,"evidenceZh":["用词自然"]},
+                 {"dimension":"pragmatics","score":3,"evidenceZh":["语气得体"]}
+               ]}"""
+        server.enqueue(MockResponse().setBody(chatBody(rubricJson)))
+
+        val result = generator().evaluateExpressionRubric("写一写你的旅行", "I traveled to Kyoto last spring.", null)
+
+        val success = result as GenerationResult.Success
+        assertEquals(14, success.data.total)
+    }
+
+    @Test
+    fun `expression rubric missing a dimension fails`() = runBlocking {
+        val rubricJson =
+            """{"dimensions":[
+                 {"dimension":"task_completion","score":3,"evidenceZh":["e"]}
+               ]}"""
+        server.enqueue(MockResponse().setBody(chatBody(rubricJson)))
+
+        val result = generator().evaluateExpressionRubric("task", "text", "B1")
 
         assertTrue(result is GenerationResult.Failure)
     }

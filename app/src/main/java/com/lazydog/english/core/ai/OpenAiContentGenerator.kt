@@ -2,8 +2,14 @@ package com.lazydog.english.core.ai
 
 import com.lazydog.english.core.network.await
 import com.lazydog.english.domain.assessment.AssessmentQuestion
-import com.lazydog.english.domain.assessment.ExpressionFeedback
-import com.lazydog.english.domain.assessment.ExpressionRating
+import com.lazydog.english.domain.assessment.DeepReadingQuestion
+import com.lazydog.english.domain.assessment.DeepReadingTask
+import com.lazydog.english.domain.assessment.DeepReadingValidation
+import com.lazydog.english.domain.assessment.DimensionScore
+import com.lazydog.english.domain.assessment.ExpressionDimension
+import com.lazydog.english.domain.assessment.ExpressionRubric
+import com.lazydog.english.domain.assessment.ExpressionValidation
+import com.lazydog.english.domain.assessment.ReadingTag
 import com.lazydog.english.domain.assessment.validateAssessmentQuestions
 import com.lazydog.english.domain.generation.ContentValidation
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
@@ -186,10 +192,11 @@ class OpenAiContentGenerator(
         cefrLevel: String,
         count: Int,
         topics: List<String>,
+        skillFilter: String?,
     ): GenerationResult<List<AssessmentQuestion>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
-            userPrompt = buildAssessmentPrompt(cefrLevel, count, topics),
+            userPrompt = buildAssessmentPrompt(cefrLevel, count, topics, skillFilter),
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -205,36 +212,48 @@ class OpenAiContentGenerator(
         return GenerationResult.Success(valid, content.model, PROMPT_VERSION)
     }
 
-    override suspend fun evaluateExpression(
-        taskZh: String,
-        userTextEn: String,
+    override suspend fun generateDeepReading(
         cefrLevel: String,
-    ): GenerationResult<ExpressionFeedback> {
+        topics: List<String>,
+    ): GenerationResult<DeepReadingTask> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
-            userPrompt = buildExpressionEvalPrompt(taskZh, userTextEn, cefrLevel),
+            userPrompt = buildDeepReadingPrompt(cefrLevel, topics),
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
         }
-        val payload = decode<ExpressionFeedbackPayload>(content.text)
+        val payload = decode<DeepReadingPayload>(content.text)
             ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
-        val rating = when (payload.rating.trim()) {
-            "good" -> ExpressionRating.Good
-            "needs_work" -> ExpressionRating.NeedsWork
-            else -> return GenerationResult.Failure("rating 字段不是预期取值：${payload.rating}")
+        if (payload.schemaVersion != SCHEMA_VERSION) {
+            return GenerationResult.Failure("schema 版本不对：${payload.schemaVersion}")
         }
-        if (payload.suggestion.isBlank() || payload.issueZh.isBlank() || payload.explanationZh.isBlank()) {
-            return GenerationResult.Failure("反馈字段不完整")
-        }
-        val feedback = ExpressionFeedback(
-            suggestionEn = payload.suggestion.trim(),
-            issueZh = payload.issueZh.trim(),
-            explanationZh = payload.explanationZh.trim(),
-            rating = rating,
+        val task = payload.toDomain()
+        val failure = DeepReadingValidation.validate(task, cefrLevel)
+        if (failure != null) return GenerationResult.Failure("阅读材料没通过校验：$failure")
+        return GenerationResult.Success(task, content.model, PROMPT_VERSION)
+    }
+
+    override suspend fun evaluateExpressionRubric(
+        taskZh: String,
+        userTextEn: String,
+        referenceCefrLevel: String?,
+    ): GenerationResult<ExpressionRubric> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildExpressionRubricPrompt(taskZh, userTextEn, referenceCefrLevel),
         )
-        return GenerationResult.Success(feedback, content.model, PROMPT_VERSION)
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<ExpressionRubricPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val rubric = payload.toDomain()
+        val failure = ExpressionValidation.validate(rubric)
+        if (failure != null) return GenerationResult.Failure("评分没通过校验：$failure")
+        return GenerationResult.Success(rubric, content.model, PROMPT_VERSION)
     }
 
     // ---- 请求执行 ----
@@ -469,12 +488,46 @@ class OpenAiContentGenerator(
     )
 
     @Serializable
-    private data class ExpressionFeedbackPayload(
-        val suggestion: String = "",
-        val issueZh: String = "",
+    private data class DeepReadingQuestionPayload(
+        val tag: String = "",
+        val prompt: String = "",
+        val options: List<String> = emptyList(),
+        val answerIndex: Int = -1,
         val explanationZh: String = "",
-        val rating: String = "",
-    )
+    ) {
+        fun toDomain() = DeepReadingQuestion(
+            tag = tag.trim(),
+            prompt = prompt.trim(),
+            options = options,
+            answerIndex = answerIndex,
+            explanationZh = explanationZh.trim(),
+        )
+    }
+
+    @Serializable
+    private data class DeepReadingPayload(
+        val schemaVersion: Int = 0,
+        val passage: String = "",
+        val questions: List<DeepReadingQuestionPayload> = emptyList(),
+    ) {
+        fun toDomain() = DeepReadingTask(passage.trim(), questions.map { it.toDomain() })
+    }
+
+    @Serializable
+    private data class DimensionScorePayload(
+        val dimension: String = "",
+        val score: Int = -1,
+        val evidenceZh: List<String> = emptyList(),
+    ) {
+        fun toDomain() = DimensionScore(dimension.trim(), score, evidenceZh.map { it.trim() })
+    }
+
+    @Serializable
+    private data class ExpressionRubricPayload(
+        val dimensions: List<DimensionScorePayload> = emptyList(),
+    ) {
+        fun toDomain() = ExpressionRubric(dimensions.map { it.toDomain() })
+    }
 
     @Serializable
     private data class SentenceExplanationPayload(
@@ -578,14 +631,25 @@ class OpenAiContentGenerator(
             )
         }
 
-        internal fun buildAssessmentPrompt(level: String, count: Int, topics: List<String>): String = buildString {
+        internal fun buildAssessmentPrompt(
+            level: String,
+            count: Int,
+            topics: List<String>,
+            skillFilter: String?,
+        ): String = buildString {
             appendLine("给中文母语的英语学习者出 $count 道 CEFR $level 难度的单选题，用来评估水平。")
-            appendLine("题型三选一，这批题里尽量都覆盖到，不要全出同一种：")
-            appendLine("- 语境选词（英文句子挖空选词，skill=\"vocab\"）")
-            appendLine("- 语法（skill=\"grammar\"）")
-            appendLine("- 分级阅读（skill=\"reading\"）：先给一段 3~5 句的英文短文放进 passage 字段，prompt 是关于这段短文的理解题（其它两种题型 passage 留空或不要这个字段）")
+            if (skillFilter != null) {
+                appendLine("这批题全部只出这一种题型：${skillDescription(skillFilter)}")
+            } else {
+                appendLine("题型四选一，这批题里尽量都覆盖到，不要全出同一种：")
+                appendLine("- ${skillDescription("vocab")}")
+                appendLine("- ${skillDescription("grammar")}")
+                appendLine("- ${skillDescription("reading")}")
+                appendLine("- ${skillDescription("pragmatics")}")
+            }
             if (topics.isNotEmpty()) appendLine("语料可以贴近这些主题：${topics.joinToString("、")}。")
             appendLine("每题 3~4 个选项且不重复，只有一个正确答案，answerIndex 从 0 开始；explanationZh 一句话解析。")
+            appendLine("错误选项要像真实误区（同类近义词、常见混淆搭配），不要三个明显不相关的干扰项。")
             appendLine("难度务必贴住 $level：不要为了区分度混入明显更高或更低难度的题。")
             appendLine("输出 JSON schema：")
             appendLine(
@@ -593,15 +657,64 @@ class OpenAiContentGenerator(
             )
         }
 
-        internal fun buildExpressionEvalPrompt(taskZh: String, userTextEn: String, level: String): String = buildString {
-            appendLine("学习者水平 $level。写作任务：$taskZh")
+        private fun skillDescription(skill: String): String = when (skill) {
+            "grammar" -> "语法与句意（skill=\"grammar\"）：给一个句子，挖空考语法形式或时态"
+            "reading" -> "完形微文本（skill=\"reading\"）：先给一段 2~4 句的英文短文放进 passage 字段，" +
+                "prompt 是挖空题，考的是篇章衔接或连接词，不是孤立语法点（其它题型 passage 留空或不要这个字段）"
+            "pragmatics" -> "语用选择（skill=\"pragmatics\"）：给一个真实场景，问\"在这个场合该怎么回复/该说什么\"，" +
+                "考的是得体和沟通，不是语法对错"
+            else -> "语境选词（skill=\"vocab\"）：英文句子挖空选词，考词义、搭配和语境判断，不是孤立背单词"
+        }
+
+        internal fun buildDeepReadingPrompt(level: String, topics: List<String>): String = buildString {
+            val (min, max) = readingLengthHint(level)
+            appendLine("给中文母语的英语学习者写一篇 $min~$max 词的英文短文，CEFR 难度 $level，用于阅读能力测评。")
+            if (topics.isNotEmpty()) appendLine("主题可以贴近：${topics.joinToString("、")}。")
+            appendLine("配 4 道单选理解题，tag 分别必须是这四个、每个只出现一次：")
+            appendLine("- \"${ReadingTag.MainIdea}\"：问文章主旨")
+            appendLine("- \"${ReadingTag.Detail}\"：问一个明确写在文中的细节")
+            appendLine("- \"${ReadingTag.Inference}\"：问需要推断的内容（作者态度、隐含结论），不能直接从原文抄到答案")
+            appendLine("- \"${ReadingTag.VocabReference}\"：问文中某个词的语境含义，或某个代词/指代关系")
+            appendLine("每题 3~4 个选项且不重复，只有一个正确答案，answerIndex 从 0 开始；explanationZh 一句话解析。")
+            appendLine("不要设计成\"原文里能直接找到相同单词就选出答案\"的扫描题，尤其是 inference 和 vocab_reference。")
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"schemaVersion":1,"passage":"...","questions":[{"tag":"main_idea","prompt":"...","options":["..."],"answerIndex":0,"explanationZh":"..."}]}""",
+            )
+        }
+
+        private fun readingLengthHint(level: String): Pair<Int, Int> = when {
+            level.startsWith("A1") -> 80 to 120
+            level.startsWith("A2") -> 120 to 180
+            level.startsWith("B1") -> 200 to 300
+            level.startsWith("B2") -> 350 to 500
+            else -> 500 to 700
+        }
+
+        internal fun buildExpressionRubricPrompt(
+            taskZh: String,
+            userTextEn: String,
+            referenceCefrLevel: String?,
+        ): String = buildString {
+            appendLine("写作任务：$taskZh")
             appendLine("学习者写的英文原文：\"$userTextEn\"")
-            appendLine("请评估表达是否清楚、语法有没有明显问题：")
-            appendLine("- suggestion：英文润色/修改版；如果原文已经不错，就给一个语气相近的润色版本，不要大改")
-            appendLine("- issueZh：一句话指出主要问题类型；如果没有明显问题，写“没有明显问题”")
-            appendLine("- explanationZh：一两句中文解释，语气平和，不要打击")
-            appendLine("- rating：整体是否达到该水平该有的表达水准，只能是 \"good\" 或 \"needs_work\"")
-            appendLine("""输出 JSON schema：{"suggestion":"...","issueZh":"...","explanationZh":"...","rating":"good"}""")
+            if (referenceCefrLevel != null) {
+                appendLine("学习者客观题测出的参考水平是 $referenceCefrLevel，可以结合这个背景打分。")
+            } else {
+                appendLine("先不用管这个人大概是什么水平，只根据文本本身独立打分。")
+            }
+            appendLine("按下面 5 个维度打分，每项 0~4 分（0=严重不达标，2=基本可以，4=稳定出色）：")
+            appendLine("- \"${ExpressionDimension.TaskCompletion}\"：任务完成——是不是回答了任务要求的全部要点")
+            appendLine("- \"${ExpressionDimension.Organization}\"：组织连贯——顺序和衔接是否清楚")
+            appendLine("- \"${ExpressionDimension.GrammarControl}\"：语法控制——错误是否妨碍理解，还是只是小瑕疵")
+            appendLine("- \"${ExpressionDimension.Vocabulary}\"：词汇能力——是否准确、灵活、搭配自然")
+            appendLine("- \"${ExpressionDimension.Pragmatics}\"：语用得体——语气、对象、风格是否合适这个场景")
+            appendLine("重要原则：不要按\"每个语法错误扣一分\"这种简单计数，要看整体能完成多复杂的沟通任务。")
+            appendLine("每个维度给 evidenceZh：1~2 条具体证据（引用或转述原文的哪部分支撑这个分数），不能只给分数没有依据。")
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"dimensions":[{"dimension":"task_completion","score":3,"evidenceZh":["..."]}]}""",
+            )
         }
 
         internal fun buildExplainSentencePrompt(sentence: String, level: String): String = buildString {
