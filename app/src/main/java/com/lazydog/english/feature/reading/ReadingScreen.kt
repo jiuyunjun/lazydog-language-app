@@ -348,7 +348,7 @@ private fun PasteView(onSave: (title: String, body: String) -> Unit) {
         )
         Button(
             onClick = { onSave(title, body) },
-            enabled = body.trim().length >= 40,
+            enabled = body.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("开始读")

@@ -403,7 +403,6 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                 app.knowledgeRepository.saveScenarioExpression(
                     expressionEn = phrase.en,
                     meaningZh = phrase.zh,
-                    exampleEn = phrase.en,
                 ) != null
             }
             persist(snapshot(ScenarioStage.Finished).copy(savedPhraseCount = savedPhraseCount))

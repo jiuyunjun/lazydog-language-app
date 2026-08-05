@@ -96,14 +96,13 @@ class KnowledgeRepository(
     suspend fun addExpression(
         expressionEn: String,
         meaningZh: String,
-        contextEn: String = "",
     ): Long? {
         val clean = expressionEn.trim()
         if (clean.isBlank()) return null
         return addVocabulary(
             term = clean,
             meaningZh = meaningZh.trim(),
-            exampleEn = contextEn.trim().ifBlank { clean },
+            exampleEn = "",
             exampleZh = meaningZh.trim(),
             pos = EXPRESSION_POS,
         )
@@ -116,12 +115,11 @@ class KnowledgeRepository(
     suspend fun saveScenarioExpression(
         expressionEn: String,
         meaningZh: String,
-        exampleEn: String = "",
     ): Long? {
         val clean = expressionEn.trim()
         if (clean.isBlank()) return null
         val existing = dao.getVocabularyByTerm(clean)
-        val id = existing?.item?.id ?: addExpression(clean, meaningZh, exampleEn)
+        val id = existing?.item?.id ?: addExpression(clean, meaningZh)
             ?: dao.getVocabularyByTerm(clean)?.item?.id
         if (id != null) recordReview(id, ReviewGrade.Good, source = "scenario")
         return id

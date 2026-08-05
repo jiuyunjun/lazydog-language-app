@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Add
@@ -38,7 +40,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.stageOrDefault
+import com.lazydog.english.core.database.GrammarRecord
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.VocabularyRecord
 import com.lazydog.english.core.designsystem.LazyDogTheme
@@ -77,7 +79,8 @@ fun LibraryScreen(
     val grammar by repository.grammar.collectAsState(initial = emptyList())
     val expressions by repository.expressions.collectAsState(initial = emptyList())
 
-    var tabIndex by rememberSaveable { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(pageCount = { 3 })
+    val tabIndex = pagerState.currentPage
     var dueTodayOnly by rememberSaveable { mutableStateOf(false) }
     var selectedItemId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showAddDialog by rememberSaveable { mutableStateOf(false) }
@@ -100,62 +103,44 @@ fun LibraryScreen(
             TabRow(selectedTabIndex = tabIndex) {
                 Tab(
                     selected = tabIndex == 0,
-                    onClick = { tabIndex = 0 },
+                    onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                     text = { Text("单词 ${vocab.size}") },
                 )
                 Tab(
                     selected = tabIndex == 1,
-                    onClick = { tabIndex = 1 },
+                    onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                     text = { Text("语法 ${grammar.size}") },
                 )
                 Tab(
                     selected = tabIndex == 2,
-                    onClick = { tabIndex = 2 },
+                    onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
                     text = { Text("表达 ${expressions.size}") },
                 )
             }
-            when (tabIndex) {
-                0 -> WordRecords(
-                    records = visibleVocab,
-                    allWordsEmpty = vocab.isEmpty(),
-                    dueTodayOnly = dueTodayOnly,
-                    onDueTodayChange = { dueTodayOnly = it },
-                    now = now,
-                    onSelect = { selectedItemId = it },
-                )
-                1 -> {
-                    if (grammar.isEmpty()) {
-                        EmptyHint("还没有记过语法点。点右下角加一个。")
-                    } else {
-                        LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
-                            items(grammar, key = { it.item.id }) { record ->
-                                LibraryRow(
-                                    title = record.detail.name,
-                                    subtitle = record.detail.explanationZh,
-                                    item = record.item,
-                                    now = now,
-                                    onClick = { selectedItemId = record.item.id },
-                                )
-                            }
-                        }
-                    }
-                }
-                else -> {
-                    if (expressions.isEmpty()) {
-                        EmptyHint("还没有摘下表达。情景总结或句子讲解里遇到想复用的句子，可以收进这里。")
-                    } else {
-                        LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
-                            items(expressions, key = { it.item.id }) { record ->
-                                LibraryRow(
-                                    title = record.detail.term,
-                                    subtitle = record.detail.meaningZh,
-                                    item = record.item,
-                                    now = now,
-                                    onClick = { selectedItemId = record.item.id },
-                                )
-                            }
-                        }
-                    }
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.Top,
+            ) { page ->
+                when (page) {
+                    0 -> WordRecords(
+                        records = visibleVocab,
+                        allWordsEmpty = vocab.isEmpty(),
+                        dueTodayOnly = dueTodayOnly,
+                        onDueTodayChange = { dueTodayOnly = it },
+                        now = now,
+                        onSelect = { selectedItemId = it },
+                    )
+                    1 -> GrammarRecords(
+                        records = grammar,
+                        now = now,
+                        onSelect = { selectedItemId = it },
+                    )
+                    else -> ExpressionRecords(
+                        records = expressions,
+                        now = now,
+                        onSelect = { selectedItemId = it },
+                    )
                 }
             }
         }
@@ -192,7 +177,9 @@ fun LibraryScreen(
         )
     }
 
-    val selectedVocab = (vocab + expressions).firstOrNull { it.item.id == selectedItemId }
+    val selectedWord = vocab.firstOrNull { it.item.id == selectedItemId }
+    val selectedExpression = expressions.firstOrNull { it.item.id == selectedItemId }
+    val selectedVocab = selectedWord ?: selectedExpression
     val selectedGrammar = grammar.firstOrNull { it.item.id == selectedItemId }
 
     // 打开单词详情时自动读一遍（设置里可关）。
@@ -202,7 +189,11 @@ fun LibraryScreen(
     }
 
     if (selectedVocab != null || selectedGrammar != null) {
-        val example = selectedVocab?.detail?.exampleEn ?: selectedGrammar?.detail?.exampleEn.orEmpty()
+        val example = when {
+            selectedExpression != null -> ""
+            selectedWord != null -> selectedWord.detail.exampleEn
+            else -> selectedGrammar?.detail?.exampleEn.orEmpty()
+        }
         ItemDetailSheet(
             title = selectedVocab?.detail?.term ?: selectedGrammar?.detail?.name.orEmpty(),
             ipa = selectedVocab?.detail?.ipa.orEmpty(),
@@ -212,6 +203,7 @@ fun LibraryScreen(
             onSpeakWord = selectedVocab?.let { record ->
                 { scope.launch { speech.speak(record.detail.term) } }
             },
+            speakDescription = if (selectedExpression != null) "朗读这条表达" else "朗读这个词",
             onSpeakExample = example.takeIf { it.isNotBlank() }?.let { text ->
                 { scope.launch { speech.speak(text) } }
             },
@@ -243,7 +235,7 @@ private fun WordRecords(
     now: Long,
     onSelect: (Long) -> Unit,
 ) {
-    Column {
+    Column(Modifier.fillMaxSize()) {
         Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             FilterChip(
                 selected = dueTodayOnly,
@@ -262,7 +254,7 @@ private fun WordRecords(
                 else "今天没有到期的单词，懒狗可以歇会儿。",
             )
         } else {
-            LazyColumn {
+            LazyColumn(Modifier.weight(1f)) {
                 items(records, key = { it.item.id }) { record ->
                     LibraryRow(
                         title = record.detail.term,
@@ -278,11 +270,59 @@ private fun WordRecords(
 }
 
 @Composable
+private fun GrammarRecords(
+    records: List<GrammarRecord>,
+    now: Long,
+    onSelect: (Long) -> Unit,
+) {
+    if (records.isEmpty()) {
+        EmptyHint("还没有记过语法点。点右下角加一个。")
+    } else {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+            items(records, key = { it.item.id }) { record ->
+                LibraryRow(
+                    title = record.detail.name,
+                    subtitle = record.detail.explanationZh,
+                    item = record.item,
+                    now = now,
+                    onClick = { onSelect(record.item.id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpressionRecords(
+    records: List<VocabularyRecord>,
+    now: Long,
+    onSelect: (Long) -> Unit,
+) {
+    if (records.isEmpty()) {
+        EmptyHint("还没有摘下表达。情景总结或句子讲解里遇到想复用的句子，可以收进这里。")
+    } else {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+            items(records, key = { it.item.id }) { record ->
+                LibraryRow(
+                    title = record.detail.term,
+                    subtitle = record.detail.meaningZh,
+                    item = record.item,
+                    now = now,
+                    stackedSubtitle = true,
+                    onClick = { onSelect(record.item.id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun LibraryRow(
     title: String,
     subtitle: String,
     item: KnowledgeItemEntity,
     now: Long,
+    stackedSubtitle: Boolean = false,
     onClick: () -> Unit,
 ) {
     Column(modifier = Modifier.clickable(onClick = onClick)) {
@@ -296,7 +336,7 @@ private fun LibraryRow(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (stackedSubtitle) {
                     InteractiveEnglishText(title, style = MaterialTheme.typography.bodyLarge, onSingleTap = onClick)
                     if (subtitle.isNotBlank()) {
                         Text(
@@ -304,6 +344,17 @@ private fun LibraryRow(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        InteractiveEnglishText(title, style = MaterialTheme.typography.bodyLarge, onSingleTap = onClick)
+                        if (subtitle.isNotBlank()) {
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -335,6 +386,7 @@ private fun ItemDetailSheet(
     example: String,
     item: KnowledgeItemEntity,
     onSpeakWord: (() -> Unit)?,
+    speakDescription: String,
     onSpeakExample: (() -> Unit)?,
     onDismiss: () -> Unit,
     onReview: (ReviewGrade) -> Unit,
@@ -351,7 +403,11 @@ private fun ItemDetailSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                InteractiveEnglishText(title, style = MaterialTheme.typography.headlineSmall)
+                InteractiveEnglishText(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f),
+                )
                 if (ipa.isNotBlank()) {
                     Text(
                         text = ipa,
@@ -363,7 +419,7 @@ private fun ItemDetailSheet(
                     IconButton(onClick = onSpeakWord) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                            contentDescription = "朗读这个词",
+                            contentDescription = speakDescription,
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
