@@ -33,6 +33,7 @@ import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
+import com.lazydog.english.domain.generation.ReadingQuestionKind
 import com.lazydog.english.domain.generation.ReadingTargetGrammar
 import com.lazydog.english.domain.generation.ReadingTargetWord
 import com.lazydog.english.domain.generation.ReadingValidation
@@ -642,6 +643,8 @@ class OpenAiContentGenerator(
         val options: List<String> = emptyList(),
         val answerIndex: Int = -1,
         val explanationZh: String = "",
+        val kind: String = "",
+        val evidenceFromText: String = "",
     )
 
     @Serializable
@@ -665,7 +668,14 @@ class OpenAiContentGenerator(
                 ReadingTargetGrammar(it.name.trim(), it.exampleFromText.trim(), it.explanationZh.trim())
             },
             comprehensionQuestions = comprehensionQuestions.map {
-                ReadingQuestion(it.promptZh.trim(), it.options, it.answerIndex, it.explanationZh.trim())
+                ReadingQuestion(
+                    promptZh = it.promptZh.trim(),
+                    options = it.options,
+                    answerIndex = it.answerIndex,
+                    explanationZh = it.explanationZh.trim(),
+                    kind = ReadingQuestionKind.normalize(it.kind),
+                    evidenceFromText = it.evidenceFromText.trim(),
+                )
             },
         )
     }
@@ -1095,13 +1105,22 @@ class OpenAiContentGenerator(
             appendLine("最多引入 ${request.maxNewWords} 个略高于当前水平的新词。")
             appendLine("targetVocabulary 里列出所有复习词（role=\"review\"）和引入的新词（role=\"new\"），")
             appendLine("exampleFromText 必须是正文里的原句；targetGrammar 的 exampleFromText 同样必须逐字来自正文。")
-            appendLine("出 2~4 道中文单选理解题，选项不重复，answerIndex 从 0 开始。")
+            appendLine("出 3~4 道中文单选题，选项不重复，answerIndex 从 0 开始。题目 kind 分三种：")
+            appendLine("- \"${ReadingQuestionKind.Gist}\"：读懂大意或细节就能答。")
+            appendLine("- \"${ReadingQuestionKind.Form}\"：问某处为什么用这个形式（时态、语态、非谓语、比较级、" +
+                "冠词、介词等），比如\"这句为什么用 have been coming 而不是 come\"。")
+            appendLine("- \"${ReadingQuestionKind.Reference}\"：问某个代词或指代成分具体指什么。")
+            appendLine("其中必须至少有一道 ${ReadingQuestionKind.Form} 或 ${ReadingQuestionKind.Reference}：" +
+                "这个学习者词汇量够、但习惯靠认词猜大意，只出大意题练不到他真正缺的解析能力。")
+            appendLine("这两类题必须给 evidenceFromText：正文里逐字照抄的那一句依据，" +
+                "gist 题可以留空字符串。")
             appendLine("输出 JSON schema：")
             appendLine(
                 """{"schemaVersion":1,"title":"...","body":"...","estimatedCefr":"A2",""" +
                     """"targetVocabulary":[{"term":"...","meaningZh":"...","exampleFromText":"...","role":"review"}],""" +
                     """"targetGrammar":[{"name":"...","exampleFromText":"...","explanationZh":"..."}],""" +
-                    """"comprehensionQuestions":[{"promptZh":"...","options":["..."],"answerIndex":0,"explanationZh":"..."}]}""",
+                    """"comprehensionQuestions":[{"kind":"form","promptZh":"...","options":["..."],""" +
+                    """"answerIndex":0,"explanationZh":"...","evidenceFromText":"..."}]}""",
             )
         }
 

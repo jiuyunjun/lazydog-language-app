@@ -53,6 +53,7 @@ import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
+import com.lazydog.english.domain.generation.ReadingQuestionKind
 import com.lazydog.english.domain.generation.ReadingTargetWord
 import com.lazydog.english.domain.planning.DailyStep
 import java.time.LocalDate
@@ -394,6 +395,8 @@ private fun ReadingQuestion.toAskContext(selectedIndex: Int): AskContext = AskCo
         add(AskDetail("选项", options.joinToString(" / ")))
         add(AskDetail("你选了", optionAt(selectedIndex)))
         add(AskDetail("正确答案", optionAt(answerIndex)))
+        add(AskDetail("题型", ReadingQuestionKind.labelZh(kind)))
+        if (evidenceFromText.isNotBlank()) add(AskDetail("原文依据", evidenceFromText))
         if (explanationZh.isNotBlank()) add(AskDetail("解析", explanationZh))
     },
     suggestions = listOf("我选的为什么不对？", "怎么在原文里找到依据？", "这类题该看什么线索？"),
@@ -516,6 +519,11 @@ private fun QuestionList(
             val selected = answers[qIndex]
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
+                    text = ReadingQuestionKind.labelZh(question.kind),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
                     text = "${qIndex + 1}. ${question.promptZh}",
                     style = MaterialTheme.typography.bodyLarge,
                 )
@@ -554,6 +562,29 @@ private fun QuestionList(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                // 形式题和指代题答完把原文那句摆出来，逼一次"回原文核对"。
+                if (selected != null && question.evidenceFromText.isNotBlank()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = "原文这句",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            InteractiveEnglishText(
+                                text = question.evidenceFromText,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                 }
             }
         }

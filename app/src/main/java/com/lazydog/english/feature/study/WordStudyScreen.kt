@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,7 +49,11 @@ import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.feature.ask.AskTopBarAction
+import com.lazydog.english.core.designsystem.LazyDogTheme
+import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.ReviewGrade
+import com.lazydog.english.domain.practice.ProductionCheck
+import com.lazydog.english.domain.practice.ProductionResult
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.NewWordsRequest
@@ -68,11 +73,26 @@ private data class StudyCard(
     val isNew: Boolean,
     val pos: String = "",
     val collocations: List<String> = emptyList(),
-)
+    val stage: String = KnowledgeStage.Learning.name,
+) {
+    /**
+     * 熟了的词改考产出：给中文，自己写出英文。
+     * 认得出不代表写得出，而认词恰恰是最不缺练的那一项。
+     */
+    val isProduction: Boolean
+        get() = !isNew && stage in setOf(KnowledgeStage.Familiar.name, KnowledgeStage.Mastered.name)
+}
 
 private sealed interface WordStudyPhase {
     data object Loading : WordStudyPhase
-    data class Cards(val cards: List<StudyCard>, val index: Int, val revealed: Boolean) : WordStudyPhase
+    data class Cards(
+        val cards: List<StudyCard>,
+        val index: Int,
+        val revealed: Boolean,
+        /** 产出卡上打的答案和判分结果；认词卡用不到。 */
+        val typed: String = "",
+        val result: ProductionResult? = null,
+    ) : WordStudyPhase
     data class OfferNew(val reviewedCount: Int) : WordStudyPhase
     data object Generating : WordStudyPhase
     data class GenerationFailed(val reason: String, val reviewedCount: Int) : WordStudyPhase
@@ -120,6 +140,7 @@ fun WordStudyScreen(
                     isNew = false,
                     pos = it.detail.pos,
                     collocations = VocabularyJson.decodeCollocations(it.detail.collocationsJson),
+                    stage = it.item.stage,
                 )
             }
         phase = if (due.isEmpty()) WordStudyPhase.OfferNew(0) else WordStudyPhase.Cards(due, 0, revealed = false)
@@ -225,12 +246,28 @@ fun WordStudyScreen(
                 }
                 is WordStudyPhase.Cards -> {
                     val card = p.cards[p.index]
-                    StudyCardView(
-                        card = card,
-                        revealed = p.revealed,
-                        onReveal = { phase = p.copy(revealed = true) },
-                        onGrade = { grade -> onGrade(card, grade, p.cards, p.index) },
-                    )
+                    if (card.isProduction) {
+                        ProductionCardView(
+                            card = card,
+                            typed = p.typed,
+                            result = p.result,
+                            onTypedChange = { phase = p.copy(typed = it) },
+                            onSubmit = {
+                                phase = p.copy(
+                                    revealed = true,
+                                    result = ProductionCheck.check(p.typed, card.term),
+                                )
+                            },
+                            onGrade = { grade -> onGrade(card, grade, p.cards, p.index) },
+                        )
+                    } else {
+                        StudyCardView(
+                            card = card,
+                            revealed = p.revealed,
+                            onReveal = { phase = p.copy(revealed = true) },
+                            onGrade = { grade -> onGrade(card, grade, p.cards, p.index) },
+                        )
+                    }
                 }
                 is WordStudyPhase.OfferNew -> OfferNewView(
                     reviewedCount = p.reviewedCount,
@@ -268,28 +305,43 @@ fun WordStudyScreen(
  * 词卡的结构化提问上下文。没揭示答案前不把释义和例句交出去，
  * 免得一句"这词什么意思"直接把自评环节绕过去。
  */
-private fun StudyCard.toAskContext(revealed: Boolean): AskContext = AskContext(
-    kind = AskContextKind.Word,
-    title = if (revealed && meaningZh.isNotBlank()) "$term · $meaningZh" else term,
-    details = buildList {
-        add(AskDetail("词条", term))
-        if (ipa.isNotBlank()) add(AskDetail("音标", ipa))
-        if (revealed) {
-            if (pos.isNotBlank()) add(AskDetail("词性", pos))
-            if (meaningZh.isNotBlank()) add(AskDetail("释义", meaningZh))
-            if (collocations.isNotEmpty()) add(AskDetail("搭配", collocations.joinToString("、")))
-            if (exampleEn.isNotBlank()) add(AskDetail("例句", exampleEn))
+private fun StudyCard.toAskContext(revealed: Boolean): AskContext {
+    // 产出卡是反过来的：中文在明面，英文才是答案，所以没作答前不能把词交出去。
+    if (isProduction && !revealed) {
+        return AskContext(
+            kind = AskContextKind.Word,
+            title = "正在回想一个词 · $meaningZh",
+            details = listOf(
+                AskDetail("中文释义", meaningZh),
+                AskDetail("词性", pos.ifBlank { "未标注" }),
+                AskDetail("状态", "学习者要自己写出这个英文词，绝对不能直接告诉他是哪个词，只能给用法或场景上的提示"),
+            ),
+            suggestions = listOf("这个意思一般用在什么场景？", "给我一个不含答案的提示"),
+        )
+    }
+    return AskContext(
+        kind = AskContextKind.Word,
+        title = if (revealed && meaningZh.isNotBlank()) "$term · $meaningZh" else term,
+        details = buildList {
+            add(AskDetail("词条", term))
+            if (ipa.isNotBlank()) add(AskDetail("音标", ipa))
+            if (revealed) {
+                if (pos.isNotBlank()) add(AskDetail("词性", pos))
+                if (meaningZh.isNotBlank()) add(AskDetail("释义", meaningZh))
+                if (collocations.isNotEmpty()) add(AskDetail("搭配", collocations.joinToString("、")))
+                if (exampleEn.isNotBlank()) add(AskDetail("例句", exampleEn))
+            } else {
+                add(AskDetail("状态", "学习者还没看答案，别直接把中文释义说出来"))
+            }
+            add(AskDetail("卡片类型", if (isNew) "AI 新给的词" else "到期复习的词"))
+        },
+        suggestions = if (revealed) {
+            listOf("这个词平时说话会用吗？", "有哪些容易混的近义词？", "再给我两个例句")
         } else {
-            add(AskDetail("状态", "学习者还没看答案，别直接把中文释义说出来"))
-        }
-        add(AskDetail("卡片类型", if (isNew) "AI 新给的词" else "到期复习的词"))
-    },
-    suggestions = if (revealed) {
-        listOf("这个词平时说话会用吗？", "有哪些容易混的近义词？", "再给我两个例句")
-    } else {
-        listOf("这个词大概什么场景会出现？", "它和哪些词长得像？")
-    },
-)
+            listOf("这个词大概什么场景会出现？", "它和哪些词长得像？")
+        },
+    )
+}
 
 private fun GeneratedWord.toCard() = StudyCard(
     itemId = null,
@@ -302,6 +354,130 @@ private fun GeneratedWord.toCard() = StudyCard(
     pos = pos,
     collocations = collocations,
 )
+
+/** 产出卡：给中文释义，自己把英文写出来，程序判分。 */
+@Composable
+private fun ProductionCardView(
+    card: StudyCard,
+    typed: String,
+    result: ProductionResult?,
+    onTypedChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onGrade: (ReviewGrade) -> Unit,
+) {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val scope = rememberCoroutineScope()
+    val extended = LazyDogTheme.extendedColors
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = "这个意思，英文怎么写",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = if (card.pos.isNotBlank()) "${card.pos} ${card.meaningZh}" else card.meaningZh,
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            if (result == null) {
+                Text(
+                    text = "提示：${ProductionCheck.hint(card.term)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = typed,
+                    onValueChange = onTypedChange,
+                    label = { Text("写出这个词") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                val (label, tint) = when (result) {
+                    ProductionResult.Correct -> "写对了" to extended.correct
+                    ProductionResult.Close -> "差一个字母，算你想起来了" to extended.attention
+                    ProductionResult.Wrong -> "这个词没写出来" to MaterialTheme.colorScheme.error
+                }
+                Text(text = label, style = MaterialTheme.typography.titleMedium, color = tint)
+                if (typed.isNotBlank() && result != ProductionResult.Correct) {
+                    Text(
+                        text = "你写的：$typed",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    InteractiveEnglishText(text = card.term, style = MaterialTheme.typography.headlineMedium)
+                    IconButton(onClick = { scope.launch { app.speechController.speak(card.term) } }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                            contentDescription = "读一遍",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                if (card.exampleEn.isNotBlank()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            InteractiveEnglishText(
+                                text = card.exampleEn,
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            if (card.exampleZh.isNotBlank()) {
+                                Text(
+                                    text = card.exampleZh,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (result == null) {
+                Button(
+                    onClick = onSubmit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                ) {
+                    Text(if (typed.isBlank()) "想不起来，看答案" else "对一下", style = MaterialTheme.typography.titleMedium)
+                }
+            } else {
+                Button(
+                    onClick = { onGrade(ProductionCheck.gradeFor(result)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                ) {
+                    Text("下一个", style = MaterialTheme.typography.titleMedium)
+                }
+                if (result == ProductionResult.Correct) {
+                    TextButton(onClick = { onGrade(ReviewGrade.Easy) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("这个我很熟，隔久点再问")
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun StudyCardView(

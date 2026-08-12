@@ -69,6 +69,20 @@ object ReadingValidation {
             if (question.options.toSet().size != question.options.size) return fail("$label 选项重复")
             if (question.answerIndex !in question.options.indices) return fail("$label 答案索引越界")
             if (question.explanationZh.isBlank()) warnings.add("$label 没有解析")
+            // 形式题和指代题的依据必须真的在正文里，否则等于凭空出题。
+            if (question.kind in ReadingQuestionKind.anchored) {
+                if (question.evidenceFromText.isBlank()) {
+                    return fail("$label 是${ReadingQuestionKind.labelZh(question.kind)}题却没给原文依据")
+                }
+                if (!bodyContainsNormalized(reading.body, question.evidenceFromText)) {
+                    return fail("$label 的原文依据不是正文内容")
+                }
+            }
+        }
+
+        // 至少一道题必须把人赶回原文看形式，否则整篇又变成"靠认词猜大意"。
+        if (reading.comprehensionQuestions.none { it.kind in ReadingQuestionKind.anchored }) {
+            return fail("缺少形式题或指代题：全是大意题，靠猜词就能做对")
         }
 
         return Outcome(failure = null, warnings = warnings)

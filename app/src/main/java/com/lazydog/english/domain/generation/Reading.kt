@@ -34,12 +34,45 @@ data class ReadingTargetGrammar(
     val explanationZh: String,
 )
 
+/**
+ * 理解题的口径。只考大意的题靠词汇量猜就能做对，练不到解析句子的能力，
+ * 所以每篇必须至少有一道 form 或 reference 题，逼着回原文看形式。
+ */
+object ReadingQuestionKind {
+    /** 大意、细节：读懂就能答。 */
+    const val Gist = "gist"
+    /** 形式：为什么用这个时态 / 这个结构，答案要落在原文某处形式上。 */
+    const val Form = "form"
+    /** 指代：这个 it / they / that 指的是什么。 */
+    const val Reference = "reference"
+
+    val all = listOf(Gist, Form, Reference)
+
+    /** 必须至少出现一道的口径。 */
+    val anchored = listOf(Form, Reference)
+
+    fun normalize(raw: String): String {
+        val clean = raw.trim().lowercase()
+        return if (clean in all) clean else Gist
+    }
+
+    fun labelZh(kind: String): String = when (normalize(kind)) {
+        Form -> "为什么这么写"
+        Reference -> "指代"
+        else -> "读懂了吗"
+    }
+}
+
 @Serializable
 data class ReadingQuestion(
     val promptZh: String,
     val options: List<String>,
     val answerIndex: Int,
     val explanationZh: String,
+    /** 见 [ReadingQuestionKind]；旧材料没有这个字段，读出来按 gist 处理。 */
+    val kind: String = ReadingQuestionKind.Gist,
+    /** form / reference 题必须给出原文里的依据句，本地校验它确实是正文子串。 */
+    val evidenceFromText: String = "",
 )
 
 data class GeneratedReading(

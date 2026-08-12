@@ -24,6 +24,14 @@ class ReadingValidationTest {
         grammar: List<ReadingTargetGrammar> = emptyList(),
         questions: List<ReadingQuestion> = listOf(
             ReadingQuestion("Ming 想控制什么？", listOf("手机使用", "饮食", "花钱"), 0, "第一句说了。"),
+            ReadingQuestion(
+                promptZh = "It was a small change 里的 it 指什么？",
+                options = listOf("这个计划", "手机", "房间"),
+                answerIndex = 0,
+                explanationZh = "指前面两人一起试的那个计划。",
+                kind = ReadingQuestionKind.Reference,
+                evidenceFromText = "It was a small change, but it worked well for them.",
+            ),
         ),
     ) = GeneratedReading(title, readingBody, "A2", targets, grammar, questions)
 
@@ -94,6 +102,55 @@ class ReadingValidationTest {
 
         val noQuestions = reading(questions = emptyList())
         assertNotNull(ReadingValidation.validate(noQuestions, request()).failure)
+    }
+
+    @Test
+    fun `全是大意题的材料被拒`() {
+        val onlyGist = reading(
+            questions = listOf(
+                ReadingQuestion("Ming 想控制什么？", listOf("手机使用", "饮食"), 0, "第一句。"),
+                ReadingQuestion("他们试了多久？", listOf("两周", "两天"), 0, "文中写了。"),
+            ),
+        )
+        val failure = ReadingValidation.validate(onlyGist, request()).failure
+        assertNotNull(failure)
+        assertTrue(failure!!.contains("形式题"))
+    }
+
+    @Test
+    fun `形式题必须给出正文里的依据`() {
+        val noEvidence = reading(
+            questions = listOf(
+                ReadingQuestion(
+                    promptZh = "这里为什么用过去式？",
+                    options = listOf("已经发生", "正在发生"),
+                    answerIndex = 0,
+                    explanationZh = "讲的是已经做完的事。",
+                    kind = ReadingQuestionKind.Form,
+                ),
+            ),
+        )
+        assertNotNull(ReadingValidation.validate(noEvidence, request()).failure)
+
+        val fabricated = reading(
+            questions = listOf(
+                ReadingQuestion(
+                    promptZh = "这里为什么用过去式？",
+                    options = listOf("已经发生", "正在发生"),
+                    answerIndex = 0,
+                    explanationZh = "讲的是已经做完的事。",
+                    kind = ReadingQuestionKind.Form,
+                    evidenceFromText = "This sentence is not in the body.",
+                ),
+            ),
+        )
+        assertNotNull(ReadingValidation.validate(fabricated, request()).failure)
+    }
+
+    @Test
+    fun `不认识的题型按大意处理`() {
+        assertEquals(ReadingQuestionKind.Gist, ReadingQuestionKind.normalize("whatever"))
+        assertEquals(ReadingQuestionKind.Form, ReadingQuestionKind.normalize("Form"))
     }
 
     @Test
