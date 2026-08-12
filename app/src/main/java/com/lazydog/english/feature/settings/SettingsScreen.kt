@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Interests
 import androidx.compose.material.icons.outlined.Notifications
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.Vibration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -50,6 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.ask.ShakeDetector
 import com.lazydog.english.core.backup.AutoBackupWorker
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.model.SampleData
@@ -74,7 +77,9 @@ private val voiceOptions = listOf(
 private val reminderOptions = listOf("关闭", "08:00", "12:30", "20:00", "21:30")
 private val themeOptions = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
 
-private enum class OpenDialog { None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, Voice, ConfirmRestore }
+private enum class OpenDialog {
+    None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, Voice, AskSensitivity, ConfirmRestore
+}
 
 @Composable
 fun SettingsScreen(
@@ -98,6 +103,10 @@ fun SettingsScreen(
     val reminderTime by prefs.reminderTime.collectAsState(initial = "")
     val themeMode by prefs.themeMode.collectAsState(initial = "system")
     val ttsVoice by prefs.ttsVoice.collectAsState(initial = UserPreferences.DEFAULT_TTS_VOICE)
+    val askShakeEnabled by prefs.askShakeEnabled.collectAsState(initial = true)
+    val askSensitivity by prefs.askShakeSensitivity.collectAsState(initial = 1)
+    val askTopBarIcon by prefs.askTopBarIcon.collectAsState(initial = false)
+    val hasShakeSensor = remember { ShakeDetector.isAvailable(context) }
 
     var dialog by rememberSaveable { mutableStateOf(OpenDialog.None) }
     var pendingReminder by remember { mutableStateOf("") }
@@ -286,6 +295,44 @@ fun SettingsScreen(
         SettingsRow(Icons.Outlined.SmartToy, "AI 服务", aiSummary, onClick = ::runAiConnectionTest)
         SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", speechSummary, onClick = ::runSpeechConnectionTest)
 
+        SettingsGroupTitle("随时提问")
+        SettingsRow(
+            Icons.Outlined.HelpOutline,
+            "摇一摇提问",
+            when {
+                !hasShakeSensor -> "这台设备没有重力传感器 · 学习页顶栏给了问号"
+                askShakeEnabled -> "开 · 学习页面里摇手机就能问"
+                else -> "关 · 只能用顶栏问号叫出来"
+            },
+            onClick = { scope.launch { prefs.setAskShakeEnabled(!askShakeEnabled) } },
+        )
+        if (hasShakeSensor && askShakeEnabled) {
+            SettingsRow(
+                Icons.Outlined.Vibration,
+                "摇一摇灵敏度",
+                "${ShakeDetector.label(askSensitivity)} · 走路时容易误触就调低",
+                onClick = { dialog = OpenDialog.AskSensitivity },
+            )
+        }
+        SettingsRow(
+            Icons.Outlined.HelpOutline,
+            "顶栏放一个问号",
+            when {
+                !hasShakeSensor -> "开 · 没有传感器时自动开启"
+                askTopBarIcon -> "开 · 学习页顶栏常驻入口"
+                else -> "关 · 只用摇一摇"
+            },
+            onClick = {
+                if (hasShakeSensor) scope.launch { prefs.setAskTopBarIcon(!askTopBarIcon) }
+            },
+        )
+        Text(
+            text = "提问用的是你自己配的 AI 服务，问一次算一次调用。问答只留在当前抽屉里，关掉就结束。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
+        )
+
         SettingsGroupTitle("提醒")
         SettingsRow(
             Icons.Outlined.Notifications,
@@ -397,6 +444,16 @@ fun SettingsScreen(
             selectedIndex = voiceOptions.indexOfFirst { it.voice == ttsVoice },
             onSelect = { index ->
                 scope.launch { prefs.setTtsVoice(voiceOptions[index].voice) }
+                dialog = OpenDialog.None
+            },
+            onDismiss = { dialog = OpenDialog.None },
+        )
+        OpenDialog.AskSensitivity -> ChoiceDialog(
+            title = "摇一摇灵敏度",
+            options = ShakeDetector.sensitivityLabels,
+            selectedIndex = askSensitivity,
+            onSelect = { index ->
+                scope.launch { prefs.setAskShakeSensitivity(index) }
                 dialog = OpenDialog.None
             },
             onDismiss = { dialog = OpenDialog.None },

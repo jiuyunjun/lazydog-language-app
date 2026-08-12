@@ -53,6 +53,16 @@ interface LearningContentGenerator {
         onProgress: ((String) -> Unit)? = null,
     ): GenerationResult<WordExplanation>
 
+    /**
+     * 摇一摇提问：结合当前学习页面注册的结构化上下文回答一个问题。
+     * [onPartialAnswer] 收到已生成的回答正文，用于边生成边显示；
+     * 最终仍以完整 JSON 解析加校验为准。
+     */
+    suspend fun askAboutContext(
+        request: com.lazydog.english.domain.ask.AskRequest,
+        onPartialAnswer: ((String) -> Unit)? = null,
+    ): GenerationResult<com.lazydog.english.domain.ask.AskAnswer>
+
     /** 整句翻译加讲解（阅读里的点句操作）。 */
     suspend fun explainSentence(
         sentence: String,

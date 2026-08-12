@@ -41,8 +41,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
+import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.VocabularyJson
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.domain.ask.AskContext
+import com.lazydog.english.domain.ask.AskContextKind
+import com.lazydog.english.domain.ask.AskDetail
+import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.GenerationResult
@@ -177,6 +182,9 @@ fun WordStudyScreen(
         }
     }
 
+    // 只有正翻着卡片时才能提问；生成中、总结页摇了也不弹。
+    ProvideAskContext((phase as? WordStudyPhase.Cards)?.let { it.cards[it.index].toAskContext(it.revealed) })
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -193,9 +201,10 @@ fun WordStudyScreen(
                             text = "${if (p.cards.first().isNew) "新词" else "复习"} ${p.index + 1} / ${p.cards.size}",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(end = 16.dp),
+                            modifier = Modifier.padding(end = 12.dp),
                         )
                     }
+                    AskTopBarAction()
                 },
             )
         },
@@ -254,6 +263,33 @@ fun WordStudyScreen(
         }
     }
 }
+
+/**
+ * 词卡的结构化提问上下文。没揭示答案前不把释义和例句交出去，
+ * 免得一句"这词什么意思"直接把自评环节绕过去。
+ */
+private fun StudyCard.toAskContext(revealed: Boolean): AskContext = AskContext(
+    kind = AskContextKind.Word,
+    title = if (revealed && meaningZh.isNotBlank()) "$term · $meaningZh" else term,
+    details = buildList {
+        add(AskDetail("词条", term))
+        if (ipa.isNotBlank()) add(AskDetail("音标", ipa))
+        if (revealed) {
+            if (pos.isNotBlank()) add(AskDetail("词性", pos))
+            if (meaningZh.isNotBlank()) add(AskDetail("释义", meaningZh))
+            if (collocations.isNotEmpty()) add(AskDetail("搭配", collocations.joinToString("、")))
+            if (exampleEn.isNotBlank()) add(AskDetail("例句", exampleEn))
+        } else {
+            add(AskDetail("状态", "学习者还没看答案，别直接把中文释义说出来"))
+        }
+        add(AskDetail("卡片类型", if (isNew) "AI 新给的词" else "到期复习的词"))
+    },
+    suggestions = if (revealed) {
+        listOf("这个词平时说话会用吗？", "有哪些容易混的近义词？", "再给我两个例句")
+    } else {
+        listOf("这个词大概什么场景会出现？", "它和哪些词长得像？")
+    },
+)
 
 private fun GeneratedWord.toCard() = StudyCard(
     itemId = null,

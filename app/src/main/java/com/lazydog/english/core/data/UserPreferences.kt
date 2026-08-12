@@ -51,6 +51,9 @@ class UserPreferences(private val context: Context) {
         val DailyMinutes = intPreferencesKey("daily_minutes")
         val BackupFolderUri = stringPreferencesKey("backup_folder_uri")
         val ScenarioHistory = stringSetPreferencesKey("scenario_history")
+        val AskShakeEnabled = booleanPreferencesKey("ask_shake_enabled")
+        val AskShakeSensitivity = intPreferencesKey("ask_shake_sensitivity")
+        val AskTopBarIcon = booleanPreferencesKey("ask_top_bar_icon")
     }
 
     val onboardingCompleted: Flow<Boolean> =
@@ -105,6 +108,18 @@ class UserPreferences(private val context: Context) {
     }
     val topics: Flow<Set<String>> = context.dataStore.data.map { it[Keys.Topics] ?: emptySet() }
     val dailyMinutes: Flow<Int> = context.dataStore.data.map { it[Keys.DailyMinutes] ?: 12 }
+
+    /** 学习页面摇一摇提问；关掉就完全不注册传感器。 */
+    val askShakeEnabled: Flow<Boolean> =
+        context.dataStore.data.map { it[Keys.AskShakeEnabled] ?: true }
+
+    /** 摇一摇灵敏度：0 低 / 1 适中 / 2 高，见 ShakeDetector。 */
+    val askShakeSensitivity: Flow<Int> =
+        context.dataStore.data.map { it[Keys.AskShakeSensitivity] ?: 1 }
+
+    /** 顶栏问号入口；没有重力传感器的设备无视这个值，一律显示。 */
+    val askTopBarIcon: Flow<Boolean> =
+        context.dataStore.data.map { it[Keys.AskTopBarIcon] ?: false }
 
     /** SAF 选定的备份文件夹（content:// tree URI 字符串）；空表示还没选。 */
     val backupFolderUri: Flow<String> = context.dataStore.data.map { it[Keys.BackupFolderUri].orEmpty() }
@@ -195,6 +210,18 @@ class UserPreferences(private val context: Context) {
             it[Keys.TodayDate] = todayDate
             it[Keys.TodayDoneSteps] = current + stepId
         }
+    }
+
+    suspend fun setAskShakeEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AskShakeEnabled] = enabled }
+    }
+
+    suspend fun setAskShakeSensitivity(level: Int) {
+        context.dataStore.edit { it[Keys.AskShakeSensitivity] = level.coerceIn(0, 2) }
+    }
+
+    suspend fun setAskTopBarIcon(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AskTopBarIcon] = enabled }
     }
 
     suspend fun setBackupFolderUri(uri: String) {

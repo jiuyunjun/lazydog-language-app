@@ -20,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
+import com.lazydog.english.feature.ask.AskHost
 import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
 import com.lazydog.english.feature.onboarding.WelcomeScreen
@@ -125,40 +126,53 @@ private fun AppNavHost(
             )
         }
 
+        // 学习类页面包一层 AskHost：摇一摇提问只在这些页面可用（DESIGN 屏 45～49）。
         composable(Routes.Scenario) {
-            ScenarioScreen(sessionId = null, onExit = { navController.popBackStack() })
+            AskHost {
+                ScenarioScreen(sessionId = null, onExit = { navController.popBackStack() })
+            }
         }
 
         composable(
             route = Routes.ScenarioOpen,
             arguments = listOf(navArgument("sessionId") { type = NavType.LongType }),
         ) { entry ->
-            ScenarioScreen(
-                sessionId = entry.arguments?.getLong("sessionId"),
-                onExit = { navController.popBackStack() },
-            )
+            AskHost {
+                ScenarioScreen(
+                    sessionId = entry.arguments?.getLong("sessionId"),
+                    onExit = { navController.popBackStack() },
+                )
+            }
         }
 
         composable(Routes.WordStudy) {
-            WordStudyScreen(
-                repository = knowledgeRepository,
-                onExit = { navController.popBackStack() },
-            )
+            AskHost {
+                WordStudyScreen(
+                    repository = knowledgeRepository,
+                    onExit = { navController.popBackStack() },
+                )
+            }
         }
 
         composable(Routes.GrammarStudy) {
-            GrammarStudyScreen(
-                repository = knowledgeRepository,
-                onExit = { navController.popBackStack() },
-            )
+            AskHost {
+                GrammarStudyScreen(
+                    repository = knowledgeRepository,
+                    onExit = { navController.popBackStack() },
+                )
+            }
         }
 
         composable(Routes.ReadingGenerate) {
-            ReadingScreen(mode = ReadingMode.Generate, onExit = { navController.popBackStack() })
+            AskHost {
+                ReadingScreen(mode = ReadingMode.Generate, onExit = { navController.popBackStack() })
+            }
         }
 
         composable(Routes.ReadingPaste) {
-            ReadingScreen(mode = ReadingMode.Paste, onExit = { navController.popBackStack() })
+            AskHost {
+                ReadingScreen(mode = ReadingMode.Paste, onExit = { navController.popBackStack() })
+            }
         }
 
         composable(
@@ -166,7 +180,9 @@ private fun AppNavHost(
             arguments = listOf(navArgument("materialId") { type = NavType.LongType }),
         ) { entry ->
             val materialId = entry.arguments?.getLong("materialId") ?: 0L
-            ReadingScreen(mode = ReadingMode.Open(materialId), onExit = { navController.popBackStack() })
+            AskHost {
+                ReadingScreen(mode = ReadingMode.Open(materialId), onExit = { navController.popBackStack() })
+            }
         }
     }
 }

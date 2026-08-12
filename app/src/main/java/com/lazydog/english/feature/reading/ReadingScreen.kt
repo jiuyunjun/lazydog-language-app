@@ -40,11 +40,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.ReadingJson
 import com.lazydog.english.core.data.ReadingRepository
 import com.lazydog.english.core.data.displayPattern
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.model.KnowledgeStage
+import com.lazydog.english.domain.ask.AskContext
+import com.lazydog.english.domain.ask.AskContextKind
+import com.lazydog.english.domain.ask.AskDetail
+import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
@@ -200,6 +205,11 @@ fun ReadingScreen(
         }
     }
 
+    // 默认拿整篇材料当上下文；答过题之后换成最近这道题（含你选了什么）。
+    var askQuestionContext by remember { mutableStateOf<AskContext?>(null) }
+    val material = (phase as? ReadingPhase.Viewing)?.material
+    ProvideAskContext(material?.let { askQuestionContext ?: it.toAskContext() })
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -209,6 +219,7 @@ fun ReadingScreen(
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                     }
                 },
+                actions = { AskTopBarAction() },
             )
         },
     ) { padding ->
@@ -242,6 +253,9 @@ fun ReadingScreen(
                 }
                 is ReadingPhase.Viewing -> MaterialContent(
                     material = p.material,
+                    onQuestionAnswered = { question, selectedIndex ->
+                        askQuestionContext = question.toAskContext(selectedIndex)
+                    },
                     onQuestionsCompleted = {
                         scope.launch {
                             // 读完并答完题：今日阅读步骤完成，复习词记一次“语境里遇见”。
@@ -357,9 +371,40 @@ private fun PasteView(onSave: (title: String, body: String) -> Unit) {
     }
 }
 
+private fun MaterialView.toAskContext(): AskContext = AskContext(
+    kind = AskContextKind.Reading,
+    title = title,
+    details = buildList {
+        add(AskDetail("标题", title))
+        if (cefr.isNotBlank()) add(AskDetail("难度", cefr))
+        // 正文按段落截断：只发学习者真的在读的这一篇，不发整个知识库。
+        add(AskDetail("正文", body.take(1200)))
+        if (targetWords.isNotEmpty()) {
+            add(AskDetail("这篇的目标词", targetWords.joinToString("、") { "${it.term}（${it.meaningZh}）" }))
+        }
+    },
+    suggestions = listOf("这段在讲什么？", "有哪句话结构比较难？", "挑两个值得记的表达"),
+)
+
+private fun ReadingQuestion.toAskContext(selectedIndex: Int): AskContext = AskContext(
+    kind = AskContextKind.Question,
+    title = "这道题 · 你选了${optionAt(selectedIndex)}",
+    details = buildList {
+        add(AskDetail("题干", promptZh))
+        add(AskDetail("选项", options.joinToString(" / ")))
+        add(AskDetail("你选了", optionAt(selectedIndex)))
+        add(AskDetail("正确答案", optionAt(answerIndex)))
+        if (explanationZh.isNotBlank()) add(AskDetail("解析", explanationZh))
+    },
+    suggestions = listOf("我选的为什么不对？", "怎么在原文里找到依据？", "这类题该看什么线索？"),
+)
+
+private fun ReadingQuestion.optionAt(index: Int): String = options.getOrNull(index) ?: "（没选）"
+
 @Composable
 private fun MaterialContent(
     material: MaterialView,
+    onQuestionAnswered: (ReadingQuestion, Int) -> Unit,
     onQuestionsCompleted: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -446,7 +491,11 @@ private fun MaterialContent(
 
         if (material.questions.isNotEmpty()) {
             Text("读懂了吗", style = MaterialTheme.typography.titleMedium)
-            QuestionList(material.questions, onAllAnswered = onQuestionsCompleted)
+            QuestionList(
+                questions = material.questions,
+                onAnswered = onQuestionAnswered,
+                onAllAnswered = onQuestionsCompleted,
+            )
         }
     }
 }
@@ -454,6 +503,7 @@ private fun MaterialContent(
 @Composable
 private fun QuestionList(
     questions: List<ReadingQuestion>,
+    onAnswered: (ReadingQuestion, Int) -> Unit,
     onAllAnswered: () -> Unit,
 ) {
     val answers = remember { mutableStateMapOf<Int, Int>() }
@@ -478,8 +528,13 @@ private fun QuestionList(
                         answered && isSelected -> MaterialTheme.colorScheme.errorContainer
                         else -> MaterialTheme.colorScheme.surfaceContainer
                     }
+                    fun choose() {
+                        if (answered) return
+                        answers[qIndex] = oIndex
+                        onAnswered(question, oIndex)
+                    }
                     Surface(
-                        onClick = { if (!answered) answers[qIndex] = oIndex },
+                        onClick = ::choose,
                         enabled = !answered,
                         color = container,
                         shape = MaterialTheme.shapes.medium,
@@ -489,7 +544,7 @@ private fun QuestionList(
                             text = option,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(12.dp),
-                            onSingleTap = { if (!answered) answers[qIndex] = oIndex },
+                            onSingleTap = ::choose,
                         )
                     }
                 }

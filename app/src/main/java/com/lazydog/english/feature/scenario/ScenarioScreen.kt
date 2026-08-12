@@ -69,11 +69,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.ScenarioReplyMode
 import com.lazydog.english.core.data.ScenarioSessionSnapshot
 import com.lazydog.english.core.data.ScenarioStage
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.domain.ask.AskContext
+import com.lazydog.english.domain.ask.AskContextKind
+import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.domain.scenario.CommunicationFailure
 import com.lazydog.english.domain.scenario.ScenarioBrief
 import com.lazydog.english.domain.scenario.ScenarioDifficulty
@@ -411,6 +416,13 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
         }
     }
 
+    // 只有对话进行中可以摇一摇问；挑场景、总结、重演页不响应。
+    ProvideAskContext(
+        brief?.takeIf { phase == ScenarioPhase.Conversation }?.let { current ->
+            askContextFor(current, messages, achievedGoals.keys)
+        },
+    )
+
     Scaffold(
         topBar = {
             if (phase !in setOf(ScenarioPhase.Summary, ScenarioPhase.Finish)) {
@@ -423,6 +435,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                             Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                         }
                     },
+                    actions = { AskTopBarAction() },
                 )
             }
         },
@@ -543,6 +556,39 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
             }
         }
     }
+}
+
+/**
+ * 演练中的提问上下文：处境、对手、目标完成情况和最近两轮对话。
+ * 只给对手说过的话和自己写过的话，判定器那套隐藏信息不进上下文。
+ */
+private fun askContextFor(
+    brief: ScenarioBrief,
+    messages: List<ScenarioMessage>,
+    achievedGoalIds: Set<String>,
+): AskContext {
+    val lastOpponentLine = messages.lastOrNull { it.speaker == ScenarioSpeaker.Opponent }?.textEn.orEmpty()
+    return AskContext(
+        kind = AskContextKind.Scenario,
+        title = "${brief.titleZh} · 对手 ${brief.opponentName}",
+        details = buildList {
+            add(AskDetail("处境", brief.situationZh))
+            add(AskDetail("对手", "${brief.opponentName}（${brief.opponentRoleZh}）"))
+            if (lastOpponentLine.isNotBlank()) add(AskDetail("对方最近这句", lastOpponentLine))
+            messages.lastOrNull { it.speaker == ScenarioSpeaker.User }?.let {
+                add(AskDetail("你上一句说的", it.textEn))
+            }
+            add(
+                AskDetail(
+                    "还没做到的目标",
+                    brief.goals.filter { it.id !in achievedGoalIds }
+                        .joinToString("；") { it.textZh }
+                        .ifBlank { "都做到了" },
+                ),
+            )
+        },
+        suggestions = listOf("他这句什么意思？", "我想说的这层意思英文怎么讲？", "这么说会不会太冲？"),
+    )
 }
 
 @Composable

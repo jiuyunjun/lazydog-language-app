@@ -205,6 +205,14 @@ interface ReadingSource {
 - 解释接口使用 OpenAI 兼容 SSE；UI 从未闭合的结构化 JSON 中增量提取已到达字段，最终结果仍需完整解析和业务校验后才能保存。
 - 组件保留可选单击动作，用于答案选择、打开知识详情等原有交互；多击判定窗口为 280 ms。
 
+### 摇一摇提问
+
+- 触发在 `core/ask/ShakeDetector.kt`：只在学习页面注册 `TYPE_ACCELEROMETER`，合力超过灵敏度阈值即触发，300 ms 去抖、1.2 s 冷却；没有传感器或用户关掉摇一摇时，降级为学习页顶栏的问号 `AskTopBarAction`。
+- 上下文由页面自己注册：`core/ask/AskController.kt` 的 `ProvideAskContext` 把结构化的 `AskContext`（词条 / 语法点 / 阅读材料 / 刚做的题 / 演练处境）挂到外层 `feature/ask/AskHost`。不截屏、不发整页文本，抽屉顶部的上下文卡展开后就是发给 AI 的全部内容。
+- 页面状态不合适提问时注册 `null`（生成中、失败页、词卡未揭示答案时只给词形不给释义），摇了也不弹。
+- 提问复用同一个 OpenAI 兼容接口（`askAboutContext`），SSE 流式；`AskStreaming.partialAnswer` 从未闭合的 JSON 里增量取出 `answerZh` 供展示，最终仍以完整解析加校验为准。
+- 一次会话只活在抽屉里：关掉即清空，不落库、没有全局聊天历史。答案里的新词经用户点“加进复习”才写入知识库。
+
 ## 9. 数据备份
 
 无账户服务时，长期学习记录是最重要资产。导出格式带 schema 版本（`core/backup/BackupModels.kt` 的 `BackupPayload`），不含密钥与录音。

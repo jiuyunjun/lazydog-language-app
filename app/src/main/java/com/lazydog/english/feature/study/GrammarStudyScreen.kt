@@ -44,8 +44,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.displayPattern
+import com.lazydog.english.domain.ask.AskContext
+import com.lazydog.english.domain.ask.AskContextKind
+import com.lazydog.english.domain.ask.AskDetail
+import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
@@ -117,6 +122,9 @@ fun GrammarStudyScreen(
         }
     }
 
+    // 讲解出来之后才可提问；输入页和生成中摇了不弹。
+    ProvideAskContext((phase as? GrammarPhase.Showing)?.lesson?.toAskContext())
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -126,6 +134,7 @@ fun GrammarStudyScreen(
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                     }
                 },
+                actions = { AskTopBarAction() },
             )
         },
     ) { padding ->
@@ -200,6 +209,21 @@ fun GrammarStudyScreen(
         }
     }
 }
+
+private fun GeneratedGrammarLesson.toAskContext(): AskContext = AskContext(
+    kind = AskContextKind.Grammar,
+    title = if (labelZh.isNotBlank()) "$patternEn · $labelZh" else patternEn,
+    details = buildList {
+        add(AskDetail("结构", patternEn))
+        if (labelZh.isNotBlank()) add(AskDetail("语法点", labelZh))
+        if (summaryZh.isNotBlank()) add(AskDetail("用途", summaryZh))
+        if (explanationZh.isNotBlank()) add(AskDetail("讲解要点", explanationZh))
+        if (goodExampleEn.isNotBlank()) add(AskDetail("正确例句", goodExampleEn))
+        if (badExampleEn.isNotBlank()) add(AskDetail("易错例句", badExampleEn))
+        if (tipZh.isNotBlank()) add(AskDetail("易混提醒", tipZh))
+    },
+    suggestions = listOf("和哪个结构最容易混？", "口语里常这么说吗？", "再给我两个例句"),
+)
 
 @Composable
 private fun LessonView(
