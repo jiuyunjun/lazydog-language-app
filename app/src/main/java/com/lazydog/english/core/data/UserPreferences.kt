@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.lazydog.english.core.config.LocalEnv
+import com.lazydog.english.domain.assessment.SkillKind
 import com.lazydog.english.domain.assessment.SkillLevels
 import com.lazydog.english.domain.assessment.labelForScore
 import com.lazydog.english.domain.speaking.SpeechRate
@@ -213,7 +214,21 @@ class UserPreferences(private val context: Context) {
         }
     }
 
-    /** 手动改等级时把分技能画像一并抹平：用户说了算，但也不再保留过期的偏科结论。 */
+    /** 设置页手改单项等级；[score] 为 null 表示清掉这一项，回退到总等级。 */
+    suspend fun setSkillLevel(kind: SkillKind, score: Double?) {
+        val key = when (kind) {
+            SkillKind.Vocab -> Keys.SkillVocab
+            SkillKind.Grammar -> Keys.SkillGrammar
+            SkillKind.Reading -> Keys.SkillReading
+            SkillKind.Expression -> Keys.SkillExpression
+            SkillKind.Pragmatics -> Keys.SkillPragmatics
+        }
+        context.dataStore.edit {
+            if (score == null) it.remove(key) else it[key] = score.coerceIn(0.0, 5.0)
+        }
+    }
+
+    /** 手动改总等级时把分技能画像一并抹平：用户说了算，但也不再保留过期的偏科结论。 */
     suspend fun overrideLearnerLevel(level: String, confidencePercent: Int) {
         context.dataStore.edit {
             it[Keys.LearnerLevel] = level

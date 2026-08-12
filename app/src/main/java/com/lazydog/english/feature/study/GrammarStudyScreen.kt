@@ -66,6 +66,8 @@ import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.practice.MistakeSummary
 import com.lazydog.english.feature.ask.AskTopBarAction
 import java.time.LocalDate
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -120,6 +122,9 @@ fun GrammarStudyScreen(
     var progressChars by remember { mutableStateOf(0) }
     var practiced by remember { mutableStateOf<List<String>>(emptyList()) }
     var weakSpots by remember { mutableStateOf<List<MistakeSummary>>(emptyList()) }
+    var partialText by remember { mutableStateOf("") }
+    // 讲解一回来就在后台出题：等你读完讲解，题基本已经就位。
+    var drillPrefetch by remember { mutableStateOf<Deferred<GenerationResult<List<GrammarDrillItem>>>?>(null) }
 
     // 进来先看有没有到期的语法：到期的复习出的是题，不是再读一遍讲解。
     LaunchedEffect(Unit) {
@@ -131,11 +136,14 @@ fun GrammarStudyScreen(
         phase = if (due.isEmpty()) GrammarPhase.Idle else GrammarPhase.DueOffer(due)
     }
 
-    fun startDrill(pending: PendingDrill) {
+    fun startDrill(
+        pending: PendingDrill,
+        prefetched: Deferred<GenerationResult<List<GrammarDrillItem>>>? = null,
+    ) {
         phase = GrammarPhase.DrillLoading(pending.request.patternEn)
         progressChars = 0
         scope.launch {
-            val result = app.contentGenerator.generateGrammarDrill(
+            val result = prefetched?.await() ?: app.contentGenerator.generateGrammarDrill(
                 pending.request,
                 onProgress = { chars -> progressChars = chars },
             )
@@ -195,24 +203,43 @@ fun GrammarStudyScreen(
         }
     }
 
+    fun drillRequestFor(lesson: GeneratedGrammarLesson, level: String) = GrammarDrillRequest(
+        patternEn = lesson.patternEn,
+        labelZh = lesson.labelZh,
+        summaryZh = lesson.summaryZh,
+        learnerLevel = level,
+        count = DRILL_COUNT,
+    )
+
     fun generate() {
         phase = GrammarPhase.Generating
         progressChars = 0
+        partialText = ""
+        drillPrefetch?.cancel()
+        drillPrefetch = null
         scope.launch {
+            val level = app.userPreferences.grammarLevelDescription.first()
             val known = repository.grammar.first().map { it.detail.displayPattern() }.take(100)
             val result = app.contentGenerator.generateGrammarLesson(
                 GrammarLessonRequest(
-                    learnerLevel = app.userPreferences.grammarLevelDescription.first(),
+                    learnerLevel = level,
                     focus = focus.trim().ifBlank { null },
                     knownGrammar = known,
                     // 没指定学什么时，让最近的错题决定讲哪一条。
                     weakSpots = weakSpots,
                 ),
                 onProgress = { chars -> progressChars = chars },
+                onPartialText = { text -> partialText = text },
             )
-            phase = when (result) {
-                is GenerationResult.Success -> GrammarPhase.Showing(result.data, saving = false)
-                is GenerationResult.Failure -> GrammarPhase.Failed(result.reason)
+            when (result) {
+                is GenerationResult.Success -> {
+                    phase = GrammarPhase.Showing(result.data, saving = false)
+                    // 用户开始读讲解的同时就把题目出好，省掉第二次干等。
+                    drillPrefetch = scope.async {
+                        app.contentGenerator.generateGrammarDrill(drillRequestFor(result.data, level))
+                    }
+                }
+                is GenerationResult.Failure -> phase = GrammarPhase.Failed(result.reason)
             }
         }
     }
@@ -233,19 +260,17 @@ fun GrammarStudyScreen(
                 tipZh = lesson.tipZh,
             )
             app.userPreferences.markTodayStepDone(LocalDate.now().toString(), DailyStep.Grammar.id)
+            val level = app.userPreferences.grammarLevelDescription.first()
+            val prefetched = drillPrefetch
+            drillPrefetch = null
             startDrill(
                 PendingDrill(
                     itemId = id,
-                    request = GrammarDrillRequest(
-                        patternEn = lesson.patternEn,
-                        labelZh = lesson.labelZh,
-                        summaryZh = lesson.summaryZh,
-                        learnerLevel = app.userPreferences.grammarLevelDescription.first(),
-                        count = DRILL_COUNT,
-                    ),
+                    request = drillRequestFor(lesson, level),
                     remainingDue = emptyList(),
                     isReview = false,
                 ),
+                prefetched = prefetched,
             )
         }
     }
@@ -253,6 +278,9 @@ fun GrammarStudyScreen(
     fun backToIdle() {
         focus = ""
         practiced = emptyList()
+        partialText = ""
+        drillPrefetch?.cancel()
+        drillPrefetch = null
         phase = GrammarPhase.Idle
     }
 
@@ -327,13 +355,11 @@ fun GrammarStudyScreen(
                         Text("让 AI 讲一讲", modifier = Modifier.padding(start = 8.dp))
                     }
                 }
-                GrammarPhase.Generating -> CenterBlock {
-                    CircularProgressIndicator()
-                    Text(
-                        text = if (progressChars > 0) "AI 正在备课… 已生成 $progressChars 字" else "AI 正在备课…",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+                // 有内容就铺内容，别让人对着转圈干等。
+                GrammarPhase.Generating -> StreamingBlock(
+                    hint = "AI 正在备课…",
+                    text = partialText,
+                )
                 is GrammarPhase.DrillLoading -> CenterBlock {
                     CircularProgressIndicator()
                     Text(
@@ -754,6 +780,32 @@ private fun LessonView(
     }
     TextButton(onClick = onAnother, modifier = Modifier.fillMaxWidth()) {
         Text("换一个语法点")
+    }
+}
+
+/** 生成中的展示：提示语在上，已经到达的正文在下，随流增长。 */
+@Composable
+private fun StreamingBlock(hint: String, text: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp))
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (text.isNotBlank()) {
+            Text(text = text, style = MaterialTheme.typography.bodyLarge)
+        }
     }
 }
 

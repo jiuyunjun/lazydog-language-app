@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Vibration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
@@ -59,8 +60,12 @@ import com.lazydog.english.core.model.SampleData
 import com.lazydog.english.core.network.AzureSpeechTokenClient
 import com.lazydog.english.core.network.OpenAiCompatClient
 import com.lazydog.english.core.reminder.StudyReminder
+import com.lazydog.english.domain.assessment.CefrLevel
+import com.lazydog.english.domain.assessment.SkillKind
 import com.lazydog.english.domain.assessment.SkillLevels
+import com.lazydog.english.domain.assessment.labelForScore
 import com.lazydog.english.domain.assessment.summaryText
+import com.lazydog.english.domain.assessment.valueOf
 import com.lazydog.english.domain.speaking.SpeechRate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -80,7 +85,8 @@ private val reminderOptions = listOf("关闭", "08:00", "12:30", "20:00", "21:30
 private val themeOptions = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
 
 private enum class OpenDialog {
-    None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, Voice, AskSensitivity, ConfirmRestore
+    None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, Voice, AskSensitivity, SkillLevels,
+    ConfirmRestore,
 }
 
 @Composable
@@ -282,6 +288,13 @@ fun SettingsScreen(
             onClick = onStartAssessment,
         )
         SettingsRow(
+            Icons.Outlined.Tune,
+            "分技能等级",
+            skillLevels.summaryText()?.let { "$it · 点击逐项调整" }
+                ?: "还没分项数据 · 点击手动设定",
+            onClick = { dialog = OpenDialog.SkillLevels },
+        )
+        SettingsRow(
             Icons.Outlined.Timer,
             "每日目标时长",
             "$dailyMinutes 分钟",
@@ -467,6 +480,12 @@ fun SettingsScreen(
             },
             onDismiss = { dialog = OpenDialog.None },
         )
+        OpenDialog.SkillLevels -> SkillLevelsDialog(
+            levels = skillLevels,
+            overallLevel = learnerLevel,
+            onSet = { kind, score -> scope.launch { prefs.setSkillLevel(kind, score) } },
+            onDismiss = { dialog = OpenDialog.None },
+        )
         OpenDialog.Goals -> GoalsDialog(
             currentGoal = goal,
             currentTopics = topics,
@@ -525,6 +544,71 @@ private fun ChoiceDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("算了") }
+        },
+    )
+}
+
+/**
+ * 逐项查看和手改分技能等级。改了立即生效：生成内容各取各的等级，
+ * 所以这里改完下一次挑词/讲语法就按新的来。重测会覆盖手改的值。
+ */
+@Composable
+private fun SkillLevelsDialog(
+    levels: SkillLevels,
+    overallLevel: String,
+    onSet: (SkillKind, Double?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val anchors = listOf(CefrLevel.A1, CefrLevel.A2, CefrLevel.B1, CefrLevel.B2, CefrLevel.C1)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("分技能等级") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    text = "各模块生成内容时各取各的等级。空着的项按总等级" +
+                        overallLevel.ifBlank { "（还没测）" } + "来。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SkillKind.entries.forEach { kind ->
+                    val value = levels.valueOf(kind)
+                    val current = value?.let { labelForScore(it) }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(kind.labelZh, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = current ?: "跟随总等级",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        Text(
+                            text = kind.usage,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            anchors.forEach { anchor ->
+                                FilterChip(
+                                    selected = current?.startsWith(anchor.label) == true,
+                                    onClick = { onSet(kind, anchor.score) },
+                                    label = { Text(anchor.label) },
+                                )
+                            }
+                        }
+                        if (value != null) {
+                            TextButton(onClick = { onSet(kind, null) }) { Text("清掉，跟随总等级") }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("好了") }
         },
     )
 }

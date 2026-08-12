@@ -20,6 +20,23 @@ data class SkillLevels(
         get() = listOf(vocab, grammar, reading, pragmatics, expression).all { it == null }
 }
 
+/** 五项技能的标识，用于设置页逐项查看和手改。 */
+enum class SkillKind(val labelZh: String, val usage: String) {
+    Vocab("词汇", "挑新词按这一档"),
+    Grammar("语法", "讲语法、出练习题按这一档"),
+    Reading("阅读", "写短文按这一档"),
+    Expression("表达", "情景演练按这一档"),
+    Pragmatics("语用", "暂时只用于画像展示"),
+}
+
+fun SkillLevels.valueOf(kind: SkillKind): Double? = when (kind) {
+    SkillKind.Vocab -> vocab
+    SkillKind.Grammar -> grammar
+    SkillKind.Reading -> reading
+    SkillKind.Expression -> expression
+    SkillKind.Pragmatics -> pragmatics
+}
+
 /** "词汇 B1+ · 语法 A2 · 阅读 B1 · 表达 A2"；一项都没测出来时返回 null。 */
 fun SkillLevels.summaryText(): String? {
     val parts = listOfNotNull(

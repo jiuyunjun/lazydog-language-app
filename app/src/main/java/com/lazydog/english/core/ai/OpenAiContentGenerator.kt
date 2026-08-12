@@ -27,6 +27,7 @@ import com.lazydog.english.domain.generation.GrammarDrillItem
 import com.lazydog.english.domain.generation.GrammarDrillRequest
 import com.lazydog.english.domain.generation.GrammarDrillValidation
 import com.lazydog.english.domain.generation.GrammarLessonRequest
+import com.lazydog.english.domain.generation.JsonStream
 import com.lazydog.english.domain.practice.GrammarErrorTag
 import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.generation.NewWordsRequest
@@ -123,11 +124,16 @@ class OpenAiContentGenerator(
     override suspend fun generateGrammarLesson(
         request: GrammarLessonRequest,
         onProgress: ((Int) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<GeneratedGrammarLesson> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildGrammarPrompt(request),
             onProgress = onProgress,
+            onTextProgress = onPartialText?.let { callback ->
+                // 哪段先到就先铺哪段：结构公式最先出来，其次是用途和讲解。
+                { raw -> callback(JsonStream.firstNonEmpty(raw, "explanationZh", "summaryZh", "patternEn")) }
+            },
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)

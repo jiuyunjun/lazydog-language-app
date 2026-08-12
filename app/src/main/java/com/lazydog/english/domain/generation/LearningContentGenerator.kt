@@ -33,9 +33,14 @@ interface LearningContentGenerator {
         onProgress: ((Int) -> Unit)? = null,
     ): GenerationResult<List<GeneratedWord>>
 
+    /**
+     * [onPartialText] 收到已经生成的讲解正文（未闭合 JSON 里抽出来的），
+     * 用于生成期间直接铺内容，而不是只显示一个字数。
+     */
     suspend fun generateGrammarLesson(
         request: GrammarLessonRequest,
         onProgress: ((Int) -> Unit)? = null,
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<GeneratedGrammarLesson>
 
     /**
