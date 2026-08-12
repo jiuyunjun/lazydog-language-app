@@ -52,6 +52,22 @@ interface LearningContentGenerator {
         onProgress: ((Int) -> Unit)? = null,
     ): GenerationResult<List<GrammarDrillItem>>
 
+    /** 中译英产出练习：出几句要用上目标形式的中文。 */
+    suspend fun generateTranslationTasks(
+        request: com.lazydog.english.domain.production.TranslationRequest,
+        onProgress: ((Int) -> Unit)? = null,
+    ): GenerationResult<List<com.lazydog.english.domain.production.TranslationTask>>
+
+    /**
+     * 判定一句中译英：意思到没到、形式错在哪几类。
+     * 判定只返回结构化结果，掌握状态和错题画像由本地决定（AI_CONTRACTS §1）。
+     */
+    suspend fun gradeTranslation(
+        task: com.lazydog.english.domain.production.TranslationTask,
+        userTextEn: String,
+        learnerLevel: String,
+    ): GenerationResult<com.lazydog.english.domain.production.TranslationFeedback>
+
     /** 生成渐进式阅读短文，返回前已通过 ReadingValidation。 */
     suspend fun generateReading(
         request: ReadingGenerationRequest,

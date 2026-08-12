@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.Abc
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -45,6 +46,7 @@ private val DailyStep.icon: ImageVector
     get() = when (this) {
         DailyStep.Words -> Icons.Outlined.Abc
         DailyStep.Grammar -> Icons.AutoMirrored.Outlined.Rule
+        DailyStep.Production -> Icons.Outlined.Edit
         DailyStep.Reading -> Icons.AutoMirrored.Outlined.Article
         DailyStep.Speaking -> Icons.Outlined.Mic
     }

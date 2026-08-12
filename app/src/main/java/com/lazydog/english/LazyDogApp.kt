@@ -22,6 +22,7 @@ import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.feature.ask.AskHost
 import com.lazydog.english.feature.main.MainScreen
+import com.lazydog.english.feature.production.ProductionScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
 import com.lazydog.english.feature.onboarding.WelcomeScreen
 import com.lazydog.english.feature.assessment.AssessmentScreen
@@ -41,6 +42,7 @@ object Routes {
     const val Speaking = "speaking"
     const val WordStudy = "study/words"
     const val GrammarStudy = "study/grammar"
+    const val Production = "study/production"
     const val Assessment = "assessment"
     const val Scenario = "scenario/new"
     const val ScenarioOpen = "scenario/open/{sessionId}"
@@ -105,6 +107,7 @@ private fun AppNavHost(
                 onStartSpeaking = { navController.navigate(Routes.Speaking) },
                 onStartWordStudy = { navController.navigate(Routes.WordStudy) },
                 onStartGrammarStudy = { navController.navigate(Routes.GrammarStudy) },
+                onStartProduction = { navController.navigate(Routes.Production) },
                 onStartReading = { navController.navigate(Routes.ReadingGenerate) },
                 onStartReadingPaste = { navController.navigate(Routes.ReadingPaste) },
                 onStartScenario = { navController.navigate(Routes.Scenario) },
@@ -160,6 +163,12 @@ private fun AppNavHost(
                     repository = knowledgeRepository,
                     onExit = { navController.popBackStack() },
                 )
+            }
+        }
+
+        composable(Routes.Production) {
+            AskHost {
+                ProductionScreen(onExit = { navController.popBackStack() })
             }
         }
 

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.Abc
 import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material3.Icon
@@ -57,6 +58,7 @@ fun StudyScreen(
     onSpeakingClick: () -> Unit,
     onWordsClick: () -> Unit,
     onGrammarClick: () -> Unit,
+    onProductionClick: () -> Unit,
     onReadingClick: () -> Unit,
     onPasteClick: () -> Unit,
     onScenarioClick: () -> Unit,
@@ -77,6 +79,7 @@ fun StudyScreen(
     val entries = listOf(
         StudyEntry(Icons.Outlined.Abc, "单词", "复习到期 + AI 上新", onClick = onWordsClick),
         StudyEntry(Icons.AutoMirrored.Outlined.Rule, "语法", "让 AI 讲一个", onClick = onGrammarClick),
+        StudyEntry(Icons.Outlined.Edit, "自己写一句", "中译英，判完记进错题", onClick = onProductionClick),
         StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "生成一篇定制短文", onClick = onReadingClick),
         StudyEntry(Icons.Outlined.Mic, "朗读", "读一句，拿反馈", onClick = onSpeakingClick),
         StudyEntry(Icons.Outlined.RecordVoiceOver, "情景演练", "和难说话的人练一轮", onClick = onScenarioClick),

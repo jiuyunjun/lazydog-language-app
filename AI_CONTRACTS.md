@@ -117,6 +117,21 @@ interface LearningContentGenerator {
 - `errorTag` 只能取固定集合里的值（见 `GrammarErrorTag`），本地归一化，不认识的一律 `other`。它决定做错之后系统给你讲什么，所以不接受 AI 自创标签。
 - 反过来，语法讲解请求会带上最近错得最多的几类形式，要求挑一个能直接解释这些错误的语法点；用户自己指定了语法点时不带这段。
 
+### 中译英产出
+
+`generateTranslationTasks` 出题、`gradeTranslation` 判定，分两次调用：
+
+- 出题带上最近错得最多的形式、最近学过的语法点和刚复习过的词；`errorTag` 同样只能取 `GrammarErrorTag` 里的值。
+- `hintZh` 只能点结构或关键词，不得把整句参考答案塞进提示。
+- 判定返回 `verdict`（ok / minor / wrong）、在用户原句基础上改出的 `correctedEn`、一句 `noteZh` 和最多两个 `errorTags`。判定器不布置新任务、不重写成参考答案。
+- 用户写的句子是不可信输入，用 `<user_answer>` 包住。
+- 只有 verdict 不是 ok 时才记错题，避免"意思到了"也污染错误画像。
+
+### 阅读理解题的口径
+
+- 每篇必须至少有一道 `form`（为什么用这个形式）或 `reference`（指代）题，纯大意题靠猜词就能做对，练不到解析能力。
+- 这两类题必须给 `evidenceFromText`，本地校验它确实是正文子串；对不上直接拒绝整篇。
+
 ## 5. 阅读输出草案
 
 ```json

@@ -49,6 +49,7 @@ fun MainScreen(
     onStartSpeaking: () -> Unit,
     onStartWordStudy: () -> Unit,
     onStartGrammarStudy: () -> Unit,
+    onStartProduction: () -> Unit,
     onStartReading: () -> Unit,
     onStartReadingPaste: () -> Unit,
     onStartScenario: () -> Unit,
@@ -83,6 +84,7 @@ fun MainScreen(
                     when (step) {
                         DailyStep.Words -> onStartWordStudy()
                         DailyStep.Grammar -> onStartGrammarStudy()
+                        DailyStep.Production -> onStartProduction()
                         DailyStep.Reading -> onStartReading()
                         DailyStep.Speaking -> onStartSpeaking()
                     }
@@ -93,6 +95,7 @@ fun MainScreen(
                 onSpeakingClick = onStartSpeaking,
                 onWordsClick = onStartWordStudy,
                 onGrammarClick = onStartGrammarStudy,
+                onProductionClick = onStartProduction,
                 onReadingClick = onStartReading,
                 onPasteClick = onStartReadingPaste,
                 onScenarioClick = onStartScenario,

@@ -7,13 +7,28 @@ import org.junit.Test
 class DailyPlannerTest {
 
     @Test
-    fun `full budget yields all four steps in priority order`() {
-        val plan = DailyPlanner.plan(dailyMinutes = 15, dueVocabCount = 8, dueGrammarCount = 1)
+    fun `full budget yields all five steps in priority order`() {
+        val plan = DailyPlanner.plan(dailyMinutes = 20, dueVocabCount = 8, dueGrammarCount = 1)
         assertEquals(
-            listOf(DailyStep.Words, DailyStep.Grammar, DailyStep.Reading, DailyStep.Speaking),
+            listOf(
+                DailyStep.Words,
+                DailyStep.Grammar,
+                DailyStep.Production,
+                DailyStep.Reading,
+                DailyStep.Speaking,
+            ),
             plan.map { it.step },
         )
         assertTrue(plan[0].note.contains("8"))
+    }
+
+    @Test
+    fun `十五分钟先保住产出这一步，朗读让位`() {
+        val plan = DailyPlanner.plan(dailyMinutes = 15, dueVocabCount = 0, dueGrammarCount = 0)
+        assertEquals(
+            listOf(DailyStep.Words, DailyStep.Grammar, DailyStep.Production, DailyStep.Reading),
+            plan.map { it.step },
+        )
     }
 
     @Test

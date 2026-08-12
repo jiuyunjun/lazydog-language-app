@@ -8,6 +8,8 @@ enum class DailyStep(val id: String, val title: String, val minutes: Int) {
     Words("words", "单词：复习 + 新词", 5),
     // 语法这一步不只是读讲解，还要当场做几道填空题，所以比原来多给两分钟。
     Grammar("grammar", "语法：讲一条 + 做几道题", 4),
+    // 排在语法后面：刚讲过的形式立刻自己写一遍，比隔天再练有用。
+    Production("production", "表达：两句中译英", 2),
     Reading("reading", "读一篇定制短文", 4),
     Speaking("speaking", "朗读几句", 2),
 }
@@ -40,6 +42,10 @@ object DailyPlanner {
                 ),
             )
             budget -= DailyStep.Grammar.minutes
+        }
+        if (budget >= DailyStep.Production.minutes) {
+            result.add(PlannedStep(DailyStep.Production, "把中文写成英文，判完记进错题"))
+            budget -= DailyStep.Production.minutes
         }
         if (budget >= DailyStep.Reading.minutes) {
             result.add(PlannedStep(DailyStep.Reading, "到期词会编进文章里"))

@@ -25,15 +25,37 @@ class MistakeRepository(private val database: AppDatabase) {
         item: GrammarDrillItem,
         chosenIndex: Int,
         nowMillis: Long = System.currentTimeMillis(),
+    ) = recordMistake(
+        itemId = itemId,
+        patternEn = patternEn,
+        errorTag = item.errorTag,
+        sentenceEn = item.sentenceEn,
+        chosen = item.options.getOrElse(chosenIndex) { "" },
+        answer = item.answer,
+        nowMillis = nowMillis,
+    )
+
+    /**
+     * 通用入口：选择题、中译英产出等任何"错在某类形式"的场合都记到同一张表，
+     * 这样错题画像不分来源，讲什么由累计的错误决定。
+     */
+    suspend fun recordMistake(
+        itemId: Long?,
+        patternEn: String,
+        errorTag: String,
+        sentenceEn: String,
+        chosen: String,
+        answer: String,
+        nowMillis: Long = System.currentTimeMillis(),
     ) {
         dao.insert(
             DrillMistakeEntity(
                 itemId = itemId,
                 patternEn = patternEn.trim(),
-                errorTag = GrammarErrorTag.normalize(item.errorTag),
-                sentenceEn = item.sentenceEn,
-                chosen = item.options.getOrElse(chosenIndex) { "" },
-                answer = item.answer,
+                errorTag = GrammarErrorTag.normalize(errorTag),
+                sentenceEn = sentenceEn.trim(),
+                chosen = chosen.trim(),
+                answer = answer.trim(),
                 occurredAt = nowMillis,
             ),
         )
