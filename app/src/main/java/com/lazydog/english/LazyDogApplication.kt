@@ -6,6 +6,7 @@ import com.lazydog.english.core.ai.OpenAiContentGenerator
 import com.lazydog.english.core.backup.BackupFileStore
 import com.lazydog.english.core.backup.BackupRepository
 import com.lazydog.english.core.data.KnowledgeRepository
+import com.lazydog.english.core.data.MistakeRepository
 import com.lazydog.english.core.data.ReadingRepository
 import com.lazydog.english.core.data.ScenarioSessionRepository
 import kotlinx.coroutines.flow.first
@@ -27,6 +28,8 @@ class LazyDogApplication : Application() {
     val knowledgeRepository: KnowledgeRepository by lazy {
         KnowledgeRepository(database, SimpleIntervalScheduler())
     }
+
+    val mistakeRepository: MistakeRepository by lazy { MistakeRepository(database) }
 
     val speechController: SpeechController by lazy { SpeechController(userPreferences) }
 

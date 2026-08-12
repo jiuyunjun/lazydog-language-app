@@ -1,6 +1,7 @@
 package com.lazydog.english.domain.generation
 
 import com.lazydog.english.core.model.ReviewGrade
+import com.lazydog.english.domain.practice.GrammarErrorTag
 
 /**
  * 语法练习题（挖空变形）。
@@ -22,6 +23,8 @@ data class GrammarDrillItem(
     val options: List<String>,
     val answerIndex: Int,
     val explanationZh: String,
+    /** 这道题考的形式类别（见 [GrammarErrorTag]）；答错时按它归类，决定后面讲什么。 */
+    val errorTag: String = GrammarErrorTag.Other,
 ) {
     val answer: String get() = options.getOrElse(answerIndex) { "" }
 
@@ -50,6 +53,7 @@ object GrammarDrillValidation {
             sentenceEn = sentence,
             options = item.options.map { it.trim() },
             explanationZh = item.explanationZh.trim(),
+            errorTag = GrammarErrorTag.normalize(item.errorTag),
         )
     }
 

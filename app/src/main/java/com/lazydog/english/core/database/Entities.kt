@@ -133,6 +133,28 @@ data class LearningEventEntity(
     val occurredAt: Long,
 )
 
+/**
+ * 做错的练习题。独立成表而不是塞进 learning_events：
+ * 这里要按"错误类型"聚合，用来决定接下来讲什么语法点，
+ * 而且知识项被删掉之后这份错误画像仍然有意义，所以不设外键、冗余存一份语法结构。
+ */
+@Entity(
+    tableName = "drill_mistakes",
+    indices = [Index(value = ["occurredAt"]), Index(value = ["errorTag"])],
+)
+data class DrillMistakeEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** 对应的知识项；出题时那条语法还没入库或已被删除时为 null。 */
+    val itemId: Long?,
+    val patternEn: String,
+    /** 见 GrammarErrorTag，AI 给的标签经本地校验，不认识的一律归到 other。 */
+    val errorTag: String,
+    val sentenceEn: String,
+    val chosen: String,
+    val answer: String,
+    val occurredAt: Long,
+)
+
 /** 可中断恢复的情景演练。具体快照作为一个整体存 JSON，避免每轮对话拆成多张表。 */
 @Entity(
     tableName = "scenario_sessions",

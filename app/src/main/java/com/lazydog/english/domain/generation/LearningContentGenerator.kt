@@ -155,6 +155,11 @@ data class GrammarLessonRequest(
     /** 用户指定想学的语法点；空则由 AI 挑选。 */
     val focus: String?,
     val knownGrammar: List<String>,
+    /**
+     * 最近错得最多的形式类别。[focus] 为空时用它挑语法点——
+     * 学的内容应该由错题决定，而不是让 AI 随便挑一个。
+     */
+    val weakSpots: List<com.lazydog.english.domain.practice.MistakeSummary> = emptyList(),
 )
 
 data class GeneratedGrammarLesson(

@@ -63,6 +63,7 @@ import com.lazydog.english.domain.generation.GrammarDrillItem
 import com.lazydog.english.domain.generation.GrammarDrillRequest
 import com.lazydog.english.domain.generation.GrammarLessonRequest
 import com.lazydog.english.domain.planning.DailyStep
+import com.lazydog.english.domain.practice.MistakeSummary
 import com.lazydog.english.feature.ask.AskTopBarAction
 import java.time.LocalDate
 import kotlinx.coroutines.flow.first
@@ -118,10 +119,12 @@ fun GrammarStudyScreen(
     var focus by rememberSaveable { mutableStateOf("") }
     var progressChars by remember { mutableStateOf(0) }
     var practiced by remember { mutableStateOf<List<String>>(emptyList()) }
+    var weakSpots by remember { mutableStateOf<List<MistakeSummary>>(emptyList()) }
 
     // 进来先看有没有到期的语法：到期的复习出的是题，不是再读一遍讲解。
     LaunchedEffect(Unit) {
         val now = System.currentTimeMillis()
+        weakSpots = app.mistakeRepository.weakSpots(now)
         val due = repository.grammar.first()
             .filter { (it.item.nextReviewAt ?: Long.MAX_VALUE) <= now }
             .take(DUE_LIMIT)
@@ -202,6 +205,8 @@ fun GrammarStudyScreen(
                     learnerLevel = app.userPreferences.grammarLevelDescription.first(),
                     focus = focus.trim().ifBlank { null },
                     knownGrammar = known,
+                    // 没指定学什么时，让最近的错题决定讲哪一条。
+                    weakSpots = weakSpots,
                 ),
                 onProgress = { chars -> progressChars = chars },
             )
@@ -298,8 +303,13 @@ fun GrammarStudyScreen(
                     onLearnNew = { phase = GrammarPhase.Idle },
                 )
                 GrammarPhase.Idle -> {
+                    WeakSpotCard(weakSpots)
                     Text(
-                        text = "想学哪个语法点？留空就让 AI 按你的语法水平挑一个。看完会当场出几道填空题。",
+                        text = if (weakSpots.isEmpty()) {
+                            "想学哪个语法点？留空就让 AI 按你的语法水平挑一个。看完会当场出几道填空题。"
+                        } else {
+                            "想学哪个语法点？留空就挑一个能治上面这些错的。看完会当场出几道填空题。"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),
@@ -375,6 +385,17 @@ fun GrammarStudyScreen(
                                     correctCount = p.session.correctCount + if (correct) 1 else 0,
                                 ),
                             )
+                            // 错题按形式类别记下来，决定下次讲什么语法点。
+                            if (!correct) {
+                                scope.launch {
+                                    app.mistakeRepository.recordGrammarMistake(
+                                        itemId = p.session.pending.itemId,
+                                        patternEn = p.session.pending.request.patternEn,
+                                        item = p.session.current,
+                                        chosenIndex = option,
+                                    )
+                                }
+                            }
                         }
                     },
                     onNext = {
@@ -436,6 +457,39 @@ private fun DrillSession.toAskContext(): AskContext {
             listOf("这句该看哪个线索？", "这几个形式分别什么时候用？")
         },
     )
+}
+
+/** 最近错得最多的形式：让用户看见"接下来讲的东西是从我的错里来的"。 */
+@Composable
+private fun WeakSpotCard(weakSpots: List<MistakeSummary>) {
+    if (weakSpots.isEmpty()) return
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "你最近老错这些",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            weakSpots.forEach { spot ->
+                Text(
+                    text = "${spot.labelZh} · 错过 ${spot.count} 次" +
+                        if (spot.patterns.isNotEmpty()) "（${spot.patterns.first()}）" else "",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            Text(
+                text = "留空让 AI 挑时，会优先挑能治这些错的语法点。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable

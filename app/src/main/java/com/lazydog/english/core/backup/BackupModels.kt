@@ -1,5 +1,6 @@
 package com.lazydog.english.core.backup
 
+import com.lazydog.english.core.database.DrillMistakeEntity
 import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
@@ -92,6 +93,18 @@ data class BackupScenarioSession(
     val updatedAt: Long,
 )
 
+/** 错题记录：错误画像决定之后讲什么，属于长期学习资产，要跟着备份走。 */
+@Serializable
+data class BackupDrillMistake(
+    val itemId: Long? = null,
+    val patternEn: String = "",
+    val errorTag: String = "",
+    val sentenceEn: String = "",
+    val chosen: String = "",
+    val answer: String = "",
+    val occurredAt: Long = 0,
+)
+
 /** 只备份学习偏好；AI/Speech 密钥和 Base URL 一律不导出（AGENTS.md §6）。 */
 @Serializable
 data class BackupPreferences(
@@ -124,6 +137,7 @@ data class BackupPayload(
     val learningEvents: List<BackupLearningEvent> = emptyList(),
     val readingMaterials: List<BackupReadingMaterial> = emptyList(),
     val scenarioSessions: List<BackupScenarioSession> = emptyList(),
+    val drillMistakes: List<BackupDrillMistake> = emptyList(),
     val preferences: BackupPreferences = BackupPreferences(),
 )
 
@@ -238,6 +252,28 @@ fun ScenarioSessionEntity.toBackup() = BackupScenarioSession(
     snapshotJson = snapshotJson,
     createdAt = createdAt,
     updatedAt = updatedAt,
+)
+
+fun DrillMistakeEntity.toBackup() = BackupDrillMistake(
+    itemId = itemId,
+    patternEn = patternEn,
+    errorTag = errorTag,
+    sentenceEn = sentenceEn,
+    chosen = chosen,
+    answer = answer,
+    occurredAt = occurredAt,
+)
+
+/** [newItemId] 是恢复后重新分配的知识项 id；对不上的记录仍然保留，只是不再关联知识项。 */
+fun BackupDrillMistake.toEntity(newItemId: Long?) = DrillMistakeEntity(
+    id = 0,
+    itemId = newItemId,
+    patternEn = patternEn,
+    errorTag = errorTag,
+    sentenceEn = sentenceEn,
+    chosen = chosen,
+    answer = answer,
+    occurredAt = occurredAt,
 )
 
 fun BackupScenarioSession.toEntity() = ScenarioSessionEntity(

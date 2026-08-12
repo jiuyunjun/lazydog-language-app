@@ -28,6 +28,7 @@ class BackupRepository(
             learningEvents = knowledgeDao.getAllEvents().map { it.toBackup() },
             readingMaterials = readingDao.getAllMaterials().map { it.toBackup() },
             scenarioSessions = scenarioDao.getAll().map { it.toBackup() },
+            drillMistakes = database.drillMistakeDao().getAll().map { it.toBackup() },
             preferences = BackupPreferences(
                 learningGoal = prefs.learningGoal.first(),
                 topics = prefs.topics.first(),
@@ -53,10 +54,12 @@ class BackupRepository(
         val knowledgeDao = database.knowledgeDao()
         val readingDao = database.readingDao()
         val scenarioDao = database.scenarioSessionDao()
+        val mistakeDao = database.drillMistakeDao()
         database.withTransaction {
             knowledgeDao.clearAll()
             readingDao.clearAll()
             scenarioDao.clearAll()
+            mistakeDao.clearAll()
 
             val idMap = mutableMapOf<Long, Long>()
             for (item in payload.knowledgeItems) {
@@ -79,6 +82,10 @@ class BackupRepository(
             }
             for (session in payload.scenarioSessions) {
                 scenarioDao.save(session.toEntity())
+            }
+            for (mistake in payload.drillMistakes) {
+                // 知识项对不上也留着：错误画像本身不依赖那条语法还在不在库里。
+                mistakeDao.insert(mistake.toEntity(mistake.itemId?.let { idMap[it] }))
             }
         }
 

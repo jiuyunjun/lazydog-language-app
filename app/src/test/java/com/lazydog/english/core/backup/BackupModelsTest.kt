@@ -1,5 +1,6 @@
 package com.lazydog.english.core.backup
 
+import com.lazydog.english.core.database.DrillMistakeEntity
 import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
@@ -102,6 +103,37 @@ class BackupModelsTest {
         val restored = entity.toBackup().toEntity()
         assertEquals(0L, restored.id)
         assertEquals("T", restored.title)
+    }
+
+    @Test
+    fun `drill mistake keeps its error tag and re-points at the remapped item`() {
+        val entity = DrillMistakeEntity(
+            id = 7,
+            itemId = 42,
+            patternEn = "have/has + past participle",
+            errorTag = "tense",
+            sentenceEn = "She ___ Japanese since last winter.",
+            chosen = "is learning",
+            answer = "has been learning",
+            occurredAt = 1000L,
+        )
+        val backup = entity.toBackup()
+        assertEquals(42L, backup.itemId)
+
+        val restored = backup.toEntity(newItemId = 99)
+        assertEquals(0L, restored.id)
+        assertEquals(99L, restored.itemId)
+        assertEquals(entity.copy(id = 0, itemId = 99), restored)
+
+        // 知识项对不上时仍然保留记录，只是不再关联。
+        assertEquals(null, backup.toEntity(newItemId = null).itemId)
+    }
+
+    @Test
+    fun `旧备份没有错题字段也能解码`() {
+        val legacy = """{"schemaVersion":1,"exportedAt":1}"""
+        val decoded = Json.decodeFromString(BackupPayload.serializer(), legacy)
+        assertEquals(emptyList<BackupDrillMistake>(), decoded.drillMistakes)
     }
 
     @Test

@@ -27,6 +27,7 @@ import com.lazydog.english.domain.generation.GrammarDrillItem
 import com.lazydog.english.domain.generation.GrammarDrillRequest
 import com.lazydog.english.domain.generation.GrammarDrillValidation
 import com.lazydog.english.domain.generation.GrammarLessonRequest
+import com.lazydog.english.domain.practice.GrammarErrorTag
 import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
@@ -774,8 +775,9 @@ class OpenAiContentGenerator(
         val options: List<String> = emptyList(),
         val answerIndex: Int = -1,
         val explanationZh: String = "",
+        val errorTag: String = "",
     ) {
-        fun toDomain() = GrammarDrillItem(sentenceEn, options, answerIndex, explanationZh)
+        fun toDomain() = GrammarDrillItem(sentenceEn, options, answerIndex, explanationZh, errorTag)
     }
 
     @Serializable
@@ -1039,11 +1041,13 @@ class OpenAiContentGenerator(
                 "第三人称漏 s、动词原形代替动名词），不要放明显不相关的词。")
             appendLine("explanationZh 一句话说明为什么是这个形式，顺带点出最容易误选的那个错在哪。")
             appendLine("几道题之间换不同的句子场景和不同的错误类型，不要同一个句式改个主语重复出。")
+            appendLine("errorTag 标这道题考的是哪一类形式，只能从这些里选：${GrammarErrorTag.promptCatalog()}。" +
+                "标不准就用 other，不要自己发明标签——答错时会按它归类，决定之后给你讲什么。")
             appendLine("输出 JSON schema：")
             appendLine(
                 """{"schemaVersion":1,"items":[{"sentenceEn":"She ___ Japanese since last winter.",""" +
                     """"options":["is learning","has been learning","learns","learned"],""" +
-                    """"answerIndex":1,"explanationZh":"..."}]}""",
+                    """"answerIndex":1,"explanationZh":"...","errorTag":"tense"}]}""",
             )
         }
 
@@ -1312,6 +1316,17 @@ class OpenAiContentGenerator(
         internal fun buildGrammarPrompt(request: GrammarLessonRequest): String = buildString {
             if (request.focus.isNullOrBlank()) {
                 appendLine("挑一个适合该学习者水平、实用的英语语法点，写一段讲解。")
+                if (request.weakSpots.isNotEmpty()) {
+                    appendLine("这个学习者最近做题错得最多的是下面这些形式，优先挑一个能直接治这些错的语法点：")
+                    request.weakSpots.forEach { spot ->
+                        val examples = spot.patterns.take(2).joinToString("、")
+                        appendLine(
+                            "- ${spot.labelZh}：最近错了 ${spot.count} 次" +
+                                if (examples.isNotBlank()) "（出现在 $examples）" else "",
+                        )
+                    }
+                    appendLine("讲的这条要能直接解释他为什么会那样写错，不要挑一个跟这些错误无关的点。")
+                }
             } else {
                 appendLine("讲解这个英语语法点：${request.focus}。")
             }
