@@ -23,6 +23,9 @@ import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GeneratedReading
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.GrammarDrillItem
+import com.lazydog.english.domain.generation.GrammarDrillRequest
+import com.lazydog.english.domain.generation.GrammarDrillValidation
 import com.lazydog.english.domain.generation.GrammarLessonRequest
 import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.generation.NewWordsRequest
@@ -138,6 +141,43 @@ class OpenAiContentGenerator(
         val problem = ContentValidation.validateGrammarLesson(lesson, request.knownGrammar)
         if (problem != null) return GenerationResult.Failure("讲解没通过校验：$problem")
         return GenerationResult.Success(lesson, content.model, GRAMMAR_PROMPT_VERSION)
+    }
+
+    override suspend fun generateGrammarDrill(
+        request: GrammarDrillRequest,
+        onProgress: ((Int) -> Unit)?,
+    ): GenerationResult<List<GrammarDrillItem>> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildGrammarDrillPrompt(request),
+            onProgress = onProgress,
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<GrammarDrillPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        if (payload.schemaVersion != SCHEMA_VERSION) {
+            return GenerationResult.Failure("schema 版本不对：${payload.schemaVersion}")
+        }
+        val parsed = payload.items.map { it.toDomain() }
+        val valid = GrammarDrillValidation.validate(parsed, request.count)
+        if (valid.isEmpty()) {
+            val notes = parsed.mapNotNull { item ->
+                GrammarDrillValidation.normalize(item)?.let { GrammarDrillValidation.problem(it) }
+            }
+            return GenerationResult.Failure(
+                "出的题都没通过校验：${notes.take(2).joinToString("；").ifBlank { "结构不完整" }}",
+            )
+        }
+        val dropped = parsed.size - valid.size
+        return GenerationResult.Success(
+            data = valid,
+            model = content.model,
+            promptVersion = GRAMMAR_DRILL_PROMPT_VERSION,
+            droppedNotes = if (dropped > 0) listOf("丢掉了 $dropped 道不合格的题") else emptyList(),
+        )
     }
 
     override suspend fun generateReading(
@@ -729,6 +769,22 @@ class OpenAiContentGenerator(
     }
 
     @Serializable
+    private data class GrammarDrillItemPayload(
+        val sentenceEn: String = "",
+        val options: List<String> = emptyList(),
+        val answerIndex: Int = -1,
+        val explanationZh: String = "",
+    ) {
+        fun toDomain() = GrammarDrillItem(sentenceEn, options, answerIndex, explanationZh)
+    }
+
+    @Serializable
+    private data class GrammarDrillPayload(
+        val schemaVersion: Int = 0,
+        val items: List<GrammarDrillItemPayload> = emptyList(),
+    )
+
+    @Serializable
     private data class AskAddablePayload(val term: String = "", val meaningZh: String = "") {
         fun toDomain() = AskAddableTerm(term.trim(), meaningZh.trim())
     }
@@ -902,6 +958,7 @@ class OpenAiContentGenerator(
         const val SCHEMA_VERSION = 1
         const val PROMPT_VERSION = 1
         const val GRAMMAR_PROMPT_VERSION = 2
+        const val GRAMMAR_DRILL_PROMPT_VERSION = 1
         const val SCENARIO_PROMPT_VERSION = 1
         const val ASK_PROMPT_VERSION = 1
         private const val RETRY_DELAY_MS = 1200L
@@ -965,6 +1022,29 @@ class OpenAiContentGenerator(
                 "term 是英文本身，meaningZh 是简洁中文释义；没有就给空数组，不要为了凑数硬塞。")
             appendLine("输出 JSON schema：")
             appendLine("""{"answerZh":"...","addable":[{"term":"...","meaningZh":"..."}]}""")
+        }
+
+        internal fun buildGrammarDrillPrompt(request: GrammarDrillRequest): String = buildString {
+            val label = listOf(request.patternEn, request.labelZh).filter { it.isNotBlank() }
+                .joinToString("｜")
+            appendLine("针对这个语法点出 ${request.count} 道英文填空题：$label。")
+            if (request.summaryZh.isNotBlank()) appendLine("这个语法点的用途：${request.summaryZh}。")
+            appendLine("学习者水平：${request.learnerLevel}。学习者是中文母语者，词汇比语法强，" +
+                "所以句子用词要简单，难点必须落在形式本身，不能靠生词制造难度。")
+            appendLine("每题一句自然的英文，用 ${GrammarDrillValidation.BLANK}（三个下划线）挖掉一处，" +
+                "整句只挖一个空。")
+            appendLine("options 给 3~4 个同一处的不同形式（时态、体、人称、单复数、介词、词序、非谓语形式等），" +
+                "只有一个正确；选项只写要填进空里的那部分，不要写整句，也不要带下划线。")
+            appendLine("干扰项必须是中文母语者真的会写错的形式（比如用一般现在时代替完成进行时、" +
+                "第三人称漏 s、动词原形代替动名词），不要放明显不相关的词。")
+            appendLine("explanationZh 一句话说明为什么是这个形式，顺带点出最容易误选的那个错在哪。")
+            appendLine("几道题之间换不同的句子场景和不同的错误类型，不要同一个句式改个主语重复出。")
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"schemaVersion":1,"items":[{"sentenceEn":"She ___ Japanese since last winter.",""" +
+                    """"options":["is learning","has been learning","learns","learned"],""" +
+                    """"answerIndex":1,"explanationZh":"..."}]}""",
+            )
         }
 
         internal fun buildNewWordsPrompt(request: NewWordsRequest): String = buildString {

@@ -92,6 +92,29 @@ interface LearningContentGenerator {
 - `explanationZh` 才承载使用条件、语气和易混区别，不得挤进标题或列表副标题。
 - 本地校验拒绝中文混入 `patternEn`、缺少英文形式、用途过长、必要例句缺失以及已学结构重复。
 
+### 语法练习题
+
+`generateGrammarDrill` 针对一个语法点出挖空变形题，程序判分：
+
+```json
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "sentenceEn": "She ___ Japanese since last winter.",
+      "options": ["is learning", "has been learning", "learns", "learned"],
+      "answerIndex": 1,
+      "explanationZh": "since + 时间点要求这件事延续到现在。"
+    }
+  ]
+}
+```
+
+- 一句只挖一个空，空一律写成三个下划线；选项只写填进空里的那部分，3～4 个、不重复、不超过 40 字符。
+- 干扰项必须是中文母语者真会写错的形式；句子用词要简单，难点落在形式而不是生词。
+- 本地逐题校验，坏题直接丢；剩下不足两道判整批失败，讲解已入库的部分不受影响。
+- 判分和复习评分都在本地：正确率 → `ReviewGrade`（全对 Easy / 3-4 Good / 一半 Hard / 更低 Forgot），AI 不参与掌握状态判定。
+
 ## 5. 阅读输出草案
 
 ```json

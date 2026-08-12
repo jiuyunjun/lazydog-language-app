@@ -38,6 +38,15 @@ interface LearningContentGenerator {
         onProgress: ((Int) -> Unit)? = null,
     ): GenerationResult<GeneratedGrammarLesson>
 
+    /**
+     * 语法练习题：针对一个语法点出几道挖空变形题，程序判分。
+     * 新学完当场做，到期复习也做题而不是重读讲解。
+     */
+    suspend fun generateGrammarDrill(
+        request: GrammarDrillRequest,
+        onProgress: ((Int) -> Unit)? = null,
+    ): GenerationResult<List<GrammarDrillItem>>
+
     /** 生成渐进式阅读短文，返回前已通过 ReadingValidation。 */
     suspend fun generateReading(
         request: ReadingGenerationRequest,

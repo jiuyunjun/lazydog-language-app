@@ -6,7 +6,8 @@ package com.lazydog.english.domain.planning
  */
 enum class DailyStep(val id: String, val title: String, val minutes: Int) {
     Words("words", "单词：复习 + 新词", 5),
-    Grammar("grammar", "语法：讲一个新点", 2),
+    // 语法这一步不只是读讲解，还要当场做几道填空题，所以比原来多给两分钟。
+    Grammar("grammar", "语法：讲一条 + 做几道题", 4),
     Reading("reading", "读一篇定制短文", 4),
     Speaking("speaking", "朗读几句", 2),
 }
@@ -35,7 +36,7 @@ object DailyPlanner {
             result.add(
                 PlannedStep(
                     DailyStep.Grammar,
-                    if (dueGrammarCount > 0) "$dueGrammarCount 个语法点到期" else "让 AI 挑一个合适的",
+                    if (dueGrammarCount > 0) "$dueGrammarCount 个语法点到期 · 直接做题" else "让 AI 挑一个合适的",
                 ),
             )
             budget -= DailyStep.Grammar.minutes
