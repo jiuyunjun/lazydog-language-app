@@ -150,7 +150,7 @@ fun ReadingScreen(
                 .take(2)
 
             val request = ReadingGenerationRequest(
-                learnerLevel = app.userPreferences.learnerLevelDescription.first(),
+                learnerLevel = app.userPreferences.readingLevelDescription.first(),
                 topic = topic,
                 targetLength = TARGET_LENGTH,
                 reviewVocabulary = due,

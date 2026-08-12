@@ -271,7 +271,8 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                 ScenarioGenerationRequest(
                     source = source,
                     seedZh = seed,
-                    learnerLevel = app.userPreferences.learnerLevelDescription.first(),
+                    // 演练练的是产出，按表达等级配英文难度，不跟着通常更高的词汇等级走。
+                    learnerLevel = app.userPreferences.expressionLevelDescription.first(),
                     learningGoal = app.userPreferences.learningGoal.first(),
                     topics = app.userPreferences.topics.first().toList(),
                     difficulty = ScenarioDifficulty(

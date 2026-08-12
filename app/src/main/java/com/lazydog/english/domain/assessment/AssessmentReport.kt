@@ -17,6 +17,8 @@ data class AssessmentOutcome(
     val vocabRangeText: String,
     /** 加权分项画像：词汇语法 25% / 阅读理解 30% / 开放表达 35% / 语用沟通 10%。 */
     val profile: List<SkillProfileRow>,
+    /** 分技能连续能力值，供生成内容时各取各的等级。 */
+    val skills: SkillLevels,
     val watchNoteZh: String,
     /** 理解和主动输出差距明显时才非空。 */
     val gapNoteZh: String?,
@@ -77,6 +79,7 @@ object AssessmentReport {
             totalCount = state.answered.size,
             vocabRangeText = AssessmentEngine.vocabRangeText(state.score),
             profile = profile,
+            skills = SkillEstimator.estimate(state, deepReading, expression),
             watchNoteZh = watchNote,
             gapNoteZh = gapNote,
             expressionNeedsReview = expression?.needsReview ?: false,

@@ -134,7 +134,7 @@ fun WordStudyScreen(
             val result = app.contentGenerator.generateNewWords(
                 NewWordsRequest(
                     count = prefs.maxNewWords.first(),
-                    learnerLevel = prefs.learnerLevelDescription.first(),
+                    learnerLevel = prefs.vocabLevelDescription.first(),
                     topics = prefs.topics.first().toList(),
                     knownTerms = known,
                 ),

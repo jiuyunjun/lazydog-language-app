@@ -3,6 +3,7 @@ package com.lazydog.english.core.backup
 import androidx.room.withTransaction
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.database.AppDatabase
+import com.lazydog.english.domain.assessment.SkillLevels
 import kotlinx.coroutines.flow.first
 
 /**
@@ -18,6 +19,7 @@ class BackupRepository(
         val knowledgeDao = database.knowledgeDao()
         val readingDao = database.readingDao()
         val scenarioDao = database.scenarioSessionDao()
+        val skills = prefs.skillLevels.first()
         return BackupPayload(
             exportedAt = System.currentTimeMillis(),
             knowledgeItems = knowledgeDao.getAllItems().map { it.toBackup() },
@@ -33,6 +35,11 @@ class BackupRepository(
                 maxNewWords = prefs.maxNewWords.first(),
                 learnerLevel = prefs.learnerLevel.first(),
                 learnerLevelConfidence = prefs.learnerLevelConfidence.first(),
+                skillVocab = skills.vocab,
+                skillGrammar = skills.grammar,
+                skillReading = skills.reading,
+                skillPragmatics = skills.pragmatics,
+                skillExpression = skills.expression,
                 reminderTime = prefs.reminderTime.first(),
                 themeMode = prefs.themeMode.first(),
                 ttsVoice = prefs.ttsVoice.first(),
@@ -83,6 +90,13 @@ class BackupRepository(
             maxNewWords = p.maxNewWords,
             learnerLevel = p.learnerLevel,
             learnerLevelConfidence = p.learnerLevelConfidence,
+            skills = SkillLevels(
+                vocab = p.skillVocab,
+                grammar = p.skillGrammar,
+                reading = p.skillReading,
+                pragmatics = p.skillPragmatics,
+                expression = p.skillExpression,
+            ),
             reminderTime = p.reminderTime,
             themeMode = p.themeMode,
             ttsVoice = p.ttsVoice,

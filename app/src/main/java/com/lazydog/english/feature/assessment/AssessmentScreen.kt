@@ -75,6 +75,7 @@ import com.lazydog.english.domain.assessment.WritingTask
 import com.lazydog.english.domain.assessment.WritingTaskLibrary
 import com.lazydog.english.domain.assessment.labelForScore
 import com.lazydog.english.domain.assessment.scoreForLabel
+import com.lazydog.english.domain.assessment.summaryText
 import com.lazydog.english.domain.generation.GenerationResult
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -230,7 +231,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
         val outcome = AssessmentReport.build(ladderState, deepReadingOutcome, expressionAssessment)
         phase = AssessmentPhase.Result(outcome, saved = false)
         scope.launch {
-            prefs.saveLearnerProfile(outcome.levelLabel, outcome.confidencePercent)
+            prefs.saveLearnerProfile(outcome.levelLabel, outcome.confidencePercent, outcome.skills)
             prefs.clearAssessmentState()
             (phase as? AssessmentPhase.Result)?.let { phase = it.copy(saved = true) }
         }
@@ -421,7 +422,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                     outcome = p.outcome,
                     saved = p.saved,
                     onOverrideLevel = { level ->
-                        scope.launch { prefs.saveLearnerProfile(level.label, confidencePercent = 100) }
+                        scope.launch { prefs.overrideLearnerLevel(level.label, confidencePercent = 100) }
                     },
                     onExit = onExit,
                 )
@@ -860,6 +861,20 @@ private fun ResultView(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
+                if (overrideLabel == null) {
+                    outcome.skills.summaryText()?.let { summary ->
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Text(
+                            text = "各项等级会分开用：讲语法按语法那档，挑词按词汇那档。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -59,6 +59,8 @@ import com.lazydog.english.core.model.SampleData
 import com.lazydog.english.core.network.AzureSpeechTokenClient
 import com.lazydog.english.core.network.OpenAiCompatClient
 import com.lazydog.english.core.reminder.StudyReminder
+import com.lazydog.english.domain.assessment.SkillLevels
+import com.lazydog.english.domain.assessment.summaryText
 import com.lazydog.english.domain.speaking.SpeechRate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -100,6 +102,7 @@ fun SettingsScreen(
     val autoRead by prefs.autoReadWords.collectAsState(initial = true)
     val learnerLevel by prefs.learnerLevel.collectAsState(initial = "")
     val levelConfidence by prefs.learnerLevelConfidence.collectAsState(initial = 0)
+    val skillLevels by prefs.skillLevels.collectAsState(initial = SkillLevels())
     val reminderTime by prefs.reminderTime.collectAsState(initial = "")
     val themeMode by prefs.themeMode.collectAsState(initial = "system")
     val ttsVoice by prefs.ttsVoice.collectAsState(initial = UserPreferences.DEFAULT_TTS_VOICE)
@@ -268,8 +271,14 @@ fun SettingsScreen(
         SettingsRow(
             Icons.Outlined.Insights,
             "能力画像",
-            if (learnerLevel.isBlank()) "还没测 · 点击开始 5 分钟小测"
-            else "$learnerLevel · 置信度 $levelConfidence% · 点击重测",
+            when {
+                learnerLevel.isBlank() -> "还没测 · 点击开始 5 分钟小测"
+                else -> buildString {
+                    append("$learnerLevel · 置信度 $levelConfidence%")
+                    skillLevels.summaryText()?.let { append("\n$it") }
+                    append(" · 点击重测")
+                }
+            },
             onClick = onStartAssessment,
         )
         SettingsRow(

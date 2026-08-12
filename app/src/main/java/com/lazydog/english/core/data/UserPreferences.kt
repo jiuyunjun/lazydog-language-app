@@ -1,7 +1,10 @@
 package com.lazydog.english.core.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -9,6 +12,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.lazydog.english.core.config.LocalEnv
+import com.lazydog.english.domain.assessment.SkillLevels
+import com.lazydog.english.domain.assessment.labelForScore
 import com.lazydog.english.domain.speaking.SpeechRate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -40,6 +45,11 @@ class UserPreferences(private val context: Context) {
         val LearnerLevel = stringPreferencesKey("learner_level")
         val LearnerLevelConfidence = intPreferencesKey("learner_level_confidence")
         val AssessedAt = longPreferencesKey("assessed_at")
+        val SkillVocab = doublePreferencesKey("skill_vocab")
+        val SkillGrammar = doublePreferencesKey("skill_grammar")
+        val SkillReading = doublePreferencesKey("skill_reading")
+        val SkillPragmatics = doublePreferencesKey("skill_pragmatics")
+        val SkillExpression = doublePreferencesKey("skill_expression")
         val AssessmentStateJson = stringPreferencesKey("assessment_state_json")
         val TodayDate = stringPreferencesKey("today_date")
         val TodayDoneSteps = stringSetPreferencesKey("today_done_steps")
@@ -85,6 +95,32 @@ class UserPreferences(private val context: Context) {
         val level = it[Keys.LearnerLevel].orEmpty()
         if (level.isBlank()) "A2-B1（未测评，默认估计）" else level
     }
+
+    /**
+     * 分技能等级描述，给生成请求用。偏科的人不能四个模块共用一个总等级：
+     * 词汇 B1 不代表语法也 B1。样本不足的项自动回退到总等级。
+     */
+    val vocabLevelDescription: Flow<String> = skillLevelDescription(Keys.SkillVocab)
+    val grammarLevelDescription: Flow<String> = skillLevelDescription(Keys.SkillGrammar)
+    val readingLevelDescription: Flow<String> = skillLevelDescription(Keys.SkillReading)
+    val expressionLevelDescription: Flow<String> = skillLevelDescription(Keys.SkillExpression)
+
+    /** 已测出的分技能等级；没测过的项为 null。用于设置页和结果页展示。 */
+    val skillLevels: Flow<SkillLevels> = context.dataStore.data.map {
+        SkillLevels(
+            vocab = it[Keys.SkillVocab],
+            grammar = it[Keys.SkillGrammar],
+            reading = it[Keys.SkillReading],
+            pragmatics = it[Keys.SkillPragmatics],
+            expression = it[Keys.SkillExpression],
+        )
+    }
+
+    private fun skillLevelDescription(key: Preferences.Key<Double>): Flow<String> =
+        context.dataStore.data.map { prefs ->
+            prefs[key]?.let { labelForScore(it) }
+                ?: prefs[Keys.LearnerLevel].orEmpty().ifBlank { "A2-B1（未测评，默认估计）" }
+        }
 
     val assessmentStateJson: Flow<String> =
         context.dataStore.data.map { it[Keys.AssessmentStateJson].orEmpty() }
@@ -159,11 +195,37 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[Keys.OnboardingCompleted] = true }
     }
 
-    suspend fun saveLearnerProfile(level: String, confidencePercent: Int) {
+    suspend fun saveLearnerProfile(
+        level: String,
+        confidencePercent: Int,
+        skills: SkillLevels = SkillLevels(),
+    ) {
         context.dataStore.edit {
             it[Keys.LearnerLevel] = level
             it[Keys.LearnerLevelConfidence] = confidencePercent
             it[Keys.AssessedAt] = System.currentTimeMillis()
+            // 这次没测到的技能保留上次的值，不要用 null 把已有画像抹掉。
+            it.putSkill(Keys.SkillVocab, skills.vocab)
+            it.putSkill(Keys.SkillGrammar, skills.grammar)
+            it.putSkill(Keys.SkillReading, skills.reading)
+            it.putSkill(Keys.SkillPragmatics, skills.pragmatics)
+            it.putSkill(Keys.SkillExpression, skills.expression)
+        }
+    }
+
+    /** 手动改等级时把分技能画像一并抹平：用户说了算，但也不再保留过期的偏科结论。 */
+    suspend fun overrideLearnerLevel(level: String, confidencePercent: Int) {
+        context.dataStore.edit {
+            it[Keys.LearnerLevel] = level
+            it[Keys.LearnerLevelConfidence] = confidencePercent
+            it[Keys.AssessedAt] = System.currentTimeMillis()
+            listOf(
+                Keys.SkillVocab,
+                Keys.SkillGrammar,
+                Keys.SkillReading,
+                Keys.SkillPragmatics,
+                Keys.SkillExpression,
+            ).forEach(it::remove)
         }
     }
 
@@ -266,6 +328,7 @@ class UserPreferences(private val context: Context) {
         maxNewWords: Int,
         learnerLevel: String,
         learnerLevelConfidence: Int,
+        skills: SkillLevels = SkillLevels(),
         reminderTime: String,
         themeMode: String,
         ttsVoice: String,
@@ -279,6 +342,11 @@ class UserPreferences(private val context: Context) {
             it[Keys.MaxNewWords] = maxNewWords
             it[Keys.LearnerLevel] = learnerLevel
             it[Keys.LearnerLevelConfidence] = learnerLevelConfidence
+            it.putSkill(Keys.SkillVocab, skills.vocab)
+            it.putSkill(Keys.SkillGrammar, skills.grammar)
+            it.putSkill(Keys.SkillReading, skills.reading)
+            it.putSkill(Keys.SkillPragmatics, skills.pragmatics)
+            it.putSkill(Keys.SkillExpression, skills.expression)
             it[Keys.ReminderTime] = reminderTime
             it[Keys.ThemeMode] = themeMode
             if (ttsVoice.isNotBlank()) it[Keys.TtsVoice] = ttsVoice
@@ -307,3 +375,7 @@ class UserPreferences(private val context: Context) {
 
 private fun String?.orDefault(default: String): String =
     if (this.isNullOrBlank()) default else this
+
+private fun MutablePreferences.putSkill(key: Preferences.Key<Double>, value: Double?) {
+    if (value != null) this[key] = value
+}

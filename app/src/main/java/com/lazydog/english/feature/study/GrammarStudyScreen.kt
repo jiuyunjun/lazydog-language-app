@@ -89,7 +89,7 @@ fun GrammarStudyScreen(
             val known = repository.grammar.first().map { it.detail.displayPattern() }.take(100)
             val result = app.contentGenerator.generateGrammarLesson(
                 GrammarLessonRequest(
-                    learnerLevel = app.userPreferences.learnerLevelDescription.first(),
+                    learnerLevel = app.userPreferences.grammarLevelDescription.first(),
                     focus = focus.trim().ifBlank { null },
                     knownGrammar = known,
                 ),

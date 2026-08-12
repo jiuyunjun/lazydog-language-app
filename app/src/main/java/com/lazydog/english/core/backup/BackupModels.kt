@@ -101,6 +101,12 @@ data class BackupPreferences(
     val maxNewWords: Int = 5,
     val learnerLevel: String = "",
     val learnerLevelConfidence: Int = 0,
+    /** 分技能能力值；旧备份没有这些字段，解码后为 null，恢复时回退到总等级。 */
+    val skillVocab: Double? = null,
+    val skillGrammar: Double? = null,
+    val skillReading: Double? = null,
+    val skillPragmatics: Double? = null,
+    val skillExpression: Double? = null,
     val reminderTime: String = "",
     val themeMode: String = "system",
     val ttsVoice: String = "",
