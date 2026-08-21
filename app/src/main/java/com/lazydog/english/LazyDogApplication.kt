@@ -28,7 +28,7 @@ class LazyDogApplication : Application() {
         KnowledgeRepository(database, SimpleIntervalScheduler())
     }
 
-    val speechController: SpeechController by lazy { SpeechController(userPreferences) }
+    val speechController: SpeechController by lazy { SpeechController(this, userPreferences) }
 
     val readingRepository: ReadingRepository by lazy { ReadingRepository(database) }
 

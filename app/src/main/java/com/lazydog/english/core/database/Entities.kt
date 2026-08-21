@@ -51,6 +51,8 @@ data class VocabularyDetailEntity(
     @ColumnInfo(defaultValue = "''") val pos: String = "",
     /** 1~2 个高价值搭配，JSON 字符串数组（§6.5"每个附带 1~2 个高价值搭配"）。 */
     @ColumnInfo(defaultValue = "'[]'") val collocationsJson: String = "[]",
+    /** 记忆方法：词根词缀拆解或联想记忆。老数据为空，UI 按"没有就不显示"处理。 */
+    @ColumnInfo(defaultValue = "''") val memoryHintZh: String = "",
 )
 
 @Entity(

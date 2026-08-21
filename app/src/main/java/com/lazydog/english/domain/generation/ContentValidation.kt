@@ -38,6 +38,7 @@ object ContentValidation {
                 word.pos.isBlank() || word.pos.length > 20 -> "词性缺失或过长"
                 word.collocations.isEmpty() || word.collocations.size > 2 -> "搭配数量应该是 1~2 个"
                 word.collocations.any { it.isBlank() || it.length > 60 } -> "搭配缺失或过长"
+                word.memoryHintZh.isBlank() || word.memoryHintZh.length > 160 -> "记忆方法缺失或过长"
                 else -> null
             }
             if (reason == null) valid.add(word.copy(term = term)) else dropped.add("${term.ifBlank { "(空)" }}：$reason")

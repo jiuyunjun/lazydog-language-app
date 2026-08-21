@@ -537,8 +537,10 @@ class OpenAiContentGenerator(
         val exampleZh: String = "",
         val pos: String = "",
         val collocations: List<String> = emptyList(),
+        val memoryHintZh: String = "",
     ) {
-        fun toDomain() = GeneratedWord(term, ipa, meaningZh, exampleEn, exampleZh, pos, collocations)
+        fun toDomain() =
+            GeneratedWord(term, ipa, meaningZh, exampleEn, exampleZh, pos, collocations, memoryHintZh)
     }
 
     @Serializable
@@ -707,8 +709,19 @@ class OpenAiContentGenerator(
         val ipa: String = "",
         val meaningZh: String = "",
         val usageNoteZh: String = "",
+        val exampleEn: String = "",
+        val exampleZh: String = "",
+        val memoryHintZh: String = "",
     ) {
-        fun toDomain() = WordExplanation(term.trim(), ipa.trim(), meaningZh.trim(), usageNoteZh.trim())
+        fun toDomain() = WordExplanation(
+            term = term.trim(),
+            ipa = ipa.trim(),
+            meaningZh = meaningZh.trim(),
+            usageNoteZh = usageNoteZh.trim(),
+            exampleEn = exampleEn.trim(),
+            exampleZh = exampleZh.trim(),
+            memoryHintZh = memoryHintZh.trim(),
+        )
     }
 
     @Serializable
@@ -892,6 +905,49 @@ class OpenAiContentGenerator(
                 "communicationFailure 仅在对方把核心意思理解成相反方向、导致对话无法继续时返回；" +
                 "语法错误、生硬或不地道都必须返回 null。"
 
+        /**
+         * 例句（exampleEn/exampleZh）的写法要求。新词生成和点词速查共用，
+         * 免得两处各写一套、慢慢跑偏。
+         */
+        internal fun exampleSentenceRules(level: String): String = buildString {
+            appendLine("写 exampleEn 时你是按 CEFR 等级出例句的英语教学专家：" +
+                "句子必须用上面说的那个词性和词义，不能滑到这个词的其他意思；" +
+                "词形本身可以按语法自然变化（时态、单复数、派生形式都行）。")
+            appendLine("例句要是英语母语者现实中真会说会写的话，句子里给足语境，" +
+                "让学习者光看这句就能大致猜出这个词的意思；每句只说一件事，" +
+                "优先用常见搭配、固定表达和高频句型，别为了把词塞进去写出生硬、离奇或不合常理的句子。")
+            appendLine("除目标词本身外，句中其他词不要明显超过$level；" +
+                "不要用复杂人名、冷僻地名、专业术语，也不要依赖特定文化背景才能看懂。")
+            appendLine("在以上前提都满足的情况下，例句要好看、有意思、让人想读下去，别写成教科书填空：" +
+                "优先挑有画面感的场景——电影/剧集/游戏里的名台词、体育解说、歌词、新闻标题式的说法都可以。" +
+                "如果这个词恰好出现在一句你确实记得的经典台词里，就直接用那句，" +
+                "并在 exampleZh 末尾用破折号标出处（例：——《肖申克的救赎》）。")
+            appendLine("但绝不能编造出处：拿不准是不是原话、或者想不起准确的原句，就自己写一句" +
+                "带那种画面感的话，不标任何出处。宁可没有出处，也不许张冠李戴。" +
+                "台词也要服从上面的等级和自然度要求，太老、太冷门、离开原片就看不懂的梗不要用。")
+            appendLine("exampleEn 里不要出现中文；exampleZh 要说人话，" +
+                "准确体现目标词在这句里的含义，不要逐字硬译。")
+        }
+
+        /** 记忆方法（memoryHintZh）的写法要求。新词生成和点词速查共用。 */
+        internal fun memoryHintRules(): String = buildString {
+            appendLine("memoryHintZh 是一条真能帮上忙的记忆方法，30~70 字。" +
+                "写这一项时你是懂词源学、认知心理学和中文联想记忆的词汇教练：只给一个最好的主方案，" +
+                "不要把几个平庸联想堆在一起，目标是让学习者能主动回忆出词义，而不是再解释一遍意思。")
+            appendLine("按优先级选一种：" +
+                "①构词/词源：拆成真实存在的前缀/词根/词干/后缀，写出每部分的意思，再说明怎么合出这个词的意思" +
+                "（比如 reduce = re- 往回 + duc- 引导 → 引回去、减少）；只有在你有较高把握时才拆，" +
+                "宁可不拆也不要为了拆而编造词根或错误词源；" +
+                "②同源联想：借学习者八成认识的简单英语同根词或派生词搭桥，最多带 3 个同根词，" +
+                "并点明它们共享的核心含义；" +
+                "③声音/画面/场景/故事联想：给一个简短、具体、有画面感、直接连到词义的联想。")
+            appendLine("必须让学习者分得清哪句是有语言学依据的构词/词源，哪句是为了好记人为编的记忆联想：" +
+                "联想类内容用「联想：」开头，谐音只在发音确实接近且真的有用时才使用，" +
+                "并明确写成「谐音联想：」，绝不能说成真实词源。")
+            appendLine("不要牵强、冗长、或需要先记住另一堆陌生知识的联想；" +
+                "memoryHintZh 必须针对这个词，不能是「多读几遍」「结合例句记」这类放到哪个词上都成立的空话。")
+        }
+
         internal fun buildNewWordsPrompt(request: NewWordsRequest): String = buildString {
             appendLine("生成 ${request.count} 个适合该学习者的英语词义（词形+词性+具体意思，不是随便挑单词）。")
             appendLine("学习者水平：${request.learnerLevel}。")
@@ -908,10 +964,13 @@ class OpenAiContentGenerator(
             appendLine("不要只给孤立单词——每个词给 pos（词性缩写，如 v./n./adj.）和 collocations：" +
                 "1~2 个这个词真实常用的搭配短语（比如 issue 配 \"resolve an issue\"，不是造一个不自然的短语）。")
             appendLine("meaningZh 是这个具体词义的简洁中文释义；exampleEn 是包含该词的自然英文例句，exampleZh 是它的翻译。")
+            append(exampleSentenceRules(request.learnerLevel))
+            appendLine("同一批例句之间场景和句型要有明显区别，不能只换个人名或地点。")
+            append(memoryHintRules())
             appendLine("输出 JSON schema：")
             appendLine(
                 """{"schemaVersion":1,"words":[{"term":"...","ipa":"...","pos":"v.","meaningZh":"...",""" +
-                    """"exampleEn":"...","exampleZh":"...","collocations":["..."]}]}""",
+                    """"exampleEn":"...","exampleZh":"...","collocations":["..."],"memoryHintZh":"..."}]}""",
             )
         }
 
@@ -1068,7 +1127,14 @@ class OpenAiContentGenerator(
             appendLine("解释单词 \"$term\" 在下面这句话里的意思，给水平 $level 的中文母语学习者看：")
             appendLine(sentence)
             appendLine("meaningZh 是简洁中文释义（含词性）；usageNoteZh 用一句话说明它在这句里的用法，可以为空字符串。")
-            appendLine("""输出 JSON schema：{"term":"$term","ipa":"...","meaningZh":"...","usageNoteZh":"..."}""")
+            appendLine("再给一个新的例句：exampleEn 换一个跟上面这句不同的场景，" +
+                "仍然用这个词在这里的词义，exampleZh 是它的翻译。")
+            append(exampleSentenceRules(level))
+            append(memoryHintRules())
+            appendLine(
+                """输出 JSON schema：{"term":"$term","ipa":"...","meaningZh":"...","usageNoteZh":"...",""" +
+                    """"exampleEn":"...","exampleZh":"...","memoryHintZh":"..."}""",
+            )
         }
 
         internal fun buildScenarioPrompt(request: ScenarioGenerationRequest): String = buildString {

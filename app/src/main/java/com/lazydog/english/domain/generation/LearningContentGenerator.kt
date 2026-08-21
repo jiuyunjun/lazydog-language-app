@@ -129,6 +129,11 @@ data class GeneratedWord(
     val pos: String = "",
     /** 1~2 个高价值搭配，不是孤立单词（§6.5"每个附带 1~2 个高价值搭配"）。 */
     val collocations: List<String> = emptyList(),
+    /**
+     * 这个词的记忆方法：优先拆词根词缀并说明怎么合出这个意思，拆不出来的用联想/构词/形近对比。
+     * 要针对这个词，不是"多读几遍"这种通用建议。
+     */
+    val memoryHintZh: String = "",
 )
 
 data class GrammarLessonRequest(

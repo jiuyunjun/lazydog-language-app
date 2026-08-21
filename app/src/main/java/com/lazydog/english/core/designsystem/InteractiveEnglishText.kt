@@ -4,11 +4,13 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.LibraryAdd
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -16,8 +18,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -25,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -169,19 +174,31 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
-    var inLibrary by remember { mutableStateOf<String?>(null) }
-    var libraryIpa by remember { mutableStateOf("") }
+    var inLibrary by remember { mutableStateOf<WordExplanation?>(null) }
     var explanation by remember { mutableStateOf<WordExplanation?>(null) }
     var streamedJson by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
 
+    // 面板关掉就别再念了。
+    DisposableEffect(Unit) {
+        onDispose { app.speechController.stopSpeaking() }
+    }
+
     LaunchedEffect(word, sentence) {
         val existing = app.knowledgeRepository.vocabulary.first()
             .firstOrNull { it.detail.term.equals(word, ignoreCase = true) }
         if (existing != null) {
-            inLibrary = existing.detail.meaningZh
-            libraryIpa = existing.detail.ipa
+            // 已经在库里就直接摊开库里存的那份，不再花一次生成。
+            inLibrary = WordExplanation(
+                term = existing.detail.term,
+                ipa = existing.detail.ipa,
+                meaningZh = existing.detail.meaningZh,
+                usageNoteZh = "",
+                exampleEn = existing.detail.exampleEn,
+                exampleZh = existing.detail.exampleZh,
+                memoryHintZh = existing.detail.memoryHintZh,
+            )
         } else {
             when (val result = app.contentGenerator.explainWord(
                 word,
@@ -199,16 +216,19 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
         Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(word, style = MaterialTheme.typography.headlineSmall)
-                (explanation?.ipa?.takeIf { it.isNotBlank() } ?: libraryIpa.takeIf { it.isNotBlank() })?.let {
+                (explanation ?: inLibrary)?.ipa?.takeIf { it.isNotBlank() }?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(onClick = { scope.launch { app.speechController.speak(word) } }) {
+                IconButton(onClick = { scope.launch { app.speechController.speakWord(word) } }) {
                     Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = "朗读这个词", tint = MaterialTheme.colorScheme.primary)
                 }
             }
             when {
                 inLibrary != null -> {
-                    Text(inLibrary!!)
+                    val value = inLibrary!!
+                    Text(value.meaningZh)
+                    WordExample(value.exampleEn, value.exampleZh)
+                    MemoryHint(value.memoryHintZh)
                     Text("已经在你的知识库里。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 explanation != null -> {
@@ -217,6 +237,8 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                     if (value.usageNoteZh.isNotBlank()) {
                         Text(value.usageNoteZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    WordExample(value.exampleEn, value.exampleZh)
+                    MemoryHint(value.memoryHintZh)
                     Button(
                         onClick = {
                             scope.launch {
@@ -224,7 +246,10 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                                     term = word,
                                     meaningZh = value.meaningZh,
                                     ipa = value.ipa,
-                                    exampleEn = sentence,
+                                    // 例句优先用这个词出现的原句：它才是用户真正读到的语境。
+                                    exampleEn = sentence.ifBlank { value.exampleEn },
+                                    exampleZh = if (sentence.isBlank()) value.exampleZh else "",
+                                    memoryHintZh = value.memoryHintZh,
                                 ) != null
                             }
                         },
@@ -243,6 +268,11 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                     if (usage.isNotBlank()) {
                         Text(usage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    WordExample(
+                        partialJsonStringValue(streamedJson, "exampleEn"),
+                        partialJsonStringValue(streamedJson, "exampleZh"),
+                    )
+                    MemoryHint(partialJsonStringValue(streamedJson, "memoryHintZh"))
                 }
                 else -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -264,6 +294,11 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
     var streamedJson by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
+
+    // 面板关掉就别再念了。
+    DisposableEffect(Unit) {
+        onDispose { app.speechController.stopSpeaking() }
+    }
 
     LaunchedEffect(sentence) {
         saved = app.knowledgeRepository.expressions.first()
@@ -322,6 +357,43 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
                 }
             }
             Text("提示：快速双击查单词，快速三击讲整句。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 24.dp))
+        }
+    }
+}
+
+/** 速查面板里的例句块。英文本身仍然可以双击/三击继续查，空的时候整块不出现。 */
+@Composable
+private fun WordExample(exampleEn: String, exampleZh: String) {
+    if (exampleEn.isBlank()) return
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            InteractiveEnglishText(text = exampleEn, style = MaterialTheme.typography.bodyMedium)
+            if (exampleZh.isNotBlank()) {
+                Text(exampleZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** 速查面板里的记忆方法，和单词卡上的"怎么记"同一套说法。 */
+@Composable
+private fun MemoryHint(memoryHintZh: String) {
+    if (memoryHintZh.isBlank()) return
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Outlined.Lightbulb, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                Text("怎么记", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+            Text(memoryHintZh, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
         }
     }
 }

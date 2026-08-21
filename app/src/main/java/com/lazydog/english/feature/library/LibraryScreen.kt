@@ -191,10 +191,11 @@ fun LibraryScreen(
     val selectedVocab = selectedWord ?: selectedExpression
     val selectedGrammar = grammar.firstOrNull { it.item.id == selectedItemId }
 
-    // 打开单词详情时自动读一遍（设置里可关）。
+    // 打开单词详情时自动读一遍（设置里可关）。表达是整句，按句子读；单词用播音腔。
     LaunchedEffect(selectedVocab?.item?.id) {
         val term = selectedVocab?.detail?.term ?: return@LaunchedEffect
-        if (app.userPreferences.autoReadWords.first()) speech.speak(term)
+        if (!app.userPreferences.autoReadWords.first()) return@LaunchedEffect
+        if (selectedExpression != null) speech.speak(term) else speech.speakWord(term)
     }
 
     if (selectedVocab != null) {
@@ -208,8 +209,14 @@ fun LibraryScreen(
             ipa = selectedVocab.detail.ipa,
             explanation = selectedVocab.detail.meaningZh,
             example = example,
+            memoryHint = selectedVocab.detail.memoryHintZh,
             item = selectedVocab.item,
-            onSpeakWord = { scope.launch { speech.speak(selectedVocab.detail.term) } },
+            onSpeakWord = {
+                scope.launch {
+                    val term = selectedVocab.detail.term
+                    if (selectedExpression != null) speech.speak(term) else speech.speakWord(term)
+                }
+            },
             speakDescription = if (selectedExpression != null) "朗读这条表达" else "朗读这个词",
             onSpeakExample = example.takeIf { it.isNotBlank() }?.let { text ->
                 { scope.launch { speech.speak(text) } }
@@ -503,6 +510,7 @@ private fun ItemDetailSheet(
     ipa: String,
     explanation: String,
     example: String,
+    memoryHint: String,
     item: KnowledgeItemEntity,
     onSpeakWord: (() -> Unit)?,
     speakDescription: String,
@@ -517,6 +525,8 @@ private fun ItemDetailSheet(
         Column(
             modifier = Modifier
                 .padding(horizontal = 24.dp)
+                // 记忆方法这类内容长度不定，小屏上要能滚。
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -563,6 +573,25 @@ private fun ItemDetailSheet(
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
+                    }
+                }
+            }
+            if (memoryHint.isNotBlank()) {
+                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "怎么记",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        Text(
+                            text = memoryHint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
                     }
                 }
             }
