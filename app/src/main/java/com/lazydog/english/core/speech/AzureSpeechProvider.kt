@@ -118,10 +118,10 @@ class AzureSpeechProvider(
         }
     }
 
-    override fun stopSpeaking() {
+    override fun stopSpeaking(keepLink: Boolean) {
         if (closed) return
         // 先掐声音（立刻静），再停合成（要等 SDK 一个来回）。
-        player.stop()
+        player.stop(keepLink)
         if (synthesizing) {
             synthesizing = false
             runCatching { synthesizer.StopSpeakingAsync() }

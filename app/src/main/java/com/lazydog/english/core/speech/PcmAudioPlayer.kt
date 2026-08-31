@@ -146,16 +146,19 @@ internal class PcmAudioPlayer(
     }
 
     /**
-     * 立刻掐掉声音（点了新的朗读、或者要释放整个 provider 时用）。
+     * 立刻掐掉声音。
      *
-     * 这是"别念了"的明确信号——页面切走、退到后台都走这里，顺手把链路也放掉，不留着耗电。
+     * 默认是"别念了"的明确信号——页面切走、退到后台都走这里，顺手把链路也放掉，不留着耗电。
+     *
+     * [keepLink] 用于"这段不要了，但马上还要念下一段"的场合（听力一题接一题就是这样）：
+     * 声音照掐，蓝牙链路留着。否则每翻一页都放手，下一句又是冷起播，等于白挂。
      */
-    fun stop() {
+    fun stop(keepLink: Boolean = false) {
         synchronized(lock) {
             ++token
             stopLocked()
             abandonFocusLocked()
-            stopKeepAliveLocked()
+            if (keepLink) startKeepAliveLocked() else stopKeepAliveLocked()
         }
     }
 

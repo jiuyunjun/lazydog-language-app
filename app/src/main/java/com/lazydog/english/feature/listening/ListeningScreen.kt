@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -16,14 +18,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Bookmark
+import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -45,11 +48,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.listening.ListeningAnswer
 import com.lazydog.english.domain.listening.ListeningHintLevel
@@ -168,7 +174,8 @@ fun ListeningScreen(onExit: () -> Unit) {
     }
 
     fun next() {
-        app.speechController.stopSpeaking()
+        // 人没走，下一句马上就要放——把揭晓页的重听掐掉，但别放掉已经热起来的蓝牙链路。
+        app.speechController.stopSpeaking(keepLink = true)
         if (index + 1 >= items.size) {
             phase = ListeningPhase.Summary
         } else {
@@ -201,6 +208,23 @@ fun ListeningScreen(onExit: () -> Unit) {
                 },
             )
         },
+        // 设计稿要求主操作固定在底部 88dp 区域内、不随内容滚动，整个学习流单手可完成。
+        bottomBar = {
+            when (phase) {
+                ListeningPhase.Pick -> BottomActions {
+                    PrimaryAction("开始 $SET_SIZE 句训练", onClick = ::startSet)
+                }
+                ListeningPhase.Reveal -> BottomActions {
+                    SecondaryAction("再听一次", Icons.Outlined.Replay, enabled = !playing, onClick = ::play)
+                    PrimaryAction(if (index + 1 >= items.size) "看结果" else "下一句", onClick = ::next)
+                }
+                ListeningPhase.Summary -> BottomActions {
+                    SecondaryAction("再来一轮", onClick = { phase = ListeningPhase.Pick })
+                    PrimaryAction("完成", onClick = onExit)
+                }
+                ListeningPhase.Loading, ListeningPhase.Question -> Unit
+            }
+        },
     ) { padding ->
         val content = Modifier
             .fillMaxSize()
@@ -211,7 +235,6 @@ fun ListeningScreen(onExit: () -> Unit) {
                 selected = scene,
                 error = error,
                 onSelect = { scene = it },
-                onStart = ::startSet,
             )
             ListeningPhase.Loading -> Loading(modifier = content, chars = progressChars, scene = scene.nameZh)
             ListeningPhase.Question -> current?.let { item ->
@@ -233,10 +256,7 @@ fun ListeningScreen(onExit: () -> Unit) {
                 Reveal(
                     modifier = content,
                     answer = record,
-                    playing = playing,
                     saved = savedExpression,
-                    last = index + 1 >= items.size,
-                    onReplay = ::play,
                     onSaveExpression = {
                         savedExpression = true
                         scope.launch {
@@ -246,15 +266,9 @@ fun ListeningScreen(onExit: () -> Unit) {
                             )
                         }
                     },
-                    onNext = ::next,
                 )
             }
-            ListeningPhase.Summary -> Summary(
-                modifier = content,
-                answers = answers,
-                onAgain = { phase = ListeningPhase.Pick },
-                onExit = onExit,
-            )
+            ListeningPhase.Summary -> Summary(modifier = content, answers = answers)
         }
     }
 
@@ -284,7 +298,6 @@ private fun PickScene(
     selected: ListeningScene,
     error: String?,
     onSelect: (ListeningScene) -> Unit,
-    onStart: () -> Unit,
 ) {
     Column(
         modifier = modifier
@@ -350,14 +363,55 @@ private fun PickScene(
                 }
             }
         }
-        Button(
-            onClick = onStart,
+        Spacer(Modifier.size(8.dp))
+    }
+}
+
+/** 底部固定操作区。主操作 56dp 高、每屏只有一个，次操作放它左边（设计稿 M3 组件映射）。 */
+@Composable
+private fun BottomActions(content: @Composable RowScope.() -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 24.dp),
-        ) {
-            Text("开始 $SET_SIZE 句训练")
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun RowScope.PrimaryAction(label: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .weight(1f)
+            .height(56.dp),
+    ) {
+        Text(label)
+    }
+}
+
+@Composable
+private fun RowScope.SecondaryAction(
+    label: String,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .weight(1f)
+            .height(56.dp),
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.size(8.dp))
         }
+        Text(label)
     }
 }
 
@@ -400,7 +454,10 @@ private fun Question(
     ) {
         LinearProgressIndicator(
             progress = { (index + 1f) / total },
-            modifier = Modifier.fillMaxWidth(),
+            // 进度不能只靠视觉，TalkBack 要能念出第几题（设计稿无障碍清单）。
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "第 ${index + 1} 题，共 $total 题" },
         )
 
         // 播放键是这一页唯一的主要动作：进来先听，别的都往后放。
@@ -420,6 +477,8 @@ private fun Question(
                     .size(128.dp)
                     .semantics {
                         contentDescription = if (playCount == 0) "播放语音" else "再播放一次"
+                        // 音频按钮的状态变化要播报出来（设计稿无障碍清单）。
+                        stateDescription = if (playing) "正在播放" else "已停止"
                     },
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -535,12 +594,8 @@ private fun HintCard(title: String, body: String) {
 private fun Reveal(
     modifier: Modifier,
     answer: ListeningAnswer,
-    playing: Boolean,
     saved: Boolean,
-    last: Boolean,
-    onReplay: () -> Unit,
     onSaveExpression: () -> Unit,
-    onNext: () -> Unit,
 ) {
     val item = answer.item
     Column(
@@ -549,15 +604,28 @@ private fun Reveal(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = if (answer.correct) "听懂了" else "这次没听出来",
-            style = MaterialTheme.typography.titleMedium,
-            color = if (answer.correct) {
-                MaterialTheme.colorScheme.primary
+        // 对错同时给图标和文字，不单靠红绿区分（设计稿无障碍清单）。
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val tint = if (answer.correct) {
+                LazyDogTheme.extendedColors.correct
             } else {
                 MaterialTheme.colorScheme.error
-            },
-        )
+            }
+            Icon(
+                imageVector = if (answer.correct) Icons.Outlined.CheckCircle else Icons.Outlined.Cancel,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = if (answer.correct) "听懂了" else "这次没听出来",
+                style = MaterialTheme.typography.titleMedium,
+                color = tint,
+            )
+        }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             InteractiveEnglishText(
                 text = item.textEn,
@@ -625,30 +693,12 @@ private fun Reveal(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(
-                onClick = onReplay,
-                enabled = !playing,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Replay,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.size(8.dp))
-                Text("再听一次")
-            }
-            Button(onClick = onNext, modifier = Modifier.weight(1f)) {
-                Text(if (last) "看结果" else "下一句")
-            }
-        }
         Text(
             text = "知道意思以后再听一遍，很多时候会突然听清。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.size(24.dp))
+        Spacer(Modifier.size(8.dp))
     }
 }
 
@@ -672,12 +722,7 @@ private fun scoreReason(answer: ListeningAnswer): String = buildString {
 
 /** 一轮结束的结果页（§22、§23）。 */
 @Composable
-private fun Summary(
-    modifier: Modifier,
-    answers: List<ListeningAnswer>,
-    onAgain: () -> Unit,
-    onExit: () -> Unit,
-) {
+private fun Summary(modifier: Modifier, answers: List<ListeningAnswer>) {
     val summary = remember(answers) { summarizeListening(answers) }
     Column(
         modifier = modifier
@@ -747,11 +792,7 @@ private fun Summary(
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text("再来一轮") }
-            FilledTonalButton(onClick = onExit, modifier = Modifier.weight(1f)) { Text("完成") }
-        }
-        Spacer(Modifier.size(24.dp))
+        Spacer(Modifier.size(8.dp))
     }
 }
 

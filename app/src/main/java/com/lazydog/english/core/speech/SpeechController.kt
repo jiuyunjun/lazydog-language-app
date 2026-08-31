@@ -45,9 +45,12 @@ class SpeechController(context: Context, private val prefs: UserPreferences) {
     /**
      * 停掉正在播的朗读。页面切走、退到后台、弹窗关掉时调用——人已经走了就不该还在念。
      * 还没用过朗读就不会为了停而去初始化 SDK。
+     *
+     * [keepLink] 用于"人没走，只是这段不要了、马上还要念下一段"：一题接一题的听力训练
+     * 就是这样。不区分的话每翻一页都会把刚热起来的蓝牙链路放掉，下一句又从冷通路起播。
      */
-    fun stopSpeaking() {
-        provider?.stopSpeaking()
+    fun stopSpeaking(keepLink: Boolean = false) {
+        provider?.stopSpeaking(keepLink)
     }
 
     suspend fun assessReading(referenceText: String): AssessmentResult =

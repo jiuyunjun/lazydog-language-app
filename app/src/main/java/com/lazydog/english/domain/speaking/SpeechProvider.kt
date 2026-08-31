@@ -20,8 +20,11 @@ interface SpeechProvider {
     /**
      * 立刻停掉正在播的示范音频。
      * 离开页面、退到后台这类"人已经不在听了"的场合调用；没有在播时什么也不做。
+     *
+     * [keepLink] 表示"人还在这一页，马上还要再念"：声音照停，但实现可以保留已经热起来的
+     * 音频通路，别让下一句又从冷通路起播。
      */
-    fun stopSpeaking()
+    fun stopSpeaking(keepLink: Boolean = false)
 
     /**
      * 从麦克风录一句朗读并对照 [referenceText] 做发音评估。
