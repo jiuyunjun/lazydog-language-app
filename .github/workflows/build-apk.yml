@@ -37,6 +37,46 @@ jobs:
       - name: Prepare local service configuration
         run: cp app/src/main/java/com/lazydog/english/core/config/LocalEnv.kt.example app/src/main/java/com/lazydog/english/core/config/LocalEnv.kt
 
+      - name: Inject repository secrets
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+          SPEECH_KEY: ${{ secrets.SPEECH_KEY }}
+          SPEECH_REGION: ${{ secrets.SPEECH_REGION }}
+        run: |
+          required_secrets=(AI_BASE_URL AI_API_KEY AI_MODEL SPEECH_KEY SPEECH_REGION)
+          for secret_name in "${required_secrets[@]}"; do
+            if [[ -z "${!secret_name}" ]]; then
+              echo "::error::Missing repository secret: ${secret_name}"
+              exit 1
+            fi
+          done
+
+          kotlin_string() {
+            local value="$1"
+            value="${value//\\/\\\\}"
+            value="${value//\"/\\\"}"
+            value="${value//$'\r'/\\r}"
+            value="${value//$'\n'/\\n}"
+            value="${value//$'\t'/\\t}"
+            printf '"%s"' "$value"
+          }
+
+          config_file="app/src/main/java/com/lazydog/english/core/config/LocalEnv.kt"
+          {
+            printf '%s\n\n' 'package com.lazydog.english.core.config'
+            printf '%s\n' 'object LocalEnv {'
+            printf '    const val AI_BASE_URL = %s\n' "$(kotlin_string "$AI_BASE_URL")"
+            printf '    const val AI_API_KEY = %s\n' "$(kotlin_string "$AI_API_KEY")"
+            printf '    const val AI_MODEL = %s\n' "$(kotlin_string "$AI_MODEL")"
+            printf '    const val SPEECH_KEY = %s\n' "$(kotlin_string "$SPEECH_KEY")"
+            printf '    const val SPEECH_REGION = %s\n' "$(kotlin_string "$SPEECH_REGION")"
+            printf '%s\n' '}'
+          } > "$config_file"
+
       - name: Test, lint, and build debug APK
         run: ./gradlew lintDebug testDebugUnitTest assembleDebug --stacktrace
 
