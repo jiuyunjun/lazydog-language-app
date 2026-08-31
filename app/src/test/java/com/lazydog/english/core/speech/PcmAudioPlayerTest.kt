@@ -47,4 +47,35 @@ class PcmAudioPlayerTest {
             )
         }
     }
+
+    @Test
+    fun `a kept-alive link needs no wake-up silence`() {
+        // 链路一直挂着就没有冷热之分，连蓝牙都只留吸收抖动的那一小段。
+        for (route in AudioRoute.entries) {
+            for (cold in listOf(false, true)) {
+                assertEquals(
+                    KEPT_ALIVE_LEAD_IN_MS,
+                    leadInSilenceMs(route, coldStart = cold, keptAlive = true),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `keep-alive dither stays at one lsb on both channels`() {
+        val chunk = keepAliveDither(frames = 2)
+        // 两帧：+1 和 -1，左右声道相同。写错高位字节会变成听得见的 255。
+        assertArrayEquals(
+            byteArrayOf(1, 0, 1, 0, -1, -1, -1, -1),
+            chunk,
+        )
+    }
+
+    @Test
+    fun `keeping the link alive is the fastest bluetooth start`() {
+        assertTrue(
+            leadInSilenceMs(AudioRoute.Bluetooth, coldStart = false, keptAlive = true) <
+                leadInSilenceMs(AudioRoute.Bluetooth, coldStart = false),
+        )
+    }
 }
