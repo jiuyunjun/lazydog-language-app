@@ -331,6 +331,7 @@ class OpenAiContentGenerator(
             systemPrompt = LISTENING_SYSTEM_PROMPT,
             userPrompt = buildListeningPrompt(request),
             onProgress = onProgress,
+            maxTokens = LISTENING_MAX_TOKENS,
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -436,6 +437,7 @@ class OpenAiContentGenerator(
         userPrompt: String,
         onProgress: ((Int) -> Unit)? = null,
         onTextProgress: ((String) -> Unit)? = null,
+        maxTokens: Int = DEFAULT_MAX_TOKENS,
     ): Completion = withContext(Dispatchers.IO) {
         val (baseUrl, apiKey, model) = config()
         val streaming = onProgress != null || onTextProgress != null
@@ -448,6 +450,7 @@ class OpenAiContentGenerator(
                     ChatMessage("system", systemPrompt),
                     ChatMessage("user", userPrompt),
                 ),
+                maxTokens = maxTokens,
                 stream = streaming,
             ),
         )
@@ -513,6 +516,13 @@ class OpenAiContentGenerator(
                 val delta = chunk.choices.firstOrNull()?.delta?.content
                 if (!delta.isNullOrEmpty()) {
                     builder.append(delta)
+                    // 服务端不认 max_tokens、或者模型自己转起圈来时，这里是最后一道闸。
+                    // readTimeout 拦不住：它是每次读的超时，只要一直有数据就一直被重置。
+                    if (builder.length > MAX_RESPONSE_CHARS) {
+                        return Completion.Error(
+                            "AI 一直没停（已经返回 ${builder.length} 个字符），先掐断了。换个说法或换个模型再试。",
+                        )
+                    }
                     onProgress?.invoke(builder.length)
                     onTextProgress?.invoke(builder.toString())
                 }
@@ -543,6 +553,7 @@ class OpenAiContentGenerator(
         val model: String,
         val messages: List<ChatMessage>,
         @SerialName("response_format") val responseFormat: ResponseFormat = ResponseFormat(),
+        @SerialName("max_tokens") val maxTokens: Int = DEFAULT_MAX_TOKENS,
         val stream: Boolean = false,
     )
 
@@ -963,6 +974,22 @@ class OpenAiContentGenerator(
 
         /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
         const val MIN_LISTENING_ITEMS = 5
+        /**
+         * 每次调用的输出上限。不设的话服务端就没有停下来的理由——模型转圈或者
+         * 一路往下写，客户端会一直收、一直计费，直到用户自己退出。
+         * 取值按"最长的那种合法返回还要留一倍余量"来定，正常内容碰不到。
+         */
+        const val DEFAULT_MAX_TOKENS = 4096
+
+        /** 一轮 10 句听力，每句十几个字段且大半是中文，是所有调用里最长的一种。 */
+        const val LISTENING_MAX_TOKENS = 8192
+
+        /**
+         * 流式返回的字符硬上限。合法返回最长也就一万出头，这里留到两倍多；
+         * 超过就说明对面根本没打算停，继续收只是白花钱。
+         */
+        const val MAX_RESPONSE_CHARS = 24_000
+
         private const val RETRY_DELAY_MS = 1200L
         private val RETRYABLE_CODES = setOf(429) + (500..599)
 
@@ -1260,6 +1287,7 @@ class OpenAiContentGenerator(
             appendLine("sceneHintZh 是第一级提示：只说这句大概和什么情境有关，不许点出关键词，" +
                 "更不许把整句意思说出来。keywordHintZh 是第二级提示：点名要听的那个词，" +
                 "并说清它为什么难听出来（比如和前面连读了、弱读成了什么）。")
+            appendLine("items 数组必须正好 ${request.count} 个元素，写完第 ${request.count} 个就闭合 JSON 结束，不要再往下写。")
             appendLine("输出 JSON schema：")
             appendLine(
                 """{"schemaVersion":1,"items":[{"textEn":"I barely made it to the meeting on time.",""" +

@@ -493,4 +493,37 @@ class OpenAiContentGeneratorTest {
 
         assertTrue((result as GenerationResult.Failure).reason.contains("schema"))
     }
+
+    @Test
+    fun `every request carries an output cap`() = runBlocking {
+        // 不带 max_tokens 的话服务端没有停下来的理由，模型转起圈来就一路计费。
+        server.enqueue(MockResponse().setBody(chatBody(listeningJson)))
+
+        generator().generateListeningSet(listeningRequest)
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body.contains("\"max_tokens\":${OpenAiContentGenerator.LISTENING_MAX_TOKENS}"))
+    }
+
+    @Test
+    fun `a stream that never stops is cut off instead of billed forever`() = runBlocking {
+        // readTimeout 拦不住这种：它是每次读的超时，只要一直有数据就一直被重置。
+        val chunk = "x".repeat(1000)
+        val parts = Array(OpenAiContentGenerator.MAX_RESPONSE_CHARS / 1000 + 5) { chunk }
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody(sseBody(*parts)),
+        )
+
+        var lastReported = 0
+        val result = generator().generateListeningSet(listeningRequest) { lastReported = it }
+
+        val failure = result as GenerationResult.Failure
+        assertTrue(failure.reason.contains("一直没停"))
+        assertTrue(
+            "掐断点不该超过上限太多，实际报到 $lastReported",
+            lastReported <= OpenAiContentGenerator.MAX_RESPONSE_CHARS,
+        )
+    }
 }

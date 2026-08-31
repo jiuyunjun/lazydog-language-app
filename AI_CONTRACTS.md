@@ -156,7 +156,15 @@ interface LearningContentGenerator {
 - 默认不向 AI 发送真实姓名、密钥、完整学习数据库或录音。
 - 调试日志应隐藏 Authorization、订阅密钥和用户长文本。
 
-## 9. 待实现时确定
+## 9. 请求上限
+
+每次调用都必须带输出上限，没有上限的流式请求会一直收、一直计费：
+
+- `max_tokens` 随请求发出（`DEFAULT_MAX_TOKENS`，听力这类最长的返回用 `LISTENING_MAX_TOKENS`）。
+- 流式读取另有字符硬上限 `MAX_RESPONSE_CHARS`，用于服务端不认 `max_tokens` 或模型自己转圈的情况。超过就掐断并返回失败。
+- OkHttp 的 `readTimeout` 拦不住这种情况：它是每次读的超时，只要一直有数据到达就会被不断重置。
+
+## 10. 待实现时确定
 
 - 实际 AI provider 与模型选择
 - 结构化输出能力和客户端库
