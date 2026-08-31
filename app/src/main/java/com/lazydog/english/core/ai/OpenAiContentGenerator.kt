@@ -14,6 +14,10 @@ import com.lazydog.english.domain.assessment.ReadingTag
 import com.lazydog.english.domain.assessment.validateAssessmentQuestions
 import com.lazydog.english.domain.assessment.validateCorrectionItem
 import com.lazydog.english.domain.generation.ContentValidation
+import com.lazydog.english.domain.listening.ListeningItem
+import com.lazydog.english.domain.listening.ListeningKeyExpression
+import com.lazydog.english.domain.listening.ListeningSetRequest
+import com.lazydog.english.domain.listening.ListeningValidation
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GeneratedReading
 import com.lazydog.english.domain.generation.GeneratedWord
@@ -317,6 +321,41 @@ class OpenAiContentGenerator(
         val tips = validatePronunciationTips(payload.tips.mapNotNull { it.toDomain() })
         if (tips.isEmpty()) return GenerationResult.Failure("生成的提示都没通过校验")
         return GenerationResult.Success(tips, content.model, PROMPT_VERSION)
+    }
+
+    override suspend fun generateListeningSet(
+        request: ListeningSetRequest,
+        onProgress: ((Int) -> Unit)?,
+    ): GenerationResult<List<ListeningItem>> {
+        val outcome = complete(
+            systemPrompt = LISTENING_SYSTEM_PROMPT,
+            userPrompt = buildListeningPrompt(request),
+            onProgress = onProgress,
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<ListeningSetPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的听力 JSON")
+        if (payload.schemaVersion != SCHEMA_VERSION) {
+            return GenerationResult.Failure("schema 版本不对：${payload.schemaVersion}")
+        }
+        val validated = ListeningValidation.validate(
+            items = payload.items.map { it.toDomain(request) },
+            maxCount = request.count,
+        )
+        if (validated.valid.size < MIN_LISTENING_ITEMS) {
+            return GenerationResult.Failure(
+                "能用的句子太少（${validated.valid.size} 句）：${validated.droppedNotes.take(3).joinToString("；")}",
+            )
+        }
+        return GenerationResult.Success(
+            data = validated.valid,
+            model = content.model,
+            promptVersion = LISTENING_PROMPT_VERSION,
+            droppedNotes = validated.droppedNotes,
+        )
     }
 
     override suspend fun generateScenario(
@@ -730,6 +769,50 @@ class OpenAiContentGenerator(
     }
 
     @Serializable
+    private data class ListeningKeyExpressionPayload(val en: String = "", val meaningZh: String = "")
+
+    @Serializable
+    private data class ListeningItemPayload(
+        val textEn: String = "",
+        val meaningZh: String = "",
+        val subSceneZh: String = "",
+        val intentZh: String = "",
+        val toneZh: String = "",
+        val registerZh: String = "",
+        val cefr: String = "",
+        val listeningDifficulty: Int = 0,
+        val audioFeatures: List<String> = emptyList(),
+        val keyExpression: ListeningKeyExpressionPayload = ListeningKeyExpressionPayload(),
+        val wrongMeaningsZh: List<String> = emptyList(),
+        val sceneHintZh: String = "",
+        val keywordHintZh: String = "",
+    ) {
+        /** 一级场景是用户在首页选的，不让 AI 再报一次——报回来对不上反而要处理冲突。 */
+        fun toDomain(request: ListeningSetRequest) = ListeningItem(
+            textEn = textEn,
+            meaningZh = meaningZh,
+            sceneZh = request.sceneZh,
+            subSceneZh = subSceneZh,
+            intentZh = intentZh,
+            toneZh = toneZh,
+            registerZh = registerZh,
+            cefr = cefr,
+            listeningDifficulty = listeningDifficulty,
+            audioFeatures = audioFeatures,
+            keyExpression = ListeningKeyExpression(keyExpression.en, keyExpression.meaningZh),
+            wrongMeaningsZh = wrongMeaningsZh,
+            sceneHintZh = sceneHintZh,
+            keywordHintZh = keywordHintZh,
+        )
+    }
+
+    @Serializable
+    private data class ListeningSetPayload(
+        val schemaVersion: Int = 0,
+        val items: List<ListeningItemPayload> = emptyList(),
+    )
+
+    @Serializable
     private data class ScenarioReplyPayload(val en: String = "", val zh: String = "") {
         fun toDomain() = ScenarioReplyOption(en.trim(), zh.trim())
     }
@@ -876,6 +959,10 @@ class OpenAiContentGenerator(
         const val PROMPT_VERSION = 1
         const val GRAMMAR_PROMPT_VERSION = 2
         const val SCENARIO_PROMPT_VERSION = 1
+        const val LISTENING_PROMPT_VERSION = 1
+
+        /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
+        const val MIN_LISTENING_ITEMS = 5
         private const val RETRY_DELAY_MS = 1200L
         private val RETRYABLE_CODES = setOf(429) + (500..599)
 
@@ -893,6 +980,11 @@ class OpenAiContentGenerator(
         private const val SYSTEM_PROMPT =
             "你是给中文母语者出英语学习内容的助手。严格只输出一个 JSON 对象：" +
                 "不要 markdown 代码块，不要输出 JSON 以外的任何文字，不要添加 schema 之外的字段。"
+
+        private const val LISTENING_SYSTEM_PROMPT =
+            "你是给中文母语者出英语听力训练材料的母语者编剧。严格只输出一个 JSON 对象：" +
+                "不要 markdown 代码块，不要输出 JSON 以外的任何文字，不要添加 schema 之外的字段。" +
+                "句子必须是真人在真实场景里会说的口语，不是教科书例句。"
 
         private const val SCENARIO_ROLE_SYSTEM_PROMPT =
             "你在英语情景演练中只扮演指定对手。严格只输出一个 JSON 对象。" +
@@ -1134,6 +1226,49 @@ class OpenAiContentGenerator(
             appendLine(
                 """输出 JSON schema：{"term":"$term","ipa":"...","meaningZh":"...","usageNoteZh":"...",""" +
                     """"exampleEn":"...","exampleZh":"...","memoryHintZh":"..."}""",
+            )
+        }
+
+        /**
+         * 听力题生成提示词（英语听力训练模块DESIGN.md §18、§19）。
+         *
+         * 关键是不能只说"生成一个 B1 句子"：场景、二级场景、意图、语气、语体、听觉难点
+         * 都要作为结构化条件给出去，否则出来的就是教科书英语，训练不到真实语流。
+         */
+        internal fun buildListeningPrompt(request: ListeningSetRequest): String = buildString {
+            appendLine("为中文母语者生成 ${request.count} 句英语听力训练材料。学习者水平：${request.learnerLevel}。")
+            appendLine("一级场景：${request.sceneZh}。")
+            if (request.subScenesZh.isNotEmpty()) {
+                appendLine("在这些二级场景里分散取材，尽量不重复：${request.subScenesZh.joinToString("、")}。")
+            }
+            if (request.topics.isNotEmpty()) appendLine("学习者兴趣，可以适度靠拢：${request.topics.joinToString("、")}。")
+            appendLine("每句都要自己指定 intentZh（沟通意图，如请求/拒绝/抱怨/调侃）、toneZh（情绪）、" +
+                "registerZh（语体：正式/职业/中性/口语/很口语/俚语），并且十句之间要有变化。")
+            appendLine("句子要求：母语者真实会说的口语；场景和意图明确；每句只有 1～2 个主要学习点；" +
+                "长度 8～16 词；不要教科书式书面英语，也不要为了显难而堆生僻词。")
+            // §15：影视和游戏场景走"Inspired Scene"，不做台词数据库——授权说不清就不要照抄。
+            appendLine("不要照搬电影、剧集或游戏里的真实台词，也不要标注出处；" +
+                "需要那种味道时，写一句风格相同、场景相同的原创台词。")
+            appendLine("这是听力题，所以每句必须带真实语流的听觉难点，写进 audioFeatures，只用这些英文标签：" +
+                "linking、reduction、contraction、elision、assimilation、flap t、gonna、wanna、gotta、" +
+                "numbers、dates、time、names、places、proper nouns、stress、emotion、fast speech、accent。")
+            appendLine("keyExpression 是这句最值得学的表达，en 必须是句子里**原样出现**的连续片段" +
+                "（大小写可以不同），meaningZh 说明它的意思。")
+            appendLine("meaningZh 是整句的自然中文意思，说人话，不要逐字硬译。")
+            appendLine("wrongMeaningsZh 正好两条干扰项：都要像模像样，不能明显荒谬，" +
+                "必须来自真实误听——关键词误解、否定词漏听、时态误解、连读听串、相似场景或相似动作。")
+            appendLine("sceneHintZh 是第一级提示：只说这句大概和什么情境有关，不许点出关键词，" +
+                "更不许把整句意思说出来。keywordHintZh 是第二级提示：点名要听的那个词，" +
+                "并说清它为什么难听出来（比如和前面连读了、弱读成了什么）。")
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"schemaVersion":1,"items":[{"textEn":"I barely made it to the meeting on time.",""" +
+                    """"meaningZh":"我勉强准时赶到了会议","subSceneZh":"会议","intentZh":"解释",""" +
+                    """"toneZh":"Nervous","registerZh":"口语","cefr":"B1","listeningDifficulty":3,""" +
+                    """"audioFeatures":["linking","reduction"],""" +
+                    """"keyExpression":{"en":"barely made it","meaningZh":"差一点没赶上"},""" +
+                    """"wrongMeaningsZh":["我提前参加了会议","我几乎没有参加会议"],""" +
+                    """"sceneHintZh":"这句和迟到、赶时间有关","keywordHintZh":"注意听 barely，它和后面的 made 连读了"}]}""",
             )
         }
 

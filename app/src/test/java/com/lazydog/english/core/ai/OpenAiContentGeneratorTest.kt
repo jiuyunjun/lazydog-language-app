@@ -3,6 +3,7 @@ package com.lazydog.english.core.ai
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GrammarLessonRequest
 import com.lazydog.english.domain.generation.NewWordsRequest
+import com.lazydog.english.domain.listening.ListeningSetRequest
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -48,6 +49,30 @@ class GrammarPromptTest {
         assertTrue(prompt.contains("不得含中文"))
         assertTrue(prompt.contains("summaryZh"))
         assertTrue(prompt.contains("be going to + base verb"))
+    }
+}
+
+class ListeningPromptTest {
+    @Test
+    fun `listening prompt carries the structured conditions instead of just a level`() {
+        // §18：只说"生成一个 B1 句子"出来的就是教科书英语，训练不到真实语流。
+        val prompt = OpenAiContentGenerator.buildListeningPrompt(
+            ListeningSetRequest(
+                sceneZh = "商务职场",
+                subScenesZh = listOf("会议", "汇报"),
+                count = 10,
+                learnerLevel = "B1",
+                topics = listOf("科技"),
+            ),
+        )
+
+        assertTrue(prompt.contains("商务职场"))
+        assertTrue(prompt.contains("会议、汇报"))
+        assertTrue(prompt.contains("intentZh"))
+        assertTrue(prompt.contains("registerZh"))
+        assertTrue(prompt.contains("audioFeatures"))
+        // §15：授权说不清就不要照抄真实台词。
+        assertTrue(prompt.contains("不要照搬电影"))
     }
 }
 
@@ -402,5 +427,70 @@ class OpenAiContentGeneratorTest {
         val result = generator().generateCorrectionItem("B1", emptyList())
 
         assertTrue(result is GenerationResult.Failure)
+    }
+
+    private val listeningRequest =
+        ListeningSetRequest("商务职场", listOf("会议"), count = 10, learnerLevel = "B1", topics = emptyList())
+
+    /** 六句合法 + 一句关键表达不在句子里，凑够开局下限，坏的那句要被丢掉。 */
+    private val listeningJson: String
+        get() {
+            val good = (1..6).joinToString(",") { i ->
+                """{"textEn":"I barely made it to the $i o'clock meeting on time.",
+                   "meaningZh":"我勉强准时赶到了第 $i 场会议","subSceneZh":"会议","intentZh":"解释",
+                   "toneZh":"Nervous","registerZh":"口语","cefr":"B1","listeningDifficulty":3,
+                   "audioFeatures":["linking","reduction"],
+                   "keyExpression":{"en":"barely made it","meaningZh":"差一点没赶上"},
+                   "wrongMeaningsZh":["我提前参加了第 $i 场会议","我没有参加第 $i 场会议"],
+                   "sceneHintZh":"这句和迟到、赶时间有关","keywordHintZh":"注意听 barely"}"""
+            }
+            val bad =
+                """{"textEn":"We should probably push the deadline by a couple of days.",
+                   "meaningZh":"我们大概得把截止日往后推两天","subSceneZh":"排期","intentZh":"建议",
+                   "toneZh":"Neutral","registerZh":"口语","cefr":"B1","listeningDifficulty":3,
+                   "audioFeatures":["reduction"],
+                   "keyExpression":{"en":"call it off","meaningZh":"取消"},
+                   "wrongMeaningsZh":["我们应该提前交","我们应该取消这个项目"],
+                   "sceneHintZh":"和时间安排有关","keywordHintZh":"注意听 push"}"""
+            return """{"schemaVersion":1,"items":[$good,$bad]}"""
+        }
+
+    @Test
+    fun `listening set drops the item whose key expression is missing from the sentence`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody(listeningJson)))
+
+        val result = generator().generateListeningSet(listeningRequest)
+
+        val success = result as GenerationResult.Success
+        assertEquals(6, success.data.size)
+        assertEquals(1, success.droppedNotes.size)
+        assertTrue(success.droppedNotes.single().contains("重点表达不在句子里"))
+    }
+
+    @Test
+    fun `too few usable listening sentences fails instead of opening a short round`() = runBlocking {
+        val onlyOne =
+            """{"schemaVersion":1,"items":[
+               {"textEn":"I barely made it to the meeting on time.","meaningZh":"我勉强准时赶到了会议",
+                "subSceneZh":"会议","intentZh":"解释","toneZh":"Nervous","registerZh":"口语","cefr":"B1",
+                "listeningDifficulty":3,"audioFeatures":["linking"],
+                "keyExpression":{"en":"barely made it","meaningZh":"差一点没赶上"},
+                "wrongMeaningsZh":["我提前到了","我没到"],
+                "sceneHintZh":"和迟到有关","keywordHintZh":"注意听 barely"}]}"""
+        server.enqueue(MockResponse().setBody(chatBody(onlyOne)))
+
+        val result = generator().generateListeningSet(listeningRequest)
+
+        val failure = result as GenerationResult.Failure
+        assertTrue(failure.reason.contains("太少"))
+    }
+
+    @Test
+    fun `listening set with a wrong schema version is rejected`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody("""{"schemaVersion":9,"items":[]}""")))
+
+        val result = generator().generateListeningSet(listeningRequest)
+
+        assertTrue((result as GenerationResult.Failure).reason.contains("schema"))
     }
 }

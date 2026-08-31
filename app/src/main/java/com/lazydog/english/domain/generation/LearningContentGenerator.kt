@@ -38,6 +38,15 @@ interface LearningContentGenerator {
         onProgress: ((Int) -> Unit)? = null,
     ): GenerationResult<GeneratedGrammarLesson>
 
+    /**
+     * 生成一轮听力训练的句子（英语听力训练模块DESIGN.md §18）。
+     * 返回前已过 ListeningValidation，条数可能少于请求数——由调用方决定够不够开一局。
+     */
+    suspend fun generateListeningSet(
+        request: com.lazydog.english.domain.listening.ListeningSetRequest,
+        onProgress: ((Int) -> Unit)? = null,
+    ): GenerationResult<List<com.lazydog.english.domain.listening.ListeningItem>>
+
     /** 生成渐进式阅读短文，返回前已通过 ReadingValidation。 */
     suspend fun generateReading(
         request: ReadingGenerationRequest,

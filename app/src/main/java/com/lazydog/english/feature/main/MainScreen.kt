@@ -47,6 +47,7 @@ fun MainScreen(
     prefs: UserPreferences,
     knowledgeRepository: KnowledgeRepository,
     onStartSpeaking: () -> Unit,
+    onStartListening: () -> Unit,
     onStartWordStudy: () -> Unit,
     onStartGrammarStudy: () -> Unit,
     onStartReading: () -> Unit,
@@ -91,6 +92,7 @@ fun MainScreen(
             MainTab.Study -> StudyScreen(
                 modifier = contentModifier,
                 onSpeakingClick = onStartSpeaking,
+                onListeningClick = onStartListening,
                 onWordsClick = onStartWordStudy,
                 onGrammarClick = onStartGrammarStudy,
                 onReadingClick = onStartReading,
