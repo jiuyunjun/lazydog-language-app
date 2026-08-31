@@ -14,10 +14,12 @@ import com.lazydog.english.domain.assessment.ReadingTag
 import com.lazydog.english.domain.assessment.validateAssessmentQuestions
 import com.lazydog.english.domain.assessment.validateCorrectionItem
 import com.lazydog.english.domain.generation.ContentValidation
+import com.lazydog.english.domain.listening.ListeningDistractor
 import com.lazydog.english.domain.listening.ListeningItem
 import com.lazydog.english.domain.listening.ListeningKeyExpression
 import com.lazydog.english.domain.listening.ListeningSetRequest
 import com.lazydog.english.domain.listening.ListeningValidation
+import com.lazydog.english.domain.listening.MishearType
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GeneratedReading
 import com.lazydog.english.domain.generation.GeneratedWord
@@ -838,6 +840,21 @@ class OpenAiContentGenerator(
     private data class ListeningKeyExpressionPayload(val en: String = "", val meaningZh: String = "")
 
     @Serializable
+    private data class ListeningDistractorPayload(
+        val meaningZh: String = "",
+        val mishearType: String = "",
+        val whyZh: String = "",
+    ) {
+        /**
+         * 类型对不上封闭集合时留空字符串顶掉——[ListeningValidation] 会因为三条类型
+         * 不互不相同而丢掉整题。宁可丢一题，也不要往"你栽在哪一类"的统计里掺脏数据。
+         */
+        fun toDomain() = MishearType.fromWire(mishearType)?.let {
+            ListeningDistractor(meaningZh, it, whyZh)
+        }
+    }
+
+    @Serializable
     private data class ListeningItemPayload(
         val textEn: String = "",
         val meaningZh: String = "",
@@ -849,7 +866,7 @@ class OpenAiContentGenerator(
         val listeningDifficulty: Int = 0,
         val audioFeatures: List<String> = emptyList(),
         val keyExpression: ListeningKeyExpressionPayload = ListeningKeyExpressionPayload(),
-        val wrongMeaningsZh: List<String> = emptyList(),
+        val distractors: List<ListeningDistractorPayload> = emptyList(),
         val sceneHintZh: String = "",
         val keywordHintZh: String = "",
     ) {
@@ -866,7 +883,7 @@ class OpenAiContentGenerator(
             listeningDifficulty = listeningDifficulty,
             audioFeatures = audioFeatures,
             keyExpression = ListeningKeyExpression(keyExpression.en, keyExpression.meaningZh),
-            wrongMeaningsZh = wrongMeaningsZh,
+            distractors = distractors.mapNotNull { it.toDomain() },
             sceneHintZh = sceneHintZh,
             keywordHintZh = keywordHintZh,
         )
@@ -1345,8 +1362,12 @@ class OpenAiContentGenerator(
             appendLine("keyExpression 是这句最值得学的表达，en 必须是句子里**原样出现**的连续片段" +
                 "（大小写可以不同），meaningZh 说明它的意思。")
             appendLine("meaningZh 是整句的自然中文意思，说人话，不要逐字硬译。")
-            appendLine("wrongMeaningsZh 正好两条干扰项：都要像模像样，不能明显荒谬，" +
-                "必须来自真实误听——关键词误解、否定词漏听、时态误解、连读听串、相似场景或相似动作。")
+            appendLine("distractors 正好三条干扰项（连正确意思一共四个选项）：都要像模像样，" +
+                "不能明显荒谬，必须来自真实误听。三条的 mishearType 必须互不相同，只能取这些值：" +
+                "${MishearType.wireList}。")
+            appendLine("每条干扰项的 whyZh 要讲到音：哪个词弱读或连读成了什么、少听了什么，" +
+                "整句意思因此从哪儿变到哪儿。答错时这句话会原样显示给用户看，" +
+                "所以要具体到这一句，不能写『没听清』这种废话。")
             appendLine("sceneHintZh 是第一级提示：只说这句大概和什么情境有关，不许点出关键词，" +
                 "更不许把整句意思说出来。keywordHintZh 是第二级提示：点名要听的那个词，" +
                 "并说清它为什么难听出来（比如和前面连读了、弱读成了什么）。")
@@ -1358,7 +1379,12 @@ class OpenAiContentGenerator(
                     """"toneZh":"Nervous","registerZh":"口语","cefr":"B1","listeningDifficulty":3,""" +
                     """"audioFeatures":["linking","reduction"],""" +
                     """"keyExpression":{"en":"barely made it","meaningZh":"差一点没赶上"},""" +
-                    """"wrongMeaningsZh":["我提前参加了会议","我几乎没有参加会议"],""" +
+                    """"distractors":[{"meaningZh":"我提前参加了会议","mishearType":"keyword",""" +
+                    """"whyZh":"barely 被听成了 early，意思从『勉强赶上』翻成了『提前到』。"},""" +
+                    """{"meaningZh":"我没能参加这场会议","mishearType":"negation",""" +
+                    """"whyZh":"barely 有否定味道，漏掉 made it 就会以为整件事没做成。"},""" +
+                    """{"meaningZh":"会议准时结束了","mishearType":"similar_scene",""" +
+                    """"whyZh":"只抓到 the meeting on time，没听出主语在说自己。"}],""" +
                     """"sceneHintZh":"这句和迟到、赶时间有关","keywordHintZh":"注意听 barely，它和后面的 made 连读了"}]}""",
             )
         }

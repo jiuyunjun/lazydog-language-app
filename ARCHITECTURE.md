@@ -202,7 +202,7 @@ interface ReadingSource {
 
 - 一轮 10 句由一次 `generateListeningSet` 生成，全部通过 `ListeningValidation` 后才开局；能用的句子少于 5 句直接失败，不开一局残缺的训练。
 - 评分、总结和挖空提示都是 `domain/listening` 里的纯函数（`listeningScore`、`summarizeListening`、`maskKeyExpression`），不依赖 Compose，可单测。
-- 选项顺序按题目下标定死，避免重组时正确答案换位置。
+- 选项顺序按题目下标定死，避免重组时正确答案换位置。四个选项先选后确认，不是点一下就判定。
 - 一轮的状态只活在页面里，不落库：MVP 不做跨轮次的听力画像和周对比（`英语听力训练模块DESIGN.md` §25），因此也没有需要长期保存的东西。中途退出会明确提示这一轮会丢。
 - 翻到下一句时调 `stopSpeaking(keepLink = true)`：声音照掐，但保留已经热起来的蓝牙链路。不区分的话每翻一页都放手，下一句又从冷通路起播，等于白挂。
 - 揭晓页留下的重点表达走 `KnowledgeRepository.addExpression`，和情景演练留下的表达共用 `pos=expression` 与同一套复习调度。

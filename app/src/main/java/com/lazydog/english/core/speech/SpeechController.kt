@@ -5,6 +5,7 @@ import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.domain.speaking.AssessmentResult
 import com.lazydog.english.domain.speaking.SpeakResult
 import com.lazydog.english.domain.speaking.SpeechProvider
+import com.lazydog.english.domain.speaking.SpeechRate
 import com.lazydog.english.domain.speaking.SpeechStyle
 import com.lazydog.english.domain.speaking.TranscriptionResult
 import kotlinx.coroutines.flow.first
@@ -33,14 +34,20 @@ class SpeechController(context: Context, private val prefs: UserPreferences) {
         ).also { provider = it }
     }
 
-    /** 用当前语速和音色朗读英文；会打断上一次播放。失败静默返回结果，由调用方决定是否展示。 */
-    suspend fun speak(text: String): SpeakResult = speak(text, SpeechStyle.Sentence)
+    /**
+     * 用当前语速和音色朗读英文；会打断上一次播放。失败静默返回结果，由调用方决定是否展示。
+     *
+     * [rate] 传非空可以只为这一次改语速（听力训练的"慢速"按钮就是这样），
+     * 不影响用户在设置里定的默认语速。
+     */
+    suspend fun speak(text: String, rate: SpeechRate? = null): SpeakResult =
+        speak(text, SpeechStyle.Sentence, rate)
 
     /** 报一个单词或搭配：用播音腔，平稳清楚，不带句子的语调（见 [SpeechStyle]）。 */
     suspend fun speakWord(text: String): SpeakResult = speak(text, SpeechStyle.Word)
 
-    private suspend fun speak(text: String, style: SpeechStyle): SpeakResult =
-        provider().speak(text, prefs.speechRate.first(), prefs.ttsVoice.first(), style)
+    private suspend fun speak(text: String, style: SpeechStyle, rate: SpeechRate? = null): SpeakResult =
+        provider().speak(text, rate ?: prefs.speechRate.first(), prefs.ttsVoice.first(), style)
 
     /**
      * 停掉正在播的朗读。页面切走、退到后台、弹窗关掉时调用——人已经走了就不该还在念。

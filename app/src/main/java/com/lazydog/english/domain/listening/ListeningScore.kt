@@ -1,35 +1,40 @@
 package com.lazydog.english.domain.listening
 
 /**
- * 单句 Listening Score（英语听力训练模块DESIGN.md §21）。
+ * 单句 Listening Score（英语听力训练模块DESIGN.md §21、设计稿「Listening Score 规则」）。
  *
- * 分数只用来让用户看见自己的变化，不追求测量学上的精确（§21 原话）。规则：
+ * 分数只用来让用户看见自己的变化，不做排行、不宣称精确科学性（设计稿原话）。规则：
  * - 答错固定 20 分：他确实是看到完整英文才明白的，对应文档里"完整字幕以后才理解：20"。
  * - 答对按**揭晓前播放了几次**给基础分：1 次 100、2 次 85、3 次 70、更多 60。
  * - 再按**用到过的最高一级提示**扣：场景提示 -15、关键词提示 -30。
- * - 挖空英文（Hint 3）已经算看了字幕，封顶 50（§21"看部分字幕：最多 50"）。
+ * - 挖空英文封顶 50（§21"看部分字幕：最多 50"）；看了完整英文只剩 20，
+ *   和答错同分——两种都是"落到文字才明白"，见设计稿"英文放在最后一级"。
  */
 fun listeningScore(correct: Boolean, playCount: Int, hint: ListeningHintLevel): Int {
     if (!correct) return SCORE_AFTER_FULL_TEXT
-    val base = when {
-        playCount <= 1 -> 100
-        playCount == 2 -> 85
-        playCount == 3 -> 70
-        else -> 60
-    }
+    val base = baseScore(playCount)
     val scored = when (hint) {
         ListeningHintLevel.None -> base
         ListeningHintLevel.Scene -> base - 15
         ListeningHintLevel.Keyword -> base - 30
         ListeningHintLevel.PartialText -> minOf(base - 30, PARTIAL_TEXT_CAP)
+        ListeningHintLevel.FullText -> SCORE_AFTER_FULL_TEXT
     }
     return scored.coerceIn(0, 100)
+}
+
+/** 只看播放次数能拿到的上限。答题页用它预告"再听一遍这题最高几分"（设计稿屏 52）。 */
+fun baseScore(playCount: Int): Int = when {
+    playCount <= 1 -> 100
+    playCount == 2 -> 85
+    playCount == 3 -> 70
+    else -> 60
 }
 
 private const val SCORE_AFTER_FULL_TEXT = 20
 private const val PARTIAL_TEXT_CAP = 50
 
-/** 把关键表达从原句里挖空，用于 Hint 3"部分英文"（§5 Hint Level 3）。 */
+/** 把关键表达从原句里挖空，用于"挖空英文"这一级提示（§5 Hint Level 3）。 */
 fun maskKeyExpression(textEn: String, keyExpressionEn: String): String {
     val key = keyExpressionEn.trim()
     // 关键表达对不上时不能整句照抄——那等于直接给答案。退而求其次挖掉最长的一个词。
@@ -46,10 +51,10 @@ fun maskKeyExpression(textEn: String, keyExpressionEn: String): String {
 private const val BLANK = "_____"
 
 /**
- * 一轮训练结束后的总结（§22、§23）。
+ * 一轮训练结束后的总结（§22、§23、设计稿屏 56）。
  *
- * 只统计这一局：文档 §23 里的"最强场景"和 §24 的周对比都需要跨局历史，这一版没有存储，
- * 所以这里只回答"这十句里最容易绊住你的听力点是什么"，不编造能力画像。
+ * 只统计这一局：设计稿屏 57 的听力能力档案和周对比都需要跨局历史，这一版没有存储，
+ * 所以这里只回答"这十句里你栽在哪儿"，不编造能力画像。
  */
 data class ListeningSummary(
     val totalScore: Int,
@@ -60,15 +65,19 @@ data class ListeningSummary(
     val afterHintCount: Int,
     val missedCount: Int,
     val averagePlays: Double,
-    /** 没能一次听懂的题里出现最多的听觉难点标签；全对时为空。 */
+    /** 没能一次听懂的题里出现最多的听觉难点标签；全部一遍听懂时为空。 */
     val weakestFeature: String?,
+    /** 答错时最常栽的那一类误听；全对时为空（设计稿"你栽在哪一类"）。 */
+    val weakestMishear: MishearType?,
+    /** 没能一遍听懂的题，总结页可以直接再过一遍（设计稿屏 56）。 */
+    val worthReplaying: List<ListeningAnswer>,
 ) {
     val total: Int get() = answers.size
 }
 
 fun summarizeListening(answers: List<ListeningAnswer>): ListeningSummary {
     if (answers.isEmpty()) {
-        return ListeningSummary(0, emptyList(), 0, 0, 0, 0, 0.0, null)
+        return ListeningSummary(0, emptyList(), 0, 0, 0, 0, 0.0, null, null, emptyList())
     }
     // 四类互斥且穷尽（§23 的四行统计）：没答对 / 用了提示 / 多听几遍 / 一遍就懂。
     val missed = answers.count { !it.correct }
@@ -82,6 +91,11 @@ fun summarizeListening(answers: List<ListeningAnswer>): ListeningSummary {
         .eachCount()
         .maxByOrNull { it.value }
         ?.key
+    val weakestMishear = answers.mapNotNull { it.mishear?.mishearType }
+        .groupingBy { it }
+        .eachCount()
+        .maxByOrNull { it.value }
+        ?.key
     return ListeningSummary(
         totalScore = answers.sumOf { it.score } / answers.size,
         answers = answers,
@@ -91,6 +105,8 @@ fun summarizeListening(answers: List<ListeningAnswer>): ListeningSummary {
         missedCount = missed,
         averagePlays = answers.sumOf { it.playCount } / answers.size.toDouble(),
         weakestFeature = weakest,
+        weakestMishear = weakestMishear,
+        worthReplaying = answers.filterNot { it.firstListen },
     )
 }
 

@@ -72,6 +72,9 @@ class ListeningPromptTest {
         assertTrue(prompt.contains("intentZh"))
         assertTrue(prompt.contains("registerZh"))
         assertTrue(prompt.contains("audioFeatures"))
+        // 干扰项类型必须是封闭集合，否则"你栽在哪一类"没法聚合。
+        assertTrue(prompt.contains("mishearType"))
+        assertTrue(prompt.contains("similar_scene"))
         // §15：授权说不清就不要照抄真实台词。
         assertTrue(prompt.contains("不要照搬电影"))
     }
@@ -476,7 +479,13 @@ class OpenAiContentGeneratorTest {
                    "toneZh":"Nervous","registerZh":"口语","cefr":"B1","listeningDifficulty":3,
                    "audioFeatures":["linking","reduction"],
                    "keyExpression":{"en":"barely made it","meaningZh":"差一点没赶上"},
-                   "wrongMeaningsZh":["我提前参加了第 $i 场会议","我没有参加第 $i 场会议"],
+                   "distractors":[
+                     {"meaningZh":"我提前参加了第 $i 场会议","mishearType":"keyword",
+                      "whyZh":"barely 被听成了 early。"},
+                     {"meaningZh":"我没能参加第 $i 场会议","mishearType":"negation",
+                      "whyZh":"漏掉 made it 会以为事情没做成。"},
+                     {"meaningZh":"第 $i 场会议准时结束了","mishearType":"similar_scene",
+                      "whyZh":"只抓到 the meeting on time。"}],
                    "sceneHintZh":"这句和迟到、赶时间有关","keywordHintZh":"注意听 barely"}"""
             }
             val bad =
@@ -485,7 +494,10 @@ class OpenAiContentGeneratorTest {
                    "toneZh":"Neutral","registerZh":"口语","cefr":"B1","listeningDifficulty":3,
                    "audioFeatures":["reduction"],
                    "keyExpression":{"en":"call it off","meaningZh":"取消"},
-                   "wrongMeaningsZh":["我们应该提前交","我们应该取消这个项目"],
+                   "distractors":[
+                     {"meaningZh":"我们应该提前交","mishearType":"tense","whyZh":"时态听反了。"},
+                     {"meaningZh":"我们应该取消这个项目","mishearType":"keyword","whyZh":"push 听成了别的词。"},
+                     {"meaningZh":"截止日已经过了","mishearType":"similar_scene","whyZh":"只抓到 deadline。"}],
                    "sceneHintZh":"和时间安排有关","keywordHintZh":"注意听 push"}"""
             return """{"schemaVersion":1,"items":[$good,$bad]}"""
         }
@@ -510,7 +522,10 @@ class OpenAiContentGeneratorTest {
                 "subSceneZh":"会议","intentZh":"解释","toneZh":"Nervous","registerZh":"口语","cefr":"B1",
                 "listeningDifficulty":3,"audioFeatures":["linking"],
                 "keyExpression":{"en":"barely made it","meaningZh":"差一点没赶上"},
-                "wrongMeaningsZh":["我提前到了","我没到"],
+                "distractors":[
+                  {"meaningZh":"我提前到了","mishearType":"keyword","whyZh":"barely 听成了 early。"},
+                  {"meaningZh":"我没到","mishearType":"negation","whyZh":"漏掉 made it。"},
+                  {"meaningZh":"会议准时结束","mishearType":"similar_scene","whyZh":"只抓到 on time。"}],
                 "sceneHintZh":"和迟到有关","keywordHintZh":"注意听 barely"}]}"""
         server.enqueue(MockResponse().setBody(chatBody(onlyOne)))
 
