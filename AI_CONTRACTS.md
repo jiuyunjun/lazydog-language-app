@@ -163,6 +163,13 @@ interface LearningContentGenerator {
 - `max_tokens` 随请求发出（`DEFAULT_MAX_TOKENS`，听力这类最长的返回用 `LISTENING_MAX_TOKENS`）。
 - 流式读取另有字符硬上限 `MAX_RESPONSE_CHARS`，用于服务端不认 `max_tokens` 或模型自己转圈的情况。超过就掐断并返回失败。
 - OkHttp 的 `readTimeout` 拦不住这种情况：它是每次读的超时，只要一直有数据到达就会被不断重置。
+- 上限字段有两个名字：老接口认 `max_tokens`，较新的 OpenAI 模型只认 `max_completion_tokens`，对前者直接回 400。客户端先发 `max_tokens`，收到提到该字段的 400 时换名重发一次，只换一次。
+
+## 10. 失败信息与日志
+
+- 失败原因必须带上服务端错误正文里的那句话（`{"error":{"message":...}}`），只报状态码等于什么都没说。
+- AI 调用打日志到 `LazyDogAI` 标签：哪个调用、模型、主机、提示词长度、状态、耗时、重试原因。用 `adb logcat -s LazyDogAI` 看。
+- 按 §8 脱敏：不打 Authorization、密钥、提示词正文和用户长文本，只打长度；服务端正文里的 `sk-*` 和 `Bearer *` 会被替换，超长正文截断。
 
 ## 10. 待实现时确定
 

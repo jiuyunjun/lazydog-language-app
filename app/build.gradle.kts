@@ -40,6 +40,14 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests {
+            // android.util.Log 在 JVM 单测里没有实现，默认会抛 "not mocked"。
+            // AI 客户端现在带日志，契约测试要能照常跑，让这类调用返回默认值即可。
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 ksp {

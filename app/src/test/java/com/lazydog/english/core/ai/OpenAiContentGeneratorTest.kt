@@ -9,6 +9,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -73,6 +74,40 @@ class ListeningPromptTest {
         assertTrue(prompt.contains("audioFeatures"))
         // §15：授权说不清就不要照抄真实台词。
         assertTrue(prompt.contains("不要照搬电影"))
+    }
+}
+
+class AiLogTest {
+
+    @Test
+    fun `server error message is pulled out of the error envelope`() {
+        val body = """{"error":{"message":"Unsupported parameter: 'max_tokens' is not supported with this model.",
+                       "type":"invalid_request_error","param":"max_tokens","code":null}}"""
+        assertEquals(
+            "Unsupported parameter: 'max_tokens' is not supported with this model.",
+            extractErrorMessage(body),
+        )
+    }
+
+    @Test
+    fun `a body without an error envelope is returned as is`() {
+        assertEquals("502 Bad Gateway", extractErrorMessage("502 Bad Gateway"))
+    }
+
+    @Test
+    fun `keys echoed back by the server never reach logcat`() {
+        // AI_CONTRACTS §8：日志不得出现 Authorization 和密钥。
+        val logged = AiLog.body("""{"error":{"message":"bad key sk-abcd1234efgh5678 with Bearer sk-zzzz9999"}}""")
+        assertFalse(logged.contains("sk-abcd1234efgh5678"))
+        assertFalse(logged.contains("sk-zzzz9999"))
+        assertTrue(logged.contains("sk-***"))
+    }
+
+    @Test
+    fun `long error bodies are truncated`() {
+        val logged = AiLog.body("x".repeat(5000))
+        assertTrue(logged.length < 600)
+        assertTrue(logged.endsWith("（已截断）"))
     }
 }
 
@@ -525,5 +560,56 @@ class OpenAiContentGeneratorTest {
             "掐断点不该超过上限太多，实际报到 $lastReported",
             lastReported <= OpenAiContentGenerator.MAX_RESPONSE_CHARS,
         )
+    }
+
+    @Test
+    fun `a 400 says what the server actually complained about`() = runBlocking {
+        // 之前只报"HTTP 400"，等于什么都没说。
+        server.enqueue(
+            MockResponse().setResponseCode(400).setBody(
+                """{"error":{"message":"Invalid value for 'temperature'.","type":"invalid_request_error"}}""",
+            ),
+        )
+
+        val result = generator().generateListeningSet(listeningRequest)
+
+        val failure = result as GenerationResult.Failure
+        assertTrue(failure.reason.contains("400"))
+        assertTrue(failure.reason.contains("Invalid value for 'temperature'."))
+    }
+
+    @Test
+    fun `a model that rejects max_tokens is retried with max_completion_tokens`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(400).setBody(
+                """{"error":{"message":"Unsupported parameter: 'max_tokens' is not supported with this model.",
+                   "param":"max_tokens"}}""",
+            ),
+        )
+        server.enqueue(MockResponse().setBody(chatBody(listeningJson)))
+
+        val result = generator().generateListeningSet(listeningRequest)
+
+        assertTrue(result is GenerationResult.Success)
+        val first = server.takeRequest().body.readUtf8()
+        val second = server.takeRequest().body.readUtf8()
+        assertTrue(first.contains("\"max_tokens\""))
+        assertFalse(first.contains("max_completion_tokens"))
+        assertTrue(second.contains("\"max_completion_tokens\":${OpenAiContentGenerator.LISTENING_MAX_TOKENS}"))
+        // 换名重发只做一次，别把一个 400 变成来回打
+        assertFalse(second.contains("\"max_tokens\":"))
+    }
+
+    @Test
+    fun `a 400 unrelated to the token limit is not retried`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(400)
+                .setBody("""{"error":{"message":"model not found"}}"""),
+        )
+
+        val result = generator().generateListeningSet(listeningRequest)
+
+        assertTrue(result is GenerationResult.Failure)
+        assertEquals(1, server.requestCount)
     }
 }

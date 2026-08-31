@@ -87,6 +87,7 @@ class OpenAiContentGenerator(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildNewWordsPrompt(request),
             onProgress = onProgress,
+            op = "新词",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -123,6 +124,7 @@ class OpenAiContentGenerator(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildGrammarPrompt(request),
             onProgress = onProgress,
+            op = "语法",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -147,6 +149,7 @@ class OpenAiContentGenerator(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildReadingPrompt(request),
             onProgress = onProgress,
+            op = "阅读",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -180,6 +183,7 @@ class OpenAiContentGenerator(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExplainWordPrompt(term, sentenceContext, learnerLevel),
             onTextProgress = onProgress,
+            op = "查词",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -203,6 +207,7 @@ class OpenAiContentGenerator(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExplainSentencePrompt(sentence, learnerLevel),
             onTextProgress = onProgress,
+            op = "讲句",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -226,6 +231,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildAssessmentPrompt(cefrLevel, count, topics, skillFilter),
+            op = "测试题",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -248,6 +254,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildDeepReadingPrompt(cefrLevel, topics),
+            op = "测试阅读",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -271,6 +278,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildCorrectionItemPrompt(cefrLevel, topics),
+            op = "纠错题",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -291,6 +299,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExpressionRubricPrompt(taskZh, userTextEn, referenceCefrLevel),
+            op = "表达评分",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -311,6 +320,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildPronunciationTipsPrompt(referenceText, feedback),
+            op = "发音提示",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -332,6 +342,7 @@ class OpenAiContentGenerator(
             userPrompt = buildListeningPrompt(request),
             onProgress = onProgress,
             maxTokens = LISTENING_MAX_TOKENS,
+            op = "听力",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -362,7 +373,7 @@ class OpenAiContentGenerator(
     override suspend fun generateScenario(
         request: ScenarioGenerationRequest,
     ): GenerationResult<ScenarioBrief> {
-        val outcome = complete(SYSTEM_PROMPT, buildScenarioPrompt(request))
+        val outcome = complete(SYSTEM_PROMPT, buildScenarioPrompt(request), op = "情景生成")
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -381,7 +392,7 @@ class OpenAiContentGenerator(
     override suspend fun generateScenarioTurn(
         request: ScenarioTurnRequest,
     ): GenerationResult<ScenarioTurn> {
-        val outcome = complete(SCENARIO_ROLE_SYSTEM_PROMPT, buildScenarioTurnPrompt(request))
+        val outcome = complete(SCENARIO_ROLE_SYSTEM_PROMPT, buildScenarioTurnPrompt(request), op = "情景对话")
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -395,7 +406,7 @@ class OpenAiContentGenerator(
     override suspend fun judgeScenarioTurn(
         request: ScenarioTurnRequest,
     ): GenerationResult<ScenarioJudgement> {
-        val outcome = complete(SCENARIO_JUDGE_SYSTEM_PROMPT, buildScenarioJudgePrompt(request))
+        val outcome = complete(SCENARIO_JUDGE_SYSTEM_PROMPT, buildScenarioJudgePrompt(request), op = "情景判定")
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -411,7 +422,7 @@ class OpenAiContentGenerator(
     override suspend fun summarizeScenario(
         request: ScenarioSummaryRequest,
     ): GenerationResult<ScenarioSummary> {
-        val outcome = complete(SYSTEM_PROMPT, buildScenarioSummaryPrompt(request))
+        val outcome = complete(SYSTEM_PROMPT, buildScenarioSummaryPrompt(request), op = "情景总结")
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -438,50 +449,88 @@ class OpenAiContentGenerator(
         onProgress: ((Int) -> Unit)? = null,
         onTextProgress: ((String) -> Unit)? = null,
         maxTokens: Int = DEFAULT_MAX_TOKENS,
+        op: String = "ai",
     ): Completion = withContext(Dispatchers.IO) {
         val (baseUrl, apiKey, model) = config()
         val streaming = onProgress != null || onTextProgress != null
+        val url = chatCompletionsUrl(baseUrl)
+        val startedAt = System.currentTimeMillis()
+        AiLog.start(op, model, url, systemPrompt.length + userPrompt.length, streaming)
 
-        val body = json.encodeToString(
-            ChatRequest.serializer(),
-            ChatRequest(
-                model = model,
-                messages = listOf(
-                    ChatMessage("system", systemPrompt),
-                    ChatMessage("user", userPrompt),
+        fun buildRequest(useCompletionTokens: Boolean): Request {
+            val body = json.encodeToString(
+                ChatRequest.serializer(),
+                ChatRequest(
+                    model = model,
+                    messages = listOf(
+                        ChatMessage("system", systemPrompt),
+                        ChatMessage("user", userPrompt),
+                    ),
+                    maxTokens = if (useCompletionTokens) null else maxTokens,
+                    maxCompletionTokens = if (useCompletionTokens) maxTokens else null,
+                    stream = streaming,
                 ),
-                maxTokens = maxTokens,
-                stream = streaming,
-            ),
-        )
-        val request = Request.Builder()
-            .url(chatCompletionsUrl(baseUrl))
-            .header("Authorization", "Bearer $apiKey")
-            .post(body.toRequestBody("application/json".toMediaType()))
-            .build()
+            )
+            return Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer $apiKey")
+                .post(body.toRequestBody("application/json".toMediaType()))
+                .build()
+        }
 
+        fun elapsed() = System.currentTimeMillis() - startedAt
+        fun fail(reason: String): Completion {
+            AiLog.failure(op, reason, elapsed())
+            return Completion.Error(reason)
+        }
+        fun done(result: Completion): Completion {
+            when (result) {
+                is Completion.Content -> AiLog.success(op, result.model, result.text.length, elapsed())
+                is Completion.Error -> AiLog.failure(op, result.reason, elapsed())
+            }
+            return result
+        }
+
+        var useCompletionTokens = false
+        var swappedTokenField = false
         var lastReason = "未知错误"
-        repeat(2) { attempt ->
+        var attempt = 0
+        // 最多三次：一次原始请求、一次换上限字段名、一次限流/网络重试。
+        while (attempt < 3) {
+            attempt += 1
             try {
-                okHttpClient.newCall(request).await().use { response ->
+                okHttpClient.newCall(buildRequest(useCompletionTokens)).await().use { response ->
                     if (response.isSuccessful) {
-                        return@withContext if (streaming) {
-                            readStreamed(response, model, onProgress, onTextProgress)
-                        } else {
-                            readWhole(response, model)
-                        }
+                        return@withContext done(
+                            if (streaming) {
+                                readStreamed(response, model, onProgress, onTextProgress)
+                            } else {
+                                readWhole(response, model)
+                            },
+                        )
                     }
-                    lastReason = "HTTP ${response.code}"
-                    if (response.code !in RETRYABLE_CODES) {
-                        return@withContext Completion.Error(lastReason)
+                    // 服务端的错误正文才说得清哪不对，只报状态码等于什么都没说。
+                    val raw = runCatching { response.body?.string().orEmpty() }.getOrDefault("")
+                    val detail = AiLog.body(extractErrorMessage(raw))
+                    lastReason = if (detail.isBlank()) "HTTP ${response.code}" else "HTTP ${response.code}：$detail"
+
+                    // 较新的 OpenAI 模型只认 max_completion_tokens，对 max_tokens 直接 400。
+                    if (response.code == 400 && !swappedTokenField && mentionsTokenLimit(raw)) {
+                        swappedTokenField = true
+                        useCompletionTokens = true
+                        AiLog.retry(op, lastReason, "改用 max_completion_tokens 重发")
+                        return@use
                     }
+                    if (response.code !in RETRYABLE_CODES) return@withContext fail(lastReason)
+                    AiLog.retry(op, lastReason, "可重试状态码，${retryDelayMs} ms 后再试")
                 }
             } catch (e: IOException) {
                 lastReason = "网络错误：${e.message ?: e.javaClass.simpleName}"
+                AiLog.retry(op, lastReason, "${retryDelayMs} ms 后再试")
             }
-            if (attempt == 0) delay(retryDelayMs)
+            if (attempt < 3 && !swappedTokenField) delay(retryDelayMs)
         }
-        Completion.Error("$lastReason（已重试 1 次）")
+        fail("$lastReason（已重试）")
     }
 
     private fun readWhole(response: okhttp3.Response, fallbackModel: String): Completion {
@@ -553,7 +602,13 @@ class OpenAiContentGenerator(
         val model: String,
         val messages: List<ChatMessage>,
         @SerialName("response_format") val responseFormat: ResponseFormat = ResponseFormat(),
-        @SerialName("max_tokens") val maxTokens: Int = DEFAULT_MAX_TOKENS,
+        /**
+         * 输出上限。两个字段只发一个：老接口认 `max_tokens`，较新的 OpenAI 模型
+         * 只认 `max_completion_tokens` 并且会对前者直接回 400。谁能用事先不知道，
+         * 所以先发 `max_tokens`，被顶回来再换，见 [complete]。
+         */
+        @SerialName("max_tokens") val maxTokens: Int? = null,
+        @SerialName("max_completion_tokens") val maxCompletionTokens: Int? = null,
         val stream: Boolean = false,
     )
 
@@ -990,13 +1045,21 @@ class OpenAiContentGenerator(
          */
         const val MAX_RESPONSE_CHARS = 24_000
 
+        /** 400 的正文提到上限字段，就说明这个服务端要的是另一个名字。 */
+        internal fun mentionsTokenLimit(body: String): Boolean =
+            body.contains("max_tokens", ignoreCase = true) ||
+                body.contains("max_completion_tokens", ignoreCase = true)
+
         private const val RETRY_DELAY_MS = 1200L
         private val RETRYABLE_CODES = setOf(429) + (500..599)
 
         // encodeDefaults：确保 response_format 这类默认值字段也会写进请求体。
+        // explicitNulls=false：没选中的那个上限字段直接不出现，而不是写成 null——
+        // 有的服务端见到 "max_tokens":null 会当成非法参数。
         private val json = Json {
             ignoreUnknownKeys = true
             encodeDefaults = true
+            explicitNulls = false
         }
 
         private val defaultOkHttpClient: OkHttpClient = OkHttpClient.Builder()
