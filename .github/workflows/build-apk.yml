@@ -34,6 +34,9 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      - name: Prepare local service configuration
+        run: cp app/src/main/java/com/lazydog/english/core/config/LocalEnv.kt.example app/src/main/java/com/lazydog/english/core/config/LocalEnv.kt
+
       - name: Test, lint, and build debug APK
         run: ./gradlew lintDebug testDebugUnitTest assembleDebug --stacktrace
 
