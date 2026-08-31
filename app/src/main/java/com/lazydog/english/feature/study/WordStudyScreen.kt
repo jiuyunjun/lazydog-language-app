@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,6 +75,7 @@ private data class StudyCard(
     val pos: String = "",
     val collocations: List<String> = emptyList(),
     val stage: String = KnowledgeStage.Learning.name,
+    val memoryHintZh: String = "",
 ) {
     /**
      * 熟了的词改考产出：给中文，自己写出英文。
@@ -141,6 +143,7 @@ fun WordStudyScreen(
                     pos = it.detail.pos,
                     collocations = VocabularyJson.decodeCollocations(it.detail.collocationsJson),
                     stage = it.item.stage,
+                    memoryHintZh = it.detail.memoryHintZh,
                 )
             }
         phase = if (due.isEmpty()) WordStudyPhase.OfferNew(0) else WordStudyPhase.Cards(due, 0, revealed = false)
@@ -184,6 +187,7 @@ fun WordStudyScreen(
                     exampleZh = card.exampleZh,
                     pos = card.pos,
                     collocations = card.collocations,
+                    memoryHintZh = card.memoryHintZh,
                 )
                 if (id != null) {
                     repository.recordReview(id, grade, source = "card")
@@ -353,6 +357,7 @@ private fun GeneratedWord.toCard() = StudyCard(
     isNew = true,
     pos = pos,
     collocations = collocations,
+    memoryHintZh = memoryHintZh,
 )
 
 /** 产出卡：给中文释义，自己把英文写出来，程序判分。 */
@@ -493,7 +498,7 @@ private fun StudyCardView(
 
     // 卡片出现时自动朗读（设置里可关）。
     LaunchedEffect(card.term) {
-        if (app.userPreferences.autoReadWords.first()) speech.speak(card.term)
+        if (app.userPreferences.autoReadWords.first()) speech.speakWord(card.term)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -510,7 +515,7 @@ private fun StudyCardView(
                     text = card.term,
                     style = if (revealed) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayMedium,
                 )
-                IconButton(onClick = { scope.launch { speech.speak(card.term) } }) {
+                IconButton(onClick = { scope.launch { speech.speakWord(card.term) } }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
                         contentDescription = "再读一遍",
@@ -551,6 +556,39 @@ private fun StudyCardView(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 )
                             }
+                        }
+                    }
+                }
+                if (card.memoryHintZh.isNotBlank()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Lightbulb,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                                Text(
+                                    text = "怎么记",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                            }
+                            Text(
+                                text = card.memoryHintZh,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
                         }
                     }
                 }
@@ -608,7 +646,7 @@ private fun StudyCardView(
                 }
             } else {
                 Text(
-                    text = if (card.isNew) "感觉这个词对你来说：" else "刚才想起来了吗？照实点，算法才准",
+                    text = if (card.isNew) "这个词你原来认识吗？照实点，算法才准" else "刚才想起来了吗？照实点，算法才准",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -621,7 +659,11 @@ private fun StudyCardView(
                             modifier = Modifier.weight(1f),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 10.dp),
                         ) {
-                            Text(grade.label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                            Text(
+                                text = if (card.isNew) grade.newLabel else grade.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                            )
                         }
                     }
                 }

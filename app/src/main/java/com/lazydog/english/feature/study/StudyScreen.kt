@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.Abc
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material3.Icon
@@ -56,6 +57,7 @@ private sealed interface RecentStudyItem {
 fun StudyScreen(
     modifier: Modifier = Modifier,
     onSpeakingClick: () -> Unit,
+    onListeningClick: () -> Unit,
     onWordsClick: () -> Unit,
     onGrammarClick: () -> Unit,
     onProductionClick: () -> Unit,
@@ -82,6 +84,7 @@ fun StudyScreen(
         StudyEntry(Icons.Outlined.Edit, "自己写一句", "中译英，判完记进错题", onClick = onProductionClick),
         StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "生成一篇定制短文", onClick = onReadingClick),
         StudyEntry(Icons.Outlined.Mic, "朗读", "读一句，拿反馈", onClick = onSpeakingClick),
+        StudyEntry(Icons.Outlined.Headphones, "听力", "先听声音，再猜意思", onClick = onListeningClick),
         StudyEntry(Icons.Outlined.RecordVoiceOver, "情景演练", "和难说话的人练一轮", onClick = onScenarioClick),
     )
 

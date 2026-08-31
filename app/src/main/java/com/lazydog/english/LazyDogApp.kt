@@ -5,12 +5,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -21,6 +26,7 @@ import androidx.navigation.navArgument
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.feature.ask.AskHost
+import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.production.ProductionScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
@@ -30,6 +36,7 @@ import com.lazydog.english.feature.reading.ReadingMode
 import com.lazydog.english.feature.reading.ReadingScreen
 import com.lazydog.english.feature.speaking.SpeakingScreen
 import com.lazydog.english.feature.scenario.ScenarioScreen
+import com.lazydog.english.feature.listening.ListeningScreen
 import com.lazydog.english.feature.study.GrammarStudyScreen
 import com.lazydog.english.feature.study.WordStudyScreen
 import kotlinx.coroutines.launch
@@ -40,6 +47,7 @@ object Routes {
     const val OnboardingGoals = "onboarding/goals"
     const val Main = "main"
     const val Speaking = "speaking"
+    const val Listening = "listening"
     const val WordStudy = "study/words"
     const val GrammarStudy = "study/grammar"
     const val Production = "study/production"
@@ -61,6 +69,8 @@ fun LazyDogApp() {
     val prefs = app.userPreferences
     val onboardingCompleted by prefs.onboardingCompleted.collectAsState(initial = null)
 
+    StopSpeakingWhenNotVisible(app.speechController)
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         when (onboardingCompleted) {
             null -> Box(Modifier.fillMaxSize()) // DataStore 首帧未就绪，避免闪错页面
@@ -73,6 +83,22 @@ fun LazyDogApp() {
     }
 }
 
+/**
+ * 界面不可见就停朗读：退到后台、锁屏、被别的 App 挡住都算。
+ * 朗读的生命周期不该长过看得见它的界面——念到一半切走还在响，只会吓人一跳。
+ */
+@Composable
+private fun StopSpeakingWhenNotVisible(speech: SpeechController) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, speech) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) speech.stopSpeaking()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+}
+
 @Composable
 private fun AppNavHost(
     prefs: UserPreferences,
@@ -81,6 +107,15 @@ private fun AppNavHost(
 ) {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val speech = remember { (context.applicationContext as LazyDogApplication).speechController }
+
+    // 换页面就停朗读：内容都换了，还在念上一页的句子只会让人莫名其妙。
+    DisposableEffect(navController, speech) {
+        val listener = NavController.OnDestinationChangedListener { _, _, _ -> speech.stopSpeaking() }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
 
     NavHost(
         navController = navController,
@@ -105,6 +140,7 @@ private fun AppNavHost(
                 prefs = prefs,
                 knowledgeRepository = knowledgeRepository,
                 onStartSpeaking = { navController.navigate(Routes.Speaking) },
+                onStartListening = { navController.navigate(Routes.Listening) },
                 onStartWordStudy = { navController.navigate(Routes.WordStudy) },
                 onStartGrammarStudy = { navController.navigate(Routes.GrammarStudy) },
                 onStartProduction = { navController.navigate(Routes.Production) },
@@ -130,6 +166,12 @@ private fun AppNavHost(
         }
 
         // 学习类页面包一层 AskHost：摇一摇提问只在这些页面可用（DESIGN 屏 45～49）。
+        composable(Routes.Listening) {
+            AskHost {
+                ListeningScreen(onExit = { navController.popBackStack() })
+            }
+        }
+
         composable(Routes.Scenario) {
             AskHost {
                 ScenarioScreen(sessionId = null, onExit = { navController.popBackStack() })

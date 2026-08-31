@@ -53,6 +53,7 @@ class KnowledgeRepository(
         exampleZh: String = "",
         pos: String = "",
         collocations: List<String> = emptyList(),
+        memoryHintZh: String = "",
     ): Long? {
         val cleanTerm = term.trim()
         if (dao.vocabularyTermExists(cleanTerm)) return null
@@ -68,6 +69,7 @@ class KnowledgeRepository(
                     exampleZh = exampleZh.trim(),
                     pos = pos.trim(),
                     collocationsJson = VocabularyJson.encodeCollocations(collocations),
+                    memoryHintZh = memoryHintZh.trim(),
                 ),
             )
             id

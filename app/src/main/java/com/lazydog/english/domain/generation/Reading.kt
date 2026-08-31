@@ -98,4 +98,9 @@ data class WordExplanation(
     val meaningZh: String,
     /** 对这句话里用法的一句话说明，可空。 */
     val usageNoteZh: String,
+    /** 换一个场景的例句，可空。 */
+    val exampleEn: String = "",
+    val exampleZh: String = "",
+    /** 记忆方法：词根词缀拆解或联想记忆，可空。 */
+    val memoryHintZh: String = "",
 )

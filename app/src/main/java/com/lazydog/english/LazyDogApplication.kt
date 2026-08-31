@@ -31,7 +31,7 @@ class LazyDogApplication : Application() {
 
     val mistakeRepository: MistakeRepository by lazy { MistakeRepository(database) }
 
-    val speechController: SpeechController by lazy { SpeechController(userPreferences) }
+    val speechController: SpeechController by lazy { SpeechController(this, userPreferences) }
 
     val readingRepository: ReadingRepository by lazy { ReadingRepository(database) }
 

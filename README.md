@@ -19,6 +19,12 @@
 - 运行：Android Studio 直接运行 `app`，或 `adb install app/build/outputs/apk/debug/app-debug.apk`
 - 说明：设置页点击「AI 服务」一行即可用内置配置做连接测试；朗读（Azure Speech）功能在 M5 才接入。
 
+### GitHub 自动构建
+
+向 GitHub 推送提交、创建或更新 Pull Request 时，`Build Debug APK` 工作流会自动运行测试、Lint 和 Debug 构建；也可以在仓库的 Actions 页面手动触发。构建成功后，在对应运行记录的 Artifacts 区域下载 `lazydog-debug-<commit SHA>`，其中包含可安装的 Debug APK，保留 14 天。
+
+Push 和手动构建会从 GitHub Actions Repository Secrets 读取 `AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`、`SPEECH_KEY`、`SPEECH_REGION` 并写入 APK；缺少任一配置时构建会明确失败。Pull Request 构建只使用无密钥占位配置，避免向 PR 代码暴露密钥。带密钥 APK 仅供私人使用，不要公开分发。
+
 ## 文档导航
 
 - [AGENTS.md](AGENTS.md)：所有编码与设计 agent 必须遵守的仓库规则

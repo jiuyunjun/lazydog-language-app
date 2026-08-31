@@ -14,7 +14,17 @@ interface SpeechProvider {
         text: String,
         rate: SpeechRate = SpeechRate.Normal,
         voiceName: String? = null,
+        style: SpeechStyle = SpeechStyle.Sentence,
     ): SpeakResult
+
+    /**
+     * 立刻停掉正在播的示范音频。
+     * 离开页面、退到后台这类"人已经不在听了"的场合调用；没有在播时什么也不做。
+     *
+     * [keepLink] 表示"人还在这一页，马上还要再念"：声音照停，但实现可以保留已经热起来的
+     * 音频通路，别让下一句又从冷通路起播。
+     */
+    fun stopSpeaking(keepLink: Boolean = false)
 
     /**
      * 从麦克风录一句朗读并对照 [referenceText] 做发音评估。
@@ -28,6 +38,14 @@ interface SpeechProvider {
     /** 释放底层资源。释放后实例不可再用。 */
     fun close()
 }
+
+/**
+ * 朗读风格。
+ *
+ * [Word] 是"播音腔"：报一个词或一条搭配时要平、要清楚，像播报读音，
+ * 不要带句子的情绪和降调。[Sentence] 是正常的自然语流，例句和短文用它。
+ */
+enum class SpeechStyle { Word, Sentence }
 
 /** 朗读语速。prosodyRate 是 SSML prosody 的取值。 */
 enum class SpeechRate(val label: String, val prosodyRate: String) {

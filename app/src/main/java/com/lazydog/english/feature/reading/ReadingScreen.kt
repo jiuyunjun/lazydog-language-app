@@ -480,7 +480,7 @@ private fun MaterialContent(
                                 )
                             }
                         }
-                        IconButton(onClick = { scope.launch { app.speechController.speak(target.term) } }) {
+                        IconButton(onClick = { scope.launch { app.speechController.speakWord(target.term) } }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
                                 contentDescription = "朗读 ${target.term}",

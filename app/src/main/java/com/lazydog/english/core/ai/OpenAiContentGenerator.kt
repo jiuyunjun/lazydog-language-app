@@ -19,6 +19,12 @@ import com.lazydog.english.domain.ask.AskRequest
 import com.lazydog.english.domain.ask.AskStreaming
 import com.lazydog.english.domain.ask.AskValidation
 import com.lazydog.english.domain.generation.ContentValidation
+import com.lazydog.english.domain.listening.ListeningDistractor
+import com.lazydog.english.domain.listening.ListeningItem
+import com.lazydog.english.domain.listening.ListeningKeyExpression
+import com.lazydog.english.domain.listening.ListeningSetRequest
+import com.lazydog.english.domain.listening.ListeningValidation
+import com.lazydog.english.domain.listening.MishearType
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GeneratedReading
 import com.lazydog.english.domain.generation.GeneratedWord
@@ -99,6 +105,7 @@ class OpenAiContentGenerator(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildNewWordsPrompt(request),
             onProgress = onProgress,
+            op = "新词",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -140,6 +147,7 @@ class OpenAiContentGenerator(
                 // 哪段先到就先铺哪段：结构公式最先出来，其次是用途和讲解。
                 { raw -> callback(JsonStream.firstNonEmpty(raw, "explanationZh", "summaryZh", "patternEn")) }
             },
+            op = "语法",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -248,6 +256,7 @@ class OpenAiContentGenerator(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildReadingPrompt(request),
             onProgress = onProgress,
+            op = "阅读",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -281,6 +290,7 @@ class OpenAiContentGenerator(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExplainWordPrompt(term, sentenceContext, learnerLevel),
             onTextProgress = onProgress,
+            op = "查词",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -326,6 +336,7 @@ class OpenAiContentGenerator(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExplainSentencePrompt(sentence, learnerLevel),
             onTextProgress = onProgress,
+            op = "讲句",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -349,6 +360,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildAssessmentPrompt(cefrLevel, count, topics, skillFilter),
+            op = "测试题",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -371,6 +383,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildDeepReadingPrompt(cefrLevel, topics),
+            op = "测试阅读",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -394,6 +407,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildCorrectionItemPrompt(cefrLevel, topics),
+            op = "纠错题",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -414,6 +428,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExpressionRubricPrompt(taskZh, userTextEn, referenceCefrLevel),
+            op = "表达评分",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -434,6 +449,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildPronunciationTipsPrompt(referenceText, feedback),
+            op = "发音提示",
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -446,10 +462,47 @@ class OpenAiContentGenerator(
         return GenerationResult.Success(tips, content.model, PROMPT_VERSION)
     }
 
+    override suspend fun generateListeningSet(
+        request: ListeningSetRequest,
+        onProgress: ((Int) -> Unit)?,
+    ): GenerationResult<List<ListeningItem>> {
+        val outcome = complete(
+            systemPrompt = LISTENING_SYSTEM_PROMPT,
+            userPrompt = buildListeningPrompt(request),
+            onProgress = onProgress,
+            maxTokens = LISTENING_MAX_TOKENS,
+            op = "听力",
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<ListeningSetPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的听力 JSON")
+        if (payload.schemaVersion != SCHEMA_VERSION) {
+            return GenerationResult.Failure("schema 版本不对：${payload.schemaVersion}")
+        }
+        val validated = ListeningValidation.validate(
+            items = payload.items.map { it.toDomain(request) },
+            maxCount = request.count,
+        )
+        if (validated.valid.size < MIN_LISTENING_ITEMS) {
+            return GenerationResult.Failure(
+                "能用的句子太少（${validated.valid.size} 句）：${validated.droppedNotes.take(3).joinToString("；")}",
+            )
+        }
+        return GenerationResult.Success(
+            data = validated.valid,
+            model = content.model,
+            promptVersion = LISTENING_PROMPT_VERSION,
+            droppedNotes = validated.droppedNotes,
+        )
+    }
+
     override suspend fun generateScenario(
         request: ScenarioGenerationRequest,
     ): GenerationResult<ScenarioBrief> {
-        val outcome = complete(SYSTEM_PROMPT, buildScenarioPrompt(request))
+        val outcome = complete(SYSTEM_PROMPT, buildScenarioPrompt(request), op = "情景生成")
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -468,7 +521,7 @@ class OpenAiContentGenerator(
     override suspend fun generateScenarioTurn(
         request: ScenarioTurnRequest,
     ): GenerationResult<ScenarioTurn> {
-        val outcome = complete(SCENARIO_ROLE_SYSTEM_PROMPT, buildScenarioTurnPrompt(request))
+        val outcome = complete(SCENARIO_ROLE_SYSTEM_PROMPT, buildScenarioTurnPrompt(request), op = "情景对话")
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -482,7 +535,7 @@ class OpenAiContentGenerator(
     override suspend fun judgeScenarioTurn(
         request: ScenarioTurnRequest,
     ): GenerationResult<ScenarioJudgement> {
-        val outcome = complete(SCENARIO_JUDGE_SYSTEM_PROMPT, buildScenarioJudgePrompt(request))
+        val outcome = complete(SCENARIO_JUDGE_SYSTEM_PROMPT, buildScenarioJudgePrompt(request), op = "情景判定")
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -498,7 +551,7 @@ class OpenAiContentGenerator(
     override suspend fun summarizeScenario(
         request: ScenarioSummaryRequest,
     ): GenerationResult<ScenarioSummary> {
-        val outcome = complete(SYSTEM_PROMPT, buildScenarioSummaryPrompt(request))
+        val outcome = complete(SYSTEM_PROMPT, buildScenarioSummaryPrompt(request), op = "情景总结")
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -524,49 +577,89 @@ class OpenAiContentGenerator(
         userPrompt: String,
         onProgress: ((Int) -> Unit)? = null,
         onTextProgress: ((String) -> Unit)? = null,
+        maxTokens: Int = DEFAULT_MAX_TOKENS,
+        op: String = "ai",
     ): Completion = withContext(Dispatchers.IO) {
         val (baseUrl, apiKey, model) = config()
         val streaming = onProgress != null || onTextProgress != null
+        val url = chatCompletionsUrl(baseUrl)
+        val startedAt = System.currentTimeMillis()
+        AiLog.start(op, model, url, systemPrompt.length + userPrompt.length, streaming)
 
-        val body = json.encodeToString(
-            ChatRequest.serializer(),
-            ChatRequest(
-                model = model,
-                messages = listOf(
-                    ChatMessage("system", systemPrompt),
-                    ChatMessage("user", userPrompt),
+        fun buildRequest(useCompletionTokens: Boolean): Request {
+            val body = json.encodeToString(
+                ChatRequest.serializer(),
+                ChatRequest(
+                    model = model,
+                    messages = listOf(
+                        ChatMessage("system", systemPrompt),
+                        ChatMessage("user", userPrompt),
+                    ),
+                    maxTokens = if (useCompletionTokens) null else maxTokens,
+                    maxCompletionTokens = if (useCompletionTokens) maxTokens else null,
+                    stream = streaming,
                 ),
-                stream = streaming,
-            ),
-        )
-        val request = Request.Builder()
-            .url(chatCompletionsUrl(baseUrl))
-            .header("Authorization", "Bearer $apiKey")
-            .post(body.toRequestBody("application/json".toMediaType()))
-            .build()
+            )
+            return Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer $apiKey")
+                .post(body.toRequestBody("application/json".toMediaType()))
+                .build()
+        }
 
+        fun elapsed() = System.currentTimeMillis() - startedAt
+        fun fail(reason: String): Completion {
+            AiLog.failure(op, reason, elapsed())
+            return Completion.Error(reason)
+        }
+        fun done(result: Completion): Completion {
+            when (result) {
+                is Completion.Content -> AiLog.success(op, result.model, result.text.length, elapsed())
+                is Completion.Error -> AiLog.failure(op, result.reason, elapsed())
+            }
+            return result
+        }
+
+        var useCompletionTokens = false
+        var swappedTokenField = false
         var lastReason = "未知错误"
-        repeat(2) { attempt ->
+        var attempt = 0
+        // 最多三次：一次原始请求、一次换上限字段名、一次限流/网络重试。
+        while (attempt < 3) {
+            attempt += 1
             try {
-                okHttpClient.newCall(request).await().use { response ->
+                okHttpClient.newCall(buildRequest(useCompletionTokens)).await().use { response ->
                     if (response.isSuccessful) {
-                        return@withContext if (streaming) {
-                            readStreamed(response, model, onProgress, onTextProgress)
-                        } else {
-                            readWhole(response, model)
-                        }
+                        return@withContext done(
+                            if (streaming) {
+                                readStreamed(response, model, onProgress, onTextProgress)
+                            } else {
+                                readWhole(response, model)
+                            },
+                        )
                     }
-                    lastReason = "HTTP ${response.code}"
-                    if (response.code !in RETRYABLE_CODES) {
-                        return@withContext Completion.Error(lastReason)
+                    // 服务端的错误正文才说得清哪不对，只报状态码等于什么都没说。
+                    val raw = runCatching { response.body?.string().orEmpty() }.getOrDefault("")
+                    val detail = AiLog.body(extractErrorMessage(raw))
+                    lastReason = if (detail.isBlank()) "HTTP ${response.code}" else "HTTP ${response.code}：$detail"
+
+                    // 较新的 OpenAI 模型只认 max_completion_tokens，对 max_tokens 直接 400。
+                    if (response.code == 400 && !swappedTokenField && mentionsTokenLimit(raw)) {
+                        swappedTokenField = true
+                        useCompletionTokens = true
+                        AiLog.retry(op, lastReason, "改用 max_completion_tokens 重发")
+                        return@use
                     }
+                    if (response.code !in RETRYABLE_CODES) return@withContext fail(lastReason)
+                    AiLog.retry(op, lastReason, "可重试状态码，${retryDelayMs} ms 后再试")
                 }
             } catch (e: IOException) {
                 lastReason = "网络错误：${e.message ?: e.javaClass.simpleName}"
+                AiLog.retry(op, lastReason, "${retryDelayMs} ms 后再试")
             }
-            if (attempt == 0) delay(retryDelayMs)
+            if (attempt < 3 && !swappedTokenField) delay(retryDelayMs)
         }
-        Completion.Error("$lastReason（已重试 1 次）")
+        fail("$lastReason（已重试）")
     }
 
     private fun readWhole(response: okhttp3.Response, fallbackModel: String): Completion {
@@ -601,6 +694,13 @@ class OpenAiContentGenerator(
                 val delta = chunk.choices.firstOrNull()?.delta?.content
                 if (!delta.isNullOrEmpty()) {
                     builder.append(delta)
+                    // 服务端不认 max_tokens、或者模型自己转起圈来时，这里是最后一道闸。
+                    // readTimeout 拦不住：它是每次读的超时，只要一直有数据就一直被重置。
+                    if (builder.length > MAX_RESPONSE_CHARS) {
+                        return Completion.Error(
+                            "AI 一直没停（已经返回 ${builder.length} 个字符），先掐断了。换个说法或换个模型再试。",
+                        )
+                    }
                     onProgress?.invoke(builder.length)
                     onTextProgress?.invoke(builder.toString())
                 }
@@ -631,6 +731,13 @@ class OpenAiContentGenerator(
         val model: String,
         val messages: List<ChatMessage>,
         @SerialName("response_format") val responseFormat: ResponseFormat = ResponseFormat(),
+        /**
+         * 输出上限。两个字段只发一个：老接口认 `max_tokens`，较新的 OpenAI 模型
+         * 只认 `max_completion_tokens` 并且会对前者直接回 400。谁能用事先不知道，
+         * 所以先发 `max_tokens`，被顶回来再换，见 [complete]。
+         */
+        @SerialName("max_tokens") val maxTokens: Int? = null,
+        @SerialName("max_completion_tokens") val maxCompletionTokens: Int? = null,
         val stream: Boolean = false,
     )
 
@@ -664,8 +771,10 @@ class OpenAiContentGenerator(
         val exampleZh: String = "",
         val pos: String = "",
         val collocations: List<String> = emptyList(),
+        val memoryHintZh: String = "",
     ) {
-        fun toDomain() = GeneratedWord(term, ipa, meaningZh, exampleEn, exampleZh, pos, collocations)
+        fun toDomain() =
+            GeneratedWord(term, ipa, meaningZh, exampleEn, exampleZh, pos, collocations, memoryHintZh)
     }
 
     @Serializable
@@ -904,14 +1013,84 @@ class OpenAiContentGenerator(
         val ipa: String = "",
         val meaningZh: String = "",
         val usageNoteZh: String = "",
+        val exampleEn: String = "",
+        val exampleZh: String = "",
+        val memoryHintZh: String = "",
     ) {
-        fun toDomain() = WordExplanation(term.trim(), ipa.trim(), meaningZh.trim(), usageNoteZh.trim())
+        fun toDomain() = WordExplanation(
+            term = term.trim(),
+            ipa = ipa.trim(),
+            meaningZh = meaningZh.trim(),
+            usageNoteZh = usageNoteZh.trim(),
+            exampleEn = exampleEn.trim(),
+            exampleZh = exampleZh.trim(),
+            memoryHintZh = memoryHintZh.trim(),
+        )
     }
 
     @Serializable
     private data class ScenarioGoalPayload(val id: String = "", val textZh: String = "") {
         fun toDomain() = ScenarioGoal(id.trim(), textZh.trim())
     }
+
+    @Serializable
+    private data class ListeningKeyExpressionPayload(val en: String = "", val meaningZh: String = "")
+
+    @Serializable
+    private data class ListeningDistractorPayload(
+        val meaningZh: String = "",
+        val mishearType: String = "",
+        val whyZh: String = "",
+    ) {
+        /**
+         * 类型对不上封闭集合时留空字符串顶掉——[ListeningValidation] 会因为三条类型
+         * 不互不相同而丢掉整题。宁可丢一题，也不要往"你栽在哪一类"的统计里掺脏数据。
+         */
+        fun toDomain() = MishearType.fromWire(mishearType)?.let {
+            ListeningDistractor(meaningZh, it, whyZh)
+        }
+    }
+
+    @Serializable
+    private data class ListeningItemPayload(
+        val textEn: String = "",
+        val meaningZh: String = "",
+        val subSceneZh: String = "",
+        val intentZh: String = "",
+        val toneZh: String = "",
+        val registerZh: String = "",
+        val cefr: String = "",
+        val listeningDifficulty: Int = 0,
+        val audioFeatures: List<String> = emptyList(),
+        val keyExpression: ListeningKeyExpressionPayload = ListeningKeyExpressionPayload(),
+        val distractors: List<ListeningDistractorPayload> = emptyList(),
+        val sceneHintZh: String = "",
+        val keywordHintZh: String = "",
+    ) {
+        /** 一级场景是用户在首页选的，不让 AI 再报一次——报回来对不上反而要处理冲突。 */
+        fun toDomain(request: ListeningSetRequest) = ListeningItem(
+            textEn = textEn,
+            meaningZh = meaningZh,
+            sceneZh = request.sceneZh,
+            subSceneZh = subSceneZh,
+            intentZh = intentZh,
+            toneZh = toneZh,
+            registerZh = registerZh,
+            cefr = cefr,
+            listeningDifficulty = listeningDifficulty,
+            audioFeatures = audioFeatures,
+            keyExpression = ListeningKeyExpression(keyExpression.en, keyExpression.meaningZh),
+            distractors = distractors.mapNotNull { it.toDomain() },
+            sceneHintZh = sceneHintZh,
+            keywordHintZh = keywordHintZh,
+        )
+    }
+
+    @Serializable
+    private data class ListeningSetPayload(
+        val schemaVersion: Int = 0,
+        val items: List<ListeningItemPayload> = emptyList(),
+    )
 
     @Serializable
     private data class ScenarioReplyPayload(val en: String = "", val zh: String = "") {
@@ -1063,13 +1242,41 @@ class OpenAiContentGenerator(
         const val TRANSLATION_PROMPT_VERSION = 1
         const val SCENARIO_PROMPT_VERSION = 1
         const val ASK_PROMPT_VERSION = 1
+        const val LISTENING_PROMPT_VERSION = 1
+
+        /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
+        const val MIN_LISTENING_ITEMS = 5
+        /**
+         * 每次调用的输出上限。不设的话服务端就没有停下来的理由——模型转圈或者
+         * 一路往下写，客户端会一直收、一直计费，直到用户自己退出。
+         * 取值按"最长的那种合法返回还要留一倍余量"来定，正常内容碰不到。
+         */
+        const val DEFAULT_MAX_TOKENS = 4096
+
+        /** 一轮 10 句听力，每句十几个字段且大半是中文，是所有调用里最长的一种。 */
+        const val LISTENING_MAX_TOKENS = 8192
+
+        /**
+         * 流式返回的字符硬上限。合法返回最长也就一万出头，这里留到两倍多；
+         * 超过就说明对面根本没打算停，继续收只是白花钱。
+         */
+        const val MAX_RESPONSE_CHARS = 24_000
+
+        /** 400 的正文提到上限字段，就说明这个服务端要的是另一个名字。 */
+        internal fun mentionsTokenLimit(body: String): Boolean =
+            body.contains("max_tokens", ignoreCase = true) ||
+                body.contains("max_completion_tokens", ignoreCase = true)
+
         private const val RETRY_DELAY_MS = 1200L
         private val RETRYABLE_CODES = setOf(429) + (500..599)
 
         // encodeDefaults：确保 response_format 这类默认值字段也会写进请求体。
+        // explicitNulls=false：没选中的那个上限字段直接不出现，而不是写成 null——
+        // 有的服务端见到 "max_tokens":null 会当成非法参数。
         private val json = Json {
             ignoreUnknownKeys = true
             encodeDefaults = true
+            explicitNulls = false
         }
 
         private val defaultOkHttpClient: OkHttpClient = OkHttpClient.Builder()
@@ -1080,6 +1287,11 @@ class OpenAiContentGenerator(
         private const val SYSTEM_PROMPT =
             "你是给中文母语者出英语学习内容的助手。严格只输出一个 JSON 对象：" +
                 "不要 markdown 代码块，不要输出 JSON 以外的任何文字，不要添加 schema 之外的字段。"
+
+        private const val LISTENING_SYSTEM_PROMPT =
+            "你是给中文母语者出英语听力训练材料的母语者编剧。严格只输出一个 JSON 对象：" +
+                "不要 markdown 代码块，不要输出 JSON 以外的任何文字，不要添加 schema 之外的字段。" +
+                "句子必须是真人在真实场景里会说的口语，不是教科书例句。"
 
         private const val SCENARIO_ROLE_SYSTEM_PROMPT =
             "你在英语情景演练中只扮演指定对手。严格只输出一个 JSON 对象。" +
@@ -1201,6 +1413,49 @@ class OpenAiContentGenerator(
             )
         }
 
+        /**
+         * 例句（exampleEn/exampleZh）的写法要求。新词生成和点词速查共用，
+         * 免得两处各写一套、慢慢跑偏。
+         */
+        internal fun exampleSentenceRules(level: String): String = buildString {
+            appendLine("写 exampleEn 时你是按 CEFR 等级出例句的英语教学专家：" +
+                "句子必须用上面说的那个词性和词义，不能滑到这个词的其他意思；" +
+                "词形本身可以按语法自然变化（时态、单复数、派生形式都行）。")
+            appendLine("例句要是英语母语者现实中真会说会写的话，句子里给足语境，" +
+                "让学习者光看这句就能大致猜出这个词的意思；每句只说一件事，" +
+                "优先用常见搭配、固定表达和高频句型，别为了把词塞进去写出生硬、离奇或不合常理的句子。")
+            appendLine("除目标词本身外，句中其他词不要明显超过$level；" +
+                "不要用复杂人名、冷僻地名、专业术语，也不要依赖特定文化背景才能看懂。")
+            appendLine("在以上前提都满足的情况下，例句要好看、有意思、让人想读下去，别写成教科书填空：" +
+                "优先挑有画面感的场景——电影/剧集/游戏里的名台词、体育解说、歌词、新闻标题式的说法都可以。" +
+                "如果这个词恰好出现在一句你确实记得的经典台词里，就直接用那句，" +
+                "并在 exampleZh 末尾用破折号标出处（例：——《肖申克的救赎》）。")
+            appendLine("但绝不能编造出处：拿不准是不是原话、或者想不起准确的原句，就自己写一句" +
+                "带那种画面感的话，不标任何出处。宁可没有出处，也不许张冠李戴。" +
+                "台词也要服从上面的等级和自然度要求，太老、太冷门、离开原片就看不懂的梗不要用。")
+            appendLine("exampleEn 里不要出现中文；exampleZh 要说人话，" +
+                "准确体现目标词在这句里的含义，不要逐字硬译。")
+        }
+
+        /** 记忆方法（memoryHintZh）的写法要求。新词生成和点词速查共用。 */
+        internal fun memoryHintRules(): String = buildString {
+            appendLine("memoryHintZh 是一条真能帮上忙的记忆方法，30~70 字。" +
+                "写这一项时你是懂词源学、认知心理学和中文联想记忆的词汇教练：只给一个最好的主方案，" +
+                "不要把几个平庸联想堆在一起，目标是让学习者能主动回忆出词义，而不是再解释一遍意思。")
+            appendLine("按优先级选一种：" +
+                "①构词/词源：拆成真实存在的前缀/词根/词干/后缀，写出每部分的意思，再说明怎么合出这个词的意思" +
+                "（比如 reduce = re- 往回 + duc- 引导 → 引回去、减少）；只有在你有较高把握时才拆，" +
+                "宁可不拆也不要为了拆而编造词根或错误词源；" +
+                "②同源联想：借学习者八成认识的简单英语同根词或派生词搭桥，最多带 3 个同根词，" +
+                "并点明它们共享的核心含义；" +
+                "③声音/画面/场景/故事联想：给一个简短、具体、有画面感、直接连到词义的联想。")
+            appendLine("必须让学习者分得清哪句是有语言学依据的构词/词源，哪句是为了好记人为编的记忆联想：" +
+                "联想类内容用「联想：」开头，谐音只在发音确实接近且真的有用时才使用，" +
+                "并明确写成「谐音联想：」，绝不能说成真实词源。")
+            appendLine("不要牵强、冗长、或需要先记住另一堆陌生知识的联想；" +
+                "memoryHintZh 必须针对这个词，不能是「多读几遍」「结合例句记」这类放到哪个词上都成立的空话。")
+        }
+
         internal fun buildNewWordsPrompt(request: NewWordsRequest): String = buildString {
             appendLine("生成 ${request.count} 个适合该学习者的英语词义（词形+词性+具体意思，不是随便挑单词）。")
             appendLine("学习者水平：${request.learnerLevel}。")
@@ -1217,10 +1472,13 @@ class OpenAiContentGenerator(
             appendLine("不要只给孤立单词——每个词给 pos（词性缩写，如 v./n./adj.）和 collocations：" +
                 "1~2 个这个词真实常用的搭配短语（比如 issue 配 \"resolve an issue\"，不是造一个不自然的短语）。")
             appendLine("meaningZh 是这个具体词义的简洁中文释义；exampleEn 是包含该词的自然英文例句，exampleZh 是它的翻译。")
+            append(exampleSentenceRules(request.learnerLevel))
+            appendLine("同一批例句之间场景和句型要有明显区别，不能只换个人名或地点。")
+            append(memoryHintRules())
             appendLine("输出 JSON schema：")
             appendLine(
                 """{"schemaVersion":1,"words":[{"term":"...","ipa":"...","pos":"v.","meaningZh":"...",""" +
-                    """"exampleEn":"...","exampleZh":"...","collocations":["..."]}]}""",
+                    """"exampleEn":"...","exampleZh":"...","collocations":["..."],"memoryHintZh":"..."}]}""",
             )
         }
 
@@ -1386,7 +1644,67 @@ class OpenAiContentGenerator(
             appendLine("解释单词 \"$term\" 在下面这句话里的意思，给水平 $level 的中文母语学习者看：")
             appendLine(sentence)
             appendLine("meaningZh 是简洁中文释义（含词性）；usageNoteZh 用一句话说明它在这句里的用法，可以为空字符串。")
-            appendLine("""输出 JSON schema：{"term":"$term","ipa":"...","meaningZh":"...","usageNoteZh":"..."}""")
+            appendLine("再给一个新的例句：exampleEn 换一个跟上面这句不同的场景，" +
+                "仍然用这个词在这里的词义，exampleZh 是它的翻译。")
+            append(exampleSentenceRules(level))
+            append(memoryHintRules())
+            appendLine(
+                """输出 JSON schema：{"term":"$term","ipa":"...","meaningZh":"...","usageNoteZh":"...",""" +
+                    """"exampleEn":"...","exampleZh":"...","memoryHintZh":"..."}""",
+            )
+        }
+
+        /**
+         * 听力题生成提示词（英语听力训练模块DESIGN.md §18、§19）。
+         *
+         * 关键是不能只说"生成一个 B1 句子"：场景、二级场景、意图、语气、语体、听觉难点
+         * 都要作为结构化条件给出去，否则出来的就是教科书英语，训练不到真实语流。
+         */
+        internal fun buildListeningPrompt(request: ListeningSetRequest): String = buildString {
+            appendLine("为中文母语者生成 ${request.count} 句英语听力训练材料。学习者水平：${request.learnerLevel}。")
+            appendLine("一级场景：${request.sceneZh}。")
+            if (request.subScenesZh.isNotEmpty()) {
+                appendLine("在这些二级场景里分散取材，尽量不重复：${request.subScenesZh.joinToString("、")}。")
+            }
+            if (request.topics.isNotEmpty()) appendLine("学习者兴趣，可以适度靠拢：${request.topics.joinToString("、")}。")
+            appendLine("每句都要自己指定 intentZh（沟通意图，如请求/拒绝/抱怨/调侃）、toneZh（情绪）、" +
+                "registerZh（语体：正式/职业/中性/口语/很口语/俚语），并且十句之间要有变化。")
+            appendLine("句子要求：母语者真实会说的口语；场景和意图明确；每句只有 1～2 个主要学习点；" +
+                "长度 8～16 词；不要教科书式书面英语，也不要为了显难而堆生僻词。")
+            // §15：影视和游戏场景走"Inspired Scene"，不做台词数据库——授权说不清就不要照抄。
+            appendLine("不要照搬电影、剧集或游戏里的真实台词，也不要标注出处；" +
+                "需要那种味道时，写一句风格相同、场景相同的原创台词。")
+            appendLine("这是听力题，所以每句必须带真实语流的听觉难点，写进 audioFeatures，只用这些英文标签：" +
+                "linking、reduction、contraction、elision、assimilation、flap t、gonna、wanna、gotta、" +
+                "numbers、dates、time、names、places、proper nouns、stress、emotion、fast speech、accent。")
+            appendLine("keyExpression 是这句最值得学的表达，en 必须是句子里**原样出现**的连续片段" +
+                "（大小写可以不同），meaningZh 说明它的意思。")
+            appendLine("meaningZh 是整句的自然中文意思，说人话，不要逐字硬译。")
+            appendLine("distractors 正好三条干扰项（连正确意思一共四个选项）：都要像模像样，" +
+                "不能明显荒谬，必须来自真实误听。三条的 mishearType 必须互不相同，只能取这些值：" +
+                "${MishearType.wireList}。")
+            appendLine("每条干扰项的 whyZh 要讲到音：哪个词弱读或连读成了什么、少听了什么，" +
+                "整句意思因此从哪儿变到哪儿。答错时这句话会原样显示给用户看，" +
+                "所以要具体到这一句，不能写『没听清』这种废话。")
+            appendLine("sceneHintZh 是第一级提示：只说这句大概和什么情境有关，不许点出关键词，" +
+                "更不许把整句意思说出来。keywordHintZh 是第二级提示：点名要听的那个词，" +
+                "并说清它为什么难听出来（比如和前面连读了、弱读成了什么）。")
+            appendLine("items 数组必须正好 ${request.count} 个元素，写完第 ${request.count} 个就闭合 JSON 结束，不要再往下写。")
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"schemaVersion":1,"items":[{"textEn":"I barely made it to the meeting on time.",""" +
+                    """"meaningZh":"我勉强准时赶到了会议","subSceneZh":"会议","intentZh":"解释",""" +
+                    """"toneZh":"Nervous","registerZh":"口语","cefr":"B1","listeningDifficulty":3,""" +
+                    """"audioFeatures":["linking","reduction"],""" +
+                    """"keyExpression":{"en":"barely made it","meaningZh":"差一点没赶上"},""" +
+                    """"distractors":[{"meaningZh":"我提前参加了会议","mishearType":"keyword",""" +
+                    """"whyZh":"barely 被听成了 early，意思从『勉强赶上』翻成了『提前到』。"},""" +
+                    """{"meaningZh":"我没能参加这场会议","mishearType":"negation",""" +
+                    """"whyZh":"barely 有否定味道，漏掉 made it 就会以为整件事没做成。"},""" +
+                    """{"meaningZh":"会议准时结束了","mishearType":"similar_scene",""" +
+                    """"whyZh":"只抓到 the meeting on time，没听出主语在说自己。"}],""" +
+                    """"sceneHintZh":"这句和迟到、赶时间有关","keywordHintZh":"注意听 barely，它和后面的 made 连读了"}]}""",
+            )
         }
 
         internal fun buildScenarioPrompt(request: ScenarioGenerationRequest): String = buildString {

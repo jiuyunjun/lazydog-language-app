@@ -14,7 +14,8 @@ class ContentValidationTest {
         exampleZh: String = "市政府想控制车流。",
         pos: String = "v.",
         collocations: List<String> = listOf("curb traffic"),
-    ) = GeneratedWord(term, "/kɜːb/", meaning, example, exampleZh, pos, collocations)
+        memoryHint: String = "curb 是路缘石，把车流「圈」在路里，引申成控制、抑制。",
+    ) = GeneratedWord(term, "/kɜːb/", meaning, example, exampleZh, pos, collocations, memoryHint)
 
     @Test
     fun `valid word passes`() {
@@ -86,6 +87,18 @@ class ContentValidationTest {
         )
         assertTrue(result.valid.isEmpty())
         assertEquals(3, result.droppedNotes.size)
+    }
+
+    @Test
+    fun `drops words missing memory hint`() {
+        val result = ContentValidation.validateNewWords(
+            listOf(word(memoryHint = ""), word(term = "linger", example = "The smell lingered.", memoryHint = "记".repeat(161))),
+            maxCount = 5,
+            knownTerms = emptySet(),
+        )
+        assertTrue(result.valid.isEmpty())
+        assertEquals(2, result.droppedNotes.size)
+        assertTrue(result.droppedNotes.all { it.contains("记忆方法") })
     }
 
     @Test

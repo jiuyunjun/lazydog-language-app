@@ -68,6 +68,15 @@ interface LearningContentGenerator {
         learnerLevel: String,
     ): GenerationResult<com.lazydog.english.domain.production.TranslationFeedback>
 
+    /**
+     * 生成一轮听力训练的句子（英语听力训练模块DESIGN.md §18）。
+     * 返回前已过 ListeningValidation，条数可能少于请求数——由调用方决定够不够开一局。
+     */
+    suspend fun generateListeningSet(
+        request: com.lazydog.english.domain.listening.ListeningSetRequest,
+        onProgress: ((Int) -> Unit)? = null,
+    ): GenerationResult<List<com.lazydog.english.domain.listening.ListeningItem>>
+
     /** 生成渐进式阅读短文，返回前已通过 ReadingValidation。 */
     suspend fun generateReading(
         request: ReadingGenerationRequest,
@@ -169,6 +178,11 @@ data class GeneratedWord(
     val pos: String = "",
     /** 1~2 个高价值搭配，不是孤立单词（§6.5"每个附带 1~2 个高价值搭配"）。 */
     val collocations: List<String> = emptyList(),
+    /**
+     * 这个词的记忆方法：优先拆词根词缀并说明怎么合出这个意思，拆不出来的用联想/构词/形近对比。
+     * 要针对这个词，不是"多读几遍"这种通用建议。
+     */
+    val memoryHintZh: String = "",
 )
 
 data class GrammarLessonRequest(
