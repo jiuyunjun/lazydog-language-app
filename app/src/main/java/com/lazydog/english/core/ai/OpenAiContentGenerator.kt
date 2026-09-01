@@ -1,5 +1,7 @@
 package com.lazydog.english.core.ai
 
+import com.lazydog.english.core.network.HttpTimingListener
+import com.lazydog.english.core.network.Ipv4FirstDns
 import com.lazydog.english.core.network.await
 import com.lazydog.english.domain.assessment.AssessmentQuestion
 import com.lazydog.english.domain.assessment.CorrectionItem
@@ -75,6 +77,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -86,8 +89,19 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/** AI 服务配置快照，调用时从偏好取。 */
-data class AiConfig(val baseUrl: String, val apiKey: String, val model: String)
+/**
+ * AI 服务配置快照，调用时从偏好取。
+ *
+ * [useCompletionTokens] 是"这个模型只认 max_completion_tokens"的既往结论。不记住的话，
+ * 每一次调用都要先用 max_tokens 撞一个 400 再换名重发——白搭一整个往返，
+ * 慢的网络上这一下就是好几秒，而且每次都付。
+ */
+data class AiConfig(
+    val baseUrl: String,
+    val apiKey: String,
+    val model: String,
+    val useCompletionTokens: Boolean = false,
+)
 
 /**
  * OpenAI 兼容接口的 [LearningContentGenerator] 实现。
@@ -99,6 +113,8 @@ class OpenAiContentGenerator(
     private val config: suspend (AiTask) -> AiConfig,
     private val okHttpClient: OkHttpClient = defaultOkHttpClient,
     private val retryDelayMs: Long = RETRY_DELAY_MS,
+    /** 记下"这个模型只认 max_completion_tokens"，下次开始就直接用对的字段名。 */
+    private val onNeedsCompletionTokens: suspend (model: String) -> Unit = {},
 ) : LearningContentGenerator {
 
     override suspend fun generateNewWords(
@@ -638,7 +654,8 @@ class OpenAiContentGenerator(
         op: String = "ai",
         task: AiTask,
     ): Completion = withContext(Dispatchers.IO) {
-        val (baseUrl, apiKey, model) = config(task)
+        val settings = config(task)
+        val (baseUrl, apiKey, model) = settings
         val streaming = onProgress != null || onTextProgress != null || onStage != null
         val url = chatCompletionsUrl(baseUrl)
         val startedAt = System.currentTimeMillis()
@@ -660,6 +677,8 @@ class OpenAiContentGenerator(
             )
             return Request.Builder()
                 .url(url)
+                // 计时日志靠这个 tag 认出自己属于哪个调用，见 HttpTimingListener。
+                .tag(String::class.java, op)
                 .header("Authorization", "Bearer $apiKey")
                 .post(body.toRequestBody("application/json".toMediaType()))
                 .build()
@@ -678,8 +697,9 @@ class OpenAiContentGenerator(
             return result
         }
 
-        var useCompletionTokens = false
-        var swappedTokenField = false
+        // 之前撞过的模型直接用对的字段名（结论存在偏好里），不再每次都先撞一个 400。
+        var useCompletionTokens = settings.useCompletionTokens
+        var swappedTokenField = useCompletionTokens
         var lastReason = "未知错误"
         var attempt = 0
         // 最多三次：一次原始请求、一次换上限字段名、一次限流/网络重试。
@@ -690,7 +710,7 @@ class OpenAiContentGenerator(
                     if (response.isSuccessful) {
                         return@withContext done(
                             if (streaming) {
-                                readStreamed(response, model, onProgress, onTextProgress, onStage)
+                                readStreamed(response, model, onProgress, onTextProgress, onStage, op, startedAt)
                             } else {
                                 readWhole(response, model)
                             },
@@ -705,7 +725,9 @@ class OpenAiContentGenerator(
                     if (response.code == 400 && !swappedTokenField && mentionsTokenLimit(raw)) {
                         swappedTokenField = true
                         useCompletionTokens = true
-                        AiLog.retry(op, lastReason, "改用 max_completion_tokens 重发")
+                        // 记到偏好里：下一次调用（以及下次开 App）都不用再撞这一下。
+                        launch { onNeedsCompletionTokens(model) }
+                        AiLog.retry(op, lastReason, "改用 max_completion_tokens 重发，并记住这个模型")
                         return@use
                     }
                     if (response.code !in RETRYABLE_CODES) return@withContext fail(lastReason)
@@ -743,6 +765,8 @@ class OpenAiContentGenerator(
         onProgress: ((Int) -> Unit)?,
         onTextProgress: ((String) -> Unit)?,
         onStage: ((GenerationStage) -> Unit)?,
+        op: String = "ai",
+        startedAt: Long = System.currentTimeMillis(),
     ): Completion {
         val source = response.body?.source() ?: return Completion.Error("AI 返回为空")
         val builder = StringBuilder()
@@ -761,6 +785,7 @@ class OpenAiContentGenerator(
                 val delta = chunk.choices.firstOrNull()?.delta
                 val reasoning = delta?.reasoningText().orEmpty()
                 if (reasoning.isNotEmpty()) {
+                    if (thinking.isEmpty()) AiLog.firstDelta(op, "思考", System.currentTimeMillis() - startedAt)
                     thinking.append(reasoning)
                     // 思考也算进硬上限：转起圈来的推理一样是一直收、一直计费。
                     if (thinking.length + builder.length > MAX_RESPONSE_CHARS) {
@@ -772,6 +797,7 @@ class OpenAiContentGenerator(
                 }
                 val text = delta?.content
                 if (!text.isNullOrEmpty()) {
+                    if (builder.isEmpty()) AiLog.firstDelta(op, "正文", System.currentTimeMillis() - startedAt)
                     builder.append(text)
                     // 服务端不认 max_tokens、或者模型自己转起圈来时，这里是最后一道闸。
                     // readTimeout 拦不住：它是每次读的超时，只要一直有数据就一直被重置。
@@ -1376,6 +1402,11 @@ class OpenAiContentGenerator(
         private val defaultOkHttpClient: OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(90, TimeUnit.SECONDS)
+            // IPv6 不通的网络（国内移动网络很常见）上，先试 IPv6 会干等满 connectTimeout 才轮到
+            // IPv4——十秒全花在「接通中」上。改成 IPv4 优先，真正的 IPv6-only 网络上 IPv4 会立刻
+            // 报 unreachable，几乎不耽误。
+            .dns(Ipv4FirstDns)
+            .eventListenerFactory { HttpTimingListener() }
             .build()
 
         private const val SYSTEM_PROMPT =

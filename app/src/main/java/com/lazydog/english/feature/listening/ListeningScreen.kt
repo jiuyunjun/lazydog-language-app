@@ -75,6 +75,7 @@ import com.lazydog.english.domain.listening.summarizeListening
 import com.lazydog.english.domain.listening.wordsOf
 import com.lazydog.english.domain.speaking.SpeechRate
 import kotlin.random.Random
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -602,6 +603,16 @@ private fun Loading(
         thinking != null -> "模型正在琢磨这 $SET_SIZE 句…"
         else -> "正在写 $scene 的 $SET_SIZE 句…"
     }
+    // 干等的时候秒数是唯一在动的东西：它既让人知道没卡死，也让"到底多久"变成一个能说出口的数字。
+    var seconds by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            seconds += 1
+        }
+    }
+    val waited = if (seconds >= 3) "（已等 $seconds 秒）" else ""
+
     Column(
         modifier = modifier.padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
@@ -615,9 +626,9 @@ private fun Loading(
                 ready > 0 -> "已经写好 $ready 句，攒够 $MIN_ITEMS_TO_START 句就开始"
                 // 服务商肯把思考过程流出来的话就显示尾巴，证明它确实在动。
                 thinking != null && thinking.excerpt.isNotBlank() -> "…${thinking.excerpt}"
-                thinking != null -> "推理模型会先想一会儿再动笔，这段最花时间"
+                thinking != null -> "推理模型会先想一会儿再动笔，这段最花时间$waited"
                 stage is GenerationStage.Writing -> "已经写了 ${stage.chars} 个字符"
-                else -> "接通中，稍等一下"
+                else -> "接通中$waited"
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

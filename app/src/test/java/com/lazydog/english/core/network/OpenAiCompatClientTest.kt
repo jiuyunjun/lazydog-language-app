@@ -155,3 +155,24 @@ class OpenAiCompatClientTest {
         assertTrue(result is OpenAiCompatClient.ConnectionResult.Failure)
     }
 }
+
+class Ipv4FirstDnsTest {
+
+    @Test
+    fun `ipv4 addresses are tried first`() {
+        // IPv6 不通但有 AAAA 记录的网络上，先试 IPv6 要干等满 connectTimeout 才轮到 IPv4，
+        // 那十秒整个落在用户盯着「接通中」的时间里。
+        val v6 = java.net.InetAddress.getByName("::1")
+        val v4 = java.net.InetAddress.getByName("127.0.0.1")
+
+        assertEquals(listOf(v4, v6), ipv4First(listOf(v6, v4)))
+    }
+
+    @Test
+    fun `ipv6 is kept, not dropped`() {
+        // IPv6-only 的网络上还得靠它；IPv4 在那种网络会立刻 unreachable，不耽误事。
+        val v6 = java.net.InetAddress.getByName("::1")
+
+        assertEquals(listOf(v6), ipv4First(listOf(v6)))
+    }
+}

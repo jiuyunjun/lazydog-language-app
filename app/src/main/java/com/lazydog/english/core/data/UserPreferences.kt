@@ -66,6 +66,7 @@ class UserPreferences(private val context: Context) {
         val AskShakeEnabled = booleanPreferencesKey("ask_shake_enabled")
         val AskShakeSensitivity = intPreferencesKey("ask_shake_sensitivity")
         val AskTopBarIcon = booleanPreferencesKey("ask_top_bar_icon")
+        val CompletionTokenModels = stringSetPreferencesKey("models_need_completion_tokens")
     }
 
     val onboardingCompleted: Flow<Boolean> =
@@ -91,6 +92,23 @@ class UserPreferences(private val context: Context) {
         AiTask.entries.mapNotNull { task ->
             prefs[taskModelKey(task)]?.takeIf { it.isNotBlank() }?.let { task to it }
         }.toMap()
+    }
+
+    /**
+     * 已知只认 `max_completion_tokens` 的模型（较新的 OpenAI 模型对 `max_tokens` 直接回 400）。
+     *
+     * 记住它是为了省掉一整个往返：不记的话每次调用都要先撞一个 400 再换名重发，
+     * 而这一下全落在用户盯着"接通中"的那段时间里。
+     */
+    val completionTokenModels: Flow<Set<String>> =
+        context.dataStore.data.map { it[Keys.CompletionTokenModels].orEmpty() }
+
+    suspend fun rememberCompletionTokenModel(model: String) {
+        val clean = model.trim()
+        if (clean.isBlank()) return
+        context.dataStore.edit {
+            it[Keys.CompletionTokenModels] = it[Keys.CompletionTokenModels].orEmpty() + clean
+        }
     }
 
     /** 只改默认模型，不动地址和密钥。 */

@@ -49,12 +49,16 @@ class LazyDogApplication : Application() {
         OpenAiContentGenerator(
             // 模型按功能取：没单独设过的功能自动跟随默认模型（设置页「各功能使用的模型」）。
             config = { task ->
+                val model = userPreferences.aiModelFor(task).first()
                 AiConfig(
                     baseUrl = userPreferences.aiBaseUrl.first(),
                     apiKey = userPreferences.aiApiKey.first(),
-                    model = userPreferences.aiModelFor(task).first(),
+                    model = model,
+                    // 撞过一次就记住了，不用每次调用都先用错的字段名试一遍。
+                    useCompletionTokens = model in userPreferences.completionTokenModels.first(),
                 )
             },
+            onNeedsCompletionTokens = userPreferences::rememberCompletionTokenModel,
         )
     }
 }

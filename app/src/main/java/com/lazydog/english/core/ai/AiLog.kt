@@ -23,6 +23,16 @@ internal object AiLog {
         Log.i(TAG, "$op → $model @ ${host(url)}｜提示词 $promptChars 字符｜${if (streaming) "流式" else "整取"}")
     }
 
+    /** 一次请求的分段耗时，见 HttpTimingListener。「接通中」到底卡在哪一段全靠它。 */
+    fun timing(op: String, outcome: String, phases: String) {
+        Log.i(TAG, "$op ⏱ $outcome｜$phases")
+    }
+
+    /** 第一个增量到达的时刻。[kind] 区分是思考还是正文——推理模型这两者差很远。 */
+    fun firstDelta(op: String, kind: String, millis: Long) {
+        Log.i(TAG, "$op ⏱ 首个$kind｜请求发出后 ${millis} ms")
+    }
+
     fun success(op: String, model: String, chars: Int, millis: Long) {
         Log.i(TAG, "$op ✓ $model｜返回 $chars 字符｜耗时 ${millis} ms")
     }

@@ -715,6 +715,45 @@ data: {"model":"gpt-test","choices":[{"delta":{"reasoning_content":"再挑难听
     }
 
     @Test
+    fun `a model already known to need max_completion_tokens skips the wasted round trip`() = runBlocking {
+        // 每次调用都先用 max_tokens 撞一个 400，等于每次都白搭一整个往返，
+        // 而这一下全落在用户盯着"接通中"的那段时间里。
+        val generator = OpenAiContentGenerator(
+            config = { AiConfig(server.url("/v1").toString(), "test-key", "gpt-test", useCompletionTokens = true) },
+            retryDelayMs = 1,
+        )
+        server.enqueue(MockResponse().setBody(chatBody(listeningJson)))
+
+        val result = generator.generateListeningSet(listeningRequest)
+
+        assertTrue(result is GenerationResult.Success)
+        assertEquals(1, server.requestCount)
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body.contains("max_completion_tokens"))
+        assertFalse(body.contains("\"max_tokens\""))
+    }
+
+    @Test
+    fun `the token field swap is reported so it can be remembered`() = runBlocking {
+        val remembered = mutableListOf<String>()
+        val generator = OpenAiContentGenerator(
+            config = { AiConfig(server.url("/v1").toString(), "test-key", "gpt-test") },
+            retryDelayMs = 1,
+            onNeedsCompletionTokens = { remembered.add(it) },
+        )
+        server.enqueue(
+            MockResponse().setResponseCode(400).setBody(
+                """{"error":{"message":"Unsupported parameter: 'max_tokens'","param":"max_tokens"}}""",
+            ),
+        )
+        server.enqueue(MockResponse().setBody(chatBody(listeningJson)))
+
+        generator.generateListeningSet(listeningRequest)
+
+        assertEquals(listOf("gpt-test"), remembered)
+    }
+
+    @Test
     fun `a 400 unrelated to the token limit is not retried`() = runBlocking {
         server.enqueue(
             MockResponse().setResponseCode(400)
