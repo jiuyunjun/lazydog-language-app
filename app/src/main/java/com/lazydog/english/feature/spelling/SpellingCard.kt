@@ -191,9 +191,15 @@ fun SpellingCardView(
  * 格子本身就是输入控件，再加一个框等于让人在两个地方之间来回看。
  */
 private fun SpellingQuestionType.needsPlainTextField(): Boolean =
-    this == SpellingQuestionType.ChunkRecall ||
-        this == SpellingQuestionType.FreeRecall ||
+    this == SpellingQuestionType.FreeRecall ||
         this == SpellingQuestionType.DelayedFreeRecall
+
+/**
+ * 四选一之外的题型都能逐级要提示。选择题没有提示梯度可言——
+ * 答案就在四个选项里，再给提示等于直接指出来。
+ */
+private fun SpellingQuestionType.hasHintLadder(): Boolean =
+    this != SpellingQuestionType.Recognition
 
 /** 题面靠声音给的题型，命中「音形对应」这一维。 */
 private fun SpellingQuestionType.isAudioPrompted(): Boolean =
@@ -235,7 +241,7 @@ private fun QuestionView(
                     onPlay = { scope.launch { app.speechController.speakWord(entry.term) } },
                 )
                 SpellingQuestionType.PartialCompletion -> PartialBody(card, answer, onTypedChange)
-                SpellingQuestionType.ChunkRecall -> ChunkBody(card, answer)
+                SpellingQuestionType.ChunkRecall -> ChunkBody(card, answer, onTypedChange)
                 SpellingQuestionType.GuidedRecall -> GuidedBody(card, answer, onTypedChange)
                 SpellingQuestionType.FreeRecall, SpellingQuestionType.DelayedFreeRecall -> FreeRecallBody(
                     card = card,
@@ -315,7 +321,7 @@ private fun QuestionView(
                     Text("下一个")
                 }
             } else {
-                if (card.questionType.needsPlainTextField()) {
+                if (card.questionType.hasHintLadder()) {
                     OutlinedButton(
                         onClick = onRequestHint,
                         modifier = Modifier
@@ -482,14 +488,18 @@ private fun PartialBody(
 }
 
 @Composable
-private fun ChunkBody(card: SpellingCard, answer: SpellingAnswer) {
+private fun ChunkBody(
+    card: SpellingCard,
+    answer: SpellingAnswer,
+    onTypedChange: (String) -> Unit,
+) {
     val entry = card
     Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(
-        text = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = true)
-            .replace(Regex("_+"), " _____ "),
-        style = MaterialTheme.typography.headlineMedium,
-        fontFamily = FontFamily.Monospace,
+    LetterSlots(
+        masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = true),
+        typed = answer.typed,
+        onTypedChange = onTypedChange,
+        enabled = !answer.resolved,
     )
     Text(
         text = "按词块想，不用一个字母一个字母地拼。",
@@ -551,7 +561,7 @@ private fun LetterSlots(
         ),
         cursorBrush = SolidColor(Color.Transparent),
         modifier = Modifier.focusRequester(focusRequester),
-        decorationBox = {
+        decorationBox = { innerTextField ->
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -601,9 +611,45 @@ private fun LetterSlots(
                         )
                     }
                 }
+                // 真正的输入框收进零宽的角落：字母由上面的格子画，
+                // 但这个调用不能省——省了这个框就收不到键盘输入。
+                Box(Modifier.width(0.dp)) { innerTextField() }
             }
         },
     )
+}
+
+/**
+ * 语境默写的挖空句（设计稿 61 屏）：空位是一条画出来的下划线，
+ * 不是一串下划线字符。这一级不给字符级提示，所以横线宽度固定，不透露字母数。
+ */
+@Composable
+private fun ClozeSentence(sentence: String, blankFor: String) {
+    val index = sentence.indexOf(blankFor, ignoreCase = true)
+    if (index < 0) {
+        Text(sentence, style = MaterialTheme.typography.titleMedium)
+        return
+    }
+    val ruleColor = MaterialTheme.colorScheme.outline
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(sentence.take(index), style = MaterialTheme.typography.titleMedium)
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 4.dp)
+                .width(88.dp)
+                .height(24.dp)
+                .drawBehind {
+                    val stroke = 2.dp.toPx()
+                    drawLine(
+                        color = ruleColor,
+                        start = Offset(0f, size.height - stroke / 2),
+                        end = Offset(size.width, size.height - stroke / 2),
+                        strokeWidth = stroke,
+                    )
+                },
+        )
+        Text(sentence.drop(index + blankFor.length), style = MaterialTheme.typography.titleMedium)
+    }
 }
 
 @Composable
@@ -617,10 +663,7 @@ private fun FreeRecallBody(card: SpellingCard, answer: SpellingAnswer, onPlay: (
     val sentence = entry.exampleEn
     if (sentence.contains(entry.term, ignoreCase = true)) {
         // 语境默写：把词从例句里挖掉，剩下的句子照给，别把答案漏在句子里。
-        Text(
-            text = sentence.replace(entry.term, "________", ignoreCase = true),
-            style = MaterialTheme.typography.titleMedium,
-        )
+        ClozeSentence(sentence = sentence, blankFor = entry.term)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconButton(onClick = onPlay) {
                 Icon(
