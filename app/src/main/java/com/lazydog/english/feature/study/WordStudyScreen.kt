@@ -70,6 +70,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+private enum class WordPracticeKind { MeaningRecall, Spelling }
+
 /** 一张学习卡：复习卡带 itemId，新词卡带生成内容。 */
 private data class StudyCard(
     val itemId: Long?,
@@ -83,6 +85,7 @@ private data class StudyCard(
     val collocations: List<String> = emptyList(),
     val memoryHintZh: String = "",
     val spellingProgress: SpellingProgress? = null,
+    val practiceKind: WordPracticeKind = WordPracticeKind.MeaningRecall,
 )
 
 private sealed interface WordStudyPhase {
@@ -92,6 +95,8 @@ private sealed interface WordStudyPhase {
         val index: Int,
         val revealed: Boolean,
         val typed: String = "",
+        /** 提示只能参考最后一次明确提交，不能跟着正在编辑的草稿实时判分。 */
+        val lastSubmittedAnswer: String = "",
         val hintLevel: Int = 0,
         val result: SpellingEvaluation? = null,
         val completed: Boolean = false,
@@ -155,6 +160,12 @@ fun WordStudyScreen(
                     collocations = VocabularyJson.decodeCollocations(it.detail.collocationsJson),
                     memoryHintZh = it.detail.memoryHintZh,
                     spellingProgress = repository.spellingProgress(it.item.id),
+                    // 词义回忆和拼写轮流出现，避免“单词学习”退化成纯拼写测试。
+                    practiceKind = if (it.item.reviewCount % 2 == 0) {
+                        WordPracticeKind.Spelling
+                    } else {
+                        WordPracticeKind.MeaningRecall
+                    },
                 )
             }
         phase = if (due.isEmpty()) WordStudyPhase.OfferNew(0) else WordStudyPhase.Cards(due, 0, revealed = false)
@@ -194,24 +205,31 @@ fun WordStudyScreen(
         }
     }
 
-    fun onNewGrade(card: StudyCard, grade: ReviewGrade, cards: List<StudyCard>, index: Int) {
+    fun onMeaningGrade(card: StudyCard, grade: ReviewGrade, cards: List<StudyCard>, index: Int) {
         scope.launch {
-            val id = repository.addVocabulary(
-                term = card.term,
-                meaningZh = card.meaningZh,
-                ipa = card.ipa,
-                exampleEn = card.exampleEn,
-                exampleZh = card.exampleZh,
-                pos = card.pos,
-                collocations = card.collocations,
-                memoryHintZh = card.memoryHintZh,
-            )
-            if (id != null) {
-                repository.recordReview(id, grade, source = "card")
-                newLearnedCount += 1
+            if (card.isNew) {
+                val id = repository.addVocabulary(
+                    term = card.term,
+                    meaningZh = card.meaningZh,
+                    ipa = card.ipa,
+                    exampleEn = card.exampleEn,
+                    exampleZh = card.exampleZh,
+                    pos = card.pos,
+                    collocations = card.collocations,
+                    memoryHintZh = card.memoryHintZh,
+                )
+                if (id != null) {
+                    repository.recordReview(id, grade, source = "card")
+                    newLearnedCount += 1
+                }
+            } else {
+                repository.recordReview(card.itemId!!, grade, source = "card")
+                reviewedCount += 1
             }
             phase = if (index + 1 < cards.size) {
                 WordStudyPhase.Cards(cards, index + 1, revealed = false)
+            } else if (!card.isNew) {
+                WordStudyPhase.OfferNew(reviewedCount)
             } else {
                 WordStudyPhase.Summary(reviewedCount, newLearnedCount)
             }
@@ -222,7 +240,7 @@ fun WordStudyScreen(
         val card = p.cards[p.index]
         val progress = card.spellingProgress ?: return
         val questionType = SpellingEngine.questionType(progress)
-        val finishes = answer.trim().equals(card.term.trim(), ignoreCase = true) || p.hintLevel >= 4
+        val finishes = answer.trim().equals(card.term.trim(), ignoreCase = true) || p.hintLevel >= 5
         phase = p.copy(submitting = true)
         scope.launch {
             val evaluation = repository.recordSpellingAttempt(
@@ -240,6 +258,7 @@ fun WordStudyScreen(
             if (finishes) reviewedCount += 1
             phase = p.copy(
                 typed = answer,
+                lastSubmittedAnswer = answer,
                 hintLevel = if (evaluation.correct) p.hintLevel else (p.hintLevel + 1).coerceAtMost(5),
                 result = evaluation,
                 completed = finishes,
@@ -247,6 +266,15 @@ fun WordStudyScreen(
                 submitting = false,
             )
         }
+    }
+
+    fun onSpellingHint(p: WordStudyPhase.Cards) {
+        val nextLevel = (p.hintLevel + 1).coerceAtMost(5)
+        phase = p.copy(
+            hintLevel = nextLevel,
+            // Level 5 已经显示完整答案，提问抽屉也不再假装答案仍被隐藏。
+            revealed = nextLevel >= 5,
+        )
     }
 
     fun advanceReview(p: WordStudyPhase.Cards) {
@@ -307,16 +335,18 @@ fun WordStudyScreen(
                 WordStudyPhase.Generating -> AiWaiting("AI 正在挑词…", stage)
                 is WordStudyPhase.Cards -> {
                     val card = p.cards[p.index]
-                    if (!card.isNew) {
+                    if (!card.isNew && card.practiceKind == WordPracticeKind.Spelling) {
                         AdaptiveSpellingCardView(
                             card = card,
                             typed = p.typed,
+                            lastSubmittedAnswer = p.lastSubmittedAnswer,
                             hintLevel = p.hintLevel,
                             result = p.result,
                             completed = p.completed,
                             submitting = p.submitting,
                             onTypedChange = { phase = p.copy(typed = it) },
                             onSubmit = { onSpellingSubmit(p, it) },
+                            onHint = { onSpellingHint(p) },
                             onNext = { advanceReview(p) },
                         )
                     } else {
@@ -324,7 +354,7 @@ fun WordStudyScreen(
                             card = card,
                             revealed = p.revealed,
                             onReveal = { phase = p.copy(revealed = true) },
-                            onGrade = { grade -> onNewGrade(card, grade, p.cards, p.index) },
+                            onGrade = { grade -> onMeaningGrade(card, grade, p.cards, p.index) },
                         )
                     }
                 }
@@ -366,7 +396,7 @@ fun WordStudyScreen(
  */
 private fun StudyCard.toAskContext(revealed: Boolean): AskContext {
     // 到期词都可能在做主动拼写；没结束前不能把英文答案交给提问抽屉。
-    if (!isNew && !revealed) {
+    if (!isNew && practiceKind == WordPracticeKind.Spelling && !revealed) {
         return AskContext(
             kind = AskContextKind.Word,
             title = "正在回想一个词 · $meaningZh",
@@ -420,12 +450,14 @@ private fun GeneratedWord.toCard() = StudyCard(
 private fun AdaptiveSpellingCardView(
     card: StudyCard,
     typed: String,
+    lastSubmittedAnswer: String,
     hintLevel: Int,
     result: SpellingEvaluation?,
     completed: Boolean,
     submitting: Boolean,
     onTypedChange: (String) -> Unit,
     onSubmit: (String) -> Unit,
+    onHint: () -> Unit,
     onNext: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -528,19 +560,7 @@ private fun AdaptiveSpellingCardView(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (!completed) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = MaterialTheme.shapes.medium,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = SpellingEngine.hintText(card.term, typed, hintLevel, result.nextProgress.weakSegments),
-                            modifier = Modifier.padding(14.dp),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
-                } else {
+                if (completed) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         InteractiveEnglishText(card.term, style = MaterialTheme.typography.headlineMedium)
                         IconButton(onClick = { scope.launch { app.speechController.speakWord(card.term) } }) {
@@ -557,6 +577,24 @@ private fun AdaptiveSpellingCardView(
                     }
                 }
             }
+            if (!completed && hintLevel > 0) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = SpellingEngine.hintText(
+                            card.term,
+                            lastSubmittedAnswer,
+                            hintLevel,
+                            result?.nextProgress?.weakSegments ?: progress.weakSegments,
+                        ),
+                        modifier = Modifier.padding(14.dp),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+            }
         }
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (completed) {
@@ -571,10 +609,12 @@ private fun AdaptiveSpellingCardView(
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                 ) { Text(if (submitting) "正在记录…" else if (recognition) "确认选择" else "检查拼写", style = MaterialTheme.typography.titleMedium) }
                 TextButton(
-                    onClick = { onSubmit("") },
+                    onClick = if (hintLevel < 5) onHint else ({ onSubmit("") }),
                     enabled = !submitting,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("想不起来，给一点提示") }
+                ) {
+                    Text(if (hintLevel < 5) "想不起来，给一点提示" else "这次没写出，记下来")
+                }
             }
         }
     }

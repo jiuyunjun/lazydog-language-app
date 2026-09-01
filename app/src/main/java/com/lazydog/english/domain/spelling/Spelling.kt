@@ -218,18 +218,35 @@ object SpellingEngine {
 
     fun hintText(expected: String, answer: String, level: Int, weakSegments: List<WeakSegment>): String {
         val clean = normalize(expected)
+        val submitted = normalize(answer)
+        if (submitted.isBlank()) {
+            return when (level.coerceIn(0, 5)) {
+                0 -> "先试着写一次；需要时再要提示。"
+                1 -> "首字母是 ${clean.take(1)}，一共 ${clean.length} 个字母。"
+                2 -> "可以分成 ${chunkWord(clean).size} 个词块。"
+                3 -> "开头是 ${clean.take(2)}，结尾是 ${clean.takeLast(2)}。"
+                4 -> "分块看：${chunkWord(clean).joinToString(" + ")}"
+                else -> "答案：$clean"
+            }
+        }
         return when (level.coerceIn(0, 5)) {
             0 -> "拼写不正确，再试一次。"
             1 -> {
-                val delta = clean.length - normalize(answer).length
+                val delta = clean.length - submitted.length
                 when {
                     delta > 0 -> "少了 $delta 个字母。"
                     delta < 0 -> "多了 ${-delta} 个字母。"
                     else -> "字母数量对了，但有位置不对。"
                 }
             }
-            2 -> "留意这里：${maskedWord(clean, weakSegments.ifEmpty { listOfNotNull(findWeakSegment(clean, answer)) }, false)}"
-            3 -> "开头是 ${clean.take(2)}，结尾是 ${clean.takeLast(2)}。"
+            2 -> {
+                val weak = findWeakSegment(clean, submitted)
+                if (weak == null) "有一小段顺序不对。" else "错误大约在第 ${weak.start + 1}～${weak.endExclusive} 个字母附近。"
+            }
+            3 -> {
+                val weak = findWeakSegment(clean, submitted) ?: weakSegments.maxByOrNull { it.errorCount }
+                if (weak == null) "开头是 ${clean.take(2)}，结尾是 ${clean.takeLast(2)}。" else "这一段是：…${weak.segment}…"
+            }
             4 -> "分块看：${chunkWord(clean).joinToString(" + ")}"
             else -> "答案：$clean"
         }

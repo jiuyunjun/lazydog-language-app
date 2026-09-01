@@ -62,6 +62,14 @@ class SpellingEngineTest {
     }
 
     @Test
+    fun `asking for a hint without an answer gives stable structural help`() {
+        assertEquals(
+            "首字母是 e，一共 11 个字母。",
+            SpellingEngine.hintText("environment", "", 1, emptyList()),
+        )
+    }
+
+    @Test
     fun `recognition distractors are deterministic and unique`() {
         val options = SpellingEngine.recognitionOptions("environment")
         assertEquals(4, options.size)
