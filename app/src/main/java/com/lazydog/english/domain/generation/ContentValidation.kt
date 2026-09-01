@@ -37,7 +37,9 @@ object ContentValidation {
                 !exampleContainsTerm(word.exampleEn, term) -> "例句里没有这个词"
                 word.pos.isBlank() || word.pos.length > 20 -> "词性缺失或过长"
                 word.collocations.isEmpty() || word.collocations.size > 2 -> "搭配数量应该是 1~2 个"
-                word.collocations.any { it.isBlank() || it.length > 60 } -> "搭配缺失或过长"
+                // 翻译允许空：模型偶尔只给英文，界面上那条还能点开现翻，不值得把整个词丢掉。
+                word.collocations.any { it.en.isBlank() || it.en.length > 60 || it.zh.length > 60 } ->
+                    "搭配缺失或过长"
                 word.memoryHintZh.isBlank() || word.memoryHintZh.length > 120 -> "记忆方法缺失或过长"
                 // 词块必须能原样拼回这个词，否则挖空题会挖出一个不存在的位置。
                 word.chunks.size < 2 -> "词块至少要拆成 2 块"

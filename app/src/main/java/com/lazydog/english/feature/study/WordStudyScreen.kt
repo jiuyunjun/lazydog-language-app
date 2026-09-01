@@ -59,6 +59,7 @@ import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.core.designsystem.AiWaiting
+import com.lazydog.english.domain.generation.Collocation
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.GenerationResult
@@ -87,7 +88,7 @@ private data class StudyCard(
     val exampleZh: String,
     val isNew: Boolean,
     val pos: String = "",
-    val collocations: List<String> = emptyList(),
+    val collocations: List<Collocation> = emptyList(),
     val stage: String = KnowledgeStage.Learning.name,
     val memoryHintZh: String = "",
     /** 熟词产出卡按这个阶段出题；新词和生词用不到。 */
@@ -401,7 +402,7 @@ private fun StudyCard.toAskContext(revealed: Boolean): AskContext {
             if (revealed) {
                 if (pos.isNotBlank()) add(AskDetail("词性", pos))
                 if (meaningZh.isNotBlank()) add(AskDetail("释义", meaningZh))
-                if (collocations.isNotEmpty()) add(AskDetail("搭配", collocations.joinToString("、")))
+                if (collocations.isNotEmpty()) add(AskDetail("搭配", collocations.joinToString("、") { listOf(it.en, it.zh).filter { part -> part.isNotBlank() }.joinToString(" ") }))
                 if (exampleEn.isNotBlank()) add(AskDetail("例句", exampleEn))
             } else {
                 add(AskDetail("状态", "学习者还没看答案，别直接把中文释义说出来"))
@@ -486,21 +487,23 @@ private fun SpellingChunks(term: String, facts: SpellingFacts) {
 }
 
 /**
- * 释义下面的那几个搭配短语。
+ * 释义下面的那几个搭配短语：翻译直接摆在英文下面，点一下就念。
  *
- * 点一下就念，同时把中文翻译显示在下面——搭配是这个词真正的用法，
- * 但一串裸英文短语在初学者眼里和没写差不多：不知道怎么读，也不确定是什么意思。
- * 翻译按需现取（第一次点才发请求），取到就留着，反复点只是重念一遍。
- * 双击查词、三击讲整句仍然照旧，这里只是给单击补了个事做。
+ * 一串裸英文短语在初学者眼里和没写差不多——不知道怎么读，也不确定是什么意思，
+ * 所以翻译跟着这个词一起生成、一起入库，进屏就已经在那儿了。
+ * 只有老词条（入库时还没有这个字段）才留着"点一下现翻"这条退路。
+ * 双击查词、三击讲整句仍然照旧。
  */
 @Composable
-private fun CollocationChip(phrase: String) {
+private fun CollocationChip(collocation: Collocation) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
-    var translation by remember(phrase) { mutableStateOf("") }
+    val phrase = collocation.en
+    var fetched by remember(phrase) { mutableStateOf("") }
     var failed by remember(phrase) { mutableStateOf("") }
     var loading by remember(phrase) { mutableStateOf(false) }
+    val translation = collocation.zh.ifBlank { fetched }
 
     fun tap() {
         scope.launch { app.speechController.speak(phrase) }
@@ -514,7 +517,7 @@ private fun CollocationChip(phrase: String) {
             )
             loading = false
             when (result) {
-                is GenerationResult.Success -> translation = result.data.translationZh
+                is GenerationResult.Success -> fetched = result.data.translationZh
                 is GenerationResult.Failure -> failed = result.reason
             }
         }
@@ -627,7 +630,7 @@ private fun StudyCardView(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        card.collocations.forEach { phrase -> CollocationChip(phrase) }
+                        card.collocations.forEach { collocation -> CollocationChip(collocation) }
                     }
                 }
                 // S0 接触（设计稿 62 屏）：新词第一次露面就把词块拆开摆着。

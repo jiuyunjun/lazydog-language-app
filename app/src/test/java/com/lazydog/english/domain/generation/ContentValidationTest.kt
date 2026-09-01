@@ -13,7 +13,7 @@ class ContentValidationTest {
         example: String = "The city tried to curb traffic.",
         exampleZh: String = "市政府想控制车流。",
         pos: String = "v.",
-        collocations: List<String> = listOf("curb traffic"),
+        collocations: List<Collocation> = listOf(Collocation("curb traffic", "控制车流")),
         memoryHint: String = "curb 是路缘石，把车流「圈」在路里，引申成控制、抑制。",
         // 从 term 推，这样换了词也仍然自洽——校验现在会检查词块能拼回原词、
         // 易错段是原词的一段，写死 curb 的那一套会让别的词全被判无效。
@@ -98,7 +98,7 @@ class ContentValidationTest {
     @Test
     fun `drops words missing part of speech or collocations`() {
         val result = ContentValidation.validateNewWords(
-            listOf(word(pos = ""), word(collocations = emptyList()), word(collocations = List(3) { "x $it" })),
+            listOf(word(pos = ""), word(collocations = emptyList()), word(collocations = List(3) { Collocation("x $it") })),
             maxCount = 5,
             knownTerms = emptySet(),
         )

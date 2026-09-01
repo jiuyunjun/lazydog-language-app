@@ -13,6 +13,7 @@ import com.lazydog.english.core.database.VocabularyRecord
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.KnowledgeType
 import com.lazydog.english.core.model.ReviewGrade
+import com.lazydog.english.domain.generation.Collocation
 import com.lazydog.english.domain.scheduling.MemoryState
 import com.lazydog.english.domain.scheduling.ReviewScheduler
 import com.lazydog.english.domain.scheduling.deriveStage
@@ -68,7 +69,7 @@ class KnowledgeRepository(
         exampleEn: String = "",
         exampleZh: String = "",
         pos: String = "",
-        collocations: List<String> = emptyList(),
+        collocations: List<Collocation> = emptyList(),
         memoryHintZh: String = "",
         facts: SpellingFacts = SpellingFacts.None,
     ): Long? {
@@ -494,9 +495,23 @@ object VocabularyJson {
     private val json = Json { ignoreUnknownKeys = true }
     private val serializer = ListSerializer(String.serializer())
 
-    fun encodeCollocations(collocations: List<String>): String = encodeList(collocations)
+    @Serializable
+    private data class CollocationRow(val en: String, val zh: String = "")
 
-    fun decodeCollocations(raw: String): List<String> = decodeList(raw)
+    private val collocationSerializer = ListSerializer(CollocationRow.serializer())
+
+    fun encodeCollocations(collocations: List<Collocation>): String =
+        json.encodeToString(collocationSerializer, collocations.map { CollocationRow(it.en, it.zh) })
+
+    /**
+     * 老数据是一串裸字符串（`["curb traffic"]`），新数据是 `[{"en":..,"zh":..}]`。
+     * 两种都认，字符串按"只有英文、还没翻译"处理——不为了加一个字段去写数据库迁移。
+     */
+    fun decodeCollocations(raw: String): List<Collocation> {
+        val rows = runCatching { json.decodeFromString(collocationSerializer, raw) }.getOrNull()
+        if (rows != null) return rows.map { Collocation(it.en, it.zh) }
+        return decodeList(raw).map { Collocation(it) }
+    }
 
     fun encodeList(values: List<String>): String = json.encodeToString(serializer, values)
 

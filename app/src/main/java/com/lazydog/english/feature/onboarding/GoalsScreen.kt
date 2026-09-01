@@ -33,8 +33,6 @@ fun GoalsScreen(
     var topics by rememberSaveable { mutableStateOf(listOf<String>()) }
     var minutes by rememberSaveable { mutableFloatStateOf(12f) }
 
-    val topicsValid = topics.size in 2..5
-
     OnboardingStepScaffold(
         title = "学什么、学多久",
         step = 2,
@@ -43,7 +41,7 @@ fun GoalsScreen(
             OnboardingBottomBar {
                 Button(
                     onClick = { onNext(LearningGoals.join(goals), topics.toSet(), minutes.roundToInt()) },
-                    enabled = goals.isNotEmpty() && topicsValid,
+                    enabled = goals.isNotEmpty() && topics.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("下一步")
@@ -72,7 +70,7 @@ fun GoalsScreen(
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("感兴趣的话题", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "选 2～5 个，阅读会按这些生成",
+                    text = "想选几个选几个，阅读会按这些生成",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 8.dp),
@@ -82,7 +80,6 @@ fun GoalsScreen(
                 options = SampleData.topicOptions,
                 selected = topics.toSet(),
                 onToggle = { topics = if (it in topics) topics - it else topics + it },
-                max = 5,
                 addPlaceholder = "比如 篮球、机械键盘",
             )
         }

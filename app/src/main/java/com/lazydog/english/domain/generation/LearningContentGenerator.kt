@@ -200,6 +200,18 @@ data class NewWordsRequest(
     val knownTerms: List<String>,
 )
 
+/**
+ * 一个搭配短语和它的中文翻译。
+ *
+ * 翻译跟着搭配一起生成、一起入库：卡片上那几个裸英文短语对初学者等于没写，
+ * 而「点一下现翻」意味着每看一个词都要多等一次网络往返。老数据里 [zh] 是空的，
+ * 界面上仍然可以点开现翻。
+ */
+data class Collocation(
+    val en: String,
+    val zh: String = "",
+)
+
 data class GeneratedWord(
     val term: String,
     val ipa: String,
@@ -209,7 +221,7 @@ data class GeneratedWord(
     /** 词性，如 "v."/"n."/"adj."（CEFR 设计文档 §6.2 的词义单位字段之一）。 */
     val pos: String = "",
     /** 1~2 个高价值搭配，不是孤立单词（§6.5"每个附带 1~2 个高价值搭配"）。 */
-    val collocations: List<String> = emptyList(),
+    val collocations: List<Collocation> = emptyList(),
     /**
      * 这个词的记忆方法：优先拆词根词缀并说明怎么合出这个意思，拆不出来的用联想/构词/形近对比。
      * 要针对这个词，不是"多读几遍"这种通用建议。

@@ -43,21 +43,18 @@ fun TagPicker(
     selected: Set<String>,
     onToggle: (String) -> Unit,
     modifier: Modifier = Modifier,
-    /** 最多选几个；null 表示不限。到上限后未选中的项点不动。 */
-    max: Int? = null,
     addPlaceholder: String = "自己写一个",
 ) {
     var adding by rememberSaveable { mutableStateOf(false) }
     var draft by rememberSaveable { mutableStateOf("") }
     // 用户自己加的排在预置项后面，顺序稳定，不会因为重组跳来跳去。
     val all = options + selected.filterNot { it in options }
-    val atLimit = max != null && selected.size >= max
 
     fun commit() {
         val value = draft.trim().take(12)
         draft = ""
         adding = false
-        if (value.isNotEmpty() && value !in selected && !atLimit) onToggle(value)
+        if (value.isNotEmpty() && value !in selected) onToggle(value)
     }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -70,7 +67,6 @@ fun TagPicker(
                 FilterChip(
                     selected = isSelected,
                     onClick = { onToggle(option) },
-                    enabled = isSelected || !atLimit,
                     label = { Text(option) },
                     leadingIcon = if (isSelected) {
                         { Icon(Icons.Outlined.Check, contentDescription = null) }
@@ -82,7 +78,6 @@ fun TagPicker(
             if (!adding) {
                 AssistChip(
                     onClick = { adding = true },
-                    enabled = !atLimit,
                     label = { Text("自己加") },
                     leadingIcon = { Icon(Icons.Outlined.Add, contentDescription = null) },
                 )
@@ -102,14 +97,6 @@ fun TagPicker(
                 TextButton(onClick = { commit() }, enabled = draft.isNotBlank()) { Text("加上") }
                 TextButton(onClick = { draft = ""; adding = false }) { Text("算了") }
             }
-        }
-        if (atLimit) {
-            Text(
-                text = "已经选满了，想换就先点掉一个。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-            )
         }
     }
 }

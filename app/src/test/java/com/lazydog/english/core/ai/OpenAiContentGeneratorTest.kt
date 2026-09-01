@@ -156,7 +156,7 @@ class OpenAiContentGeneratorTest {
 
     private val wordsJson =
         """{"schemaVersion":1,"words":[
-           {"term":"curb","ipa":"/kɜːb/","pos":"v.","meaningZh":"控制","exampleEn":"The city tried to curb traffic.","exampleZh":"市政府想控制车流。","collocations":["curb traffic"],"memoryHintZh":"curb 本义是路缘石，把车流圈在路里，引申成控制、抑制。","chunks":["cu","rb"],"trickyPart":"ur","misspellings":["curbe","kurb","curp"]},
+           {"term":"curb","ipa":"/kɜːb/","pos":"v.","meaningZh":"控制","exampleEn":"The city tried to curb traffic.","exampleZh":"市政府想控制车流。","collocations":[{"en":"curb traffic","zh":"控制车流"}],"memoryHintZh":"curb 本义是路缘石，把车流圈在路里，引申成控制、抑制。","chunks":["cu","rb"],"trickyPart":"ur","misspellings":["curbe","kurb","curp"]},
            {"term":"","ipa":"","meaningZh":"","exampleEn":"","exampleZh":""}
         ]}"""
 
@@ -170,6 +170,8 @@ class OpenAiContentGeneratorTest {
 
         val success = result as GenerationResult.Success
         assertEquals(listOf("curb"), success.data.map { it.term })
+        assertEquals(listOf("curb traffic"), success.data.first().collocations.map { it.en })
+        assertEquals(listOf("控制车流"), success.data.first().collocations.map { it.zh })
         assertEquals(1, success.droppedNotes.size)
         assertEquals("gpt-test", success.model)
 
@@ -177,6 +179,21 @@ class OpenAiContentGeneratorTest {
         assertEquals("/v1/chat/completions", recorded.path)
         assertEquals("Bearer test-key", recorded.getHeader("Authorization"))
         assertTrue(recorded.body.readUtf8().contains("json_object"))
+    }
+
+    @Test
+    fun `collocations given as plain strings still parse`() = runBlocking {
+        // 模型偶尔还是照老样子给一串裸字符串。那是“只有英文、还没翻译”，
+        // 不该让十几个词连同拼写事实一起白生成。
+        server.enqueue(MockResponse().setBody(chatBody(wordsJson.replace(
+            """[{"en":"curb traffic","zh":"控制车流"}]""",
+            """["curb traffic"]""",
+        ))))
+
+        val success = generator().generateNewWords(wordsRequest) as GenerationResult.Success
+
+        assertEquals(listOf("curb traffic"), success.data.first().collocations.map { it.en })
+        assertEquals(listOf(""), success.data.first().collocations.map { it.zh })
     }
 
     @Test

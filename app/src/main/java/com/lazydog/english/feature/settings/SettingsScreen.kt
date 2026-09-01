@@ -652,12 +652,11 @@ private fun GoalsDialog(
                     onToggle = { goals = if (it in goals) goals - it else goals + it },
                     addPlaceholder = "比如 面试",
                 )
-                Text("兴趣（最多 5 个）", style = MaterialTheme.typography.labelLarge)
+                Text("兴趣（可多选，也可以自己加）", style = MaterialTheme.typography.labelLarge)
                 TagPicker(
                     options = SampleData.topicOptions,
                     selected = topics,
                     onToggle = { topics = if (it in topics) topics - it else topics + it },
-                    max = 5,
                     addPlaceholder = "比如 篮球",
                 )
             }

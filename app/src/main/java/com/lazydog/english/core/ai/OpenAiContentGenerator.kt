@@ -28,6 +28,7 @@ import com.lazydog.english.domain.listening.ListeningKeyExpression
 import com.lazydog.english.domain.listening.ListeningSetRequest
 import com.lazydog.english.domain.listening.ListeningValidation
 import com.lazydog.english.domain.listening.MishearType
+import com.lazydog.english.domain.generation.Collocation
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GeneratedReading
 import com.lazydog.english.domain.generation.GeneratedWord
@@ -88,9 +89,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -1008,6 +1013,37 @@ class OpenAiContentGenerator(
     )
 
     @Serializable
+    private data class CollocationPayload(
+        val en: String = "",
+        val zh: String = "",
+    ) {
+        fun toDomain() = Collocation(en = en.trim(), zh = zh.trim())
+    }
+
+    /**
+     * 搭配以前是一串裸字符串，现在是 {en, zh}。
+     *
+     * 模型偶尔还是会照老样子给 `["resolve an issue"]`——那是它见过的更常见的写法。
+     * 这时把字符串当成只有 en 的对象，而不是整批词解析失败：一个字段的写法差异
+     * 不该让十几个词连同拼写事实一起白生成，翻译空着界面上还能点开现翻。
+     */
+    private object CollocationListSerializer :
+        JsonTransformingSerializer<List<CollocationPayload>>(ListSerializer(CollocationPayload.serializer())) {
+        override fun transformDeserialize(element: JsonElement): JsonElement {
+            val array = element as? JsonArray ?: return element
+            return JsonArray(
+                array.map { item ->
+                    if (item is JsonPrimitive && item.isString) {
+                        JsonObject(mapOf("en" to item))
+                    } else {
+                        item
+                    }
+                },
+            )
+        }
+    }
+
+    @Serializable
     private data class WordPayload(
         val term: String = "",
         val ipa: String = "",
@@ -1015,7 +1051,8 @@ class OpenAiContentGenerator(
         val exampleEn: String = "",
         val exampleZh: String = "",
         val pos: String = "",
-        val collocations: List<String> = emptyList(),
+        @Serializable(with = CollocationListSerializer::class)
+        val collocations: List<CollocationPayload> = emptyList(),
         val memoryHintZh: String = "",
         val chunks: List<String> = emptyList(),
         val trickyPart: String = "",
@@ -1028,7 +1065,7 @@ class OpenAiContentGenerator(
             exampleEn = exampleEn,
             exampleZh = exampleZh,
             pos = pos,
-            collocations = collocations,
+            collocations = collocations.map { it.toDomain() },
             memoryHintZh = memoryHintZh,
             chunks = chunks,
             trickyPart = trickyPart,
@@ -1935,7 +1972,9 @@ class OpenAiContentGenerator(
                 "但达到这个水平该会用的词。大部分（八成左右）贴着这个水平走，可以有一两个稍高一级的" +
                 "作为提前热身，但不要选到明显超纲、需要专业背景才懂的生僻词。")
             appendLine("不要只给孤立单词——每个词给 pos（词性缩写，如 v./n./adj.）和 collocations：" +
-                "1~2 个这个词真实常用的搭配短语（比如 issue 配 \"resolve an issue\"，不是造一个不自然的短语）。")
+                "1~2 个这个词真实常用的搭配短语，写成 {\"en\":\"resolve an issue\",\"zh\":\"解决一个问题\"} 这种对象" +
+                "（比如 issue 配 resolve an issue，不是造一个不自然的短语）。" +
+                "zh 是这个搭配整体的中文说法，短、自然、口语，不是逐词直译，也不要再解释一遍这个词。")
             appendLine("meaningZh 是这个具体词义的简洁中文释义；exampleEn 是包含该词的自然英文例句，exampleZh 是它的翻译。")
             append(exampleSentenceRules(request.learnerLevel))
             appendLine("同一批例句之间场景和句型要有明显区别，不能只换个人名或地点。")
@@ -1944,7 +1983,8 @@ class OpenAiContentGenerator(
             appendLine("输出 JSON schema：")
             appendLine(
                 """{"schemaVersion":1,"words":[{"term":"...","ipa":"...","pos":"v.","meaningZh":"...",""" +
-                    """"exampleEn":"...","exampleZh":"...","collocations":["..."],"memoryHintZh":"...",""" +
+                    """"exampleEn":"...","exampleZh":"...","collocations":[{"en":"...","zh":"..."}],""" +
+                    """"memoryHintZh":"...",""" +
                     """"chunks":["...","..."],"trickyPart":"...","misspellings":["...","...","..."]}]}""",
             )
         }
