@@ -1,5 +1,6 @@
 package com.lazydog.english.core.ai
 
+import com.lazydog.english.core.network.CallHooks
 import com.lazydog.english.core.network.HttpTimingListener
 import com.lazydog.english.core.network.Ipv4FirstDns
 import com.lazydog.english.core.network.await
@@ -95,12 +96,15 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * [useCompletionTokens] 是"这个模型只认 max_completion_tokens"的既往结论。不记住的话，
  * 每一次调用都要先用 max_tokens 撞一个 400 再换名重发——白搭一整个往返，
  * 慢的网络上这一下就是好几秒，而且每次都付。
+ *
+ * [sendReasoningEffort] 同理，记的是"这个模型认不认 reasoning_effort"。
  */
 data class AiConfig(
     val baseUrl: String,
     val apiKey: String,
     val model: String,
     val useCompletionTokens: Boolean = false,
+    val sendReasoningEffort: Boolean = true,
 )
 
 /**
@@ -115,6 +119,8 @@ class OpenAiContentGenerator(
     private val retryDelayMs: Long = RETRY_DELAY_MS,
     /** 记下"这个模型只认 max_completion_tokens"，下次开始就直接用对的字段名。 */
     private val onNeedsCompletionTokens: suspend (model: String) -> Unit = {},
+    /** 记下"这个模型不认 reasoning_effort"，下次开始就不带这个参数。 */
+    private val onRejectsReasoningEffort: suspend (model: String) -> Unit = {},
 ) : LearningContentGenerator {
 
     override suspend fun generateNewWords(
@@ -661,7 +667,7 @@ class OpenAiContentGenerator(
         val startedAt = System.currentTimeMillis()
         AiLog.start(op, model, url, systemPrompt.length + userPrompt.length, streaming)
 
-        fun buildRequest(useCompletionTokens: Boolean): Request {
+        fun buildRequest(useCompletionTokens: Boolean, reasoningEffort: String?): Request {
             val body = json.encodeToString(
                 ChatRequest.serializer(),
                 ChatRequest(
@@ -672,13 +678,19 @@ class OpenAiContentGenerator(
                     ),
                     maxTokens = if (useCompletionTokens) null else maxTokens,
                     maxCompletionTokens = if (useCompletionTokens) maxTokens else null,
+                    reasoningEffort = reasoningEffort,
                     stream = streaming,
                 ),
             )
+            val hooks = CallHooks(
+                op = op,
+                // 推理模型想完之前连响应头都不发，所以"等模型"从请求发出去那一刻就开始算，
+                // 而不是等响应头——不然整个思考期界面上都写着"接通中"。
+                onRequestSent = { onStage?.invoke(GenerationStage.Thinking("")) },
+            )
             return Request.Builder()
                 .url(url)
-                // 计时日志靠这个 tag 认出自己属于哪个调用，见 HttpTimingListener。
-                .tag(String::class.java, op)
+                .tag(CallHooks::class.java, hooks)
                 .header("Authorization", "Bearer $apiKey")
                 .post(body.toRequestBody("application/json".toMediaType()))
                 .build()
@@ -700,13 +712,16 @@ class OpenAiContentGenerator(
         // 之前撞过的模型直接用对的字段名（结论存在偏好里），不再每次都先撞一个 400。
         var useCompletionTokens = settings.useCompletionTokens
         var swappedTokenField = useCompletionTokens
+        var reasoningEffort = if (settings.sendReasoningEffort) task.reasoningEffort else null
         var lastReason = "未知错误"
         var attempt = 0
-        // 最多三次：一次原始请求、一次换上限字段名、一次限流/网络重试。
-        while (attempt < 3) {
+        var correcting = false
+        // 最多四次：原始请求、换上限字段名、去掉 reasoning_effort、一次限流/网络重试。
+        while (attempt < 4) {
             attempt += 1
+            correcting = false
             try {
-                okHttpClient.newCall(buildRequest(useCompletionTokens)).await().use { response ->
+                okHttpClient.newCall(buildRequest(useCompletionTokens, reasoningEffort)).await().use { response ->
                     if (response.isSuccessful) {
                         return@withContext done(
                             if (streaming) {
@@ -725,9 +740,27 @@ class OpenAiContentGenerator(
                     if (response.code == 400 && !swappedTokenField && mentionsTokenLimit(raw)) {
                         swappedTokenField = true
                         useCompletionTokens = true
+                        correcting = true
                         // 记到偏好里：下一次调用（以及下次开 App）都不用再撞这一下。
                         launch { onNeedsCompletionTokens(model) }
                         AiLog.retry(op, lastReason, "改用 max_completion_tokens 重发，并记住这个模型")
+                        return@use
+                    }
+                    // 老模型和别家服务商不认 reasoning_effort。
+                    // 只要带着它挨了 400 就先去掉重发一次——有的网关只回一句含糊的
+                    // "unrecognized parameter"，认不出是哪个参数，不能因此整个功能都用不了。
+                    // 但只有服务端点名说了这个参数，才记住"以后别带"，否则一次无关的 400
+                    // 会把这个模型的思考力度永久关掉。
+                    if (response.code == 400 && reasoningEffort != null) {
+                        val named = mentionsReasoningEffort(raw)
+                        reasoningEffort = null
+                        correcting = true
+                        if (named) launch { onRejectsReasoningEffort(model) }
+                        AiLog.retry(
+                            op,
+                            lastReason,
+                            if (named) "去掉 reasoning_effort 重发，并记住这个模型" else "先去掉 reasoning_effort 再试一次",
+                        )
                         return@use
                     }
                     if (response.code !in RETRYABLE_CODES) return@withContext fail(lastReason)
@@ -737,7 +770,8 @@ class OpenAiContentGenerator(
                 lastReason = "网络错误：${e.message ?: e.javaClass.simpleName}"
                 AiLog.retry(op, lastReason, "${retryDelayMs} ms 后再试")
             }
-            if (attempt < 3 && !swappedTokenField) delay(retryDelayMs)
+            // 纠正参数的重发不必等：不是限流，等只是白等。
+            if (attempt < 4 && !correcting) delay(retryDelayMs)
         }
         fail("$lastReason（已重试）")
     }
@@ -844,6 +878,11 @@ class OpenAiContentGenerator(
          */
         @SerialName("max_tokens") val maxTokens: Int? = null,
         @SerialName("max_completion_tokens") val maxCompletionTokens: Int? = null,
+        /**
+         * 思考力度。推理模型开口前的思考实测能占整次调用六成，而多数任务不需要它想那么久。
+         * 不认这个参数的服务端会回 400，届时去掉重发并记住（见 [complete]）。
+         */
+        @SerialName("reasoning_effort") val reasoningEffort: String? = null,
         val stream: Boolean = false,
     )
 
@@ -1383,6 +1422,9 @@ class OpenAiContentGenerator(
         private const val THINKING_EXCERPT_CHARS = 80
 
         /** 400 的正文提到上限字段，就说明这个服务端要的是另一个名字。 */
+        internal fun mentionsReasoningEffort(body: String): Boolean =
+            body.contains("reasoning_effort", ignoreCase = true)
+
         internal fun mentionsTokenLimit(body: String): Boolean =
             body.contains("max_tokens", ignoreCase = true) ||
                 body.contains("max_completion_tokens", ignoreCase = true)

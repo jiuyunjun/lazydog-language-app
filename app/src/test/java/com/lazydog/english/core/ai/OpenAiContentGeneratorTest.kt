@@ -653,11 +653,14 @@ data: {"model":"gpt-test","choices":[{"delta":{"reasoning_content":"再挑难听
     @Test
     fun `a 400 says what the server actually complained about`() = runBlocking {
         // 之前只报"HTTP 400"，等于什么都没说。
-        server.enqueue(
-            MockResponse().setResponseCode(400).setBody(
-                """{"error":{"message":"Invalid value for 'temperature'.","type":"invalid_request_error"}}""",
-            ),
-        )
+        // 两次是因为带着 reasoning_effort 挨 400 时会先去掉它重试一次，见上面那条用例。
+        repeat(2) {
+            server.enqueue(
+                MockResponse().setResponseCode(400).setBody(
+                    """{"error":{"message":"Invalid value for 'temperature'.","type":"invalid_request_error"}}""",
+                ),
+            )
+        }
 
         val result = generator().generateListeningSet(listeningRequest)
 
@@ -754,13 +757,119 @@ data: {"model":"gpt-test","choices":[{"delta":{"reasoning_content":"再挑难听
     }
 
     @Test
-    fun `a 400 unrelated to the token limit is not retried`() = runBlocking {
+    fun `each task asks for its own reasoning effort`() = runBlocking {
+        // 推理模型开口前的思考实测占了整次调用六成，而这些任务多数只是按模板填内容。
+        server.enqueue(MockResponse().setBody(chatBody(listeningJson)))
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody("""{"term":"curb","ipa":"/kɜːb/","meaningZh":"v. 控制","usageNoteZh":"控制车流。"}"""),
+            ),
+        )
+
+        generator().generateListeningSet(listeningRequest)
+        generator().explainWord("curb", "We should curb traffic.", "A2")
+
+        assertTrue(server.takeRequest().body.readUtf8().contains(""""reasoning_effort":"low""""))
+        assertTrue(server.takeRequest().body.readUtf8().contains(""""reasoning_effort":"minimal""""))
+    }
+
+    @Test
+    fun `a model that rejects reasoning effort is retried without it and remembered`() = runBlocking {
+        // 老模型和别家服务商不认这个参数，不能因此整个功能都用不了。
+        val rejected = mutableListOf<String>()
+        val generator = OpenAiContentGenerator(
+            config = { AiConfig(server.url("/v1").toString(), "test-key", "gpt-test") },
+            retryDelayMs = 1,
+            onRejectsReasoningEffort = { rejected.add(it) },
+        )
+        server.enqueue(
+            MockResponse().setResponseCode(400).setBody(
+                """{"error":{"message":"Unrecognized request argument: reasoning_effort"}}""",
+            ),
+        )
+        server.enqueue(MockResponse().setBody(chatBody(listeningJson)))
+
+        val result = generator.generateListeningSet(listeningRequest)
+
+        assertTrue(result is GenerationResult.Success)
+        assertEquals(listOf("gpt-test"), rejected)
+        server.takeRequest()
+        assertFalse(server.takeRequest().body.readUtf8().contains("reasoning_effort"))
+    }
+
+    @Test
+    fun `a model already known to reject reasoning effort never sends it`() = runBlocking {
+        val generator = OpenAiContentGenerator(
+            config = {
+                AiConfig(server.url("/v1").toString(), "test-key", "gpt-test", sendReasoningEffort = false)
+            },
+            retryDelayMs = 1,
+        )
+        server.enqueue(MockResponse().setBody(chatBody(listeningJson)))
+
+        generator.generateListeningSet(listeningRequest)
+
+        assertEquals(1, server.requestCount)
+        assertFalse(server.takeRequest().body.readUtf8().contains("reasoning_effort"))
+    }
+
+    @Test
+    fun `waiting for the model starts when the request is sent, not when headers arrive`() = runBlocking {
+        // 实测 gpt-5 系想完之前连响应头都不发（一次压住 49 秒）。等响应头才算"在等模型"的话，
+        // 整个思考期界面上都会写着"接通中"——而真正的接通只有几十毫秒。
+        server.enqueue(
+            MockResponse()
+                .setHeadersDelay(400, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .setBody(chatBody(listeningJson)),
+        )
+
+        val startedAt = System.currentTimeMillis()
+        var firstThinkingAt = 0L
+        generator().generateListeningSet(
+            request = listeningRequest,
+            onStage = { if (it is GenerationStage.Thinking && firstThinkingAt == 0L) firstThinkingAt = System.currentTimeMillis() },
+        )
+
+        assertTrue("一次 Thinking 都没报", firstThinkingAt > 0)
+        val waited = firstThinkingAt - startedAt
+        assertTrue("应该在响应头之前就报出来，实际等了 $waited ms", waited < 300)
+    }
+
+    @Test
+    fun `an unrelated 400 gives up after dropping the optional parameter once`() = runBlocking {
+        // 有的网关只回一句含糊的"参数不对"，认不出是哪个，所以先去掉 reasoning_effort 再试一次。
+        // 但也就这一次——一个 400 不该变成来回打。
+        server.enqueue(
+            MockResponse().setResponseCode(400)
+                .setBody("""{"error":{"message":"model not found"}}"""),
+        )
         server.enqueue(
             MockResponse().setResponseCode(400)
                 .setBody("""{"error":{"message":"model not found"}}"""),
         )
 
         val result = generator().generateListeningSet(listeningRequest)
+
+        assertTrue(result is GenerationResult.Failure)
+        assertEquals(2, server.requestCount)
+        server.takeRequest()
+        assertFalse(server.takeRequest().body.readUtf8().contains("reasoning_effort"))
+    }
+
+    @Test
+    fun `an unrelated 400 with no optional parameter in play is not retried at all`() = runBlocking {
+        val generator = OpenAiContentGenerator(
+            config = {
+                AiConfig(server.url("/v1").toString(), "test-key", "gpt-test", sendReasoningEffort = false)
+            },
+            retryDelayMs = 1,
+        )
+        server.enqueue(
+            MockResponse().setResponseCode(400)
+                .setBody("""{"error":{"message":"model not found"}}"""),
+        )
+
+        val result = generator.generateListeningSet(listeningRequest)
 
         assertTrue(result is GenerationResult.Failure)
         assertEquals(1, server.requestCount)

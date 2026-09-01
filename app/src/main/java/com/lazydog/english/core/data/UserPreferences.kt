@@ -67,6 +67,7 @@ class UserPreferences(private val context: Context) {
         val AskShakeSensitivity = intPreferencesKey("ask_shake_sensitivity")
         val AskTopBarIcon = booleanPreferencesKey("ask_top_bar_icon")
         val CompletionTokenModels = stringSetPreferencesKey("models_need_completion_tokens")
+        val NoReasoningEffortModels = stringSetPreferencesKey("models_reject_reasoning_effort")
     }
 
     val onboardingCompleted: Flow<Boolean> =
@@ -108,6 +109,18 @@ class UserPreferences(private val context: Context) {
         if (clean.isBlank()) return
         context.dataStore.edit {
             it[Keys.CompletionTokenModels] = it[Keys.CompletionTokenModels].orEmpty() + clean
+        }
+    }
+
+    /** 已知不认 `reasoning_effort` 的模型。同样是记一次省一次往返。 */
+    val noReasoningEffortModels: Flow<Set<String>> =
+        context.dataStore.data.map { it[Keys.NoReasoningEffortModels].orEmpty() }
+
+    suspend fun rememberNoReasoningEffortModel(model: String) {
+        val clean = model.trim()
+        if (clean.isBlank()) return
+        context.dataStore.edit {
+            it[Keys.NoReasoningEffortModels] = it[Keys.NoReasoningEffortModels].orEmpty() + clean
         }
     }
 

@@ -56,9 +56,11 @@ class LazyDogApplication : Application() {
                     model = model,
                     // 撞过一次就记住了，不用每次调用都先用错的字段名试一遍。
                     useCompletionTokens = model in userPreferences.completionTokenModels.first(),
+                    sendReasoningEffort = model !in userPreferences.noReasoningEffortModels.first(),
                 )
             },
             onNeedsCompletionTokens = userPreferences::rememberCompletionTokenModel,
+            onRejectsReasoningEffort = userPreferences::rememberNoReasoningEffortModel,
         )
     }
 }

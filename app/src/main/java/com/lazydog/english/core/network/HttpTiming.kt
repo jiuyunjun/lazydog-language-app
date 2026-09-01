@@ -23,6 +23,19 @@ import okhttp3.Response
  *
  * 复用连接时不会有 DNS 和建连两段——那正是想看到的对照。
  */
+/**
+ * 挂在请求上的钩子：让 [HttpTimingListener] 能把"请求已经发出去了"回报给调用方。
+ *
+ * 为什么需要：推理模型在想完之前**连响应头都不发**（实测 gpt-5 系一次要压住 49 秒），
+ * 所以"等模型开口"不能等响应头才算开始——那会让界面在整个思考期里都显示「接通中」，
+ * 而真正的接通（DNS + 建连 + TLS）实测只有几十毫秒。
+ */
+internal class CallHooks(
+    val op: String,
+    /** 请求体发完的那一刻。从这里往后就全是在等模型了。 */
+    val onRequestSent: () -> Unit = {},
+)
+
 internal class HttpTimingListener : EventListener() {
 
     private var callStart = 0L
@@ -88,6 +101,7 @@ internal class HttpTimingListener : EventListener() {
     override fun requestBodyEnd(call: Call, byteCount: Long) {
         requestMs = now() - requestStart
         responseWaitStart = now()
+        call.request().tag(CallHooks::class.java)?.onRequestSent?.invoke()
     }
 
     override fun requestHeadersEnd(call: Call, request: Request) {
@@ -108,7 +122,7 @@ internal class HttpTimingListener : EventListener() {
 
     private fun log(call: Call, outcome: String) {
         val total = now() - callStart
-        val op = call.request().tag(String::class.java) ?: "ai"
+        val op = call.request().tag(CallHooks::class.java)?.op ?: "ai"
         val parts = buildList {
             if (reusedConnection) add("复用连接") else add("新建连接")
             if (dnsMs > 0) add("DNS ${dnsMs}ms")
