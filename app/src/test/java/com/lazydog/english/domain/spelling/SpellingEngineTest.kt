@@ -1,5 +1,6 @@
 package com.lazydog.english.domain.spelling
 
+import com.lazydog.english.core.model.KnowledgeStage
 import java.time.Instant
 import java.time.ZoneOffset
 import org.junit.Assert.assertEquals
@@ -140,6 +141,22 @@ class SpellingEngineTest {
         assertEquals(
             "enviroment",
             SpellingEngine.fillMasked("environment", "viro", weak, chunk = true),
+        )
+    }
+
+    @Test
+    fun `a word already in rotation does not start back at multiple choice`() {
+        // 一律从 Seen 起考的话，每个词都要先答对两轮四选一才轮得到挖空，
+        // 结果就是"逐字母下划线"那几屏实际上永远见不到。
+        assertEquals(SpellingStage.Seen, SpellingEngine.initialStageFor(KnowledgeStage.Exposed))
+        assertEquals(SpellingStage.PartialRecall, SpellingEngine.initialStageFor(KnowledgeStage.Learning))
+        assertEquals(SpellingStage.GuidedRecall, SpellingEngine.initialStageFor(KnowledgeStage.Familiar))
+        assertEquals(SpellingStage.FreeRecall, SpellingEngine.initialStageFor(KnowledgeStage.Mastered))
+
+        // 学习中的词第一次考的就是挖空题，也就是逐字母格子那一屏。
+        assertEquals(
+            SpellingQuestionType.PartialCompletion,
+            SpellingEngine.questionType(SpellingProgress(stage = SpellingEngine.initialStageFor(KnowledgeStage.Learning))),
         )
     }
 

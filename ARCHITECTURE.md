@@ -169,7 +169,8 @@ interface ReviewScheduler {
 - **第 5 级之前任何一级都不给出完整拼写**，由 `SpellingEngineTest` 断言守着。第 1 级只说错的性质（双写 / 元音顺序 / 少几个字母），不说在哪；第 2 级给的是挖过空的错误区域（`en_____ment`），不是原词；第 3 级给薄弱片段的内芯，掐头去尾，严格窄于片段本身；第 4 级给词块骨架但弱块仍然空着（`en + _____ + ment`）。这样五级才是单调递增的，否则第 4 级就等于答案，逐级要提示退化成点四下看答案。
 - 局部补全和引导回忆的题面是逐字母下划线格子（`LetterSlots`，设计稿 63 屏），每个缺字母一格、格间留空，不是一条通长横线。格子本身是 `BasicTextField`，底下不再另摆输入框。
 - **手滑和忘了分开**：编辑距离 1 且用时 < 2 秒记为 `likelyTypo`，不计连续错误、不降级（设计稿「阶段升降级规则」最后一行）。
-- 新词从 Seen 开始；v8 之前的旧词没有拼写行时，按通用阶段保守映射到 Seen / Partial / Guided / Free，首次提交后建立独立状态。
+- 起点由 `SpellingEngine.initialStageFor` 按通用掌握阶段推：Exposed → Seen、Learning → PartialRecall、Familiar → GuidedRecall、Mastered → FreeRecall。**不能一律从 Seen 起**——那样每个词都要先答对两轮四选一才轮得到挖空，逐字母下划线那几屏实际上永远见不到。
+- 判断"练没练过"看 `lastAttemptAt`，不看有没有那一行。建表时留下的空行不作数，否则一个已经复习过几轮的词会被按死在四选一；这条同时把已经写进库的空行一并救回来。
 - 「音形对应」这一维只由题面靠声音给出的题型（识别、完整默写、延迟回忆）驱动，由调用方显式传 `audioPrompted`，引擎不猜。
 - 用户级 `SpellingProfile` 不落库，每次进画像页由 `spelling_attempts` 重算：错误率的分母是「错过的次数」而不是「答过的次数」，否则正确率一上升，弱点就被稀释得看不见了。
 - Room schema 为 v8，两张表都通过 `itemId` 外键随知识项级联删除；都包含在 schema v2 备份中，旧备份缺字段时按空列表恢复。
@@ -234,7 +235,7 @@ interface ReadingSource {
 
 - 今日第三步是中译英（`DailyStep.Production`，2 分钟，排在语法之后）：出题带上错题画像、最近学的语法点和刚复习过的词。
 - 判定是独立调用，返回三档结论 + 在原句上改出的版本 + 最多两个形式错误类别；错误类别经 `MistakeRepository.recordMistake` 进同一张 `drill_mistakes` 表，和选择题错题不分来源。
-- 单词复习到 Familiar 以上翻转成产出方向，而**产出卡就是一张拼写卡**：走 `SpellingCardView` 和 `SpellingEngine`，按这个词自己的拼写阶段出题，判分进 `spelling_attempts` 和拼写画像。原来那套独立判分（`ProductionCheck`）已删除——同一件事有两个判官，写对了却不进画像，两边对「差一个字母」的处理还不一样。整句和短语（`pos=expression`）没法做字母级训练，仍然走四档自评。
+- **每一张复习卡就是一张拼写卡**（新词和整句表达除外）：走 `SpellingCardView` 和 `SpellingEngine`，按这个词自己的拼写阶段出题，判分进 `spelling_attempts` 和拼写画像。原来那套独立判分（`ProductionCheck`）已删除——同一件事有两个判官，写对了却不进画像，两边对「差一个字母」的处理还不一样。整句和短语（`pos=expression`）没法做字母级训练，仍然走四档自评。
 
 ### 拼写训练入口
 

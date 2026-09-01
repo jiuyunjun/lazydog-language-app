@@ -87,7 +87,6 @@ class KnowledgeRepository(
                     memoryHintZh = memoryHintZh.trim(),
                 ),
             )
-            spellingDao.saveProgress(SpellingProgress().toEntity(id))
             id
         }
     }
@@ -188,25 +187,20 @@ class KnowledgeRepository(
         next
     }
 
-    /** 读取拼写进度；旧数据按通用掌握阶段给一个保守起点，首次提交时才真正建行。 */
+    /** 读取拼写进度；还没真正练过的按通用掌握阶段给一个起点，首次提交后才认存下来的那一行。 */
     suspend fun spellingProgress(itemId: Long): SpellingProgress {
-        spellingDao.getProgress(itemId)?.let { return it.toDomain() }
-        val item = dao.getItem(itemId) ?: return SpellingProgress()
-        return defaultSpellingProgress(item)
+        val item = dao.getItem(itemId)
+        val stored = spellingDao.getProgress(itemId)?.toDomain()
+        if (stored != null && stored.lastAttemptAt != null) return stored
+        return item?.let(::defaultSpellingProgress) ?: stored ?: SpellingProgress()
     }
 
     /**
      * 还没练过拼写的老词的起点。按通用掌握阶段猜一档，但只猜到"认得"这一侧：
      * 通用阶段说明的是认不认得，不是写不写得出，所以宁可从低一点的阶段起考。
      */
-    private fun defaultSpellingProgress(item: KnowledgeItemEntity) = SpellingProgress(
-        stage = when (item.stageOrDefault()) {
-            KnowledgeStage.Unseen, KnowledgeStage.Exposed -> SpellingStage.Seen
-            KnowledgeStage.Learning -> SpellingStage.PartialRecall
-            KnowledgeStage.Familiar -> SpellingStage.GuidedRecall
-            KnowledgeStage.Mastered -> SpellingStage.FreeRecall
-        },
-    )
+    private fun defaultSpellingProgress(item: KnowledgeItemEntity) =
+        SpellingProgress(stage = SpellingEngine.initialStageFor(item.stageOrDefault()))
 
     /**
      * 复习优先级 = 遗忘风险 + 薄弱片段分 + 错误频次 + 没练过的补一次。
@@ -317,7 +311,11 @@ class KnowledgeRepository(
                 val term = record.detail.term.trim()
                 // 多词条目走不了字母级训练，跳过。
                 if (term.isBlank() || term.any { it.isWhitespace() }) return@mapNotNull null
-                val progress = progressById[record.item.id]?.toDomain() ?: defaultSpellingProgress(record.item)
+                val stored = progressById[record.item.id]?.toDomain()
+                // 存下来但一次没练过的行不算数：一个已经复习过几轮的词，
+                // 不该因为建表时留了一行 Seen 就永远停在四选一。
+                val progress = stored?.takeIf { it.lastAttemptAt != null }
+                    ?: defaultSpellingProgress(record.item)
                 SpellingQueueEntry(
                     itemId = record.item.id,
                     term = term,
@@ -336,9 +334,12 @@ class KnowledgeRepository(
             .take(limit)
     }
 
-    /** 熟词的产出卡要按各自的拼写阶段出题，进页面时一次取齐，别一张卡查一次库。 */
+    /** 复习卡要按各自的拼写阶段出题，进页面时一次取齐，别一张卡查一次库。 */
     suspend fun spellingProgressByItem(): Map<Long, SpellingProgress> =
-        spellingDao.getAllProgress().associate { it.itemId to it.toDomain() }
+        spellingDao.getAllProgress()
+            // 没练过的那些行不作数，交给 defaultSpellingProgress 按通用阶段推。
+            .filter { it.lastAttemptAt != null }
+            .associate { it.itemId to it.toDomain() }
 
     /** 画像页要的全量聚合。数据量是"这个人练过的拼写次数"，直接全读没问题。 */
     suspend fun spellingProfile(): SpellingProfile = SpellingProfiles.build(

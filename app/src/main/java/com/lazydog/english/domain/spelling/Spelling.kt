@@ -1,5 +1,6 @@
 package com.lazydog.english.domain.spelling
 
+import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.ReviewGrade
 import java.time.Instant
 import java.time.ZoneId
@@ -79,6 +80,20 @@ data class SpellingEvaluation(
 )
 
 object SpellingEngine {
+    /**
+     * 还没练过拼写的词从哪一级起考，由它的通用掌握阶段推。
+     *
+     * 只往低了猜：通用阶段说明的是认不认得，不是写不写得出。但也不能一律从
+     * Seen 起——那样一个已经复习过几轮的词还要先做两轮四选一才轮得到默写，
+     * 而"认词恰恰是最不缺练的那一项"。
+     */
+    fun initialStageFor(stage: KnowledgeStage): SpellingStage = when (stage) {
+        KnowledgeStage.Unseen, KnowledgeStage.Exposed -> SpellingStage.Seen
+        KnowledgeStage.Learning -> SpellingStage.PartialRecall
+        KnowledgeStage.Familiar -> SpellingStage.GuidedRecall
+        KnowledgeStage.Mastered -> SpellingStage.FreeRecall
+    }
+
     fun questionType(progress: SpellingProgress): SpellingQuestionType = when (progress.stage) {
         SpellingStage.Seen, SpellingStage.Recognition -> SpellingQuestionType.Recognition
         SpellingStage.PartialRecall -> SpellingQuestionType.PartialCompletion

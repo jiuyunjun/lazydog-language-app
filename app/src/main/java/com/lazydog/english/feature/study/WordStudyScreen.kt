@@ -88,15 +88,26 @@ private data class StudyCard(
     val spelling: SpellingProgress? = null,
 ) {
     /**
-     * 熟了的词改考产出：给中文，自己写出英文。
-     * 认得出不代表写得出，而认词恰恰是最不缺练的那一项。
+     * 复习一个词就是考它的拼写：给中文，自己写出英文，程序判分。
+     *
+     * 不设"熟了才考"的门槛。原来卡在 Familiar 以上（stability ≥ 7，
+     * 要连着答对四轮才够），结果实际上一次都没触发过，复习永远是看词显示意思。
+     * 难度交给这个词自己的拼写阶段决定：刚学的词是四选一，不会一上来就让人默写。
      */
-    val isProduction: Boolean
-        get() = !isNew && stage in setOf(KnowledgeStage.Familiar.name, KnowledgeStage.Mastered.name) &&
+    val isSpellingCard: Boolean
+        get() = !isNew &&
             // 整句和短语走不了字母级拼写训练，仍然用四档自评。
             term.isNotBlank() && term.none { it.isWhitespace() }
 
-    /** 产出卡就是一张拼写卡。这里是"熟词复习 = 拼写"这条的落点。 */
+    /**
+     * 没有拼写记录时按通用掌握阶段推一个起点，和仓储层的映射保持一致：
+     * 通用阶段说明的是认不认得，所以只往低了猜。
+     */
+    private fun defaultSpellingStage(): SpellingStage = SpellingEngine.initialStageFor(
+        KnowledgeStage.entries.firstOrNull { it.name == stage } ?: KnowledgeStage.Exposed,
+    )
+
+    /** 复习卡就是一张拼写卡。这里是"单词复习 = 拼写"这条的落点。 */
     fun toSpellingCard(): SpellingCard = SpellingCard(
         itemId = itemId!!,
         term = term,
@@ -105,7 +116,7 @@ private data class StudyCard(
         pos = pos,
         exampleEn = exampleEn,
         exampleZh = exampleZh,
-        progress = spelling ?: SpellingProgress(stage = SpellingStage.GuidedRecall),
+        progress = spelling ?: SpellingProgress(stage = defaultSpellingStage()),
         // 单词页只发到期的卡，所以这里一定推动复习时间。
         dueNow = true,
     )
@@ -297,8 +308,8 @@ fun WordStudyScreen(
                 WordStudyPhase.Generating -> AiWaiting("AI 正在挑词…", stage)
                 is WordStudyPhase.Cards -> {
                     val card = p.cards[p.index]
-                    if (card.isProduction) {
-                        // 熟词复习就是拼写：出题、提示梯度、判分、写复习时间全在这张共用卡里，
+                    if (card.isSpellingCard) {
+                        // 复习就是拼写：出题、提示梯度、判分、写复习时间全在这张共用卡里，
                         // 所以这里不再调 onGrade——再调一次会把同一次复习记成两次。
                         SpellingCardView(
                             card = card.toSpellingCard(),
@@ -359,7 +370,7 @@ fun WordStudyScreen(
  */
 private fun StudyCard.toAskContext(revealed: Boolean): AskContext {
     // 产出卡是反过来的：中文在明面，英文才是答案，所以没作答前不能把词交出去。
-    if (isProduction && !revealed) {
+    if (isSpellingCard && !revealed) {
         return AskContext(
             kind = AskContextKind.Word,
             title = "正在回想一个词 · $meaningZh",

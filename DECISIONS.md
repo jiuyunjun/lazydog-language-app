@@ -310,3 +310,24 @@
     `advanceReviewSchedule = false`，画像照记但不动 `nextReviewAt`。加练不该改写复习计划。
 - 未验证：这条规则要落到 Room 才看得出效果，而项目还没有 Robolectric/instrumented 测试基础，
   所以只有引擎层有单测，仓储层这一段靠真机验收。
+
+## D-030：拼写的起点按通用阶段推，复习不设「熟了才考」的门槛
+
+- 状态：已确认（2026-09-01，用户实测反馈「下划线分字母没实现」「复习还是看词显示意思，没拼写检查」）
+- 现象与原因：两条反馈是同一个根。
+  1. `addVocabulary` 给每个新词抢先写一行 `SpellingProgress()`（stage = Seen），
+     于是所有词的题型都是 S1 四选一，要连着答对两轮才升到 S2。逐字母下划线那几屏
+     （设计稿 63）实际上要练两轮才见得到，用户合理地判断成"没实现"。
+  2. D-029 把复习卡改成拼写卡，但门槛留在 Familiar 以上，也就是 `stability ≥ 7.0`；
+     按 `SimpleIntervalScheduler` 要连着答对四轮才够。所以那条改动**一次都没触发过**，
+     复习看起来毫无变化。
+- 决定：
+  - 起点交给 `SpellingEngine.initialStageFor(KnowledgeStage)` 统一推：
+    Exposed → Seen、Learning → PartialRecall、Familiar → GuidedRecall、Mastered → FreeRecall。
+    只往低了猜（通用阶段说的是认不认得），但不能一律从 Seen 起。
+  - 不再抢先写空行；**判断"练没练过"看 `lastAttemptAt` 而不是看行在不在**。
+    这样已经写进库的那些空 Seen 行也一并失效，老数据不用迁移就恢复正常。
+  - 复习卡去掉「熟了才考拼写」的门槛：非新词、单个词形的都走拼写卡，
+    难度由该词自己的拼写阶段决定。整句表达（`pos=expression`）仍走四档自评。
+- 教训：状态机的门槛要放在**实际到得了**的位置上。Familiar 这道门在文档里读着合理，
+  落到调度参数上是"连对四轮"，等于把功能关掉了。以后加这类门槛，先按调度算一遍要多久才够得着。
