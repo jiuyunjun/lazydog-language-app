@@ -168,6 +168,8 @@ interface ReviewScheduler {
 - 请求提示不是一次作答：只抬提示等级，不写 attempt、不动阶段。
 - **第 5 级之前任何一级都不给出完整拼写**，由 `SpellingEngineTest` 断言守着。第 1 级只说错的性质（双写 / 元音顺序 / 少几个字母），不说在哪；第 2 级给的是挖过空的错误区域（`en_____ment`），不是原词；第 3 级给薄弱片段的内芯，掐头去尾，严格窄于片段本身；第 4 级给词块骨架但弱块仍然空着（`en + _____ + ment`）。这样五级才是单调递增的，否则第 4 级就等于答案，逐级要提示退化成点四下看答案。
 - 需要填字母的题型（局部补全、词块回忆、引导回忆）题面一律是逐字母下划线格子（`LetterSlots`，设计稿 63 屏）：每个缺字母一格、格间留空，不是一条通长横线。格子本身是 `BasicTextField`，底下不再另摆输入框——`decorationBox` 里必须调一次 `innerTextField()`（收进零宽 Box），不调这个框收不到键盘输入。
+- 格子里的字母和已给出的字母按**基线**对齐（`alignByBaseline` + `paddingFromBaseline`），不是按底边：按底边的话格高和内边距会把字母顶上去，和旁边的固定字母差半行。下划线画在基线下方固定距离，所以每一格的线高度一致。
+- 提示面板是 ModalBottomSheet，弹出会拿走焦点且关掉不还。格子把真正的输入框收成了零宽，屏幕上没有能点的地方，所以必须在关掉面板和答错之后主动把焦点要回来（`SpellingAnswer.focusEpoch`），并且让点这排格子也能重新聚焦。
 - 完整默写不给格子：格子数就是字母数，S5 这一级不给任何字符级提示。语境挖空的空位是画出来的固定宽度横线（`ClozeSentence`），不透露长度。
 - **手滑和忘了分开**：编辑距离 1 且用时 < 2 秒记为 `likelyTypo`，不计连续错误、不降级（设计稿「阶段升降级规则」最后一行）。
 - 起点由 `SpellingEngine.initialStageFor` 按通用掌握阶段推：Exposed → Seen、Learning → PartialRecall、Familiar → GuidedRecall、Mastered → FreeRecall。**不能一律从 Seen 起**——那样每个词都要先答对两轮四选一才轮得到挖空，逐字母下划线那几屏实际上永远见不到。

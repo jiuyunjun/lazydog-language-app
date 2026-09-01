@@ -1,5 +1,7 @@
 package com.lazydog.english.feature.spelling
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.paddingFromBaseline
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -51,6 +54,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
@@ -68,6 +72,9 @@ import com.lazydog.english.domain.spelling.SpellingQuestionType
 import kotlinx.coroutines.launch
 
 internal const val MAX_HINT_LEVEL = SpellingEngine.MAX_HINT_LEVEL
+
+/** 下划线离基线多远。留出降部（p/g/y）的空间，又不至于让字母飘在半空。 */
+private val UNDERLINE_BELOW_BASELINE = 10.dp
 
 /**
  * 一张拼写卡要考的全部内容。
@@ -113,6 +120,8 @@ data class SpellingAnswer(
     val lastResult: SpellingEvaluation? = null,
     val startedAtMillis: Long = System.currentTimeMillis(),
     val showHintSheet: Boolean = false,
+    /** 每加一次就把焦点要回输入格。关掉提示面板、答错了要重打，都得往回要一次。 */
+    val focusEpoch: Int = 0,
 ) {
     /** 这张卡已经翻篇了：要么写对了，要么提示已经拉到底、答案摆在脸上。 */
     val resolved: Boolean get() = lastResult?.correct == true || hintLevel >= MAX_HINT_LEVEL
@@ -172,7 +181,12 @@ fun SpellingCardView(
         answer = answer,
         onTypedChange = { answer = answer.copy(typed = it) },
         onSelectOption = { answer = answer.copy(selectedOption = it) },
-        onSubmit = { record(answer.hintLevel) { answer = answer.copy(lastResult = it) } },
+        onSubmit = {
+            record(answer.hintLevel) { evaluation ->
+                // 答错了还要接着改，焦点得回到格子里，不然要重打得先想办法点回去。
+                answer = answer.copy(lastResult = evaluation, focusEpoch = answer.focusEpoch + 1)
+            }
+        },
         onRequestHint = {
             // 要提示本身不是一次作答：不记 attempt、不动阶段，只是把提示往上抬一级。
             val nextLevel = (answer.hintLevel + 1).coerceAtMost(MAX_HINT_LEVEL)
@@ -182,7 +196,9 @@ fun SpellingCardView(
             if (nextLevel >= MAX_HINT_LEVEL) record(MAX_HINT_LEVEL) {}
         },
         onNext = { onResolved(answer.lastResult?.correct == true, answer.hintLevel > 0) },
-        onDismissHintSheet = { answer = answer.copy(showHintSheet = false) },
+        onDismissHintSheet = {
+            answer = answer.copy(showHintSheet = false, focusEpoch = answer.focusEpoch + 1)
+        },
     )
 }
 
@@ -479,6 +495,7 @@ private fun PartialBody(
         typed = answer.typed,
         onTypedChange = onTypedChange,
         enabled = !answer.resolved,
+        refocusKey = answer.focusEpoch,
     )
     Text(
         text = "补全缺失的字母",
@@ -500,6 +517,7 @@ private fun ChunkBody(
         typed = answer.typed,
         onTypedChange = onTypedChange,
         enabled = !answer.resolved,
+        refocusKey = answer.focusEpoch,
     )
     Text(
         text = "按词块想，不用一个字母一个字母地拼。",
@@ -522,6 +540,7 @@ private fun GuidedBody(
         typed = answer.typed,
         onTypedChange = onTypedChange,
         enabled = !answer.resolved,
+        refocusKey = answer.focusEpoch,
     )
     Text(
         text = "${entry.term.length} 个字母" +
@@ -544,10 +563,19 @@ private fun LetterSlots(
     typed: String,
     onTypedChange: (String) -> Unit,
     enabled: Boolean,
+    /**
+     * 这个值一变就把焦点要回来。提示面板是个 ModalBottomSheet，弹出时会把焦点拿走，
+     * 关掉之后不会自己还回来——而真正的输入框被收成了零宽，屏幕上没有能点的地方，
+     * 于是"要过提示之后就打不了字了"。
+     */
+    refocusKey: Any = Unit,
 ) {
     val blanks = masked.count { it == '_' }
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(masked) { runCatching { focusRequester.requestFocus() } }
+    fun grabFocus() {
+        if (enabled) runCatching { focusRequester.requestFocus() }
+    }
+    LaunchedEffect(masked, refocusKey, enabled) { grabFocus() }
 
     BasicTextField(
         value = typed,
@@ -562,20 +590,30 @@ private fun LetterSlots(
         cursorBrush = SolidColor(Color.Transparent),
         modifier = Modifier.focusRequester(focusRequester),
         decorationBox = { innerTextField ->
+            // 每一格和已给出的字母都按**基线**对齐，不是按底边。
+            // 按底边的话，格子里的字母会被格高和内边距一起顶上去，
+            // 和旁边的固定字母差半行，一眼就能看出来没坐在同一条线上。
+            val letterStyle = MaterialTheme.typography.headlineSmall.copy(fontFamily = FontFamily.Monospace)
             Row(
-                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.semantics {
-                    contentDescription = "补全 $masked，已填 ${typed.length} / $blanks 个字母"
-                },
+                modifier = Modifier
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = enabled,
+                        onClick = ::grabFocus,
+                    )
+                    .semantics {
+                        contentDescription = "补全 $masked，已填 ${typed.length} / $blanks 个字母"
+                    },
             ) {
                 var typedIndex = 0
                 masked.forEach { char ->
                     if (char != '_') {
                         Text(
                             text = char.toString(),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontFamily = FontFamily.Monospace,
+                            style = letterStyle,
+                            modifier = Modifier.alignByBaseline(),
                         )
                         return@forEach
                     }
@@ -587,29 +625,30 @@ private fun LetterSlots(
                         isNext && enabled -> MaterialTheme.colorScheme.primary
                         else -> MaterialTheme.colorScheme.outline
                     }
-                    Box(
-                        contentAlignment = Alignment.BottomCenter,
+                    val stroke = if (filled != null || isNext) 2.dp else 1.dp
+                    Text(
+                        // 空格子也得是个 Text：没有文字就没有基线，这一格会跟着掉下去。
+                        // 用不换行空格占位，字形高度和真字母一致。
+                        text = filled?.toString() ?: " ",
+                        style = letterStyle,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier
+                            .alignByBaseline()
+                            // 下划线画在基线下方固定距离处，所以每一格的线都在同一高度，
+                            // 和字母的基线关系也永远一样。
+                            .paddingFromBaseline(bottom = UNDERLINE_BELOW_BASELINE)
                             .width(24.dp)
-                            .height(38.dp)
                             .drawBehind {
-                                val stroke = if (filled != null || isNext) 2.dp.toPx() else 1.dp.toPx()
+                                val width = stroke.toPx()
                                 drawLine(
                                     color = lineColor,
-                                    start = Offset(0f, size.height - stroke / 2),
-                                    end = Offset(size.width, size.height - stroke / 2),
-                                    strokeWidth = stroke,
+                                    start = Offset(0f, size.height - width / 2),
+                                    end = Offset(size.width, size.height - width / 2),
+                                    strokeWidth = width,
                                 )
                             },
-                    ) {
-                        Text(
-                            text = filled?.toString().orEmpty(),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                    }
+                    )
                 }
                 // 真正的输入框收进零宽的角落：字母由上面的格子画，
                 // 但这个调用不能省——省了这个框就收不到键盘输入。
