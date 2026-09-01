@@ -1,5 +1,9 @@
 # Spelling Learning System Design
 
+> 实现状态（2026-09-01）：核心离线闭环已落地，见 `ROADMAP.md` M12。状态机、提示阶梯、八类错误与薄弱片段、多维进度、延迟保持判定、Room 持久化、备份、独立拼写练习入口和拼写能力档案都已实现；§20 的 AI/FSRS/手写/语音扩展仍为后续范围。
+>
+> 界面以设计稿 `懒狗放洋屁 MVP.dc.html` 59～64 屏为准，本文件负责引擎与数据规格。两处冲突时以设计稿为准（见 `DECISIONS.md` D-028）。
+
 ## 1. 目标
 
 本系统用于语言学习 App 中的**渐进式拼写训练（Progressive Spelling Learning）**。

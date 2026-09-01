@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
@@ -61,6 +62,7 @@ import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.planning.DailyStep
+import com.lazydog.english.domain.spelling.SpellingEngine
 import java.time.LocalDate
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -510,6 +512,48 @@ private fun ProductionCardView(
     }
 }
 
+/**
+ * 词块拆分（S0 接触）。中间那块单独标出来：前后缀是规则，词干才是每次拼错的地方，
+ * 后面 S2 挖空也优先挖它。拆不出三块的短词不显示——两个字母的"块"没有意义。
+ */
+@Composable
+private fun SpellingChunks(term: String) {
+    val chunks = remember(term) { SpellingEngine.chunkWord(term) }
+    if (chunks.size < 2) return
+    val extended = LazyDogTheme.extendedColors
+    // 剥掉前后缀之后剩下的那块。只有两块时后一块是后缀，要盯的是前一块。
+    val stemIndex = if (chunks.size >= 3) 1 else 0
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "词块拆分",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            chunks.forEachIndexed { index, chunk ->
+                val highlight = index == stemIndex
+                Surface(
+                    color = if (highlight) extended.attentionContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = MaterialTheme.shapes.small,
+                ) {
+                    Text(
+                        text = chunk,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (highlight) extended.attention else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                }
+            }
+        }
+        Text(
+            text = "中间的 ${chunks[stemIndex]} 是最容易拼错的部分",
+            style = MaterialTheme.typography.bodySmall,
+            color = extended.attention,
+        )
+    }
+}
+
 @Composable
 private fun StudyCardView(
     card: StudyCard,
@@ -585,6 +629,9 @@ private fun StudyCardView(
                         }
                     }
                 }
+                // S0 接触（设计稿 62 屏）：新词第一次露面就把词块拆开摆着。
+                // 拼写练习后面所有阶段都按这套词块出题，第一眼见到的结构和后面练的是同一套。
+                if (card.isNew) SpellingChunks(card.term)
                 if (card.memoryHintZh.isNotBlank()) {
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,

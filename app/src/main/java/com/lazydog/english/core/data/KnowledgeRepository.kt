@@ -6,6 +6,8 @@ import com.lazydog.english.core.database.GrammarRecord
 import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
+import com.lazydog.english.core.database.SpellingAttemptEntity
+import com.lazydog.english.core.database.SpellingProgressEntity
 import com.lazydog.english.core.database.VocabularyDetailEntity
 import com.lazydog.english.core.database.VocabularyRecord
 import com.lazydog.english.core.model.KnowledgeStage
@@ -14,11 +16,23 @@ import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.scheduling.MemoryState
 import com.lazydog.english.domain.scheduling.ReviewScheduler
 import com.lazydog.english.domain.scheduling.deriveStage
+import com.lazydog.english.domain.spelling.SpellingEngine
+import com.lazydog.english.domain.spelling.SpellingErrorType
+import com.lazydog.english.domain.spelling.SpellingEvaluation
+import com.lazydog.english.domain.spelling.SpellingAttemptSummary
+import com.lazydog.english.domain.spelling.SpellingProfile
+import com.lazydog.english.domain.spelling.SpellingProfiles
+import com.lazydog.english.domain.spelling.SpellingProgress
+import com.lazydog.english.domain.spelling.SpellingQuestionType
+import com.lazydog.english.domain.spelling.SpellingStage
+import com.lazydog.english.domain.spelling.WeakSegment
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
@@ -31,6 +45,7 @@ class KnowledgeRepository(
     private val now: () -> Instant = Instant::now,
 ) {
     private val dao = database.knowledgeDao()
+    private val spellingDao = database.spellingDao()
 
     private val vocabularyRecords: Flow<List<VocabularyRecord>> = dao.observeVocabulary()
     /** 真正的单词；完整短语和句子单独显示在“表达”里。 */
@@ -72,6 +87,7 @@ class KnowledgeRepository(
                     memoryHintZh = memoryHintZh.trim(),
                 ),
             )
+            spellingDao.saveProgress(SpellingProgress().toEntity(id))
             id
         }
     }
@@ -172,6 +188,161 @@ class KnowledgeRepository(
         next
     }
 
+    /** 读取拼写进度；旧数据按通用掌握阶段给一个保守起点，首次提交时才真正建行。 */
+    suspend fun spellingProgress(itemId: Long): SpellingProgress {
+        spellingDao.getProgress(itemId)?.let { return it.toDomain() }
+        val item = dao.getItem(itemId) ?: return SpellingProgress()
+        return defaultSpellingProgress(item)
+    }
+
+    /**
+     * 还没练过拼写的老词的起点。按通用掌握阶段猜一档，但只猜到"认得"这一侧：
+     * 通用阶段说明的是认不认得，不是写不写得出，所以宁可从低一点的阶段起考。
+     */
+    private fun defaultSpellingProgress(item: KnowledgeItemEntity) = SpellingProgress(
+        stage = when (item.stageOrDefault()) {
+            KnowledgeStage.Unseen, KnowledgeStage.Exposed -> SpellingStage.Seen
+            KnowledgeStage.Learning -> SpellingStage.PartialRecall
+            KnowledgeStage.Familiar -> SpellingStage.GuidedRecall
+            KnowledgeStage.Mastered -> SpellingStage.FreeRecall
+        },
+    )
+
+    /**
+     * 复习优先级 = 遗忘风险 + 薄弱片段分 + 错误频次 + 没练过的补一次。
+     * 分数只用于排序，绝对值没有意义，所以不做归一化。
+     */
+    private fun spellingPriority(
+        nextReviewAt: Long?,
+        progress: SpellingProgress,
+        neverPracticed: Boolean,
+        at: Instant,
+    ): Double {
+        val overdueDays = nextReviewAt
+            ?.let { (at.toEpochMilli() - it).toDouble() / MILLIS_PER_DAY }
+            ?.coerceAtLeast(0.0)
+            ?: 0.0
+        val weakScore = progress.weakSegments.sumOf { it.errorCount }.toDouble()
+        return overdueDays.coerceAtMost(30.0) +
+            weakScore * 1.5 +
+            progress.failureStreak * 2.0 +
+            if (neverPracticed) 3.0 else 0.0
+    }
+
+    /**
+     * 记录一次真实的拼写提交。
+     *
+     * 每次提交都更新拼写画像和错误记录——同一张卡答错后还能重来，那几次也是真实数据。
+     * 但通用复习时间只在这张卡真正翻篇时更新一次（写对了，或者提示已经拉到底、
+     * 答案摆在脸上），否则一张卡来回试三次会被记成三轮复习，把 lapseCount 撑得虚高。
+     */
+    suspend fun recordSpellingAttempt(
+        itemId: Long,
+        expected: String,
+        answer: String,
+        questionType: SpellingQuestionType,
+        hintLevel: Int,
+        responseTimeMillis: Long,
+        audioPrompted: Boolean = false,
+    ): SpellingEvaluation? = database.withTransaction {
+        val item = dao.getItem(itemId) ?: return@withTransaction null
+        val at = now()
+        val previous = spellingDao.getProgress(itemId)?.toDomain() ?: spellingProgress(itemId)
+        val evaluation = SpellingEngine.evaluate(
+            progress = previous,
+            expected = expected,
+            answer = answer,
+            questionType = questionType,
+            hintLevel = hintLevel,
+            attemptedAt = at,
+            responseTimeMillis = responseTimeMillis,
+            audioPrompted = audioPrompted,
+        )
+        spellingDao.saveProgress(evaluation.nextProgress.toEntity(itemId))
+        spellingDao.insertAttempt(
+            SpellingAttemptEntity(
+                itemId = itemId,
+                questionType = questionType.name,
+                expected = expected,
+                answer = answer,
+                correct = evaluation.correct,
+                hintLevel = hintLevel.coerceIn(0, 5),
+                responseTimeMillis = responseTimeMillis.coerceAtLeast(0),
+                errorTypesJson = SpellingJson.encodeErrorTypes(evaluation.errorTypes),
+                weakSegment = evaluation.weakSegment?.segment.orEmpty(),
+                weakStart = evaluation.weakSegment?.start,
+                weakEndExclusive = evaluation.weakSegment?.endExclusive,
+                masteryCredit = evaluation.masteryCredit,
+                occurredAt = at.toEpochMilli(),
+            ),
+        )
+        val resolvesCard = evaluation.correct || hintLevel >= SpellingEngine.MAX_HINT_LEVEL
+        if (resolvesCard) {
+            val memory = scheduler.schedule(item.toMemoryState(), evaluation.reviewGrade, at)
+            dao.insertEvent(
+                LearningEventEntity(
+                    itemId = itemId,
+                    source = "spelling",
+                    activity = "review",
+                    rating = evaluation.reviewGrade.name,
+                    responseMillis = responseTimeMillis,
+                    occurredAt = at.toEpochMilli(),
+                ),
+            )
+            dao.updateItem(memory.applyTo(item, updatedAt = at))
+        }
+        evaluation
+    }
+
+    /**
+     * 组一轮拼写练习的队列（单词记忆DESIGN.md §14 的复习优先级）。
+     *
+     * 排序参考四件事：到期多久（遗忘风险）、这个词有多少薄弱片段、错误次数、
+     * 以及还没练过拼写的词优先来一次。表达（整句）不进拼写练习——
+     * 让人默写一整句不是拼写训练。
+     */
+    suspend fun spellingQueue(limit: Int = DEFAULT_SPELLING_SESSION_SIZE): List<SpellingQueueEntry> {
+        val at = now()
+        val words = vocabulary.first()
+        if (words.isEmpty()) return emptyList()
+        val progressById = spellingDao.getAllProgress().associateBy { it.itemId }
+        return words
+            .mapNotNull { record ->
+                val term = record.detail.term.trim()
+                // 多词条目走不了字母级训练，跳过。
+                if (term.isBlank() || term.any { it.isWhitespace() }) return@mapNotNull null
+                val progress = progressById[record.item.id]?.toDomain() ?: defaultSpellingProgress(record.item)
+                SpellingQueueEntry(
+                    itemId = record.item.id,
+                    term = term,
+                    ipa = record.detail.ipa,
+                    meaningZh = record.detail.meaningZh,
+                    pos = record.detail.pos,
+                    exampleEn = record.detail.exampleEn,
+                    exampleZh = record.detail.exampleZh,
+                    progress = progress,
+                    priority = spellingPriority(record.item.nextReviewAt, progress, progress.lastAttemptAt == null, at),
+                )
+            }
+            .sortedByDescending { it.priority }
+            .take(limit)
+    }
+
+    /** 画像页要的全量聚合。数据量是"这个人练过的拼写次数"，直接全读没问题。 */
+    suspend fun spellingProfile(): SpellingProfile = SpellingProfiles.build(
+        progress = spellingDao.getAllProgress().map { it.toDomain() },
+        attempts = spellingDao.getAllAttempts().map { attempt ->
+            SpellingAttemptSummary(
+                correct = attempt.correct,
+                questionType = SpellingQuestionType.entries
+                    .firstOrNull { it.name == attempt.questionType } ?: SpellingQuestionType.FreeRecall,
+                errorTypes = SpellingJson.decodeErrorTypes(attempt.errorTypesJson),
+                responseTimeMillis = attempt.responseTimeMillis,
+                hintLevel = attempt.hintLevel,
+            )
+        },
+    )
+
     suspend fun deleteItem(itemId: Long) = dao.deleteItem(itemId)
 
     /**
@@ -221,10 +392,27 @@ class KnowledgeRepository(
         return id
     }
 
-    private companion object {
-        const val EXPRESSION_POS = "expression"
+    companion object {
+        private const val EXPRESSION_POS = "expression"
+        private const val MILLIS_PER_DAY = 24.0 * 60 * 60 * 1000
+
+        /** 一轮拼写练习的题量，对齐设计稿顶部的「拼写练习 · n / 12」。 */
+        const val DEFAULT_SPELLING_SESSION_SIZE = 12
     }
 }
+
+/** 拼写练习队列里的一个词，带上出题需要的全部内容和当前阶段。 */
+data class SpellingQueueEntry(
+    val itemId: Long,
+    val term: String,
+    val ipa: String,
+    val meaningZh: String,
+    val pos: String,
+    val exampleEn: String,
+    val exampleZh: String,
+    val progress: SpellingProgress,
+    val priority: Double,
+)
 
 private fun VocabularyDetailEntity.isExpression(): Boolean =
     pos.equals("expression", ignoreCase = true) || pos.equals("phrase", ignoreCase = true)
@@ -281,4 +469,78 @@ object VocabularyJson {
 
     fun decodeCollocations(raw: String): List<String> =
         runCatching { json.decodeFromString(serializer, raw) }.getOrDefault(emptyList())
+}
+
+private fun SpellingProgressEntity.toDomain() = SpellingProgress(
+    stage = SpellingStage.entries.firstOrNull { it.name == stage } ?: SpellingStage.Seen,
+    recognitionScore = recognitionScore,
+    partialRecallScore = partialRecallScore,
+    chunkRecallScore = chunkRecallScore,
+    phonemeGraphemeScore = phonemeGraphemeScore,
+    freeRecallScore = freeRecallScore,
+    retentionScore = retentionScore,
+    successStreak = successStreak,
+    failureStreak = failureStreak,
+    stageSuccessCount = stageSuccessCount,
+    freeRecallSuccessCount = freeRecallSuccessCount,
+    successfulRecallDates = SpellingJson.decodeDates(successfulRecallDatesJson),
+    longestSuccessfulIntervalDays = longestSuccessfulIntervalDays,
+    currentIntervalDays = currentIntervalDays,
+    weakSegments = SpellingJson.decodeWeakSegments(weakSegmentsJson),
+    lastAttemptAt = lastAttemptAt?.let(Instant::ofEpochMilli),
+)
+
+private fun SpellingProgress.toEntity(itemId: Long) = SpellingProgressEntity(
+    itemId = itemId,
+    stage = stage.name,
+    recognitionScore = recognitionScore,
+    partialRecallScore = partialRecallScore,
+    chunkRecallScore = chunkRecallScore,
+    phonemeGraphemeScore = phonemeGraphemeScore,
+    freeRecallScore = freeRecallScore,
+    retentionScore = retentionScore,
+    successStreak = successStreak,
+    failureStreak = failureStreak,
+    stageSuccessCount = stageSuccessCount,
+    freeRecallSuccessCount = freeRecallSuccessCount,
+    successfulRecallDatesJson = SpellingJson.encodeDates(successfulRecallDates),
+    longestSuccessfulIntervalDays = longestSuccessfulIntervalDays,
+    currentIntervalDays = currentIntervalDays,
+    weakSegmentsJson = SpellingJson.encodeWeakSegments(weakSegments),
+    lastAttemptAt = lastAttemptAt?.toEpochMilli(),
+)
+
+@Serializable
+private data class StoredWeakSegment(
+    val segment: String,
+    val start: Int,
+    val endExclusive: Int,
+    val errorCount: Int,
+)
+
+object SpellingJson {
+    private val json = Json { ignoreUnknownKeys = true }
+    private val strings = ListSerializer(String.serializer())
+    private val weakSegments = ListSerializer(StoredWeakSegment.serializer())
+
+    fun encodeDates(values: Set<String>): String = json.encodeToString(strings, values.sorted())
+    fun decodeDates(raw: String): Set<String> = runCatching { json.decodeFromString(strings, raw).toSet() }.getOrDefault(emptySet())
+
+    fun encodeWeakSegments(values: List<WeakSegment>): String = json.encodeToString(
+        weakSegments,
+        values.map { StoredWeakSegment(it.segment, it.start, it.endExclusive, it.errorCount) },
+    )
+    fun decodeWeakSegments(raw: String): List<WeakSegment> = runCatching {
+        json.decodeFromString(weakSegments, raw).map { WeakSegment(it.segment, it.start, it.endExclusive, it.errorCount) }
+    }.getOrDefault(emptyList())
+
+    fun encodeErrorTypes(values: Set<SpellingErrorType>): String =
+        json.encodeToString(strings, values.map { it.name })
+
+    /** 认不出来的名字直接丢掉：老备份里可能有已经改名的类型，不该让整条记录读不出来。 */
+    fun decodeErrorTypes(raw: String): Set<SpellingErrorType> = runCatching {
+        json.decodeFromString(strings, raw)
+            .mapNotNull { name -> SpellingErrorType.entries.firstOrNull { it.name == name } }
+            .toSet()
+    }.getOrDefault(emptySet())
 }

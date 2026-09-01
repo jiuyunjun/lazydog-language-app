@@ -41,6 +41,8 @@ import com.lazydog.english.feature.speaking.SpeakingScreen
 import com.lazydog.english.feature.scenario.ScenarioScreen
 import com.lazydog.english.feature.listening.ListeningScreen
 import com.lazydog.english.feature.study.GrammarStudyScreen
+import com.lazydog.english.feature.spelling.SpellingProfileScreen
+import com.lazydog.english.feature.spelling.SpellingScreen
 import com.lazydog.english.feature.study.WordStudyScreen
 import kotlinx.coroutines.launch
 
@@ -52,6 +54,8 @@ object Routes {
     const val Speaking = "speaking"
     const val Listening = "listening"
     const val WordStudy = "study/words"
+    const val Spelling = "study/spelling"
+    const val SpellingProfile = "study/spelling/profile"
     const val GrammarStudy = "study/grammar"
     const val Production = "study/production"
     const val Assessment = "assessment"
@@ -152,6 +156,7 @@ private fun AppNavHost(
                 onStartSpeaking = { navController.navigate(Routes.Speaking) },
                 onStartListening = { navController.navigate(Routes.Listening) },
                 onStartWordStudy = { navController.navigate(Routes.WordStudy) },
+                onStartSpelling = { navController.navigate(Routes.Spelling) },
                 onStartGrammarStudy = { navController.navigate(Routes.GrammarStudy) },
                 onStartProduction = { navController.navigate(Routes.Production) },
                 onStartReading = { navController.navigate(Routes.ReadingGenerate) },
@@ -229,6 +234,28 @@ private fun AppNavHost(
                     onExit = { navController.popBackStack() },
                 )
             }
+        }
+
+        composable(Routes.Spelling) {
+            AskHost {
+                SpellingScreen(
+                    repository = knowledgeRepository,
+                    onExit = { navController.popBackStack() },
+                    onOpenProfile = { navController.navigate(Routes.SpellingProfile) },
+                )
+            }
+        }
+
+        composable(Routes.SpellingProfile) {
+            SpellingProfileScreen(
+                repository = knowledgeRepository,
+                onBack = { navController.popBackStack() },
+                onStartPractice = {
+                    navController.navigate(Routes.Spelling) {
+                        popUpTo(Routes.SpellingProfile) { inclusive = true }
+                    }
+                },
+            )
         }
 
         composable(Routes.GrammarStudy) {

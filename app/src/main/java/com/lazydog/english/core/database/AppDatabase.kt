@@ -17,8 +17,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReadingMaterialEntity::class,
         ScenarioSessionEntity::class,
         DrillMistakeEntity::class,
+        SpellingProgressEntity::class,
+        SpellingAttemptEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -38,10 +40,12 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun drillMistakeDao(): DrillMistakeDao
 
+    abstract fun spellingDao(): SpellingDao
+
     companion object {
         fun create(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "lazydog.db")
-                .addMigrations(MIGRATION_6_7)
+                .addMigrations(MIGRATION_6_7, MIGRATION_7_8)
                 .build()
 
         /**
@@ -74,6 +78,39 @@ abstract class AppDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_drill_mistakes_errorTag` " +
                         "ON `drill_mistakes` (`errorTag`)",
                 )
+            }
+        }
+
+        internal val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `spelling_progress` (" +
+                        "`itemId` INTEGER NOT NULL, `stage` TEXT NOT NULL, " +
+                        "`recognitionScore` REAL NOT NULL, `partialRecallScore` REAL NOT NULL, " +
+                        "`chunkRecallScore` REAL NOT NULL, `phonemeGraphemeScore` REAL NOT NULL, " +
+                        "`freeRecallScore` REAL NOT NULL, `retentionScore` REAL NOT NULL, " +
+                        "`successStreak` INTEGER NOT NULL, `failureStreak` INTEGER NOT NULL, " +
+                        "`stageSuccessCount` INTEGER NOT NULL, `freeRecallSuccessCount` INTEGER NOT NULL, " +
+                        "`successfulRecallDatesJson` TEXT NOT NULL, " +
+                        "`longestSuccessfulIntervalDays` INTEGER NOT NULL, `currentIntervalDays` INTEGER NOT NULL, " +
+                        "`weakSegmentsJson` TEXT NOT NULL, `lastAttemptAt` INTEGER, " +
+                        "PRIMARY KEY(`itemId`), FOREIGN KEY(`itemId`) REFERENCES `knowledge_items`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `spelling_attempts` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `itemId` INTEGER NOT NULL, " +
+                        "`questionType` TEXT NOT NULL, `expected` TEXT NOT NULL, `answer` TEXT NOT NULL, " +
+                        "`correct` INTEGER NOT NULL, `hintLevel` INTEGER NOT NULL, " +
+                        "`responseTimeMillis` INTEGER NOT NULL, `errorTypesJson` TEXT NOT NULL, " +
+                        "`weakSegment` TEXT NOT NULL, `weakStart` INTEGER, `weakEndExclusive` INTEGER, " +
+                        "`masteryCredit` REAL NOT NULL, `occurredAt` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`itemId`) REFERENCES `knowledge_items`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_spelling_attempts_itemId` ON `spelling_attempts` (`itemId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_spelling_attempts_occurredAt` ON `spelling_attempts` (`occurredAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_spelling_attempts_questionType` ON `spelling_attempts` (`questionType`)")
             }
         }
 

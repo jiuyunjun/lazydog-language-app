@@ -135,6 +135,68 @@ data class LearningEventEntity(
     val occurredAt: Long,
 )
 
+/** 单词的多维拼写掌握状态；与通用复习调度分开，避免“认得”冒充“写得出”。 */
+@Entity(
+    tableName = "spelling_progress",
+    foreignKeys = [
+        ForeignKey(
+            entity = KnowledgeItemEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["itemId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class SpellingProgressEntity(
+    @PrimaryKey val itemId: Long,
+    val stage: String,
+    val recognitionScore: Double,
+    val partialRecallScore: Double,
+    val chunkRecallScore: Double,
+    val phonemeGraphemeScore: Double,
+    val freeRecallScore: Double,
+    val retentionScore: Double,
+    val successStreak: Int,
+    val failureStreak: Int,
+    val stageSuccessCount: Int,
+    val freeRecallSuccessCount: Int,
+    val successfulRecallDatesJson: String,
+    val longestSuccessfulIntervalDays: Int,
+    val currentIntervalDays: Int,
+    val weakSegmentsJson: String,
+    val lastAttemptAt: Long?,
+)
+
+/** 每次拼写提交都追加保存，包括同一张卡逐级要提示时的错误尝试。 */
+@Entity(
+    tableName = "spelling_attempts",
+    foreignKeys = [
+        ForeignKey(
+            entity = KnowledgeItemEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["itemId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index(value = ["itemId"]), Index(value = ["occurredAt"]), Index(value = ["questionType"])],
+)
+data class SpellingAttemptEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val itemId: Long,
+    val questionType: String,
+    val expected: String,
+    val answer: String,
+    val correct: Boolean,
+    val hintLevel: Int,
+    val responseTimeMillis: Long,
+    val errorTypesJson: String,
+    val weakSegment: String,
+    val weakStart: Int?,
+    val weakEndExclusive: Int?,
+    val masteryCredit: Double,
+    val occurredAt: Long,
+)
+
 /**
  * 做错的练习题。独立成表而不是塞进 learning_events：
  * 这里要按"错误类型"聚合，用来决定接下来讲什么语法点，

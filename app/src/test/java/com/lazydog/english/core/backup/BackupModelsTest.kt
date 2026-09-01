@@ -5,6 +5,8 @@ import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
 import com.lazydog.english.core.database.ReadingMaterialEntity
+import com.lazydog.english.core.database.SpellingAttemptEntity
+import com.lazydog.english.core.database.SpellingProgressEntity
 import com.lazydog.english.core.database.VocabularyDetailEntity
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -134,6 +136,53 @@ class BackupModelsTest {
         val legacy = """{"schemaVersion":1,"exportedAt":1}"""
         val decoded = Json.decodeFromString(BackupPayload.serializer(), legacy)
         assertEquals(emptyList<BackupDrillMistake>(), decoded.drillMistakes)
+        assertEquals(emptyList<BackupSpellingProgress>(), decoded.spellingProgress)
+        assertEquals(emptyList<BackupSpellingAttempt>(), decoded.spellingAttempts)
+    }
+
+    @Test
+    fun `spelling records rebind to the restored vocabulary id`() {
+        val progress = SpellingProgressEntity(
+            itemId = 42,
+            stage = "GuidedRecall",
+            recognitionScore = 1.0,
+            partialRecallScore = 0.8,
+            chunkRecallScore = 0.7,
+            phonemeGraphemeScore = 0.0,
+            freeRecallScore = 0.5,
+            retentionScore = 0.0,
+            successStreak = 2,
+            failureStreak = 0,
+            stageSuccessCount = 1,
+            freeRecallSuccessCount = 0,
+            successfulRecallDatesJson = "[]",
+            longestSuccessfulIntervalDays = 0,
+            currentIntervalDays = 3,
+            weakSegmentsJson = "[]",
+            lastAttemptAt = 1000,
+        )
+        assertEquals(99L, progress.toBackup().toEntity(99).itemId)
+
+        val attempt = SpellingAttemptEntity(
+            id = 7,
+            itemId = 42,
+            questionType = "FreeRecall",
+            expected = "environment",
+            answer = "enviroment",
+            correct = false,
+            hintLevel = 1,
+            responseTimeMillis = 3200,
+            errorTypesJson = "[\"Omission\"]",
+            weakSegment = "viron",
+            weakStart = 2,
+            weakEndExclusive = 7,
+            masteryCredit = 0.0,
+            occurredAt = 2000,
+        )
+        val restored = attempt.toBackup().toEntity(99)
+        assertEquals(0L, restored.id)
+        assertEquals(99L, restored.itemId)
+        assertEquals("viron", restored.weakSegment)
     }
 
     @Test
