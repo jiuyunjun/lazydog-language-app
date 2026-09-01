@@ -2,7 +2,6 @@ package com.lazydog.english.domain.spelling
 
 import com.lazydog.english.core.model.ReviewGrade
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.max
 
@@ -118,7 +117,7 @@ object SpellingEngine {
         val isFree = questionType == SpellingQuestionType.FreeRecall ||
             questionType == SpellingQuestionType.DelayedFreeRecall
         val successfulDates = if (correct && isFree) {
-            progress.successfulRecallDates + LocalDate.ofInstant(attemptedAt, zoneId).toString()
+            progress.successfulRecallDates + attemptedAt.atZone(zoneId).toLocalDate().toString()
         } else {
             progress.successfulRecallDates
         }

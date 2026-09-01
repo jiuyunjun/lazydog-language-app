@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -51,16 +52,18 @@ import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.core.designsystem.LazyDogTheme
-import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.ReviewGrade
-import com.lazydog.english.domain.practice.ProductionCheck
-import com.lazydog.english.domain.practice.ProductionResult
 import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.planning.DailyStep
+import com.lazydog.english.domain.spelling.SpellingEngine
+import com.lazydog.english.domain.spelling.SpellingErrorType
+import com.lazydog.english.domain.spelling.SpellingEvaluation
+import com.lazydog.english.domain.spelling.SpellingProgress
+import com.lazydog.english.domain.spelling.SpellingQuestionType
 import java.time.LocalDate
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -78,16 +81,9 @@ private data class StudyCard(
     val isNew: Boolean,
     val pos: String = "",
     val collocations: List<String> = emptyList(),
-    val stage: String = KnowledgeStage.Learning.name,
     val memoryHintZh: String = "",
-) {
-    /**
-     * 熟了的词改考产出：给中文，自己写出英文。
-     * 认得出不代表写得出，而认词恰恰是最不缺练的那一项。
-     */
-    val isProduction: Boolean
-        get() = !isNew && stage in setOf(KnowledgeStage.Familiar.name, KnowledgeStage.Mastered.name)
-}
+    val spellingProgress: SpellingProgress? = null,
+)
 
 private sealed interface WordStudyPhase {
     data object Loading : WordStudyPhase
@@ -95,9 +91,12 @@ private sealed interface WordStudyPhase {
         val cards: List<StudyCard>,
         val index: Int,
         val revealed: Boolean,
-        /** 产出卡上打的答案和判分结果；认词卡用不到。 */
         val typed: String = "",
-        val result: ProductionResult? = null,
+        val hintLevel: Int = 0,
+        val result: SpellingEvaluation? = null,
+        val completed: Boolean = false,
+        val submitting: Boolean = false,
+        val startedAtMillis: Long = System.currentTimeMillis(),
     ) : WordStudyPhase
     data class OfferNew(val reviewedCount: Int) : WordStudyPhase
     data object Generating : WordStudyPhase
@@ -154,8 +153,8 @@ fun WordStudyScreen(
                     isNew = false,
                     pos = it.detail.pos,
                     collocations = VocabularyJson.decodeCollocations(it.detail.collocationsJson),
-                    stage = it.item.stage,
                     memoryHintZh = it.detail.memoryHintZh,
+                    spellingProgress = repository.spellingProgress(it.item.id),
                 )
             }
         phase = if (due.isEmpty()) WordStudyPhase.OfferNew(0) else WordStudyPhase.Cards(due, 0, revealed = false)
@@ -195,34 +194,66 @@ fun WordStudyScreen(
         }
     }
 
-    fun onGrade(card: StudyCard, grade: ReviewGrade, cards: List<StudyCard>, index: Int) {
+    fun onNewGrade(card: StudyCard, grade: ReviewGrade, cards: List<StudyCard>, index: Int) {
         scope.launch {
-            if (card.isNew) {
-                val id = repository.addVocabulary(
-                    term = card.term,
-                    meaningZh = card.meaningZh,
-                    ipa = card.ipa,
-                    exampleEn = card.exampleEn,
-                    exampleZh = card.exampleZh,
-                    pos = card.pos,
-                    collocations = card.collocations,
-                    memoryHintZh = card.memoryHintZh,
-                )
-                if (id != null) {
-                    repository.recordReview(id, grade, source = "card")
-                    newLearnedCount += 1
-                }
-            } else {
-                repository.recordReview(card.itemId!!, grade, source = "card")
-                reviewedCount += 1
+            val id = repository.addVocabulary(
+                term = card.term,
+                meaningZh = card.meaningZh,
+                ipa = card.ipa,
+                exampleEn = card.exampleEn,
+                exampleZh = card.exampleZh,
+                pos = card.pos,
+                collocations = card.collocations,
+                memoryHintZh = card.memoryHintZh,
+            )
+            if (id != null) {
+                repository.recordReview(id, grade, source = "card")
+                newLearnedCount += 1
             }
             phase = if (index + 1 < cards.size) {
                 WordStudyPhase.Cards(cards, index + 1, revealed = false)
-            } else if (!card.isNew) {
-                WordStudyPhase.OfferNew(reviewedCount)
             } else {
                 WordStudyPhase.Summary(reviewedCount, newLearnedCount)
             }
+        }
+    }
+
+    fun onSpellingSubmit(p: WordStudyPhase.Cards, answer: String) {
+        val card = p.cards[p.index]
+        val progress = card.spellingProgress ?: return
+        val questionType = SpellingEngine.questionType(progress)
+        val finishes = answer.trim().equals(card.term.trim(), ignoreCase = true) || p.hintLevel >= 4
+        phase = p.copy(submitting = true)
+        scope.launch {
+            val evaluation = repository.recordSpellingAttempt(
+                itemId = card.itemId!!,
+                expected = card.term,
+                answer = answer,
+                questionType = questionType,
+                hintLevel = p.hintLevel,
+                responseTimeMillis = System.currentTimeMillis() - p.startedAtMillis,
+                finishReview = finishes,
+            ) ?: run {
+                phase = p.copy(submitting = false)
+                return@launch
+            }
+            if (finishes) reviewedCount += 1
+            phase = p.copy(
+                typed = answer,
+                hintLevel = if (evaluation.correct) p.hintLevel else (p.hintLevel + 1).coerceAtMost(5),
+                result = evaluation,
+                completed = finishes,
+                revealed = finishes,
+                submitting = false,
+            )
+        }
+    }
+
+    fun advanceReview(p: WordStudyPhase.Cards) {
+        phase = if (p.index + 1 < p.cards.size) {
+            WordStudyPhase.Cards(p.cards, p.index + 1, revealed = false)
+        } else {
+            WordStudyPhase.OfferNew(reviewedCount)
         }
     }
 
@@ -276,26 +307,24 @@ fun WordStudyScreen(
                 WordStudyPhase.Generating -> AiWaiting("AI 正在挑词…", stage)
                 is WordStudyPhase.Cards -> {
                     val card = p.cards[p.index]
-                    if (card.isProduction) {
-                        ProductionCardView(
+                    if (!card.isNew) {
+                        AdaptiveSpellingCardView(
                             card = card,
                             typed = p.typed,
+                            hintLevel = p.hintLevel,
                             result = p.result,
+                            completed = p.completed,
+                            submitting = p.submitting,
                             onTypedChange = { phase = p.copy(typed = it) },
-                            onSubmit = {
-                                phase = p.copy(
-                                    revealed = true,
-                                    result = ProductionCheck.check(p.typed, card.term),
-                                )
-                            },
-                            onGrade = { grade -> onGrade(card, grade, p.cards, p.index) },
+                            onSubmit = { onSpellingSubmit(p, it) },
+                            onNext = { advanceReview(p) },
                         )
                     } else {
                         StudyCardView(
                             card = card,
                             revealed = p.revealed,
                             onReveal = { phase = p.copy(revealed = true) },
-                            onGrade = { grade -> onGrade(card, grade, p.cards, p.index) },
+                            onGrade = { grade -> onNewGrade(card, grade, p.cards, p.index) },
                         )
                     }
                 }
@@ -336,8 +365,8 @@ fun WordStudyScreen(
  * 免得一句"这词什么意思"直接把自评环节绕过去。
  */
 private fun StudyCard.toAskContext(revealed: Boolean): AskContext {
-    // 产出卡是反过来的：中文在明面，英文才是答案，所以没作答前不能把词交出去。
-    if (isProduction && !revealed) {
+    // 到期词都可能在做主动拼写；没结束前不能把英文答案交给提问抽屉。
+    if (!isNew && !revealed) {
         return AskContext(
             kind = AskContextKind.Word,
             title = "正在回想一个词 · $meaningZh",
@@ -386,20 +415,27 @@ private fun GeneratedWord.toCard() = StudyCard(
     memoryHintZh = memoryHintZh,
 )
 
-/** 产出卡：给中文释义，自己把英文写出来，程序判分。 */
+/** 到期词统一走渐进拼写：题型由本地掌握向量决定，答错只增加一级最小提示。 */
 @Composable
-private fun ProductionCardView(
+private fun AdaptiveSpellingCardView(
     card: StudyCard,
     typed: String,
-    result: ProductionResult?,
+    hintLevel: Int,
+    result: SpellingEvaluation?,
+    completed: Boolean,
+    submitting: Boolean,
     onTypedChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onGrade: (ReviewGrade) -> Unit,
+    onSubmit: (String) -> Unit,
+    onNext: () -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
     val extended = LazyDogTheme.extendedColors
+    val progress = card.spellingProgress ?: SpellingProgress()
+    val questionType = SpellingEngine.questionType(progress)
+    val recognition = questionType == SpellingQuestionType.Recognition
+    val options = remember(card.term) { SpellingEngine.recognitionOptions(card.term) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -410,7 +446,7 @@ private fun ProductionCardView(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(
-                text = "这个意思，英文怎么写",
+                text = "${questionType.labelZh()} · ${progress.stage.labelZh}",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -418,96 +454,160 @@ private fun ProductionCardView(
                 text = if (card.pos.isNotBlank()) "${card.pos} ${card.meaningZh}" else card.meaningZh,
                 style = MaterialTheme.typography.headlineSmall,
             )
-            if (result == null) {
-                Text(
-                    text = "提示：${ProductionCheck.hint(card.term)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OutlinedTextField(
-                    value = typed,
-                    onValueChange = onTypedChange,
-                    label = { Text("写出这个词") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
-                val (label, tint) = when (result) {
-                    ProductionResult.Correct -> "写对了" to extended.correct
-                    ProductionResult.Close -> "差一个字母，算你想起来了" to extended.attention
-                    ProductionResult.Wrong -> "这个词没写出来" to MaterialTheme.colorScheme.error
+
+            if (!completed) {
+                when (questionType) {
+                    SpellingQuestionType.Recognition -> {
+                        Text("选出正确拼写", style = MaterialTheme.typography.titleMedium)
+                        options.forEach { option ->
+                            Surface(
+                                onClick = { onTypedChange(option) },
+                                color = if (typed == option) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                                shape = MaterialTheme.shapes.medium,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    RadioButton(selected = typed == option, onClick = { onTypedChange(option) })
+                                    Text(option, style = MaterialTheme.typography.titleMedium)
+                                }
+                            }
+                        }
+                    }
+                    SpellingQuestionType.PartialCompletion,
+                    SpellingQuestionType.ChunkRecall,
+                    -> {
+                        Text(
+                            text = SpellingEngine.maskedWord(
+                                card.term,
+                                progress.weakSegments,
+                                chunk = questionType == SpellingQuestionType.ChunkRecall,
+                            ),
+                            style = MaterialTheme.typography.headlineMedium,
+                        )
+                        Text("照着提示写出完整单词", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SpellingInput(typed, onTypedChange)
+                    }
+                    SpellingQuestionType.GuidedRecall -> {
+                        Text(
+                            text = "${card.term.take(1)}${"_".repeat((card.term.length - 1).coerceAtLeast(0))}",
+                            style = MaterialTheme.typography.headlineMedium,
+                        )
+                        Text("${card.term.length} 个字母", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SpellingInput(typed, onTypedChange)
+                    }
+                    SpellingQuestionType.FreeRecall,
+                    SpellingQuestionType.DelayedFreeRecall,
+                    -> {
+                        OutlinedButton(onClick = { scope.launch { app.speechController.speakWord(card.term) } }) {
+                            Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = null)
+                            Text("听发音", modifier = Modifier.padding(start = 8.dp))
+                        }
+                        SpellingInput(typed, onTypedChange)
+                    }
                 }
-                Text(text = label, style = MaterialTheme.typography.titleMedium, color = tint)
-                if (typed.isNotBlank() && result != ProductionResult.Correct) {
+            }
+
+            if (result != null) {
+                val message = when {
+                    result.correct -> "写对了"
+                    completed -> "这次先记住薄弱处，下次少给点提示"
+                    else -> "还差一点，再试一次"
+                }
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (result.correct) extended.correct else MaterialTheme.colorScheme.error,
+                )
+                if (!result.correct && result.errorTypes.isNotEmpty()) {
                     Text(
-                        text = "你写的：$typed",
+                        text = "这次主要是：${result.errorTypes.joinToString("、") { it.labelZh() }}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    InteractiveEnglishText(text = card.term, style = MaterialTheme.typography.headlineMedium)
-                    IconButton(onClick = { scope.launch { app.speechController.speak(card.term) } }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                            contentDescription = "读一遍",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-                if (card.exampleEn.isNotBlank()) {
+                if (!completed) {
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        color = MaterialTheme.colorScheme.secondaryContainer,
                         shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            InteractiveEnglishText(
-                                text = card.exampleEn,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                            if (card.exampleZh.isNotBlank()) {
-                                Text(
-                                    text = card.exampleZh,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                        Text(
+                            text = SpellingEngine.hintText(card.term, typed, hintLevel, result.nextProgress.weakSegments),
+                            modifier = Modifier.padding(14.dp),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        InteractiveEnglishText(card.term, style = MaterialTheme.typography.headlineMedium)
+                        IconButton(onClick = { scope.launch { app.speechController.speakWord(card.term) } }) {
+                            Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = "读一遍")
                         }
+                    }
+                    Text(
+                        text = "拼写阶段：${progress.stage.labelZh} → ${result.nextProgress.stage.labelZh} · 本次记忆分 ${(result.masteryCredit * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (card.exampleEn.isNotBlank()) {
+                        InteractiveEnglishText(card.exampleEn, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
         }
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (result == null) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (completed) {
                 Button(
-                    onClick = onSubmit,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                ) {
-                    Text(if (typed.isBlank()) "想不起来，看答案" else "对一下", style = MaterialTheme.typography.titleMedium)
-                }
+                    onClick = onNext,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                ) { Text("下一个", style = MaterialTheme.typography.titleMedium) }
             } else {
                 Button(
-                    onClick = { onGrade(ProductionCheck.gradeFor(result)) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                ) {
-                    Text("下一个", style = MaterialTheme.typography.titleMedium)
-                }
-                if (result == ProductionResult.Correct) {
-                    TextButton(onClick = { onGrade(ReviewGrade.Easy) }, modifier = Modifier.fillMaxWidth()) {
-                        Text("这个我很熟，隔久点再问")
-                    }
-                }
+                    onClick = { onSubmit(typed) },
+                    enabled = typed.isNotBlank() && !submitting,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                ) { Text(if (submitting) "正在记录…" else if (recognition) "确认选择" else "检查拼写", style = MaterialTheme.typography.titleMedium) }
+                TextButton(
+                    onClick = { onSubmit("") },
+                    enabled = !submitting,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("想不起来，给一点提示") }
             }
         }
     }
+}
+
+@Composable
+private fun SpellingInput(value: String, onValueChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text("写出完整单词") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+private fun SpellingQuestionType.labelZh(): String = when (this) {
+    SpellingQuestionType.Recognition -> "拼写识别"
+    SpellingQuestionType.PartialCompletion -> "局部补全"
+    SpellingQuestionType.ChunkRecall -> "分块拼写"
+    SpellingQuestionType.GuidedRecall -> "提示拼写"
+    SpellingQuestionType.FreeRecall -> "完整默写"
+    SpellingQuestionType.DelayedFreeRecall -> "延迟回忆"
+}
+
+private fun SpellingErrorType.labelZh(): String = when (this) {
+    SpellingErrorType.Omission -> "漏字"
+    SpellingErrorType.Insertion -> "多字"
+    SpellingErrorType.Substitution -> "字母替换"
+    SpellingErrorType.Transposition -> "顺序交换"
+    SpellingErrorType.Doubling -> "双写"
+    SpellingErrorType.VowelOrder -> "元音顺序"
+    SpellingErrorType.Morphology -> "词形变化"
 }
 
 @Composable

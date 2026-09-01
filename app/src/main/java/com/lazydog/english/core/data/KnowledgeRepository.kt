@@ -83,6 +83,7 @@ class KnowledgeRepository(
                     memoryHintZh = memoryHintZh.trim(),
                 ),
             )
+            spellingDao.saveProgress(SpellingProgress().toEntity(id))
             id
         }
     }
