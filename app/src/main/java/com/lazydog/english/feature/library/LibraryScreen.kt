@@ -39,7 +39,6 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
@@ -62,19 +61,19 @@ import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.VocabularyRecord
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
-import com.lazydog.english.feature.vocabulary.MemoryHintPanel
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.KnowledgeType
 import com.lazydog.english.core.model.ReviewGrade
 import java.time.LocalDate
 import java.time.ZoneId
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
 fun LibraryScreen(
     modifier: Modifier = Modifier,
     repository: KnowledgeRepository,
+    /** 单词和表达点开的是整页词卡（[com.lazydog.english.feature.vocabulary.WordDetailScreen]）。 */
+    onOpenWord: (Long) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -87,7 +86,8 @@ fun LibraryScreen(
     val pagerState = rememberPagerState(pageCount = { 3 })
     val tabIndex = pagerState.currentPage
     var dueTodayOnly by rememberSaveable { mutableStateOf(false) }
-    var selectedItemId by rememberSaveable { mutableStateOf<Long?>(null) }
+    /** 只剩语法还是半屏卡片：它没有词卡那套内容，一页专门讲一个语法点太空。 */
+    var selectedGrammarId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showAddDialog by rememberSaveable { mutableStateOf(false) }
 
     val now = System.currentTimeMillis()
@@ -134,17 +134,17 @@ fun LibraryScreen(
                         dueTodayOnly = dueTodayOnly,
                         onDueTodayChange = { dueTodayOnly = it },
                         now = now,
-                        onSelect = { selectedItemId = it },
+                        onSelect = onOpenWord,
                     )
                     1 -> GrammarRecords(
                         records = grammar,
                         now = now,
-                        onSelect = { selectedItemId = it },
+                        onSelect = { selectedGrammarId = it },
                     )
                     else -> ExpressionRecords(
                         records = expressions,
                         now = now,
-                        onSelect = { selectedItemId = it },
+                        onSelect = onOpenWord,
                     )
                 }
             }
@@ -187,61 +187,7 @@ fun LibraryScreen(
         )
     }
 
-    val selectedWord = vocab.firstOrNull { it.item.id == selectedItemId }
-    val selectedExpression = expressions.firstOrNull { it.item.id == selectedItemId }
-    val selectedVocab = selectedWord ?: selectedExpression
-    val selectedGrammar = grammar.firstOrNull { it.item.id == selectedItemId }
-
-    // 打开单词详情时自动读一遍（设置里可关）。表达是整句，按句子读；单词用播音腔。
-    LaunchedEffect(selectedVocab?.item?.id) {
-        val term = selectedVocab?.detail?.term ?: return@LaunchedEffect
-        if (!app.userPreferences.autoReadWords.first()) return@LaunchedEffect
-        if (selectedExpression != null) speech.speak(term) else speech.speakWord(term)
-    }
-
-    if (selectedVocab != null) {
-        val example = when {
-            selectedExpression != null -> ""
-            selectedWord != null -> selectedWord.detail.exampleEn
-            else -> ""
-        }
-        ItemDetailSheet(
-            title = selectedVocab.detail.term,
-            ipa = selectedVocab.detail.ipa,
-            explanation = selectedVocab.detail.meaningZh,
-            example = example,
-            memoryHint = selectedVocab.detail.memoryHintZh,
-            // 整句表达不给记忆提示：这套提示是按"一个词最值得记什么"设计的，
-            // 对一整句话拆构词、标重音、找易错段都无从谈起。
-            memoryHintItemId = selectedVocab.item.id.takeIf { selectedExpression == null },
-            item = selectedVocab.item,
-            onSpeakWord = {
-                scope.launch {
-                    val term = selectedVocab.detail.term
-                    if (selectedExpression != null) speech.speak(term) else speech.speakWord(term)
-                }
-            },
-            speakDescription = if (selectedExpression != null) "朗读这条表达" else "朗读这个词",
-            onSpeakExample = example.takeIf { it.isNotBlank() }?.let { text ->
-                { scope.launch { speech.speak(text) } }
-            },
-            onDismiss = { selectedItemId = null },
-            onReview = { grade ->
-                val id = selectedItemId ?: return@ItemDetailSheet
-                scope.launch {
-                    repository.recordReview(id, grade)
-                    selectedItemId = null
-                }
-            },
-            onDelete = {
-                val id = selectedItemId ?: return@ItemDetailSheet
-                scope.launch {
-                    repository.deleteItem(id)
-                    selectedItemId = null
-                }
-            },
-        )
-    }
+    val selectedGrammar = grammar.firstOrNull { it.item.id == selectedGrammarId }
 
     selectedGrammar?.let { record ->
         GrammarDetailSheet(
@@ -249,17 +195,17 @@ fun LibraryScreen(
             onSpeakExample = record.detail.exampleEn.takeIf { it.isNotBlank() }?.let { text ->
                 { scope.launch { speech.speak(text) } }
             },
-            onDismiss = { selectedItemId = null },
+            onDismiss = { selectedGrammarId = null },
             onReview = { grade ->
                 scope.launch {
                     repository.recordReview(record.item.id, grade)
-                    selectedItemId = null
+                    selectedGrammarId = null
                 }
             },
             onDelete = {
                 scope.launch {
                     repository.deleteItem(record.item.id)
-                    selectedItemId = null
+                    selectedGrammarId = null
                 }
             },
         )
@@ -501,118 +447,6 @@ private fun GrammarDetailSheet(
 
     if (confirmDelete) {
         DeleteRecordDialog(pattern, onDismiss = { confirmDelete = false }) {
-            confirmDelete = false
-            onDelete()
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ItemDetailSheet(
-    title: String,
-    ipa: String,
-    explanation: String,
-    example: String,
-    memoryHint: String,
-    /** 非空时显示可重新生成的记忆提示面板；整句表达没有 itemId 意义上的"词"可记，传 null。 */
-    memoryHintItemId: Long?,
-    item: KnowledgeItemEntity,
-    onSpeakWord: (() -> Unit)?,
-    speakDescription: String,
-    onSpeakExample: (() -> Unit)?,
-    onDismiss: () -> Unit,
-    onReview: (ReviewGrade) -> Unit,
-    onDelete: () -> Unit,
-) {
-    var confirmDelete by remember { mutableStateOf(false) }
-
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 24.dp)
-                // 记忆方法这类内容长度不定，小屏上要能滚。
-                .verticalScroll(rememberScrollState())
-                .navigationBarsPadding()
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                InteractiveEnglishText(
-                    text = title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.weight(1f),
-                )
-                if (ipa.isNotBlank()) {
-                    Text(
-                        text = ipa,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (onSpeakWord != null) {
-                    IconButton(onClick = onSpeakWord) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                            contentDescription = speakDescription,
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            }
-            if (explanation.isNotBlank()) {
-                Text(explanation, style = MaterialTheme.typography.bodyMedium)
-            }
-            if (example.isNotBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    InteractiveEnglishText(
-                        text = example,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (onSpeakExample != null) {
-                        IconButton(onClick = onSpeakExample) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                                contentDescription = "朗读例句",
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                }
-            }
-            if (memoryHintItemId != null) {
-                MemoryHintPanel(itemId = memoryHintItemId, fallbackHintZh = memoryHint)
-            } else if (memoryHint.isNotBlank()) {
-                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = "怎么记",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                        Text(
-                            text = memoryHint,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
-                }
-            }
-            RecordReviewControls(item, onReview)
-
-            TextButton(onClick = { confirmDelete = true }) {
-                Text("删除这条记录", color = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
-
-    if (confirmDelete) {
-        DeleteRecordDialog(title, onDismiss = { confirmDelete = false }) {
             confirmDelete = false
             onDelete()
         }

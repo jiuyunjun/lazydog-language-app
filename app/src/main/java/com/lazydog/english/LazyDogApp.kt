@@ -46,6 +46,7 @@ import com.lazydog.english.feature.study.GrammarStudyScreen
 import com.lazydog.english.feature.spelling.SpellingProfileScreen
 import com.lazydog.english.feature.spelling.SpellingScreen
 import com.lazydog.english.feature.study.WordStudyScreen
+import com.lazydog.english.feature.vocabulary.WordDetailScreen
 import kotlinx.coroutines.launch
 
 object Routes {
@@ -68,6 +69,7 @@ object Routes {
     const val ReadingGenerate = "reading/generate"
     const val ReadingPaste = "reading/paste"
     const val ReadingOpen = "reading/open/{materialId}"
+    const val WordDetail = "library/word/{itemId}"
 
     /** [taskKey] 传 [DEFAULT_MODEL_KEY] 表示改的是默认模型。 */
     fun modelPick(taskKey: String) = "settings/models/$taskKey"
@@ -75,6 +77,7 @@ object Routes {
     const val DEFAULT_MODEL_KEY = "default"
 
     fun readingOpen(materialId: Long) = "reading/open/$materialId"
+    fun wordDetail(itemId: Long) = "library/word/$itemId"
     fun scenarioOpen(sessionId: Long) = "scenario/open/$sessionId"
 }
 
@@ -168,6 +171,7 @@ private fun AppNavHost(
                 onOpenMaterial = { id -> navController.navigate(Routes.readingOpen(id)) },
                 onStartAssessment = { navController.navigate(Routes.Assessment) },
                 onOpenModelSettings = { navController.navigate(Routes.ModelSettings) },
+                onOpenWord = { id -> navController.navigate(Routes.wordDetail(id)) },
             )
         }
 
@@ -287,6 +291,18 @@ private fun AppNavHost(
             AskHost {
                 ReadingScreen(mode = ReadingMode.Paste, onExit = { navController.popOnce() })
             }
+        }
+
+        composable(
+            route = Routes.WordDetail,
+            arguments = listOf(navArgument("itemId") { type = NavType.LongType }),
+        ) { entry ->
+            // 不包 AskHost：DESIGN.md §5.4 说好了记录里的页面不响应摇一摇提问。
+            WordDetailScreen(
+                itemId = entry.arguments?.getLong("itemId") ?: 0L,
+                repository = knowledgeRepository,
+                onExit = { navController.popOnce() },
+            )
         }
 
         composable(
