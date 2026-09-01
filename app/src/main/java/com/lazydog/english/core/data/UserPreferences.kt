@@ -68,6 +68,7 @@ class UserPreferences(private val context: Context) {
         val AskTopBarIcon = booleanPreferencesKey("ask_top_bar_icon")
         val CompletionTokenModels = stringSetPreferencesKey("models_need_completion_tokens")
         val NoReasoningEffortModels = stringSetPreferencesKey("models_reject_reasoning_effort")
+        val RejectedEfforts = stringSetPreferencesKey("model_rejected_reasoning_efforts")
     }
 
     val onboardingCompleted: Flow<Boolean> =
@@ -121,6 +122,50 @@ class UserPreferences(private val context: Context) {
         if (clean.isBlank()) return
         context.dataStore.edit {
             it[Keys.NoReasoningEffortModels] = it[Keys.NoReasoningEffortModels].orEmpty() + clean
+        }
+    }
+
+    /**
+     * 某个模型拒绝过的 `reasoning_effort` 取值（存成 `模型|取值`）。
+     *
+     * 取值是模型相关的（gpt-5.6-terra 认 none 却不认 minimal），撞一次就该记住，
+     * 否则每次调用都要拿被拒过的取值再撞一遍。
+     */
+    fun rejectedEfforts(model: String): Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        val prefix = "${model.trim()}|"
+        prefs[Keys.RejectedEfforts].orEmpty()
+            .filter { it.startsWith(prefix) }
+            .map { it.removePrefix(prefix) }
+            .toSet()
+    }
+
+    suspend fun rememberRejectedEffort(model: String, effort: String) {
+        val clean = model.trim()
+        if (clean.isBlank() || effort.isBlank()) return
+        context.dataStore.edit {
+            it[Keys.RejectedEfforts] = it[Keys.RejectedEfforts].orEmpty() + "$clean|$effort"
+        }
+    }
+
+    /**
+     * 某个功能选定的思考力度。null 表示跟随该功能的推荐值，
+     * [AiTask.MODEL_DEFAULT] 表示不发这个参数、用模型自己的默认。
+     */
+    fun aiTaskEffort(task: AiTask): Flow<String?> =
+        context.dataStore.data.map { it[taskEffortKey(task)]?.takeIf { v -> v.isNotBlank() } }
+
+    /** 已经单独指定过力度的功能，设置页用它显示当前值。 */
+    val aiTaskEfforts: Flow<Map<AiTask, String>> = context.dataStore.data.map { prefs ->
+        AiTask.entries.mapNotNull { task ->
+            prefs[taskEffortKey(task)]?.takeIf { it.isNotBlank() }?.let { task to it }
+        }.toMap()
+    }
+
+    /** [effort] 传 null 表示回到"跟随推荐"。 */
+    suspend fun setAiTaskEffort(task: AiTask, effort: String?) {
+        context.dataStore.edit {
+            val key = taskEffortKey(task)
+            if (effort.isNullOrBlank()) it.remove(key) else it[key] = effort
         }
     }
 
@@ -450,6 +495,8 @@ class UserPreferences(private val context: Context) {
 }
 
 private fun taskModelKey(task: AiTask) = stringPreferencesKey("ai_model_${task.key}")
+
+private fun taskEffortKey(task: AiTask) = stringPreferencesKey("ai_effort_${task.key}")
 
 private fun String?.orDefault(default: String): String =
     if (this.isNullOrBlank()) default else this

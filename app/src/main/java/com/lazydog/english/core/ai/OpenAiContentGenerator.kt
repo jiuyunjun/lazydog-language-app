@@ -97,14 +97,17 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * 每一次调用都要先用 max_tokens 撞一个 400 再换名重发——白搭一整个往返，
  * 慢的网络上这一下就是好几秒，而且每次都付。
  *
- * [sendReasoningEffort] 同理，记的是"这个模型认不认 reasoning_effort"。
+ * [effortCandidates] 是这次调用要试的 `reasoning_effort` 取值，按顺序，已经过滤掉这个模型
+ * 拒过的和用户的选择（见 [AiTask.effortCandidates]）。空列表表示不发这个参数。
+ * 取值是模型相关的（gpt-5.6-terra 认 none 却不认 minimal），所以被拒是正常路径：
+ * 退到下一个候选，而不是退回模型默认——那多半是 medium，比想要的还慢。
  */
 data class AiConfig(
     val baseUrl: String,
     val apiKey: String,
     val model: String,
     val useCompletionTokens: Boolean = false,
-    val sendReasoningEffort: Boolean = true,
+    val effortCandidates: List<String> = emptyList(),
 )
 
 /**
@@ -121,6 +124,8 @@ class OpenAiContentGenerator(
     private val onNeedsCompletionTokens: suspend (model: String) -> Unit = {},
     /** 记下"这个模型不认 reasoning_effort"，下次开始就不带这个参数。 */
     private val onRejectsReasoningEffort: suspend (model: String) -> Unit = {},
+    /** 记下"这个模型不认这个取值"，下次直接从下一个候选开始。 */
+    private val onRejectsEffortValue: suspend (model: String, effort: String) -> Unit = { _, _ -> },
 ) : LearningContentGenerator {
 
     override suspend fun generateNewWords(
@@ -712,12 +717,15 @@ class OpenAiContentGenerator(
         // 之前撞过的模型直接用对的字段名（结论存在偏好里），不再每次都先撞一个 400。
         var useCompletionTokens = settings.useCompletionTokens
         var swappedTokenField = useCompletionTokens
-        var reasoningEffort = if (settings.sendReasoningEffort) task.reasoningEffort else null
+        val effortCandidates = settings.effortCandidates
+        var effortIndex = 0
+        var reasoningEffort = effortCandidates.getOrNull(0)
         var lastReason = "未知错误"
         var attempt = 0
         var correcting = false
-        // 最多四次：原始请求、换上限字段名、去掉 reasoning_effort、一次限流/网络重试。
-        while (attempt < 4) {
+        // 原始请求 + 换上限字段名 + 逐个退 reasoning_effort 候选 + 一次限流/网络重试。
+        val maxAttempts = 3 + effortCandidates.size
+        while (attempt < maxAttempts) {
             attempt += 1
             correcting = false
             try {
@@ -746,20 +754,32 @@ class OpenAiContentGenerator(
                         AiLog.retry(op, lastReason, "改用 max_completion_tokens 重发，并记住这个模型")
                         return@use
                     }
-                    // 老模型和别家服务商不认 reasoning_effort。
-                    // 只要带着它挨了 400 就先去掉重发一次——有的网关只回一句含糊的
-                    // "unrecognized parameter"，认不出是哪个参数，不能因此整个功能都用不了。
-                    // 但只有服务端点名说了这个参数，才记住"以后别带"，否则一次无关的 400
-                    // 会把这个模型的思考力度永久关掉。
+                    // 带着 reasoning_effort 挨了 400：先换下一个候选取值，候选用尽才彻底不带。
+                    //
+                    // 为什么不一步丢掉：不带这个参数就是模型默认（多数是 medium），比我们想要的
+                    // 还慢——"修一下反而更慢"。取值是模型相关的，terra 认 none 却不认 minimal，
+                    // 所以退一格通常就能落到它认的那个上。
+                    //
+                    // 只要挨了 400 就退，哪怕服务端只回一句含糊的"参数不对"（有的网关就这样，
+                    // 认不出是哪个参数）；但只有它点名说了这个参数，才把结论记进偏好——
+                    // 一次无关的 400 不该把这个模型的思考力度永久改掉。
                     if (response.code == 400 && reasoningEffort != null) {
-                        val named = mentionsReasoningEffort(raw)
-                        reasoningEffort = null
+                        val rejected = reasoningEffort
+                        // 服务端点名了这个参数，或者点名了我们刚发的那个取值（"Invalid value: 'none'…"），
+                        // 都算它确实说清了问题，可以把结论记下来。
+                        val named = mentionsReasoningEffort(raw) || namesValue(raw, rejected)
+                        effortIndex += 1
+                        reasoningEffort = effortCandidates.getOrNull(effortIndex)
                         correcting = true
-                        if (named) launch { onRejectsReasoningEffort(model) }
+                        if (named) {
+                            if (rejected != null) launch { onRejectsEffortValue(model, rejected) }
+                            if (reasoningEffort == null) launch { onRejectsReasoningEffort(model) }
+                        }
                         AiLog.retry(
                             op,
                             lastReason,
-                            if (named) "去掉 reasoning_effort 重发，并记住这个模型" else "先去掉 reasoning_effort 再试一次",
+                            reasoningEffort?.let { "reasoning_effort 换成 $it 重发" }
+                                ?: "去掉 reasoning_effort 重发",
                         )
                         return@use
                     }
@@ -771,7 +791,7 @@ class OpenAiContentGenerator(
                 AiLog.retry(op, lastReason, "${retryDelayMs} ms 后再试")
             }
             // 纠正参数的重发不必等：不是限流，等只是白等。
-            if (attempt < 4 && !correcting) delay(retryDelayMs)
+            if (attempt < maxAttempts && !correcting) delay(retryDelayMs)
         }
         fail("$lastReason（已重试）")
     }
@@ -1429,6 +1449,10 @@ class OpenAiContentGenerator(
         private const val THINKING_EXCERPT_CHARS = 80
 
         /** 400 的正文提到上限字段，就说明这个服务端要的是另一个名字。 */
+        /** 错误正文里点名了我们刚发的那个取值。用引号包住，避免 "low" 撞上正文里别的词。 */
+        internal fun namesValue(body: String, value: String?): Boolean =
+            value != null && (body.contains("'$value'") || body.contains("\"$value\""))
+
         internal fun mentionsReasoningEffort(body: String): Boolean =
             body.contains("reasoning_effort", ignoreCase = true)
 

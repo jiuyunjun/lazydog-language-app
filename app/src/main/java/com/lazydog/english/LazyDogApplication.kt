@@ -2,6 +2,7 @@ package com.lazydog.english
 
 import android.app.Application
 import com.lazydog.english.core.ai.AiConfig
+import com.lazydog.english.core.ai.AiTask
 import com.lazydog.english.core.ai.ModelCatalog
 import com.lazydog.english.core.ai.OpenAiContentGenerator
 import com.lazydog.english.core.backup.BackupFileStore
@@ -56,11 +57,20 @@ class LazyDogApplication : Application() {
                     model = model,
                     // 撞过一次就记住了，不用每次调用都先用错的字段名试一遍。
                     useCompletionTokens = model in userPreferences.completionTokenModels.first(),
-                    sendReasoningEffort = model !in userPreferences.noReasoningEffortModels.first(),
+                    effortCandidates = if (model in userPreferences.noReasoningEffortModels.first()) {
+                        emptyList()
+                    } else {
+                        AiTask.effortCandidates(
+                            task = task,
+                            chosen = userPreferences.aiTaskEffort(task).first(),
+                            rejected = userPreferences.rejectedEfforts(model).first(),
+                        )
+                    },
                 )
             },
             onNeedsCompletionTokens = userPreferences::rememberCompletionTokenModel,
             onRejectsReasoningEffort = userPreferences::rememberNoReasoningEffortModel,
+            onRejectsEffortValue = userPreferences::rememberRejectedEffort,
         )
     }
 }

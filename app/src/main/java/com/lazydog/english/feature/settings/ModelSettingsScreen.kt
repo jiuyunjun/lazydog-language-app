@@ -58,6 +58,7 @@ fun ModelSettingsScreen(
 ) {
     val defaultModel by prefs.aiModel.collectAsState(initial = "")
     val overrides by prefs.aiTaskModels.collectAsState(initial = emptyMap())
+    val efforts by prefs.aiTaskEfforts.collectAsState(initial = emptyMap())
 
     Scaffold(
         topBar = {
@@ -90,7 +91,11 @@ fun ModelSettingsScreen(
             items(AiTask.entries) { task ->
                 ModelRow(
                     name = task.labelZh,
-                    value = overrides[task] ?: "跟随默认 · ${task.noteZh}",
+                    value = buildString {
+                        append(overrides[task] ?: "跟随默认")
+                        append(" · 思考 ")
+                        append(effortLabel(efforts[task], task))
+                    },
                     onClick = { onPick(task) },
                 )
             }
@@ -119,6 +124,7 @@ fun ModelPickScreen(
 
     val defaultModel by prefs.aiModel.collectAsState(initial = "")
     val overrides by prefs.aiTaskModels.collectAsState(initial = emptyMap())
+    val efforts by prefs.aiTaskEfforts.collectAsState(initial = emptyMap())
     val current = if (task == null) defaultModel else overrides[task]
 
     var showAll by rememberSaveable { mutableStateOf(false) }
@@ -160,6 +166,41 @@ fun ModelPickScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 )
+            }
+            // 思考力度和模型是两件事，但都属于"这个功能怎么跑"，放同一页省得来回翻。
+            if (task != null) {
+                item { SectionTitle("思考力度") }
+                item {
+                    Text(
+                        text = "推理模型开口前会先想一阵，这段实测能占掉整次调用的大半。" +
+                            "取值随模型而异，选了不支持的会自动往下退，不会因此报错。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+                item {
+                    ModelOptionRow(
+                        label = "跟随推荐（${effortLabel(null, task)}）",
+                        selected = efforts[task] == null,
+                        onClick = { scope.launch { prefs.setAiTaskEffort(task, null) } },
+                    )
+                }
+                items(AiTask.ALL_EFFORTS) { effort ->
+                    ModelOptionRow(
+                        label = "$effort${effortNote(effort)}",
+                        selected = efforts[task] == effort,
+                        onClick = { scope.launch { prefs.setAiTaskEffort(task, effort) } },
+                    )
+                }
+                item {
+                    ModelOptionRow(
+                        label = "模型默认（不发这个参数）",
+                        selected = efforts[task] == AiTask.MODEL_DEFAULT,
+                        onClick = { scope.launch { prefs.setAiTaskEffort(task, AiTask.MODEL_DEFAULT) } },
+                    )
+                }
+                item { SectionTitle("模型") }
             }
             // 默认模型这一项没有"跟随"可言，它自己就是被跟随的那个。
             if (task != null) {
@@ -216,6 +257,32 @@ fun ModelPickScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 4.dp),
+    )
+}
+
+/** 列表上显示的当前力度。null（没单独设过）时显示这个功能的推荐值。 */
+private fun effortLabel(stored: String?, task: AiTask): String = when (stored) {
+    null -> task.reasoningEffort ?: "模型默认"
+    AiTask.MODEL_DEFAULT -> "模型默认"
+    else -> stored
+}
+
+private fun effortNote(effort: String): String = when (effort) {
+    "none" -> "（不思考，最快）"
+    "minimal" -> "（几乎不思考）"
+    "low" -> "（少想一会儿）"
+    "medium" -> "（多数模型的默认）"
+    "high", "xhigh", "max" -> "（更慢，换质量）"
+    else -> ""
 }
 
 @Composable

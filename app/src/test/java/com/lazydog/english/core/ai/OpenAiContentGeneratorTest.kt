@@ -132,7 +132,8 @@ class OpenAiContentGeneratorTest {
     }
 
     private fun generator() = OpenAiContentGenerator(
-        config = { AiConfig(server.url("/v1").toString(), "test-key", "gpt-test") },
+        // 真机上候选由偏好和 AiTask 算好后传进来（见 LazyDogApplication），这里照搬那套算法。
+        config = { task -> AiConfig(server.url("/v1").toString(), "test-key", "gpt-test", effortCandidates = AiTask.effortCandidates(task)) },
         retryDelayMs = 1,
     )
 
@@ -770,18 +771,64 @@ data: {"model":"gpt-test","choices":[{"delta":{"reasoning_content":"再挑难听
         generator().explainWord("curb", "We should curb traffic.", "A2")
 
         assertTrue(server.takeRequest().body.readUtf8().contains(""""reasoning_effort":"low""""))
-        assertTrue(server.takeRequest().body.readUtf8().contains(""""reasoning_effort":"minimal""""))
+        // 点词要马上出字，思考对它几乎没有增益；none 是文档里给延迟敏感任务准备的取值。
+        assertTrue(server.takeRequest().body.readUtf8().contains(""""reasoning_effort":"none""""))
     }
 
     @Test
-    fun `a model that rejects reasoning effort is retried without it and remembered`() = runBlocking {
-        // 老模型和别家服务商不认这个参数，不能因此整个功能都用不了。
-        val rejected = mutableListOf<String>()
+    fun `a rejected effort value falls back to the next candidate, not to the default`() = runBlocking {
+        // 服务端只点名了取值、没点名参数（真实的 400 常是这样），一样要能记住。
+        // gpt-5.6-terra 认 none 却不认 minimal，取值是模型相关的。这里的关键是**别退回默认值**：
+        // 不带这个参数就是模型默认（多数是 medium），比我们想要的还慢——修一下反而更慢。
+        val rejectedValues = mutableListOf<Pair<String, String>>()
         val generator = OpenAiContentGenerator(
-            config = { AiConfig(server.url("/v1").toString(), "test-key", "gpt-test") },
+            config = { task ->
+                AiConfig(
+                    server.url("/v1").toString(),
+                    "test-key",
+                    "gpt-test",
+                    effortCandidates = AiTask.effortCandidates(task),
+                )
+            },
             retryDelayMs = 1,
-            onRejectsReasoningEffort = { rejected.add(it) },
+            onRejectsEffortValue = { model, effort -> rejectedValues.add(model to effort) },
         )
+        server.enqueue(
+            MockResponse().setResponseCode(400).setBody(
+                """{"error":{"message":"Unsupported value: 'none' is not supported with this model. Supported values are 'low', 'medium'."}}""",
+            ),
+        )
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody("""{"term":"curb","ipa":"/kɜːb/","meaningZh":"v. 控制","usageNoteZh":"控制车流。"}"""),
+            ),
+        )
+
+        val result = generator.explainWord("curb", "We should curb traffic.", "A2")
+
+        assertTrue(result is GenerationResult.Success)
+        assertEquals(listOf("gpt-test" to "none"), rejectedValues)
+        assertTrue(server.takeRequest().body.readUtf8().contains(""""reasoning_effort":"none""""))
+        // 退到下一个候选，而不是把参数丢掉。low 几乎所有推理模型都认。
+        assertTrue(server.takeRequest().body.readUtf8().contains(""""reasoning_effort":"low""""))
+    }
+
+    @Test
+    fun `a model that rejects every candidate ends up sending none of them, and is remembered`() = runBlocking {
+        val rejectedParam = mutableListOf<String>()
+        val generator = OpenAiContentGenerator(
+            config = { task ->
+                AiConfig(
+                    server.url("/v1").toString(),
+                    "test-key",
+                    "gpt-test",
+                    effortCandidates = AiTask.effortCandidates(task),
+                )
+            },
+            retryDelayMs = 1,
+            onRejectsReasoningEffort = { rejectedParam.add(it) },
+        )
+        // 听力只有一个候选 low，撞掉就没了。
         server.enqueue(
             MockResponse().setResponseCode(400).setBody(
                 """{"error":{"message":"Unrecognized request argument: reasoning_effort"}}""",
@@ -792,17 +839,50 @@ data: {"model":"gpt-test","choices":[{"delta":{"reasoning_content":"再挑难听
         val result = generator.generateListeningSet(listeningRequest)
 
         assertTrue(result is GenerationResult.Success)
-        assertEquals(listOf("gpt-test"), rejected)
+        assertEquals(listOf("gpt-test"), rejectedParam)
         server.takeRequest()
+        assertFalse(server.takeRequest().body.readUtf8().contains("reasoning_effort"))
+    }
+
+    @Test
+    fun `candidates already known to be rejected are skipped`() = runBlocking {
+        val generator = OpenAiContentGenerator(
+            config = { task ->
+                AiConfig(
+                    server.url("/v1").toString(),
+                    "test-key",
+                    "gpt-test",
+                    effortCandidates = AiTask.effortCandidates(task, rejected = setOf("none")),
+                )
+            },
+            retryDelayMs = 1,
+        )
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody("""{"term":"curb","ipa":"/kɜːb/","meaningZh":"v. 控制","usageNoteZh":"控制车流。"}"""),
+            ),
+        )
+
+        generator.explainWord("curb", "We should curb traffic.", "A2")
+
+        assertEquals(1, server.requestCount)
+        assertTrue(server.takeRequest().body.readUtf8().contains(""""reasoning_effort":"low""""))
+    }
+
+    @Test
+    fun `a task that wants the model default sends no effort at all`() = runBlocking {
+        // medium 本来就是多数模型的默认值，显式再发一遍没意义，还多一个可能被拒的参数。
+        server.enqueue(MockResponse().setBody(chatBody("""{"dimensions":[]}""")))
+
+        generator().evaluateExpressionRubric("task", "text", null)
+
         assertFalse(server.takeRequest().body.readUtf8().contains("reasoning_effort"))
     }
 
     @Test
     fun `a model already known to reject reasoning effort never sends it`() = runBlocking {
         val generator = OpenAiContentGenerator(
-            config = {
-                AiConfig(server.url("/v1").toString(), "test-key", "gpt-test", sendReasoningEffort = false)
-            },
+            config = { AiConfig(server.url("/v1").toString(), "test-key", "gpt-test") },
             retryDelayMs = 1,
         )
         server.enqueue(MockResponse().setBody(chatBody(listeningJson)))
@@ -836,7 +916,7 @@ data: {"model":"gpt-test","choices":[{"delta":{"reasoning_content":"再挑难听
     }
 
     @Test
-    fun `an unrelated 400 gives up after dropping the optional parameter once`() = runBlocking {
+    fun `an unrelated 400 gives up after exhausting the optional parameter`() = runBlocking {
         // 有的网关只回一句含糊的"参数不对"，认不出是哪个，所以先去掉 reasoning_effort 再试一次。
         // 但也就这一次——一个 400 不该变成来回打。
         server.enqueue(
@@ -859,9 +939,7 @@ data: {"model":"gpt-test","choices":[{"delta":{"reasoning_content":"再挑难听
     @Test
     fun `an unrelated 400 with no optional parameter in play is not retried at all`() = runBlocking {
         val generator = OpenAiContentGenerator(
-            config = {
-                AiConfig(server.url("/v1").toString(), "test-key", "gpt-test", sendReasoningEffort = false)
-            },
+            config = { AiConfig(server.url("/v1").toString(), "test-key", "gpt-test") },
             retryDelayMs = 1,
         )
         server.enqueue(
