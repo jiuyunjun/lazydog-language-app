@@ -51,6 +51,9 @@ enum class AiTask(
         /** 用户在设置里选"用模型自己的默认值"时存的值：不发这个参数。 */
         const val MODEL_DEFAULT = "model-default"
 
+        /** 上面那个值在界面上的说法。 */
+        const val MODEL_DEFAULT_LABEL = "模型默认"
+
         /**
          * 这次调用真正要试的取值，按顺序。
          *

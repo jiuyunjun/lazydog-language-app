@@ -62,7 +62,7 @@ class LazyDogApplication : Application() {
                     } else {
                         AiTask.effortCandidates(
                             task = task,
-                            chosen = userPreferences.aiTaskEffort(task).first(),
+                            chosen = userPreferences.aiEffortFor(task).first(),
                             rejected = userPreferences.rejectedEfforts(model).first(),
                         )
                     },

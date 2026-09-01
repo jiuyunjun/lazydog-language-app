@@ -69,6 +69,7 @@ class UserPreferences(private val context: Context) {
         val CompletionTokenModels = stringSetPreferencesKey("models_need_completion_tokens")
         val NoReasoningEffortModels = stringSetPreferencesKey("models_reject_reasoning_effort")
         val RejectedEfforts = stringSetPreferencesKey("model_rejected_reasoning_efforts")
+        val DefaultEffort = stringPreferencesKey("ai_effort_default")
     }
 
     val onboardingCompleted: Flow<Boolean> =
@@ -148,11 +149,30 @@ class UserPreferences(private val context: Context) {
     }
 
     /**
-     * 某个功能选定的思考力度。null 表示跟随该功能的推荐值，
+     * 某个功能真正生效的思考力度，三层：**这个功能设的 → 默认设的 → 都没设（用功能推荐值）**。
+     *
+     * 和模型那套是同一个层级，改默认就能一次改掉所有"跟随"的功能。
+     * null 表示两层都没设，交给 [AiTask.reasoningEffort]；
      * [AiTask.MODEL_DEFAULT] 表示不发这个参数、用模型自己的默认。
      */
+    fun aiEffortFor(task: AiTask): Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[taskEffortKey(task)]?.takeIf { it.isNotBlank() }
+            ?: prefs[Keys.DefaultEffort]?.takeIf { it.isNotBlank() }
+    }
+
+    /** 只看这个功能自己设过什么；设置页用它区分"自己设的"和"跟随默认"。 */
     fun aiTaskEffort(task: AiTask): Flow<String?> =
         context.dataStore.data.map { it[taskEffortKey(task)]?.takeIf { v -> v.isNotBlank() } }
+
+    /** 没单独设过的功能用的力度；null 表示各用各的推荐值。 */
+    val defaultEffort: Flow<String?> =
+        context.dataStore.data.map { it[Keys.DefaultEffort]?.takeIf { v -> v.isNotBlank() } }
+
+    suspend fun setDefaultEffort(effort: String?) {
+        context.dataStore.edit {
+            if (effort.isNullOrBlank()) it.remove(Keys.DefaultEffort) else it[Keys.DefaultEffort] = effort
+        }
+    }
 
     /** 已经单独指定过力度的功能，设置页用它显示当前值。 */
     val aiTaskEfforts: Flow<Map<AiTask, String>> = context.dataStore.data.map { prefs ->

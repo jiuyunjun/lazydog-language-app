@@ -44,10 +44,13 @@ import com.lazydog.english.core.data.UserPreferences
 import kotlinx.coroutines.launch
 
 /**
- * 「各功能使用的模型」：一个独立页面，不是弹窗。
+ * 「各功能使用的模型」的第一级：默认一行 + 九个功能各一行。
  *
- * 这里要翻的是一份几十上百行的模型清单，还要在九个功能之间来回比对——浮窗放不下，
- * 滚起来也别扭。所以做成两级正经页面，退出走系统返回。
+ * 每一行点进去都是同一种页面（[ModelPickScreen]），里面能配这个功能的两件事：用哪个模型、
+ * 思考多久。默认那行配的是"没单独设过的功能"用什么——改它等于一次改掉所有跟随的功能。
+ *
+ * 做成独立页面而不是弹窗：要翻的是几十上百行的模型清单，还要在九个功能之间来回比对，
+ * 浮窗放不下也滚不顺。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +60,8 @@ fun ModelSettingsScreen(
     onExit: () -> Unit,
 ) {
     val defaultModel by prefs.aiModel.collectAsState(initial = "")
-    val overrides by prefs.aiTaskModels.collectAsState(initial = emptyMap())
+    val defaultEffort by prefs.defaultEffort.collectAsState(initial = null)
+    val models by prefs.aiTaskModels.collectAsState(initial = emptyMap())
     val efforts by prefs.aiTaskEfforts.collectAsState(initial = emptyMap())
 
     Scaffold(
@@ -74,28 +78,31 @@ fun ModelSettingsScreen(
     ) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
             item {
-                ModelRow(
-                    name = "默认模型",
-                    // 默认模型是其它功能的兜底，单独放在最上面：改它等于一次改掉所有"跟随"的功能。
-                    value = defaultModel.ifBlank { "还没设置" },
+                SettingRow(
+                    name = "默认",
+                    value = summaryLine(
+                        model = defaultModel.ifBlank { "还没设置" },
+                        effort = defaultEffort?.let(::effortText) ?: "各功能自己的推荐值",
+                    ),
                     onClick = { onPick(null) },
                 )
                 HorizontalDivider()
                 Text(
-                    text = "下面每一项都可以单独指定。没指定的跟随默认模型——默认模型一改，它们跟着改。",
+                    text = "下面每一项都可以单独指定模型和思考力度。没指定的跟随默认——默认一改，它们跟着改。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 )
             }
             items(AiTask.entries) { task ->
-                ModelRow(
+                SettingRow(
                     name = task.labelZh,
-                    value = buildString {
-                        append(overrides[task] ?: "跟随默认")
-                        append(" · 思考 ")
-                        append(effortLabel(efforts[task], task))
-                    },
+                    value = summaryLine(
+                        model = models[task] ?: "跟随默认",
+                        effort = efforts[task]?.let(::effortText)
+                            ?: defaultEffort?.let { "${effortText(it)}（跟随默认）" }
+                            ?: "${effortText(task.reasoningEffort)}（推荐）",
+                    ),
                     onClick = { onPick(task) },
                 )
             }
@@ -104,10 +111,11 @@ fun ModelSettingsScreen(
 }
 
 /**
- * 给某一项挑模型。[task] 为 null 时改的是默认模型。
+ * 配一个功能：用哪个模型、思考多久。[task] 为 null 时配的是默认。
  *
- * 列表默认只显示看着像对话模型的那些：`/models` 会把生图、嵌入、语音、重排全列出来，
- * 聚合网关能有几百个，选错了要到生成时才报错。筛选只是按名字猜，所以留了「显示全部」。
+ * 两件事放同一页，是因为它们回答的是同一个问题——"这个功能怎么跑"；分成两级页面
+ * 就要为了改一个力度翻两层。选中即生效，不自动退出：自动退出会让"选模型"和"选力度"
+ * 一个跳走一个不跳，用起来莫名其妙。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,23 +131,24 @@ fun ModelPickScreen(
     val state by catalog.state.collectAsState()
 
     val defaultModel by prefs.aiModel.collectAsState(initial = "")
-    val overrides by prefs.aiTaskModels.collectAsState(initial = emptyMap())
+    val defaultEffort by prefs.defaultEffort.collectAsState(initial = null)
+    val models by prefs.aiTaskModels.collectAsState(initial = emptyMap())
     val efforts by prefs.aiTaskEfforts.collectAsState(initial = emptyMap())
-    val current = if (task == null) defaultModel else overrides[task]
+
+    val currentModel = if (task == null) defaultModel.ifBlank { null } else models[task]
+    val currentEffort = if (task == null) defaultEffort else efforts[task]
+    /** 这个功能实际会用的模型——力度支不支持要按它来判断。 */
+    val effectiveModel = currentModel ?: defaultModel
+
+    val unsupported by prefs.noReasoningEffortModels.collectAsState(initial = emptySet())
+    val rejected by prefs.rejectedEfforts(effectiveModel).collectAsState(initial = emptySet())
+    val modelIgnoresEffort = effectiveModel.isNotBlank() && effectiveModel in unsupported
 
     var showAll by rememberSaveable { mutableStateOf(false) }
-
     LaunchedEffect(Unit) { catalog.load() }
 
-    fun choose(model: String?) {
-        scope.launch {
-            if (task == null) prefs.setAiModel(model.orEmpty()) else prefs.setAiTaskModel(task, model)
-            onExit()
-        }
-    }
-
     val loaded = state as? ModelCatalog.State.Loaded
-    val models = when {
+    val modelList = when {
         loaded == null -> emptyList()
         showAll -> loaded.all
         else -> loaded.chat
@@ -149,7 +158,7 @@ fun ModelPickScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(task?.labelZh ?: "默认模型") },
+                title = { Text(task?.labelZh ?: "默认") },
                 navigationIcon = {
                     IconButton(onClick = onExit) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
@@ -161,67 +170,43 @@ fun ModelPickScreen(
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
             item {
                 Text(
-                    text = task?.noteZh ?: "其它功能没单独指定时用的就是它。",
+                    text = task?.noteZh ?: "没单独设过的功能，用的就是这里配的模型和力度。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 )
             }
-            // 思考力度和模型是两件事，但都属于"这个功能怎么跑"，放同一页省得来回翻。
-            if (task != null) {
-                item { SectionTitle("思考力度") }
-                item {
-                    Text(
-                        text = "推理模型开口前会先想一阵，这段实测能占掉整次调用的大半。" +
-                            "取值随模型而异，选了不支持的会自动往下退，不会因此报错。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-                item {
-                    ModelOptionRow(
-                        label = "跟随推荐（${effortLabel(null, task)}）",
-                        selected = efforts[task] == null,
-                        onClick = { scope.launch { prefs.setAiTaskEffort(task, null) } },
-                    )
-                }
-                items(AiTask.ALL_EFFORTS) { effort ->
-                    ModelOptionRow(
-                        label = "$effort${effortNote(effort)}",
-                        selected = efforts[task] == effort,
-                        onClick = { scope.launch { prefs.setAiTaskEffort(task, effort) } },
-                    )
-                }
-                item {
-                    ModelOptionRow(
-                        label = "模型默认（不发这个参数）",
-                        selected = efforts[task] == AiTask.MODEL_DEFAULT,
-                        onClick = { scope.launch { prefs.setAiTaskEffort(task, AiTask.MODEL_DEFAULT) } },
-                    )
-                }
-                item { SectionTitle("模型") }
-            }
-            // 默认模型这一项没有"跟随"可言，它自己就是被跟随的那个。
+
+            // ---- 模型 ----
+            item { SectionTitle("模型") }
+            // 默认那一项没有"跟随"可言，它自己就是被跟随的那个。
             if (task != null) {
                 item {
-                    ModelOptionRow(
+                    OptionRow(
                         label = "跟随默认（${defaultModel.ifBlank { "还没设置" }}）",
-                        selected = current == null,
-                        onClick = { choose(null) },
+                        selected = currentModel == null,
+                        onClick = { scope.launch { prefs.setAiTaskModel(task, null) } },
                     )
                 }
             }
-            items(models) { model ->
-                ModelOptionRow(label = model, selected = model == current, onClick = { choose(model) })
+            items(modelList) { model ->
+                OptionRow(
+                    label = model,
+                    selected = model == currentModel,
+                    onClick = {
+                        scope.launch {
+                            if (task == null) prefs.setAiModel(model) else prefs.setAiTaskModel(task, model)
+                        }
+                    },
+                )
             }
             // 手改过地址、或者服务端不给列表时，至少让当前这个值还看得见、选得回来。
-            if (!current.isNullOrBlank() && current !in models) {
+            if (currentModel != null && currentModel !in modelList) {
                 item {
-                    ModelOptionRow(
-                        label = "$current（不在列表里）",
+                    OptionRow(
+                        label = "$currentModel（不在列表里）",
                         selected = true,
-                        onClick = { choose(current) },
+                        onClick = {},
                     )
                 }
             }
@@ -255,8 +240,90 @@ fun ModelPickScreen(
                     }
                 }
             }
+
+            // ---- 思考力度 ----
+            item { SectionTitle("思考力度") }
+            item {
+                Text(
+                    text = if (modelIgnoresEffort) {
+                        "$effectiveModel 不认这个参数（试过一次被拒了），这里选什么都不会发出去。"
+                    } else {
+                        "推理模型开口前会先想一阵，这段实测能占掉整次调用的大半。" +
+                            "取值随模型而异，选了不支持的会自动往下退，不会因此报错。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (modelIgnoresEffort) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+            item {
+                OptionRow(
+                    label = if (task == null) "各功能用自己的推荐值" else "跟随默认（${defaultEffortText(defaultEffort, task)}）",
+                    selected = currentEffort == null,
+                    enabled = !modelIgnoresEffort,
+                    onClick = {
+                        scope.launch {
+                            if (task == null) prefs.setDefaultEffort(null) else prefs.setAiTaskEffort(task, null)
+                        }
+                    },
+                )
+            }
+            items(AiTask.ALL_EFFORTS) { effort ->
+                OptionRow(
+                    // 被这个模型拒过的取值标出来：不是猜的，是真发过一次被顶回来了。
+                    label = "$effort${effortNote(effort)}" + if (effort in rejected) " · 这个模型不支持" else "",
+                    selected = currentEffort == effort,
+                    enabled = !modelIgnoresEffort && effort !in rejected,
+                    onClick = {
+                        scope.launch {
+                            if (task == null) prefs.setDefaultEffort(effort) else prefs.setAiTaskEffort(task, effort)
+                        }
+                    },
+                )
+            }
+            item {
+                OptionRow(
+                    label = "${AiTask.MODEL_DEFAULT_LABEL}（不发这个参数）",
+                    selected = currentEffort == AiTask.MODEL_DEFAULT,
+                    enabled = !modelIgnoresEffort,
+                    onClick = {
+                        scope.launch {
+                            if (task == null) {
+                                prefs.setDefaultEffort(AiTask.MODEL_DEFAULT)
+                            } else {
+                                prefs.setAiTaskEffort(task, AiTask.MODEL_DEFAULT)
+                            }
+                        }
+                    },
+                )
+            }
         }
     }
+}
+
+private fun summaryLine(model: String, effort: String): String = "$model · 思考 $effort"
+
+private fun effortText(stored: String?): String = when (stored) {
+    null -> "推荐值"
+    AiTask.MODEL_DEFAULT -> AiTask.MODEL_DEFAULT_LABEL
+    else -> stored
+}
+
+/** 某个功能"跟随默认"时实际会用到的力度：默认设过就是它，没设过就是这个功能的推荐值。 */
+private fun defaultEffortText(defaultEffort: String?, task: AiTask): String =
+    defaultEffort?.let(::effortText) ?: "${effortText(task.reasoningEffort)}（推荐）"
+
+private fun effortNote(effort: String): String = when (effort) {
+    "none" -> "（不思考，最快）"
+    "minimal" -> "（几乎不思考）"
+    "low" -> "（少想一会儿）"
+    "medium" -> "（多数模型的默认）"
+    "high", "xhigh", "max" -> "（更慢，换质量）"
+    else -> ""
 }
 
 @Composable
@@ -269,24 +336,8 @@ private fun SectionTitle(text: String) {
     )
 }
 
-/** 列表上显示的当前力度。null（没单独设过）时显示这个功能的推荐值。 */
-private fun effortLabel(stored: String?, task: AiTask): String = when (stored) {
-    null -> task.reasoningEffort ?: "模型默认"
-    AiTask.MODEL_DEFAULT -> "模型默认"
-    else -> stored
-}
-
-private fun effortNote(effort: String): String = when (effort) {
-    "none" -> "（不思考，最快）"
-    "minimal" -> "（几乎不思考）"
-    "low" -> "（少想一会儿）"
-    "medium" -> "（多数模型的默认）"
-    "high", "xhigh", "max" -> "（更慢，换质量）"
-    else -> ""
-}
-
 @Composable
-private fun ModelRow(name: String, value: String, onClick: () -> Unit) {
+private fun SettingRow(name: String, value: String, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         headlineContent = { Text(name) },
@@ -302,16 +353,26 @@ private fun ModelRow(name: String, value: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ModelOptionRow(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun OptionRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    val color = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = selected, onClick = onClick)
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+        RadioButton(selected = selected, enabled = enabled, onClick = onClick)
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = color)
     }
 }
