@@ -57,6 +57,8 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.ask.ShakeDetector
 import com.lazydog.english.core.backup.AutoBackupWorker
 import com.lazydog.english.core.data.UserPreferences
+import com.lazydog.english.core.designsystem.TagPicker
+import com.lazydog.english.core.model.LearningGoals
 import com.lazydog.english.core.model.SampleData
 import com.lazydog.english.core.network.AzureSpeechTokenClient
 import com.lazydog.english.core.network.OpenAiCompatClient
@@ -634,8 +636,8 @@ private fun GoalsDialog(
     onConfirm: (goal: String, topics: Set<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var goal by rememberSaveable { mutableStateOf(currentGoal) }
     // Set 不能进 SavedState，旋转丢失可接受。
+    var goals by remember { mutableStateOf(LearningGoals.split(currentGoal)) }
     var topics by remember { mutableStateOf(currentTopics) }
 
     AlertDialog(
@@ -643,54 +645,33 @@ private fun GoalsDialog(
         title = { Text("学习目标与兴趣") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("目标", style = MaterialTheme.typography.labelLarge)
-                FlowChips(
+                Text("目标（可多选，也可以自己加）", style = MaterialTheme.typography.labelLarge)
+                TagPicker(
                     options = SampleData.goalOptions,
-                    isSelected = { it == goal },
-                    onToggle = { goal = it },
+                    selected = goals,
+                    onToggle = { goals = if (it in goals) goals - it else goals + it },
+                    addPlaceholder = "比如 面试",
                 )
                 Text("兴趣（最多 5 个）", style = MaterialTheme.typography.labelLarge)
-                FlowChips(
+                TagPicker(
                     options = SampleData.topicOptions,
-                    isSelected = { it in topics },
-                    onToggle = {
-                        topics = if (it in topics) topics - it
-                        else if (topics.size < 5) topics + it else topics
-                    },
+                    selected = topics,
+                    onToggle = { topics = if (it in topics) topics - it else topics + it },
+                    max = 5,
+                    addPlaceholder = "比如 篮球",
                 )
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(goal, topics) },
-                enabled = goal.isNotBlank() && topics.isNotEmpty(),
+                onClick = { onConfirm(LearningGoals.join(goals), topics) },
+                enabled = goals.isNotEmpty() && topics.isNotEmpty(),
             ) { Text("保存") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("算了") }
         },
     )
-}
-
-@Composable
-private fun FlowChips(
-    options: List<String>,
-    isSelected: (String) -> Boolean,
-    onToggle: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        options.chunked(3).forEach { rowOptions ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                rowOptions.forEach { option ->
-                    FilterChip(
-                        selected = isSelected(option),
-                        onClick = { onToggle(option) },
-                        label = { Text(option) },
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable
