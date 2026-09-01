@@ -43,6 +43,47 @@ class OpenAiCompatClientTest {
     )
 
     @Test
+    fun `the model list comes back sorted and de-duplicated`() {
+        // 设置页只让用户在这个列表里挑，手打模型名是这套配置最容易出错的地方。
+        runBlocking {
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"object":"list","data":[{"id":"z-model"},{"id":"a-model"},{"id":"a-model"},{"id":" "}]}""",
+                ),
+            )
+
+            val result = client().listModels()
+
+            assertEquals(
+                listOf("a-model", "z-model"),
+                (result as OpenAiCompatClient.ModelsResult.Success).models,
+            )
+        }
+    }
+
+    @Test
+    fun `an empty model list is reported as a failure instead of an empty picker`() {
+        runBlocking {
+            server.enqueue(MockResponse().setBody("""{"object":"list","data":[]}"""))
+
+            val result = client().listModels()
+
+            assertTrue((result as OpenAiCompatClient.ModelsResult.Failure).reason.contains("空"))
+        }
+    }
+
+    @Test
+    fun `a rejected key is explained when listing models`() {
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(401))
+
+            val result = client().listModels()
+
+            assertTrue((result as OpenAiCompatClient.ModelsResult.Failure).reason.contains("401"))
+        }
+    }
+
+    @Test
     fun `success when model is listed`() = runBlocking {
         server.enqueue(
             MockResponse().setBody("""{"object":"list","data":[{"id":"gpt-5.5"},{"id":"other"}]}"""),

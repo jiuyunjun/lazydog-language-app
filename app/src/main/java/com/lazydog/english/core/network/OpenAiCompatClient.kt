@@ -50,6 +50,45 @@ class OpenAiCompatClient(
         }
     }
 
+    sealed interface ModelsResult {
+        data class Success(val models: List<String>) : ModelsResult
+        data class Failure(val reason: String) : ModelsResult
+    }
+
+    /**
+     * 拉服务商支持的模型清单，给设置页「各功能使用的模型」选。
+     *
+     * 手打模型名是这套配置最容易出错的地方——名字差一个字符要到真正生成时才报错，
+     * 所以列表从服务端拉，用户只在拉回来的名字里选。
+     */
+    suspend fun listModels(): ModelsResult {
+        val request = Request.Builder()
+            .url(modelsUrl(baseUrl))
+            .header("Authorization", "Bearer $apiKey")
+            .get()
+            .build()
+
+        return try {
+            okHttpClient.newCall(request).await().use { response ->
+                if (!response.isSuccessful) {
+                    return ModelsResult.Failure(httpFailureReason(response.code))
+                }
+                val body = response.body?.string().orEmpty()
+                val models = json.decodeFromString<ModelListResponse>(body)
+                    .data.map { it.id.trim() }.filter { it.isNotBlank() }.distinct().sorted()
+                if (models.isEmpty()) {
+                    ModelsResult.Failure("服务端返回的模型列表是空的")
+                } else {
+                    ModelsResult.Success(models)
+                }
+            }
+        } catch (e: IOException) {
+            ModelsResult.Failure("网络错误：${e.message ?: e.javaClass.simpleName}")
+        } catch (e: kotlinx.serialization.SerializationException) {
+            ModelsResult.Failure("返回内容不是预期的模型列表格式")
+        }
+    }
+
     @Serializable
     private data class ModelListResponse(val data: List<ModelInfo> = emptyList())
 

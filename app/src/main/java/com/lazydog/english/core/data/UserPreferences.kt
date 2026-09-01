@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.lazydog.english.core.ai.AiTask
 import com.lazydog.english.core.config.LocalEnv
 import com.lazydog.english.domain.assessment.SkillKind
 import com.lazydog.english.domain.assessment.SkillLevels
@@ -76,6 +77,30 @@ class UserPreferences(private val context: Context) {
         context.dataStore.data.map { it[Keys.AiApiKey].orDefault(LocalEnv.AI_API_KEY) }
     val aiModel: Flow<String> =
         context.dataStore.data.map { it[Keys.AiModel].orDefault(LocalEnv.AI_MODEL) }
+
+    /**
+     * 某个功能实际用的模型：设过就用设的，没设过跟随默认模型。
+     * 默认模型改了，跟随的功能自动跟着改（[AiTask]）。
+     */
+    fun aiModelFor(task: AiTask): Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[taskModelKey(task)].orDefault(prefs[Keys.AiModel].orDefault(LocalEnv.AI_MODEL))
+    }
+
+    /** 已经单独指定过模型的功能；设置页用它显示"哪几项没跟随默认"。 */
+    val aiTaskModels: Flow<Map<AiTask, String>> = context.dataStore.data.map { prefs ->
+        AiTask.entries.mapNotNull { task ->
+            prefs[taskModelKey(task)]?.takeIf { it.isNotBlank() }?.let { task to it }
+        }.toMap()
+    }
+
+    /** [model] 传 null 表示回到"跟随默认"。 */
+    suspend fun setAiTaskModel(task: AiTask, model: String?) {
+        context.dataStore.edit {
+            val key = taskModelKey(task)
+            if (model.isNullOrBlank()) it.remove(key) else it[key] = model.trim()
+        }
+    }
+
     val speechKey: Flow<String> =
         context.dataStore.data.map { it[Keys.SpeechKey].orDefault(LocalEnv.SPEECH_KEY) }
     val speechRegion: Flow<String> =
@@ -387,6 +412,8 @@ class UserPreferences(private val context: Context) {
             stored?.let { legacyVoices[it] ?: it }
     }
 }
+
+private fun taskModelKey(task: AiTask) = stringPreferencesKey("ai_model_${task.key}")
 
 private fun String?.orDefault(default: String): String =
     if (this.isNullOrBlank()) default else this

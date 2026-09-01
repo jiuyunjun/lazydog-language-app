@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Tune
@@ -53,6 +54,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.ai.AiTask
 import com.lazydog.english.core.ask.ShakeDetector
 import com.lazydog.english.core.backup.AutoBackupWorker
 import com.lazydog.english.core.data.UserPreferences
@@ -86,7 +88,7 @@ private val themeOptions = listOf("system" to "跟随系统", "light" to "浅色
 
 private enum class OpenDialog {
     None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, Voice, AskSensitivity, SkillLevels,
-    ConfirmRestore,
+    ConfirmRestore, TaskModels,
 }
 
 @Composable
@@ -150,6 +152,13 @@ fun SettingsScreen(
         }
     }
 
+    val taskModels by prefs.aiTaskModels.collectAsState(initial = emptyMap())
+    /** 打开"给某个功能挑模型"时选中的功能；null 表示还停在功能列表那一层。 */
+    var modelPickerTask by remember { mutableStateOf<AiTask?>(null) }
+    var availableModels by remember { mutableStateOf<List<String>>(emptyList()) }
+    var modelsError by remember { mutableStateOf<String?>(null) }
+    var modelsLoading by remember { mutableStateOf(false) }
+
     var aiTestState by remember { mutableStateOf<String?>(null) }
     var speechTestState by remember { mutableStateOf<String?>(null) }
     var testing by remember { mutableStateOf(false) }
@@ -182,6 +191,25 @@ fun SettingsScreen(
                     "连接失败：${result.reason}"
             }
             testing = false
+        }
+    }
+
+    /** 模型清单从服务端拉，用户只在拉回来的名字里挑，避免手打错一个字符要到生成时才发现。 */
+    fun loadModels(force: Boolean = false) {
+        if (modelsLoading) return
+        if (availableModels.isNotEmpty() && !force) return
+        modelsLoading = true
+        modelsError = null
+        scope.launch {
+            val client = OpenAiCompatClient(
+                baseUrl = prefs.aiBaseUrl.first(),
+                apiKey = prefs.aiApiKey.first(),
+            )
+            when (val result = client.listModels()) {
+                is OpenAiCompatClient.ModelsResult.Success -> availableModels = result.models
+                is OpenAiCompatClient.ModelsResult.Failure -> modelsError = result.reason
+            }
+            modelsLoading = false
         }
     }
 
@@ -315,6 +343,20 @@ fun SettingsScreen(
 
         SettingsGroupTitle("服务")
         SettingsRow(Icons.Outlined.SmartToy, "AI 服务", aiSummary, onClick = ::runAiConnectionTest)
+        SettingsRow(
+            Icons.Outlined.Memory,
+            "各功能使用的模型",
+            if (taskModels.isEmpty()) {
+                "全部跟随默认（$aiModel）· 点击逐项指定"
+            } else {
+                "${taskModels.size} 项单独指定 · 其余跟随 $aiModel"
+            },
+            onClick = {
+                modelPickerTask = null
+                dialog = OpenDialog.TaskModels
+                loadModels()
+            },
+        )
         SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", speechSummary, onClick = ::runSpeechConnectionTest)
 
         SettingsGroupTitle("随时提问")
@@ -495,6 +537,28 @@ fun SettingsScreen(
             },
             onDismiss = { dialog = OpenDialog.None },
         )
+        OpenDialog.TaskModels -> when (val task = modelPickerTask) {
+            null -> TaskModelListDialog(
+                defaultModel = aiModel,
+                overrides = taskModels,
+                onPick = { modelPickerTask = it },
+                onDismiss = { dialog = OpenDialog.None },
+            )
+            else -> ModelPickerDialog(
+                task = task,
+                defaultModel = aiModel,
+                current = taskModels[task],
+                models = availableModels,
+                loading = modelsLoading,
+                error = modelsError,
+                onRetry = { loadModels(force = true) },
+                onSelect = { model ->
+                    scope.launch { prefs.setAiTaskModel(task, model) }
+                    modelPickerTask = null
+                },
+                onDismiss = { modelPickerTask = null },
+            )
+        }
         OpenDialog.ConfirmRestore -> AlertDialog(
             onDismissRequest = { dialog = OpenDialog.None },
             title = { Text("确定要恢复吗？") },
@@ -511,6 +575,127 @@ fun SettingsScreen(
                 TextButton(onClick = { dialog = OpenDialog.None }) { Text("算了") }
             },
         )
+    }
+}
+
+/**
+ * 先挑功能，再挑模型。九项直接铺在设置页会把页面撑长，而且这是个"配一次基本不再动"的东西，
+ * 所以收在一层对话框里。
+ */
+@Composable
+private fun TaskModelListDialog(
+    defaultModel: String,
+    overrides: Map<AiTask, String>,
+    onPick: (AiTask) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("各功能使用的模型") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = "没单独指定的功能跟随默认模型 $defaultModel；默认模型改了，它们自动跟着改。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                AiTask.entries.forEach { task ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPick(task) }
+                            .padding(vertical = 8.dp),
+                    ) {
+                        Text(task.labelZh, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = overrides[task] ?: "跟随默认 · ${task.noteZh}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("完成") } },
+    )
+}
+
+/** 某一个功能挑模型。第一项永远是"跟随默认"，其余是从服务端拉回来的模型名。 */
+@Composable
+private fun ModelPickerDialog(
+    task: AiTask,
+    defaultModel: String,
+    current: String?,
+    models: List<String>,
+    loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
+    onSelect: (String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(task.labelZh) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = task.noteZh,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                ModelOption(
+                    label = "跟随默认（$defaultModel）",
+                    selected = current == null,
+                    onClick = { onSelect(null) },
+                )
+                models.forEach { model ->
+                    ModelOption(label = model, selected = model == current, onClick = { onSelect(model) })
+                }
+                // 手改过默认地址、或者服务端不给列表时，至少让当前这个值还看得见、选得回来。
+                if (current != null && current !in models) {
+                    ModelOption(label = "$current（不在列表里）", selected = true, onClick = { onSelect(current) })
+                }
+                when {
+                    loading -> Text(
+                        text = "正在拉模型列表…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    error != null -> Row(
+                        modifier = Modifier.padding(top = 8.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "拉不到模型列表：$error",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = onRetry) { Text("重试") }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("算了") } },
+    )
+}
+
+@Composable
+private fun ModelOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
 

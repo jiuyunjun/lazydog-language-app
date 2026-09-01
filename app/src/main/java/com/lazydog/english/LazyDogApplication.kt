@@ -43,11 +43,12 @@ class LazyDogApplication : Application() {
 
     val contentGenerator: LearningContentGenerator by lazy {
         OpenAiContentGenerator(
-            config = {
+            // 模型按功能取：没单独设过的功能自动跟随默认模型（设置页「各功能使用的模型」）。
+            config = { task ->
                 AiConfig(
                     baseUrl = userPreferences.aiBaseUrl.first(),
                     apiKey = userPreferences.aiApiKey.first(),
-                    model = userPreferences.aiModel.first(),
+                    model = userPreferences.aiModelFor(task).first(),
                 )
             },
         )
