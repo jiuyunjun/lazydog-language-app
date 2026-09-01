@@ -38,7 +38,7 @@ object ContentValidation {
                 word.pos.isBlank() || word.pos.length > 20 -> "词性缺失或过长"
                 word.collocations.isEmpty() || word.collocations.size > 2 -> "搭配数量应该是 1~2 个"
                 word.collocations.any { it.isBlank() || it.length > 60 } -> "搭配缺失或过长"
-                word.memoryHintZh.isBlank() || word.memoryHintZh.length > 160 -> "记忆方法缺失或过长"
+                word.memoryHintZh.isBlank() || word.memoryHintZh.length > 120 -> "记忆方法缺失或过长"
                 // 词块必须能原样拼回这个词，否则挖空题会挖出一个不存在的位置。
                 word.chunks.size < 2 -> "词块至少要拆成 2 块"
                 word.chunks.joinToString("").lowercase() != term.lowercase() -> "词块拼起来和原词对不上"
@@ -52,10 +52,35 @@ object ContentValidation {
                     "常见错拼有重复"
                 else -> null
             }
-            if (reason == null) valid.add(word.copy(term = term)) else dropped.add("${term.ifBlank { "(空)" }}：$reason")
+            if (reason == null) {
+                // 空洞的记忆方法就地清掉，但不因此丢掉整个词：词本身还是能学的，
+                // 提示留空后学习卡上出现的是「生成记忆提示」，那条按这个词单独生成，质量高得多。
+                val hollow = isHollowMemoryHint(word.memoryHintZh)
+                if (hollow) dropped.add("$term：记忆方法是句空话，已清掉")
+                valid.add(word.copy(term = term, memoryHintZh = if (hollow) "" else word.memoryHintZh.trim()))
+            } else {
+                dropped.add("${term.ifBlank { "(空)" }}：$reason")
+            }
             if (valid.size == maxCount) break
         }
         return ValidatedWords(valid, dropped)
+    }
+
+    /** 放到哪个词上都成立的话，等于没给提示。 */
+    private val hollowHintPhrases = listOf(
+        "多读几遍", "多念几遍", "反复朗读", "反复记忆", "结合例句多记", "多加练习",
+    )
+
+    /**
+     * 这条记忆方法是不是等于什么都没说（词汇记忆提示DESIGN.md §10：宁缺毋滥）。
+     *
+     * 判得很窄——只挑明显的空话和短到装不下一个记忆钩子的句子。
+     * 「这条联想到底有没有用」本地判不了，那一层由提示词里的反例和自检要求管；
+     * 这里宁可漏掉几条平庸的，也不能误杀真正拆对了词根的那种。
+     */
+    fun isHollowMemoryHint(hint: String): Boolean {
+        val text = hint.trim()
+        return text.length < 12 || hollowHintPhrases.any { it in text }
     }
 
     /**
