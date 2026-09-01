@@ -16,6 +16,8 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavController
+import androidx.navigation.NavHostController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -138,7 +140,7 @@ private fun AppNavHost(
         onboardingGraph(
             prefs = prefs,
             navigateNext = { route -> navController.navigate(route) },
-            navigateBack = { navController.popBackStack() },
+            navigateBack = { navController.popOnce() },
             finishOnboarding = {
                 scope.launch {
                     prefs.setOnboardingCompleted()
@@ -175,7 +177,7 @@ private fun AppNavHost(
                 onPick = { task ->
                     navController.navigate(Routes.modelPick(task?.key ?: Routes.DEFAULT_MODEL_KEY))
                 },
-                onExit = { navController.popBackStack() },
+                onExit = { navController.popOnce() },
             )
         }
 
@@ -186,32 +188,32 @@ private fun AppNavHost(
             ModelPickScreen(
                 prefs = prefs,
                 task = entry.arguments?.getString("task")?.let(AiTask::fromKey),
-                onExit = { navController.popBackStack() },
+                onExit = { navController.popOnce() },
             )
         }
 
         composable(Routes.Assessment) {
-            AssessmentScreen(onExit = { navController.popBackStack() })
+            AssessmentScreen(onExit = { navController.popOnce() })
         }
 
         composable(Routes.Speaking) {
             SpeakingScreen(
                 prefs = prefs,
                 repository = knowledgeRepository,
-                onExit = { navController.popBackStack() },
+                onExit = { navController.popOnce() },
             )
         }
 
         // 学习类页面包一层 AskHost：摇一摇提问只在这些页面可用（DESIGN 屏 45～49）。
         composable(Routes.Listening) {
             AskHost {
-                ListeningScreen(onExit = { navController.popBackStack() })
+                ListeningScreen(onExit = { navController.popOnce() })
             }
         }
 
         composable(Routes.Scenario) {
             AskHost {
-                ScenarioScreen(sessionId = null, onExit = { navController.popBackStack() })
+                ScenarioScreen(sessionId = null, onExit = { navController.popOnce() })
             }
         }
 
@@ -222,7 +224,7 @@ private fun AppNavHost(
             AskHost {
                 ScenarioScreen(
                     sessionId = entry.arguments?.getLong("sessionId"),
-                    onExit = { navController.popBackStack() },
+                    onExit = { navController.popOnce() },
                 )
             }
         }
@@ -231,7 +233,7 @@ private fun AppNavHost(
             AskHost {
                 WordStudyScreen(
                     repository = knowledgeRepository,
-                    onExit = { navController.popBackStack() },
+                    onExit = { navController.popOnce() },
                 )
             }
         }
@@ -240,7 +242,7 @@ private fun AppNavHost(
             AskHost {
                 SpellingScreen(
                     repository = knowledgeRepository,
-                    onExit = { navController.popBackStack() },
+                    onExit = { navController.popOnce() },
                     onOpenProfile = { navController.navigate(Routes.SpellingProfile) },
                 )
             }
@@ -249,10 +251,12 @@ private fun AppNavHost(
         composable(Routes.SpellingProfile) {
             SpellingProfileScreen(
                 repository = knowledgeRepository,
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popOnce() },
                 onStartPractice = {
+                    // 回到已经在栈里的那一页，而不是再压一个同名页上去；
+                    // 否则退出时要连按两次「拼写练习」才出得来。
                     navController.navigate(Routes.Spelling) {
-                        popUpTo(Routes.SpellingProfile) { inclusive = true }
+                        popUpTo(Routes.Spelling) { inclusive = true }
                     }
                 },
             )
@@ -262,26 +266,26 @@ private fun AppNavHost(
             AskHost {
                 GrammarStudyScreen(
                     repository = knowledgeRepository,
-                    onExit = { navController.popBackStack() },
+                    onExit = { navController.popOnce() },
                 )
             }
         }
 
         composable(Routes.Production) {
             AskHost {
-                ProductionScreen(onExit = { navController.popBackStack() })
+                ProductionScreen(onExit = { navController.popOnce() })
             }
         }
 
         composable(Routes.ReadingGenerate) {
             AskHost {
-                ReadingScreen(mode = ReadingMode.Generate, onExit = { navController.popBackStack() })
+                ReadingScreen(mode = ReadingMode.Generate, onExit = { navController.popOnce() })
             }
         }
 
         composable(Routes.ReadingPaste) {
             AskHost {
-                ReadingScreen(mode = ReadingMode.Paste, onExit = { navController.popBackStack() })
+                ReadingScreen(mode = ReadingMode.Paste, onExit = { navController.popOnce() })
             }
         }
 
@@ -291,7 +295,7 @@ private fun AppNavHost(
         ) { entry ->
             val materialId = entry.arguments?.getLong("materialId") ?: 0L
             AskHost {
-                ReadingScreen(mode = ReadingMode.Open(materialId), onExit = { navController.popBackStack() })
+                ReadingScreen(mode = ReadingMode.Open(materialId), onExit = { navController.popOnce() })
             }
         }
     }
@@ -325,4 +329,24 @@ private fun NavGraphBuilder.onboardingGraph(
             )
         }
     }
+}
+
+/**
+ * 页面内「返回 / 关闭」用的退栈，防连点。
+ *
+ * 直接调 [NavHostController.popBackStack] 有两个坑，快按两下会同时踩中：
+ * 转场还没完成时第二下照样派发，于是第一下弹掉当前页、第二下把起始页也弹了；
+ * back stack 一空，NavHost 就没有目的地可画——界面直接白掉，而且退不回来。
+ *
+ * 所以两道闸：当前页真正在前台（RESUMED）才认这一下，转场途中的第二下丢掉；
+ * 起始页不由页面内的返回键弹掉，那是系统返回键的事。
+ */
+private fun NavHostController.popOnce() {
+    val current = currentBackStackEntry ?: return
+    // 转场途中的第二下：这一页已经不在前台了，丢掉。
+    if (!current.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+    // 转场瞬间完成时上面那道闸拦不住（两下都落在真实状态上），所以再挡一道：
+    // 起始页永远不由页面内的返回键弹掉，那是系统返回键的事。
+    if (current.destination.id == graph.findStartDestination().id) return
+    popBackStack()
 }
