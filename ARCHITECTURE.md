@@ -158,16 +158,6 @@ interface ReviewScheduler {
 3. 最近新学、需要巩固的项目
 4. 在剩余时间内加入少量新知识
 
-### 6.1 渐进拼写子状态
-
-通用 `KnowledgeItem` 继续负责“这个知识项何时再出现”；单词另有本地 `spelling_progress`，负责“下次以多强的提示考拼写”。两者不能合并，因为选择题认得出不能把通用稳定度直接解释成完整拼写能力。
-
-- `SpellingEngine` 是纯 Kotlin 状态机，维护 Recognition / Partial / Chunk / Free / Retention 等分量、当前拼写阶段、成功日期和薄弱片段。
-- `spelling_attempts` 追加保存每次提交，包括同一卡片逐级要提示时的中间错误；字段包含题型、原答案、提示级别、耗时、错误类型、薄弱片段和 Mastery Credit。
-- 一张卡可以有多次拼写尝试，但只在卡片结束时调用通用 `ReviewScheduler` 一次，避免提示重试虚增复习次数。
-- 新词从 Seen 开始；v8 之前的旧词没有拼写行时，按通用阶段保守映射到 Seen / Partial / Guided / Free，首次提交后建立独立状态。
-- Room schema 为 v8，`spelling_progress` 和 `spelling_attempts` 都通过 `itemId` 外键随知识项级联删除；两张表包含在 schema v2 备份中，旧备份缺字段时按空列表恢复。
-
 ## 7. 阅读生成管线
 
 ```text
@@ -228,7 +218,7 @@ interface ReadingSource {
 
 - 今日第三步是中译英（`DailyStep.Production`，2 分钟，排在语法之后）：出题带上错题画像、最近学的语法点和刚复习过的词。
 - 判定是独立调用，返回三档结论 + 在原句上改出的版本 + 最多两个形式错误类别；错误类别经 `MistakeRepository.recordMistake` 进同一张 `drill_mistakes` 表，和选择题错题不分来源。
-- 到期单词按通用复习次数在词义回忆与渐进拼写之间交替；拼写轮次的题型由独立拼写进度决定，本地严格判分并按提示量映射 `ReviewGrade`，避免单词学习退化成纯拼写测试。
+- 单词复习到 Familiar 以上翻转成产出方向：`ProductionCheck` 本地判分（归一化 + 长词允许一处拼写差错），结果直接映射 `ReviewGrade`，不再自评。
 
 ### 错题画像与选题
 

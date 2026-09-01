@@ -6,8 +6,6 @@ import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
 import com.lazydog.english.core.database.ReadingMaterialEntity
 import com.lazydog.english.core.database.ScenarioSessionEntity
-import com.lazydog.english.core.database.SpellingAttemptEntity
-import com.lazydog.english.core.database.SpellingProgressEntity
 import com.lazydog.english.core.database.VocabularyDetailEntity
 import kotlinx.serialization.Serializable
 
@@ -108,44 +106,6 @@ data class BackupDrillMistake(
     val occurredAt: Long = 0,
 )
 
-@Serializable
-data class BackupSpellingProgress(
-    val itemId: Long,
-    val stage: String,
-    val recognitionScore: Double,
-    val partialRecallScore: Double,
-    val chunkRecallScore: Double,
-    val phonemeGraphemeScore: Double,
-    val freeRecallScore: Double,
-    val retentionScore: Double,
-    val successStreak: Int,
-    val failureStreak: Int,
-    val stageSuccessCount: Int,
-    val freeRecallSuccessCount: Int,
-    val successfulRecallDatesJson: String,
-    val longestSuccessfulIntervalDays: Int,
-    val currentIntervalDays: Int,
-    val weakSegmentsJson: String,
-    val lastAttemptAt: Long?,
-)
-
-@Serializable
-data class BackupSpellingAttempt(
-    val itemId: Long,
-    val questionType: String,
-    val expected: String,
-    val answer: String,
-    val correct: Boolean,
-    val hintLevel: Int,
-    val responseTimeMillis: Long,
-    val errorTypesJson: String,
-    val weakSegment: String,
-    val weakStart: Int?,
-    val weakEndExclusive: Int?,
-    val masteryCredit: Double,
-    val occurredAt: Long,
-)
-
 /** 只备份学习偏好；AI/Speech 密钥和 Base URL 一律不导出（AGENTS.md §6）。 */
 @Serializable
 data class BackupPreferences(
@@ -170,7 +130,7 @@ data class BackupPreferences(
 
 @Serializable
 data class BackupPayload(
-    val schemaVersion: Int = 2,
+    val schemaVersion: Int = 1,
     val exportedAt: Long,
     val knowledgeItems: List<BackupKnowledgeItem> = emptyList(),
     val vocabularyDetails: List<BackupVocabularyDetail> = emptyList(),
@@ -179,8 +139,6 @@ data class BackupPayload(
     val readingMaterials: List<BackupReadingMaterial> = emptyList(),
     val scenarioSessions: List<BackupScenarioSession> = emptyList(),
     val drillMistakes: List<BackupDrillMistake> = emptyList(),
-    val spellingProgress: List<BackupSpellingProgress> = emptyList(),
-    val spellingAttempts: List<BackupSpellingAttempt> = emptyList(),
     val preferences: BackupPreferences = BackupPreferences(),
 )
 
@@ -318,79 +276,6 @@ fun BackupDrillMistake.toEntity(newItemId: Long?) = DrillMistakeEntity(
     sentenceEn = sentenceEn,
     chosen = chosen,
     answer = answer,
-    occurredAt = occurredAt,
-)
-
-fun SpellingProgressEntity.toBackup() = BackupSpellingProgress(
-    itemId = itemId,
-    stage = stage,
-    recognitionScore = recognitionScore,
-    partialRecallScore = partialRecallScore,
-    chunkRecallScore = chunkRecallScore,
-    phonemeGraphemeScore = phonemeGraphemeScore,
-    freeRecallScore = freeRecallScore,
-    retentionScore = retentionScore,
-    successStreak = successStreak,
-    failureStreak = failureStreak,
-    stageSuccessCount = stageSuccessCount,
-    freeRecallSuccessCount = freeRecallSuccessCount,
-    successfulRecallDatesJson = successfulRecallDatesJson,
-    longestSuccessfulIntervalDays = longestSuccessfulIntervalDays,
-    currentIntervalDays = currentIntervalDays,
-    weakSegmentsJson = weakSegmentsJson,
-    lastAttemptAt = lastAttemptAt,
-)
-
-fun BackupSpellingProgress.toEntity(newItemId: Long) = SpellingProgressEntity(
-    itemId = newItemId,
-    stage = stage,
-    recognitionScore = recognitionScore,
-    partialRecallScore = partialRecallScore,
-    chunkRecallScore = chunkRecallScore,
-    phonemeGraphemeScore = phonemeGraphemeScore,
-    freeRecallScore = freeRecallScore,
-    retentionScore = retentionScore,
-    successStreak = successStreak,
-    failureStreak = failureStreak,
-    stageSuccessCount = stageSuccessCount,
-    freeRecallSuccessCount = freeRecallSuccessCount,
-    successfulRecallDatesJson = successfulRecallDatesJson,
-    longestSuccessfulIntervalDays = longestSuccessfulIntervalDays,
-    currentIntervalDays = currentIntervalDays,
-    weakSegmentsJson = weakSegmentsJson,
-    lastAttemptAt = lastAttemptAt,
-)
-
-fun SpellingAttemptEntity.toBackup() = BackupSpellingAttempt(
-    itemId = itemId,
-    questionType = questionType,
-    expected = expected,
-    answer = answer,
-    correct = correct,
-    hintLevel = hintLevel,
-    responseTimeMillis = responseTimeMillis,
-    errorTypesJson = errorTypesJson,
-    weakSegment = weakSegment,
-    weakStart = weakStart,
-    weakEndExclusive = weakEndExclusive,
-    masteryCredit = masteryCredit,
-    occurredAt = occurredAt,
-)
-
-fun BackupSpellingAttempt.toEntity(newItemId: Long) = SpellingAttemptEntity(
-    id = 0,
-    itemId = newItemId,
-    questionType = questionType,
-    expected = expected,
-    answer = answer,
-    correct = correct,
-    hintLevel = hintLevel,
-    responseTimeMillis = responseTimeMillis,
-    errorTypesJson = errorTypesJson,
-    weakSegment = weakSegment,
-    weakStart = weakStart,
-    weakEndExclusive = weakEndExclusive,
-    masteryCredit = masteryCredit,
     occurredAt = occurredAt,
 )
 

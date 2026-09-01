@@ -20,7 +20,6 @@ class BackupRepository(
         val readingDao = database.readingDao()
         val scenarioDao = database.scenarioSessionDao()
         val skills = prefs.skillLevels.first()
-        val spellingDao = database.spellingDao()
         return BackupPayload(
             exportedAt = System.currentTimeMillis(),
             knowledgeItems = knowledgeDao.getAllItems().map { it.toBackup() },
@@ -30,8 +29,6 @@ class BackupRepository(
             readingMaterials = readingDao.getAllMaterials().map { it.toBackup() },
             scenarioSessions = scenarioDao.getAll().map { it.toBackup() },
             drillMistakes = database.drillMistakeDao().getAll().map { it.toBackup() },
-            spellingProgress = spellingDao.getAllProgress().map { it.toBackup() },
-            spellingAttempts = spellingDao.getAllAttempts().map { it.toBackup() },
             preferences = BackupPreferences(
                 learningGoal = prefs.learningGoal.first(),
                 topics = prefs.topics.first(),
@@ -58,7 +55,6 @@ class BackupRepository(
         val readingDao = database.readingDao()
         val scenarioDao = database.scenarioSessionDao()
         val mistakeDao = database.drillMistakeDao()
-        val spellingDao = database.spellingDao()
         database.withTransaction {
             knowledgeDao.clearAll()
             readingDao.clearAll()
@@ -80,14 +76,6 @@ class BackupRepository(
             for (event in payload.learningEvents) {
                 val newId = idMap[event.itemId] ?: continue
                 knowledgeDao.insertEvent(event.toEntity(newId))
-            }
-            for (progress in payload.spellingProgress) {
-                val newId = idMap[progress.itemId] ?: continue
-                spellingDao.saveProgress(progress.toEntity(newId))
-            }
-            for (attempt in payload.spellingAttempts) {
-                val newId = idMap[attempt.itemId] ?: continue
-                spellingDao.insertAttempt(attempt.toEntity(newId))
             }
             for (material in payload.readingMaterials) {
                 readingDao.insert(material.toEntity())

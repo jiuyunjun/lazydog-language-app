@@ -6,8 +6,6 @@ import com.lazydog.english.core.database.GrammarRecord
 import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
-import com.lazydog.english.core.database.SpellingAttemptEntity
-import com.lazydog.english.core.database.SpellingProgressEntity
 import com.lazydog.english.core.database.VocabularyDetailEntity
 import com.lazydog.english.core.database.VocabularyRecord
 import com.lazydog.english.core.model.KnowledgeStage
@@ -16,19 +14,11 @@ import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.scheduling.MemoryState
 import com.lazydog.english.domain.scheduling.ReviewScheduler
 import com.lazydog.english.domain.scheduling.deriveStage
-import com.lazydog.english.domain.spelling.SpellingEngine
-import com.lazydog.english.domain.spelling.SpellingErrorType
-import com.lazydog.english.domain.spelling.SpellingEvaluation
-import com.lazydog.english.domain.spelling.SpellingProgress
-import com.lazydog.english.domain.spelling.SpellingQuestionType
-import com.lazydog.english.domain.spelling.SpellingStage
-import com.lazydog.english.domain.spelling.WeakSegment
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
@@ -41,7 +31,6 @@ class KnowledgeRepository(
     private val now: () -> Instant = Instant::now,
 ) {
     private val dao = database.knowledgeDao()
-    private val spellingDao = database.spellingDao()
 
     private val vocabularyRecords: Flow<List<VocabularyRecord>> = dao.observeVocabulary()
     /** 真正的单词；完整短语和句子单独显示在“表达”里。 */
@@ -83,7 +72,6 @@ class KnowledgeRepository(
                     memoryHintZh = memoryHintZh.trim(),
                 ),
             )
-            spellingDao.saveProgress(SpellingProgress().toEntity(id))
             id
         }
     }
@@ -182,79 +170,6 @@ class KnowledgeRepository(
         )
         dao.updateItem(next.applyTo(item, updatedAt = at))
         next
-    }
-
-    /** 读取拼写进度；旧数据按通用掌握阶段给一个保守起点，首次提交时才真正建行。 */
-    suspend fun spellingProgress(itemId: Long): SpellingProgress {
-        spellingDao.getProgress(itemId)?.let { return it.toDomain() }
-        val item = dao.getItem(itemId) ?: return SpellingProgress()
-        return SpellingProgress(
-            stage = when (item.stageOrDefault()) {
-                KnowledgeStage.Unseen, KnowledgeStage.Exposed -> SpellingStage.Seen
-                KnowledgeStage.Learning -> SpellingStage.PartialRecall
-                KnowledgeStage.Familiar -> SpellingStage.GuidedRecall
-                KnowledgeStage.Mastered -> SpellingStage.FreeRecall
-            },
-        )
-    }
-
-    /**
-     * 记录一次真实的拼写提交。同一张卡答错后可以继续要提示，所以每次提交都更新拼写画像；
-     * 只有 [finishReview] 为 true 时才更新通用复习时间，避免一次卡片被算成多轮复习。
-     */
-    suspend fun recordSpellingAttempt(
-        itemId: Long,
-        expected: String,
-        answer: String,
-        questionType: SpellingQuestionType,
-        hintLevel: Int,
-        responseTimeMillis: Long,
-        finishReview: Boolean,
-    ): SpellingEvaluation? = database.withTransaction {
-        val item = dao.getItem(itemId) ?: return@withTransaction null
-        val at = now()
-        val previous = spellingDao.getProgress(itemId)?.toDomain() ?: spellingProgress(itemId)
-        val evaluation = SpellingEngine.evaluate(
-            progress = previous,
-            expected = expected,
-            answer = answer,
-            questionType = questionType,
-            hintLevel = hintLevel,
-            attemptedAt = at,
-        )
-        spellingDao.saveProgress(evaluation.nextProgress.toEntity(itemId))
-        spellingDao.insertAttempt(
-            SpellingAttemptEntity(
-                itemId = itemId,
-                questionType = questionType.name,
-                expected = expected,
-                answer = answer,
-                correct = evaluation.correct,
-                hintLevel = hintLevel.coerceIn(0, 5),
-                responseTimeMillis = responseTimeMillis.coerceAtLeast(0),
-                errorTypesJson = SpellingJson.encodeErrorTypes(evaluation.errorTypes),
-                weakSegment = evaluation.weakSegment?.segment.orEmpty(),
-                weakStart = evaluation.weakSegment?.start,
-                weakEndExclusive = evaluation.weakSegment?.endExclusive,
-                masteryCredit = evaluation.masteryCredit,
-                occurredAt = at.toEpochMilli(),
-            ),
-        )
-        if (finishReview) {
-            val memory = scheduler.schedule(item.toMemoryState(), evaluation.reviewGrade, at)
-            dao.insertEvent(
-                LearningEventEntity(
-                    itemId = itemId,
-                    source = "spelling",
-                    activity = "review",
-                    rating = evaluation.reviewGrade.name,
-                    responseMillis = responseTimeMillis,
-                    occurredAt = at.toEpochMilli(),
-                ),
-            )
-            dao.updateItem(memory.applyTo(item, updatedAt = at))
-        }
-        evaluation
     }
 
     suspend fun deleteItem(itemId: Long) = dao.deleteItem(itemId)
@@ -366,71 +281,4 @@ object VocabularyJson {
 
     fun decodeCollocations(raw: String): List<String> =
         runCatching { json.decodeFromString(serializer, raw) }.getOrDefault(emptyList())
-}
-
-private fun SpellingProgressEntity.toDomain() = SpellingProgress(
-    stage = SpellingStage.entries.firstOrNull { it.name == stage } ?: SpellingStage.Seen,
-    recognitionScore = recognitionScore,
-    partialRecallScore = partialRecallScore,
-    chunkRecallScore = chunkRecallScore,
-    phonemeGraphemeScore = phonemeGraphemeScore,
-    freeRecallScore = freeRecallScore,
-    retentionScore = retentionScore,
-    successStreak = successStreak,
-    failureStreak = failureStreak,
-    stageSuccessCount = stageSuccessCount,
-    freeRecallSuccessCount = freeRecallSuccessCount,
-    successfulRecallDates = SpellingJson.decodeDates(successfulRecallDatesJson),
-    longestSuccessfulIntervalDays = longestSuccessfulIntervalDays,
-    currentIntervalDays = currentIntervalDays,
-    weakSegments = SpellingJson.decodeWeakSegments(weakSegmentsJson),
-    lastAttemptAt = lastAttemptAt?.let(Instant::ofEpochMilli),
-)
-
-private fun SpellingProgress.toEntity(itemId: Long) = SpellingProgressEntity(
-    itemId = itemId,
-    stage = stage.name,
-    recognitionScore = recognitionScore,
-    partialRecallScore = partialRecallScore,
-    chunkRecallScore = chunkRecallScore,
-    phonemeGraphemeScore = phonemeGraphemeScore,
-    freeRecallScore = freeRecallScore,
-    retentionScore = retentionScore,
-    successStreak = successStreak,
-    failureStreak = failureStreak,
-    stageSuccessCount = stageSuccessCount,
-    freeRecallSuccessCount = freeRecallSuccessCount,
-    successfulRecallDatesJson = SpellingJson.encodeDates(successfulRecallDates),
-    longestSuccessfulIntervalDays = longestSuccessfulIntervalDays,
-    currentIntervalDays = currentIntervalDays,
-    weakSegmentsJson = SpellingJson.encodeWeakSegments(weakSegments),
-    lastAttemptAt = lastAttemptAt?.toEpochMilli(),
-)
-
-@Serializable
-private data class StoredWeakSegment(
-    val segment: String,
-    val start: Int,
-    val endExclusive: Int,
-    val errorCount: Int,
-)
-
-object SpellingJson {
-    private val json = Json { ignoreUnknownKeys = true }
-    private val strings = ListSerializer(String.serializer())
-    private val weakSegments = ListSerializer(StoredWeakSegment.serializer())
-
-    fun encodeDates(values: Set<String>): String = json.encodeToString(strings, values.sorted())
-    fun decodeDates(raw: String): Set<String> = runCatching { json.decodeFromString(strings, raw).toSet() }.getOrDefault(emptySet())
-
-    fun encodeWeakSegments(values: List<WeakSegment>): String = json.encodeToString(
-        weakSegments,
-        values.map { StoredWeakSegment(it.segment, it.start, it.endExclusive, it.errorCount) },
-    )
-    fun decodeWeakSegments(raw: String): List<WeakSegment> = runCatching {
-        json.decodeFromString(weakSegments, raw).map { WeakSegment(it.segment, it.start, it.endExclusive, it.errorCount) }
-    }.getOrDefault(emptyList())
-
-    fun encodeErrorTypes(values: Set<SpellingErrorType>): String =
-        json.encodeToString(strings, values.map { it.name })
 }

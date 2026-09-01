@@ -1,7 +1,5 @@
 # Spelling Learning System Design
 
-> 实现状态（2026-09-01）：核心离线闭环已落地，见 `ROADMAP.md` M12。状态机、提示阶梯、错误/薄弱片段、多维进度、延迟保持判定、Room 持久化、备份和自适应单词页已实现；§20 的 AI/FSRS/手写/语音/Dashboard 扩展仍为后续范围。
-
 ## 1. 目标
 
 本系统用于语言学习 App 中的**渐进式拼写训练（Progressive Spelling Learning）**。
