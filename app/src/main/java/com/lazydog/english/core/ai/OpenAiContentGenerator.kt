@@ -130,13 +130,13 @@ class OpenAiContentGenerator(
 
     override suspend fun generateNewWords(
         request: NewWordsRequest,
-        onProgress: ((Int) -> Unit)?,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<List<GeneratedWord>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildNewWordsPrompt(request),
             task = AiTask.Words,
-            onProgress = onProgress,
+            onStage = onStage,
             op = "新词",
         )
         val content = when (outcome) {
@@ -168,14 +168,14 @@ class OpenAiContentGenerator(
 
     override suspend fun generateGrammarLesson(
         request: GrammarLessonRequest,
-        onProgress: ((Int) -> Unit)?,
+        onStage: ((GenerationStage) -> Unit)?,
         onPartialText: ((String) -> Unit)?,
     ): GenerationResult<GeneratedGrammarLesson> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildGrammarPrompt(request),
             task = AiTask.Grammar,
-            onProgress = onProgress,
+            onStage = onStage,
             onTextProgress = onPartialText?.let { callback ->
                 // 哪段先到就先铺哪段：结构公式最先出来，其次是用途和讲解。
                 { raw -> callback(JsonStream.firstNonEmpty(raw, "explanationZh", "summaryZh", "patternEn")) }
@@ -199,13 +199,13 @@ class OpenAiContentGenerator(
 
     override suspend fun generateGrammarDrill(
         request: GrammarDrillRequest,
-        onProgress: ((Int) -> Unit)?,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<List<GrammarDrillItem>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildGrammarDrillPrompt(request),
             task = AiTask.Grammar,
-            onProgress = onProgress,
+            onStage = onStage,
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -237,13 +237,13 @@ class OpenAiContentGenerator(
 
     override suspend fun generateTranslationTasks(
         request: TranslationRequest,
-        onProgress: ((Int) -> Unit)?,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<List<TranslationTask>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildTranslationTasksPrompt(request),
             task = AiTask.Translation,
-            onProgress = onProgress,
+            onStage = onStage,
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -266,10 +266,12 @@ class OpenAiContentGenerator(
         task: TranslationTask,
         userTextEn: String,
         learnerLevel: String,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<TranslationFeedback> {
         val outcome = complete(
             systemPrompt = TRANSLATION_JUDGE_SYSTEM_PROMPT,
             userPrompt = buildTranslationGradePrompt(task, userTextEn, learnerLevel),
+            onStage = onStage,
             task = AiTask.Translation,
         )
         val content = when (outcome) {
@@ -286,13 +288,13 @@ class OpenAiContentGenerator(
 
     override suspend fun generateReading(
         request: ReadingGenerationRequest,
-        onProgress: ((Int) -> Unit)?,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<GeneratedReading> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildReadingPrompt(request),
             task = AiTask.Reading,
-            onProgress = onProgress,
+            onStage = onStage,
             op = "阅读",
         )
         val content = when (outcome) {
@@ -396,10 +398,12 @@ class OpenAiContentGenerator(
         count: Int,
         topics: List<String>,
         skillFilter: String?,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<List<AssessmentQuestion>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildAssessmentPrompt(cefrLevel, count, topics, skillFilter),
+            onStage = onStage,
             task = AiTask.Assessment,
             op = "测试题",
         )
@@ -420,10 +424,12 @@ class OpenAiContentGenerator(
     override suspend fun generateDeepReading(
         cefrLevel: String,
         topics: List<String>,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<DeepReadingTask> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildDeepReadingPrompt(cefrLevel, topics),
+            onStage = onStage,
             task = AiTask.Assessment,
             op = "测试阅读",
         )
@@ -445,10 +451,12 @@ class OpenAiContentGenerator(
     override suspend fun generateCorrectionItem(
         cefrLevel: String,
         topics: List<String>,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<CorrectionItem> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildCorrectionItemPrompt(cefrLevel, topics),
+            onStage = onStage,
             task = AiTask.Assessment,
             op = "纠错题",
         )
@@ -467,10 +475,12 @@ class OpenAiContentGenerator(
         taskZh: String,
         userTextEn: String,
         referenceCefrLevel: String?,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<ExpressionRubric> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExpressionRubricPrompt(taskZh, userTextEn, referenceCefrLevel),
+            onStage = onStage,
             task = AiTask.Assessment,
             op = "表达评分",
         )
@@ -489,10 +499,12 @@ class OpenAiContentGenerator(
     override suspend fun explainPronunciation(
         referenceText: String,
         feedback: PronunciationFeedback,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<List<PronunciationTip>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildPronunciationTipsPrompt(referenceText, feedback),
+            onStage = onStage,
             task = AiTask.Speaking,
             op = "发音提示",
         )
@@ -564,10 +576,12 @@ class OpenAiContentGenerator(
 
     override suspend fun generateScenario(
         request: ScenarioGenerationRequest,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<ScenarioBrief> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildScenarioPrompt(request),
+            onStage = onStage,
             task = AiTask.Scenario,
             op = "情景生成",
         )
@@ -588,10 +602,12 @@ class OpenAiContentGenerator(
 
     override suspend fun generateScenarioTurn(
         request: ScenarioTurnRequest,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<ScenarioTurn> {
         val outcome = complete(
             systemPrompt = SCENARIO_ROLE_SYSTEM_PROMPT,
             userPrompt = buildScenarioTurnPrompt(request),
+            onStage = onStage,
             task = AiTask.Scenario,
             op = "情景对话",
         )
@@ -628,10 +644,12 @@ class OpenAiContentGenerator(
 
     override suspend fun summarizeScenario(
         request: ScenarioSummaryRequest,
+        onStage: ((GenerationStage) -> Unit)?,
     ): GenerationResult<ScenarioSummary> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildScenarioSummaryPrompt(request),
+            onStage = onStage,
             task = AiTask.Scenario,
             op = "情景总结",
         )

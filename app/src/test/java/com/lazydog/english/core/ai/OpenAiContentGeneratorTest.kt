@@ -225,13 +225,16 @@ class OpenAiContentGeneratorTest {
             MockResponse().setBody(sseBody(wordsJson.substring(0, half), wordsJson.substring(half))),
         )
 
-        val progress = mutableListOf<Int>()
-        val result = generator().generateNewWords(wordsRequest) { progress.add(it) }
+        val stages = mutableListOf<GenerationStage>()
+        val result = generator().generateNewWords(wordsRequest) { stages.add(it) }
 
         val success = result as GenerationResult.Success
         assertEquals(listOf("curb"), success.data.map { it.term })
-        assertEquals(2, progress.size)
-        assertTrue(progress.last() > progress.first())
+        val written = stages.filterIsInstance<GenerationStage.Writing>()
+        assertEquals(2, written.size)
+        assertTrue(written.last().chars > written.first().chars)
+        // 响应头一到就先报一次"在等模型开口"，界面据此离开"接通中"。
+        assertTrue(stages.first() is GenerationStage.Thinking)
 
         val recorded = server.takeRequest()
         assertTrue(recorded.body.readUtf8().contains("\"stream\":true"))

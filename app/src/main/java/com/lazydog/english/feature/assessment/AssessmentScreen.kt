@@ -22,7 +22,6 @@ import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,7 +75,9 @@ import com.lazydog.english.domain.assessment.WritingTaskLibrary
 import com.lazydog.english.domain.assessment.labelForScore
 import com.lazydog.english.domain.assessment.scoreForLabel
 import com.lazydog.english.domain.assessment.summaryText
+import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.GenerationStage
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -127,6 +128,10 @@ fun AssessmentScreen(onExit: () -> Unit) {
     val prefs = app.userPreferences
 
     var phase by remember { mutableStateOf<AssessmentPhase>(AssessmentPhase.Intro) }
+
+    /** 生成走到哪一步了：没接通 / 模型在想 / 正在写。 */
+
+    var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
     var ladderState by remember { mutableStateOf(AssessmentEngine.initial()) }
     var deepReadingOutcome by remember { mutableStateOf<DeepReadingOutcome?>(null) }
     var expressionAssessment by remember { mutableStateOf<ExpressionAssessment?>(null) }
@@ -150,7 +155,11 @@ fun AssessmentScreen(onExit: () -> Unit) {
         scope.launch {
             val topics = prefs.topics.first().toList()
             when (
-                val result = app.contentGenerator.generateDeepReading(labelForScore(ladderState.score), topics)
+                val result = app.contentGenerator.generateDeepReading(
+                    cefrLevel = labelForScore(ladderState.score),
+                    topics = topics,
+                    onStage = { stage = it },
+                )
             ) {
                 is GenerationResult.Failure -> phase = AssessmentPhase.DeepReadingFailed(result.reason)
                 is GenerationResult.Success -> {
@@ -173,6 +182,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                             count = 1,
                             topics = topics,
                             skillFilter = step.skill,
+                            onStage = { stage = it },
                         )
                     ) {
                         is GenerationResult.Failure -> phase = AssessmentPhase.LadderFailed(result.reason)
@@ -193,7 +203,13 @@ fun AssessmentScreen(onExit: () -> Unit) {
                 correctionText = ""
                 scope.launch {
                     val topics = prefs.topics.first().toList()
-                    when (val result = app.contentGenerator.generateCorrectionItem(step.level, topics)) {
+                    when (
+                        val result = app.contentGenerator.generateCorrectionItem(
+                            cefrLevel = step.level,
+                            topics = topics,
+                            onStage = { stage = it },
+                        )
+                    ) {
                         is GenerationResult.Failure -> phase = AssessmentPhase.CorrectionFailed(result.reason)
                         is GenerationResult.Success -> {
                             scope.launch { persist(AssessmentStage.Ladder) }
@@ -253,7 +269,12 @@ fun AssessmentScreen(onExit: () -> Unit) {
     fun submitWriting(task: WritingTask, text: String) {
         phase = AssessmentPhase.WritingSubmitting
         scope.launch {
-            val firstResult = app.contentGenerator.evaluateExpressionRubric(task.promptZh, text, referenceCefrLevel = null)
+            val firstResult = app.contentGenerator.evaluateExpressionRubric(
+                taskZh = task.promptZh,
+                userTextEn = text,
+                referenceCefrLevel = null,
+                onStage = { stage = it },
+            )
             val first = when (firstResult) {
                 is GenerationResult.Failure -> {
                     phase = AssessmentPhase.WritingFailed(firstResult.reason)
@@ -262,9 +283,10 @@ fun AssessmentScreen(onExit: () -> Unit) {
                 is GenerationResult.Success -> firstResult.data
             }
             val secondResult = app.contentGenerator.evaluateExpressionRubric(
-                task.promptZh,
-                text,
-                labelForScore(ladderState.score),
+                taskZh = task.promptZh,
+                userTextEn = text,
+                referenceCefrLevel = labelForScore(ladderState.score),
+                onStage = { stage = it },
             )
             val second = when (secondResult) {
                 is GenerationResult.Failure -> {
@@ -355,7 +377,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                         advanceLadder()
                     },
                 )
-                AssessmentPhase.FetchingQuestion -> LoadingView("正在出 ${labelForScore(ladderState.score)} 难度的题…")
+                AssessmentPhase.FetchingQuestion -> LoadingView("正在出 ${labelForScore(ladderState.score)} 难度的题…", stage)
                 is AssessmentPhase.LadderFailed -> FailedView(
                     reason = p.reason,
                     onRetry = { advanceLadder() },
@@ -369,7 +391,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                     onConfirm = { onLadderAnswer(p.question, p.levelScore, p.selected, p.shownAtMillis) },
                     onSkip = { onLadderAnswer(p.question, p.levelScore, null, p.shownAtMillis) },
                 )
-                AssessmentPhase.FetchingCorrection -> LoadingView("正在出一道纠错题…")
+                AssessmentPhase.FetchingCorrection -> LoadingView("正在出一道纠错题…", stage)
                 is AssessmentPhase.CorrectionFailed -> FailedView(
                     reason = p.reason,
                     onRetry = { advanceLadder() },
@@ -382,7 +404,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                     onConfirm = { onCorrectionAnswer(p.item, p.levelScore, p.shownAtMillis, correctionText) },
                     onSkip = { onCorrectionAnswer(p.item, p.levelScore, p.shownAtMillis, "") },
                 )
-                AssessmentPhase.FetchingDeepReading -> LoadingView("正在准备一篇阅读短文…")
+                AssessmentPhase.FetchingDeepReading -> LoadingView("正在准备一篇阅读短文…", stage)
                 is AssessmentPhase.DeepReadingFailed -> FailedView(
                     reason = p.reason,
                     onRetry = { fetchDeepReading() },
@@ -404,7 +426,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                     onSubmit = { submitWriting(p.task, writingText) },
                     onSkip = { skipWriting() },
                 )
-                AssessmentPhase.WritingSubmitting -> LoadingView("AI 正在评两轮分…")
+                AssessmentPhase.WritingSubmitting -> LoadingView("AI 正在评两轮分…", stage)
                 is AssessmentPhase.WritingFailed -> FailedView(
                     reason = p.reason,
                     onRetry = {
@@ -432,15 +454,8 @@ fun AssessmentScreen(onExit: () -> Unit) {
 }
 
 @Composable
-private fun LoadingView(message: String) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        CircularProgressIndicator()
-        Text(message, style = MaterialTheme.typography.bodyMedium)
-    }
+private fun LoadingView(message: String, stage: GenerationStage) {
+    AiWaiting(title = message, stage = stage, modifier = Modifier.padding(top = 24.dp))
 }
 
 @Composable

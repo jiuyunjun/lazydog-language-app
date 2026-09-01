@@ -57,7 +57,9 @@ import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
+import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.GrammarDrillGrading
 import com.lazydog.english.domain.generation.GrammarDrillItem
 import com.lazydog.english.domain.generation.GrammarDrillRequest
@@ -119,7 +121,7 @@ fun GrammarStudyScreen(
 
     var phase by remember { mutableStateOf<GrammarPhase>(GrammarPhase.Loading) }
     var focus by rememberSaveable { mutableStateOf("") }
-    var progressChars by remember { mutableStateOf(0) }
+    var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
     var practiced by remember { mutableStateOf<List<String>>(emptyList()) }
     var weakSpots by remember { mutableStateOf<List<MistakeSummary>>(emptyList()) }
     var partialText by remember { mutableStateOf("") }
@@ -141,11 +143,11 @@ fun GrammarStudyScreen(
         prefetched: Deferred<GenerationResult<List<GrammarDrillItem>>>? = null,
     ) {
         phase = GrammarPhase.DrillLoading(pending.request.patternEn)
-        progressChars = 0
+        stage = GenerationStage.Connecting
         scope.launch {
             val result = prefetched?.await() ?: app.contentGenerator.generateGrammarDrill(
                 pending.request,
-                onProgress = { chars -> progressChars = chars },
+                onStage = { stage = it },
             )
             phase = when (result) {
                 is GenerationResult.Success ->
@@ -213,7 +215,7 @@ fun GrammarStudyScreen(
 
     fun generate() {
         phase = GrammarPhase.Generating
-        progressChars = 0
+        stage = GenerationStage.Connecting
         partialText = ""
         drillPrefetch?.cancel()
         drillPrefetch = null
@@ -228,7 +230,7 @@ fun GrammarStudyScreen(
                     // 没指定学什么时，让最近的错题决定讲哪一条。
                     weakSpots = weakSpots,
                 ),
-                onProgress = { chars -> progressChars = chars },
+                onStage = { stage = it },
                 onPartialText = { text -> partialText = text },
             )
             when (result) {
@@ -359,16 +361,10 @@ fun GrammarStudyScreen(
                 GrammarPhase.Generating -> StreamingBlock(
                     hint = "AI 正在备课…",
                     text = partialText,
+                    stage = stage,
                 )
-                is GrammarPhase.DrillLoading -> CenterBlock {
-                    CircularProgressIndicator()
-                    Text(
-                        text = if (progressChars > 0) "在给「${p.title}」出题… 已生成 $progressChars 字"
-                        else "在给「${p.title}」出几道填空题…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                is GrammarPhase.DrillLoading ->
+                    AiWaiting("在给「${p.title}」出几道填空题…", stage)
                 is GrammarPhase.Failed -> CenterBlock {
                     Text(
                         text = "没拿到讲解：${p.reason}",
@@ -785,27 +781,20 @@ private fun LessonView(
 
 /** 生成中的展示：提示语在上，已经到达的正文在下，随流增长。 */
 @Composable
-private fun StreamingBlock(hint: String, text: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            CircularProgressIndicator(modifier = Modifier.size(18.dp))
-            Text(
-                text = hint,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (text.isNotBlank()) {
-            Text(text = text, style = MaterialTheme.typography.bodyLarge)
-        }
+private fun StreamingBlock(hint: String, text: String, stage: GenerationStage) {
+    // 正文一到就铺正文——那是最好的进度条。还没到的时候退回统一等待区，
+    // 它至少会说清现在是没接通还是模型在想，以及等了多久。
+    if (text.isBlank()) {
+        AiWaiting(hint, stage)
+        return
+    }
+    CenterBlock {
+        Text(
+            text = hint,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(text, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

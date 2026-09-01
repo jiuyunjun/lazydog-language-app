@@ -58,7 +58,10 @@ import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.designsystem.rememberWaitedSeconds
+import com.lazydog.english.core.designsystem.stageDetail
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.speaking.AssessmentResult
 import com.lazydog.english.domain.speaking.PronunciationFeedback
@@ -116,6 +119,7 @@ fun SpeakingScreen(
     val sentence = sentences[sentenceIndex % sentences.size]
 
     var uiState by remember { mutableStateOf<SpeakingUiState>(SpeakingUiState.Idle) }
+    var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
     var showPermissionRationale by rememberSaveable { mutableStateOf(false) }
     val busy = uiState is SpeakingUiState.Playing ||
         uiState is SpeakingUiState.Listening ||
@@ -134,7 +138,13 @@ fun SpeakingScreen(
             when (val result = speech.assessReading(sentence.text)) {
                 is AssessmentResult.Done -> {
                     uiState = SpeakingUiState.GeneratingTips
-                    val tips = when (val tipsResult = app.contentGenerator.explainPronunciation(sentence.text, result.feedback)) {
+                    stage = GenerationStage.Connecting
+                    val tipsResult = app.contentGenerator.explainPronunciation(
+                        referenceText = sentence.text,
+                        feedback = result.feedback,
+                        onStage = { stage = it },
+                    )
+                    val tips = when (tipsResult) {
                         is GenerationResult.Success -> tipsResult.data
                         is GenerationResult.Failure -> localPronunciationTips(result.feedback)
                     }
@@ -261,7 +271,10 @@ fun SpeakingScreen(
                 )
                 SpeakingUiState.Playing -> BusyHint("正在播放标准音…")
                 SpeakingUiState.Listening -> BusyHint("在听你读…读完停一下就好")
-                SpeakingUiState.GeneratingTips -> BusyHint("正在想怎么跟你说…")
+                SpeakingUiState.GeneratingTips -> BusyHint(
+                    text = "正在想怎么跟你说…",
+                    detail = stageDetail(stage, rememberWaitedSeconds()),
+                )
                 is SpeakingUiState.Error -> Text(
                     text = state.message,
                     style = MaterialTheme.typography.bodyMedium,
@@ -319,13 +332,23 @@ private fun HighlightedSentence(text: String, problemWords: Set<String>) {
 }
 
 @Composable
-private fun BusyHint(text: String) {
+private fun BusyHint(text: String, detail: String? = null) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         CircularProgressIndicator(modifier = Modifier.padding(4.dp))
-        Text(text, style = MaterialTheme.typography.bodyMedium)
+        Column {
+            Text(text, style = MaterialTheme.typography.bodyMedium)
+            // 等 AI 时多一行"卡在哪一步、等了多久"；等麦克风和播放时没有这一行。
+            if (detail != null) {
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

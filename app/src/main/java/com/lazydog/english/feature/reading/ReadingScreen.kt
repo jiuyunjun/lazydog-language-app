@@ -50,7 +50,9 @@ import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.feature.ask.AskTopBarAction
+import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
 import com.lazydog.english.domain.generation.ReadingQuestionKind
@@ -109,7 +111,7 @@ fun ReadingScreen(
             },
         )
     }
-    var progressChars by remember { mutableStateOf(0) }
+    var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
 
     LaunchedEffect(mode) {
         if (mode is ReadingMode.Open) {
@@ -134,7 +136,7 @@ fun ReadingScreen(
 
     fun generate(topic: String) {
         phase = ReadingPhase.Generating
-        progressChars = 0
+        stage = GenerationStage.Connecting
         scope.launch {
             val now = System.currentTimeMillis()
             val vocab = app.knowledgeRepository.vocabulary.first()
@@ -159,7 +161,7 @@ fun ReadingScreen(
                 reviewGrammar = dueGrammar,
                 maxNewWords = MAX_NEW_WORDS,
             )
-            when (val result = app.contentGenerator.generateReading(request, onProgress = { progressChars = it })) {
+            when (val result = app.contentGenerator.generateReading(request, onStage = { stage = it })) {
                 is GenerationResult.Failure -> phase = ReadingPhase.Failed(result.reason)
                 is GenerationResult.Success -> {
                     val id = readingRepo.saveGenerated(
@@ -232,13 +234,8 @@ fun ReadingScreen(
             when (val p = phase) {
                 ReadingPhase.Setup -> SetupView(onGenerate = ::generate)
                 ReadingPhase.PasteInput -> PasteView(onSave = ::savePasted)
-                ReadingPhase.Generating -> CenterColumn {
-                    CircularProgressIndicator()
-                    Text(
-                        text = if (progressChars > 0) "AI 正在写文章… 已生成 $progressChars 字" else "AI 正在写文章，会把到期复习词编进去…",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+                ReadingPhase.Generating ->
+                    AiWaiting("AI 正在写文章，会把到期复习词编进去…", stage)
                 ReadingPhase.Loading -> CenterColumn { CircularProgressIndicator() }
                 is ReadingPhase.Failed -> CenterColumn {
                     Text(

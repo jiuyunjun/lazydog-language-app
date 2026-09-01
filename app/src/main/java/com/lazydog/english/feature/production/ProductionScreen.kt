@@ -14,7 +14,6 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,7 +44,9 @@ import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
+import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.practice.GrammarErrorTag
 import com.lazydog.english.domain.production.TranslationFeedback
@@ -97,6 +98,8 @@ fun ProductionScreen(onExit: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     var phase by remember { mutableStateOf<ProductionPhase>(ProductionPhase.Generating) }
+
+    var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
     var input by remember { mutableStateOf("") }
     var done by remember { mutableStateOf<List<WrittenLine>>(emptyList()) }
 
@@ -115,13 +118,14 @@ fun ProductionScreen(onExit: () -> Unit) {
                 .take(6)
                 .map { it.detail.term }
             val result = app.contentGenerator.generateTranslationTasks(
-                TranslationRequest(
+                request = TranslationRequest(
                     learnerLevel = prefs.expressionLevelDescription.first(),
                     count = TASK_COUNT,
                     targetGrammar = recentGrammar,
                     targetVocabulary = recentWords,
                     weakSpots = app.mistakeRepository.weakSpots(now),
                 ),
+                onStage = { stage = it },
             )
             phase = when (result) {
                 is GenerationResult.Success -> ProductionPhase.Writing(result.data, 0)
@@ -139,6 +143,7 @@ fun ProductionScreen(onExit: () -> Unit) {
         scope.launch {
             val task = tasks[index]
             val result = app.contentGenerator.gradeTranslation(
+                onStage = { stage = it },
                 task = task,
                 userTextEn = written,
                 learnerLevel = app.userPreferences.expressionLevelDescription.first(),
@@ -226,10 +231,7 @@ fun ProductionScreen(onExit: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             when (val p = phase) {
-                ProductionPhase.Generating -> Hint {
-                    CircularProgressIndicator()
-                    Text("在挑两句你现在最该练的…", style = MaterialTheme.typography.bodyMedium)
-                }
+                ProductionPhase.Generating -> AiWaiting("在挑两句你现在最该练的…", stage)
                 is ProductionPhase.Failed -> Hint {
                     Text(
                         text = "没拿到句子：${p.reason}",
@@ -248,10 +250,7 @@ fun ProductionScreen(onExit: () -> Unit) {
                     onShowHint = { phase = p.copy(hintShown = true) },
                     onSubmit = { submit(p.tasks, p.index) },
                 )
-                is ProductionPhase.Checking -> Hint {
-                    CircularProgressIndicator()
-                    Text("在看你这句…", style = MaterialTheme.typography.bodyMedium)
-                }
+                is ProductionPhase.Checking -> AiWaiting("在看你这句…", stage)
                 is ProductionPhase.CheckFailed -> Hint {
                     Text(
                         text = "判不了：${p.reason}",

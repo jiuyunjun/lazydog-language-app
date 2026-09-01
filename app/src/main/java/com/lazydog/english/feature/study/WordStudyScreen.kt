@@ -55,7 +55,9 @@ import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.practice.ProductionCheck
 import com.lazydog.english.domain.practice.ProductionResult
+import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.domain.generation.GeneratedWord
+import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.planning.DailyStep
@@ -120,7 +122,7 @@ fun WordStudyScreen(
     var phase by remember { mutableStateOf<WordStudyPhase>(WordStudyPhase.Loading) }
     var reviewedCount by remember { mutableStateOf(0) }
     var newLearnedCount by remember { mutableStateOf(0) }
-    var progressChars by remember { mutableStateOf(0) }
+    var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
     val maxNewWords by app.userPreferences.maxNewWords.collectAsState(initial = 5)
     /**
      * 正在后台先生成的新词。复习到期卡片要花上一两分钟，而这段时间正好够把新词写完——
@@ -169,13 +171,13 @@ fun WordStudyScreen(
                 topics = prefs.topics.first().toList(),
                 knownTerms = known,
             ),
-            onProgress = { chars -> progressChars = chars },
+            onStage = { stage = it },
         )
     }
 
     fun generateNewWords() {
         phase = WordStudyPhase.Generating
-        progressChars = 0
+        stage = GenerationStage.Connecting
         scope.launch {
             // 已经在后台跑的那次直接等它，别再发一次重复的请求。
             val running = prefetch ?: scope.async { requestNewWords() }.also { prefetch = it }
@@ -271,13 +273,7 @@ fun WordStudyScreen(
         ) {
             when (val p = phase) {
                 WordStudyPhase.Loading -> CenterHint { CircularProgressIndicator() }
-                WordStudyPhase.Generating -> CenterHint {
-                    CircularProgressIndicator()
-                    Text(
-                        text = if (progressChars > 0) "AI 正在挑词… 已生成 $progressChars 字" else "AI 正在挑词…",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+                WordStudyPhase.Generating -> AiWaiting("AI 正在挑词…", stage)
                 is WordStudyPhase.Cards -> {
                     val card = p.cards[p.index]
                     if (card.isProduction) {

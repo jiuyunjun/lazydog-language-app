@@ -59,6 +59,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.domain.generation.GenerationResult
@@ -595,45 +596,13 @@ private fun Loading(
     scene: String,
     waitingForNext: Boolean = false,
 ) {
-    // 「接通中」只该出现在真的还没接通的时候。推理模型开口前要想一阵，那段是"在想"，
-    // 不是"没连上"——两件事用户该做的反应不一样，一个是等，一个是去查网络。
-    val thinking = (stage as? GenerationStage.Thinking)?.takeIf { ready == 0 }
-    val title = when {
-        waitingForNext -> "下一句还在写…"
-        thinking != null -> "模型正在琢磨这 $SET_SIZE 句…"
-        else -> "正在写 $scene 的 $SET_SIZE 句…"
-    }
-    // 干等的时候秒数是唯一在动的东西：它既让人知道没卡死，也让"到底多久"变成一个能说出口的数字。
-    var seconds by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            seconds += 1
-        }
-    }
-    val waited = if (seconds >= 3) "（已等 $seconds 秒）" else ""
-
-    Column(
-        modifier = modifier.padding(32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        CircularProgressIndicator()
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Text(
-            text = when {
-                // 写好一句就往这边送，所以这里报的是"攒了几句"，不是干等的字符数。
-                ready > 0 -> "已经写好 $ready 句，攒够 $MIN_ITEMS_TO_START 句就开始"
-                // 服务商肯把思考过程流出来的话就显示尾巴，证明它确实在动。
-                thinking != null && thinking.excerpt.isNotBlank() -> "…${thinking.excerpt}"
-                thinking != null -> "推理模型会先想一会儿再动笔，这段最花时间$waited"
-                stage is GenerationStage.Writing -> "已经写了 ${stage.chars} 个字符"
-                else -> "接通中$waited"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    AiWaiting(
+        modifier = modifier,
+        title = if (waitingForNext) "下一句还在写…" else "正在写 $scene 的 $SET_SIZE 句…",
+        stage = stage,
+        // 写好一句就往这边送，攒够就开练——这时候"攒了几句"比字符数和阶段都有用。
+        detail = if (ready > 0) "已经写好 $ready 句，攒够 $MIN_ITEMS_TO_START 句就开始" else null,
+    )
 }
 
 /**

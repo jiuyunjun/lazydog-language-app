@@ -77,7 +77,10 @@ import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
+import com.lazydog.english.core.designsystem.rememberWaitedSeconds
+import com.lazydog.english.core.designsystem.stageDetail
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.domain.scenario.CommunicationFailure
 import com.lazydog.english.domain.scenario.ScenarioBrief
@@ -126,6 +129,8 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
     val sessionRepository = app.scenarioSessionRepository
     var currentSessionId by remember { mutableStateOf(sessionId) }
     var phase by remember { mutableStateOf(if (sessionId == null) ScenarioPhase.Pick else ScenarioPhase.Loading) }
+    /** 生成走到哪一步了：没接通 / 模型在想 / 正在写。 */
+    var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
     var customSeed by remember { mutableStateOf("") }
     var selectedSeed by remember { mutableStateOf<ScenarioSeed?>(recommendedSeeds.first()) }
     var brief by remember { mutableStateOf<ScenarioBrief?>(null) }
@@ -268,7 +273,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
         scope.launch {
             val tier = requestedTier
             val result = app.contentGenerator.generateScenario(
-                ScenarioGenerationRequest(
+                request = ScenarioGenerationRequest(
                     source = source,
                     seedZh = seed,
                     // 演练练的是产出，按表达等级配英文难度，不跟着通常更高的词汇等级走。
@@ -284,6 +289,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                     ),
                     excludedScenarioIds = app.userPreferences.recentScenarioIds(),
                 ),
+                onStage = { stage = it },
             )
             when (result) {
                 is GenerationResult.Success -> {
@@ -336,7 +342,8 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
         val request = ScenarioTurnRequest(current, transcriptBefore, cleanReply)
         scope.launch {
             val pair = coroutineScope {
-                val turnCall = async { app.contentGenerator.generateScenarioTurn(request) }
+                // 只有对话这一路报阶段：判定是并行跑的，两路都往同一个状态写会来回跳。
+                val turnCall = async { app.contentGenerator.generateScenarioTurn(request, onStage = { stage = it }) }
                 val judgeCall = async { app.contentGenerator.judgeScenarioTurn(request) }
                 turnCall.await() to judgeCall.await()
             }
@@ -386,9 +393,12 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
         busy = true
         error = null
         scope.launch {
-            when (val result = app.contentGenerator.summarizeScenario(
-                ScenarioSummaryRequest(current, messages, achievedGoals.keys),
-            )) {
+            when (
+                val result = app.contentGenerator.summarizeScenario(
+                    request = ScenarioSummaryRequest(current, messages, achievedGoals.keys),
+                    onStage = { stage = it },
+                )
+            ) {
                 is GenerationResult.Success -> {
                     summary = result.data
                     persist(snapshot(ScenarioStage.Summary).copy(summary = result.data))
@@ -449,6 +459,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 )
                 ScenarioPhase.Pick -> ScenarioPicker(
+                    stage = stage,
                     customSeed = customSeed,
                     onCustomSeedChange = { customSeed = it; selectedSeed = null },
                     selectedSeed = selectedSeed,
@@ -466,6 +477,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                 )
                 ScenarioPhase.Brief -> brief?.let { current ->
                     ScenarioBriefView(
+                        stage = stage,
                         brief = current,
                         busy = busy,
                         error = error,
@@ -475,6 +487,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                 }
                 ScenarioPhase.Conversation -> brief?.let { current ->
                     ScenarioConversation(
+                        stage = stage,
                         brief = current,
                         messages = messages,
                         options = options,
@@ -594,6 +607,7 @@ private fun askContextFor(
 
 @Composable
 private fun ScenarioPicker(
+    stage: GenerationStage,
     customSeed: String,
     onCustomSeedChange: (String) -> Unit,
     selectedSeed: ScenarioSeed?,
@@ -647,6 +661,7 @@ private fun ScenarioPicker(
             FriendlyLoading(
                 title = "正在搭场景和对手…",
                 detail = "会先准备完成清单，再给四种开场说法。",
+                stage = stage,
             )
         }
         Button(onClick = onUse, enabled = !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
@@ -662,6 +677,7 @@ private fun ScenarioPicker(
 
 @Composable
 private fun ScenarioBriefView(
+    stage: GenerationStage,
     brief: ScenarioBrief,
     busy: Boolean,
     error: String?,
@@ -707,6 +723,7 @@ private fun ScenarioBriefView(
             FriendlyLoading(
                 title = "正在换一个更难缠的对手…",
                 detail = "词汇难度不变，只增加信息量、追问和阻力。",
+                stage = stage,
             )
         }
         Spacer(Modifier.weight(1f))
@@ -719,6 +736,7 @@ private fun ScenarioBriefView(
 
 @Composable
 private fun ScenarioConversation(
+    stage: GenerationStage,
     brief: ScenarioBrief,
     messages: List<ScenarioMessage>,
     options: List<ScenarioReplyOption>,
@@ -788,6 +806,7 @@ private fun ScenarioConversation(
                 FriendlyLoading(
                     title = "对手正在想怎么回…",
                     detail = "同时检查你完成了哪些目标，不会在中途纠错。",
+                stage = stage,
                 )
             }
         }
@@ -1092,7 +1111,12 @@ private fun ErrorText(error: String?) {
 }
 
 @Composable
-private fun FriendlyLoading(title: String, detail: String, modifier: Modifier = Modifier) {
+private fun FriendlyLoading(
+    title: String,
+    detail: String,
+    modifier: Modifier = Modifier,
+    stage: GenerationStage? = null,
+) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.large,
@@ -1107,6 +1131,15 @@ private fun FriendlyLoading(title: String, detail: String, modifier: Modifier = 
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // 上面那句说的是"在做什么"，这句说的是"卡在哪一步、等了多久"——
+                // 干等的时候只有后者会动。
+                if (stage != null) {
+                    Text(
+                        text = stageDetail(stage, rememberWaitedSeconds()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

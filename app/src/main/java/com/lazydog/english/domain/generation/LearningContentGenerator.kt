@@ -10,11 +10,13 @@ interface LearningContentGenerator {
     /** 生成场景简报、对手和 4～6 条可判定目标。 */
     suspend fun generateScenario(
         request: com.lazydog.english.domain.scenario.ScenarioGenerationRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioBrief>
 
     /** 只扮演对手并推进对话；不得纠错或评价用户。 */
     suspend fun generateScenarioTurn(
         request: com.lazydog.english.domain.scenario.ScenarioTurnRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioTurn>
 
     /** 与对话生成分开的目标判定调用；只返回命中目标和沟通失败。 */
@@ -25,12 +27,16 @@ interface LearningContentGenerator {
     /** 对话结束后集中生成固定三条表达改进与待复习表达。 */
     suspend fun summarizeScenario(
         request: com.lazydog.english.domain.scenario.ScenarioSummaryRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioSummary>
 
-    /** [onProgress] 收到已生成的字符数，用于长请求的进度展示；实现应流式请求。 */
+    /**
+     * [onStage] 报"现在卡在哪一步"（还没接通 / 模型在想 / 正在写），实现应流式请求。
+     * 只报字符数的话，推理模型开口前的那段思考里界面完全静止，看着像卡死。
+     */
     suspend fun generateNewWords(
         request: NewWordsRequest,
-        onProgress: ((Int) -> Unit)? = null,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<List<GeneratedWord>>
 
     /**
@@ -39,7 +45,7 @@ interface LearningContentGenerator {
      */
     suspend fun generateGrammarLesson(
         request: GrammarLessonRequest,
-        onProgress: ((Int) -> Unit)? = null,
+        onStage: ((GenerationStage) -> Unit)? = null,
         onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<GeneratedGrammarLesson>
 
@@ -49,13 +55,13 @@ interface LearningContentGenerator {
      */
     suspend fun generateGrammarDrill(
         request: GrammarDrillRequest,
-        onProgress: ((Int) -> Unit)? = null,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<List<GrammarDrillItem>>
 
     /** 中译英产出练习：出几句要用上目标形式的中文。 */
     suspend fun generateTranslationTasks(
         request: com.lazydog.english.domain.production.TranslationRequest,
-        onProgress: ((Int) -> Unit)? = null,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<List<com.lazydog.english.domain.production.TranslationTask>>
 
     /**
@@ -66,6 +72,7 @@ interface LearningContentGenerator {
         task: com.lazydog.english.domain.production.TranslationTask,
         userTextEn: String,
         learnerLevel: String,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.production.TranslationFeedback>
 
     /**
@@ -87,7 +94,7 @@ interface LearningContentGenerator {
     /** 生成渐进式阅读短文，返回前已通过 ReadingValidation。 */
     suspend fun generateReading(
         request: ReadingGenerationRequest,
-        onProgress: ((Int) -> Unit)? = null,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<GeneratedReading>
 
     /** 点词解释：结合所在句子解释一个词。 */
@@ -126,12 +133,14 @@ interface LearningContentGenerator {
         count: Int,
         topics: List<String>,
         skillFilter: String? = null,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<List<com.lazydog.english.domain.assessment.AssessmentQuestion>>
 
     /** 能力测试的独立阅读模块：一篇按等级定长的短文 + 4 道分技能标签的理解题。 */
     suspend fun generateDeepReading(
         cefrLevel: String,
         topics: List<String>,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.assessment.DeepReadingTask>
 
     /**
@@ -141,6 +150,7 @@ interface LearningContentGenerator {
     suspend fun generateCorrectionItem(
         cefrLevel: String,
         topics: List<String>,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.assessment.CorrectionItem>
 
     /**
@@ -153,6 +163,7 @@ interface LearningContentGenerator {
         taskZh: String,
         userTextEn: String,
         referenceCefrLevel: String?,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.assessment.ExpressionRubric>
 
     /**
@@ -163,6 +174,7 @@ interface LearningContentGenerator {
     suspend fun explainPronunciation(
         referenceText: String,
         feedback: com.lazydog.english.domain.speaking.PronunciationFeedback,
+        onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<List<com.lazydog.english.domain.speaking.PronunciationTip>>
 }
 
