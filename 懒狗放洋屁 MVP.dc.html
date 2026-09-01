@@ -1484,6 +1484,496 @@
   </div>
 </section>
 
+<section style="display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font:500 12px Roboto;letter-spacing:.14em;color:#6750A4">50 — 58 · 新模块</div>
+    <div style="font:700 28px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">听力训练</div>
+    <div style="font:400 15px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#49454F;max-width:820px">训练的是「声音 → 意思」，不是「声音 → 拼写 → 翻译」。所以裸听在前，英文永远最后出现。MVP 只做这条 loop：选场景 → 裸听 → 中文三选一 → 揭晓 → 再听一次 → 下一句 → 10 句总结。语音识别、Shadowing 评分、多口音、自由输入判定都不在第一版。</div>
+  </div>
+
+  <div style="background:#FEF7FF;border-radius:20px;padding:24px;display:flex;flex-wrap:wrap;gap:24px">
+    <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:10px">
+      <div style="font:500 15px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">英文什么时候才出现</div>
+      <div style="font:400 13px/1.7 Roboto,'Noto Sans SC',sans-serif;color:#49454F">答题前只有播放按钮和播放次数，没有字幕、没有英文、没有中文原句。提示分四级递进：场景 → 关键词 → 挖空英文 → 完整英文。前两级不给拼写，用户仍在听音辨义；只有 Level 3 起才落到文字，分数上限也从这里开始压。</div>
+    </div>
+    <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:10px">
+      <div style="font:500 15px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">「再听一次」是重点，不是收尾</div>
+      <div style="font:400 13px/1.7 Roboto,'Noto Sans SC',sans-serif;color:#49454F">揭晓页的主按钮就是再听一次，不是「下一句」。知道意思之后重听同一条音频，是把声音和含义焊在一起的那一下。页面同时标出这句的听觉难点（弱读、连读、缩写），让用户知道刚才卡在哪。</div>
+    </div>
+    <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:10px">
+      <div style="font:500 15px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">干扰项从哪儿来</div>
+      <div style="font:400 13px/1.7 Roboto,'Noto Sans SC',sans-serif;color:#49454F">三个错误选项不能荒谬，必须来自真实误听：否定词漏听、时态误判、连读粘连成别的词、相似动作、相似场景。生成时按类型指定，答错后记录的是「你栽在哪一类」，不是「你答错了」。</div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:32px">
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">50 听力首页</span><span style="font:400 12px Roboto;color:#79747E">选场景 · 智能混合</span></div>
+      <div data-screen-label="50 听力-首页" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:41</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;gap:14px;padding:0 8px 0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">arrow_back</span><span style="font:400 21px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">今天想听什么</span></div>
+        <div style="flex:1;padding:0 16px;display:flex;flex-direction:column;gap:10px;overflow:hidden">
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <sc-for list="{{ listenScenes }}" as="s" hint-placeholder-count="9">
+              <div style="width:calc(33.333% - 6px);box-sizing:border-box;background:{{ s.bg }};border-radius:14px;padding:11px 10px;display:flex;flex-direction:column;gap:5px;min-height:82px"><span style="font-family:'Material Symbols Outlined';font-size:19px;color:{{ s.fg }}">{{ s.icon }}</span><div style="display:flex;flex-direction:column;gap:1px"><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">{{ s.name }}</span><span style="font:400 10px/1.35 Roboto,'Noto Sans SC',sans-serif;color:#49454F">{{ s.note }}</span></div></div>
+            </sc-for>
+          </div>
+          <div style="background:#F3EDF7;border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:9px">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Material Symbols Outlined';font-size:18px;color:#4F378B">shuffle</span><span style="flex:1;font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">智能混合</span><div style="width:44px;height:26px;border-radius:13px;background:#6750A4;display:flex;align-items:center;justify-content:flex-end;padding:0 3px;box-sizing:border-box;flex:none"><div style="width:20px;height:20px;border-radius:10px;background:#FFFFFF"></div></div></div>
+            <div style="display:flex;height:8px;border-radius:4px;overflow:hidden"><div style="width:70%;background:#6750A4"></div><div style="width:20%;background:#A9741F"></div><div style="width:10%;background:#CAC4D0"></div></div>
+            <div style="display:flex;justify-content:space-between"><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#49454F">70% 你选的场景</span><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#7A4E00">20% 弱项</span><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#79747E">10% 探索</span></div>
+          </div>
+          <div style="background:#E8DEF8;border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px"><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#4F378B">你现在最弱的</span><span style="font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#1D192B">弱读（would've、gonna 这类）</span><span style="font:400 11px/1.5 Roboto,'Noto Sans SC',sans-serif;color:#4F378B">今天会多塞 3 句给你</span></div>
+        </div>
+        <div style="padding:10px 16px 22px;display:flex;flex-direction:column;gap:6px;flex:none">
+          <div style="height:54px;border-radius:27px;background:#6750A4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;gap:10px;font:500 16px Roboto,'Noto Sans SC',sans-serif"><span style="font-family:'Material Symbols Outlined';font-size:21px">headphones</span>开始 10 句训练</div>
+          <div style="height:38px;display:flex;align-items:center;justify-content:center;font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#6750A4">约 6 分钟 · 戴耳机效果更好</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">51 裸听</span><span style="font:400 12px Roboto;color:#79747E">没听之前什么都不给</span></div>
+      <div data-screen-label="51 听力-裸听" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:42</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">3 / 10</span></div>
+        <div style="padding:0 16px 12px;flex:none"><div style="height:4px;border-radius:2px;background:#E8DEF8;overflow:hidden"><div style="width:30%;height:100%;background:#6750A4"></div></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:0 24px">
+          <div style="height:26px;padding:0 12px;border-radius:8px;background:#ECE6F0;display:flex;align-items:center;font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#49454F">商务职场 · 会议</div>
+          <div style="width:112px;height:112px;border-radius:56px;background:#6750A4;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(103,80,164,.3)"><span style="font-family:'Material Symbols Outlined';font-size:52px;color:#FFFFFF">play_arrow</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><span style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#79747E">已播放 0 次</span><span style="font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#79747E">第一遍就听懂，分数最高</span></div>
+          <div style="font:400 18px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">这句话是什么意思？</div>
+        </div>
+        <div style="padding:12px 16px 24px;display:flex;flex-direction:column;gap:8px;flex:none">
+          <div style="height:52px;border-radius:26px;background:#E8DEF8;color:#1D192B;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,'Noto Sans SC',sans-serif">听完了，看选项</div>
+          <div style="height:40px;display:flex;align-items:center;justify-content:center;gap:8px;font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#6750A4"><span style="font-family:'Material Symbols Outlined';font-size:18px">lightbulb</span>要点提示</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">52 三选一</span><span style="font:400 12px Roboto;color:#79747E">干扰项来自真实误听</span></div>
+      <div data-screen-label="52 听力-三选一" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:42</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">3 / 10</span></div>
+        <div style="padding:0 16px 14px;flex:none"><div style="height:4px;border-radius:2px;background:#E8DEF8;overflow:hidden"><div style="width:30%;height:100%;background:#6750A4"></div></div></div>
+        <div style="flex:1;padding:0 16px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:56px;height:56px;border-radius:28px;background:#6750A4;display:flex;align-items:center;justify-content:center;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:28px;color:#FFFFFF">replay</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">已播放 2 次</span><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#79747E">再听一遍这题最高 70 分</span></div>
+            <div style="height:32px;padding:0 12px;border-radius:16px;border:1px solid #79747E;display:flex;align-items:center;gap:5px;font:500 12px Roboto,'Noto Sans SC',sans-serif;color:#6750A4;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:16px">slow_motion_video</span>慢速</div>
+          </div>
+          <div style="font:400 16px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">他在说什么？</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ listenOptions }}" as="o" hint-placeholder-count="4">
+              <div style="border:1px solid #CAC4D0;border-radius:14px;padding:14px;min-height:52px;box-sizing:border-box;display:flex;align-items:center;font:400 15px/1.45 Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">{{ o }}</div>
+            </sc-for>
+          </div>
+          <div style="align-self:center;height:36px;padding:0 16px;border-radius:18px;display:flex;align-items:center;gap:8px;font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#6750A4"><span style="font-family:'Material Symbols Outlined';font-size:18px">lightbulb</span>还是没听清，给点提示</div>
+        </div>
+        <div style="padding:12px 16px 24px;flex:none"><div style="height:52px;border-radius:26px;background:#E6E0E9;color:#79747E;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,'Noto Sans SC',sans-serif">确认</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">53 渐进提示</span><span style="font:400 12px Roboto;color:#79747E">英文放在最后一级</span></div>
+      <div data-screen-label="53 听力-渐进提示" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 2px 12px rgba(0,0,0,.06);position:relative">
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column">
+          <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:43</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+          <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">3 / 10</span></div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center"><div style="width:96px;height:96px;border-radius:48px;background:#6750A4;display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Outlined';font-size:44px;color:#FFFFFF">replay</span></div></div>
+        </div>
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,.3)"></div>
+        <div style="position:relative;background:#F3EDF7;border-radius:28px 28px 0 0;padding:12px 0 22px;display:flex;flex-direction:column;gap:14px;box-shadow:0 -2px 16px rgba(0,0,0,.1)">
+          <div style="width:32px;height:4px;border-radius:2px;background:#CAC4D0;align-self:center"></div>
+          <div style="padding:0 18px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font:500 17px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">一级一级来</span><span style="font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#79747E">用了会扣分，但比蒙强</span></div>
+            <sc-for list="{{ hintLevels }}" as="h" hint-placeholder-count="4">
+              <div style="background:{{ h.bg }};border:1px solid {{ h.border }};border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:5px">
+                <div style="display:flex;align-items:center;gap:8px"><span style="height:20px;padding:0 7px;border-radius:6px;background:#E8DEF8;font:500 10px Roboto,'Noto Sans SC',sans-serif;color:#4F378B;display:flex;align-items:center;flex:none">{{ h.tag }}</span><span style="flex:1;font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">{{ h.name }}</span><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:{{ h.costColor }}">{{ h.cost }}</span></div>
+                <div style="font:400 14px/1.5 {{ h.font }};color:{{ h.textColor }}">{{ h.body }}</div>
+              </div>
+            </sc-for>
+            <div style="font:400 11px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#79747E;text-align:center">看到英文之前，你都还在练听力。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">54 揭晓 · 答对</span><span style="font:400 12px Roboto;color:#79747E">主按钮是再听一次</span></div>
+      <div data-screen-label="54 听力-揭晓答对" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:43</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">3 / 10</span></div>
+        <div style="flex:1;padding:0 16px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px"><span style="font-family:'Material Symbols Outlined';font-size:20px;color:#2E6B4F">check_circle</span><span style="flex:1;font:500 15px Roboto,'Noto Sans SC',sans-serif;color:#2E6B4F">听懂了</span><div style="display:flex;align-items:baseline;gap:4px"><span style="font:700 24px Roboto,sans-serif;color:#1D1B20">85</span><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#79747E">分</span></div></div>
+          <div style="background:#F3EDF7;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:400 19px/1.5 Roboto,sans-serif;color:#1D1B20">I <span style="background:#E8DEF8;border-radius:3px;padding:0 3px">barely made it</span> to the meeting on time.</div>
+            <div style="font:400 15px/1.5 Roboto,'Noto Sans SC',sans-serif;color:#49454F">我勉强准时赶到了会议。</div>
+          </div>
+          <div style="border:1px solid #CAC4D0;border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px"><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#6750A4">这句的重点</span><span style="font:500 16px Roboto,sans-serif;color:#1D1B20">barely made it</span><span style="font:400 13px/1.5 Roboto,'Noto Sans SC',sans-serif;color:#49454F">差一点没赶上、勉强赶上。日常口语里非常高频。</span></div>
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#6750A4">刚才难在这儿</span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap"><div style="height:26px;padding:0 10px;border-radius:8px;background:#FCEAC8;display:flex;align-items:center;font:500 11px Roboto,'Noto Sans SC',sans-serif;color:#7A4E00">连读 made it</div><div style="height:26px;padding:0 10px;border-radius:8px;background:#FCEAC8;display:flex;align-items:center;font:500 11px Roboto,'Noto Sans SC',sans-serif;color:#7A4E00">弱读 to</div><div style="height:26px;padding:0 10px;border-radius:8px;background:#ECE6F0;display:flex;align-items:center;font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#49454F">中速</div></div>
+          </div>
+          <div style="background:#ECE6F0;border-radius:12px;padding:11px 13px;font:400 12px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#49454F">85 分：第二遍听懂，没用提示。</div>
+        </div>
+        <div style="padding:10px 16px 22px;display:flex;flex-direction:column;gap:8px;flex:none">
+          <div style="height:54px;border-radius:27px;background:#6750A4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;gap:10px;font:500 16px Roboto,'Noto Sans SC',sans-serif"><span style="font-family:'Material Symbols Outlined';font-size:21px">hearing</span>知道意思了，再听一次</div>
+          <div style="height:40px;display:flex;align-items:center;justify-content:center;font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#6750A4">下一句</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">55 揭晓 · 答错</span><span style="font:400 12px Roboto;color:#79747E">指出误听在哪</span></div>
+      <div data-screen-label="55 听力-揭晓答错" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:45</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">5 / 10</span></div>
+        <div style="flex:1;padding:0 16px;display:flex;flex-direction:column;gap:11px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px"><span style="font-family:'Material Symbols Outlined';font-size:20px;color:#B3261E">cancel</span><span style="flex:1;font:500 15px Roboto,'Noto Sans SC',sans-serif;color:#B3261E">这次没听出来</span><div style="display:flex;align-items:baseline;gap:4px"><span style="font:700 24px Roboto,sans-serif;color:#1D1B20">20</span><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#79747E">分</span></div></div>
+          <div style="background:#F3EDF7;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:9px">
+            <div style="font:400 19px/1.5 Roboto,sans-serif;color:#1D1B20">You <span style="background:#FCEAC8;border-radius:3px;padding:0 3px">could've just</span> told me.</div>
+            <div style="font:400 15px/1.5 Roboto,'Noto Sans SC',sans-serif;color:#49454F">你其实直接跟我说就好了。</div>
+          </div>
+          <div style="border:1px solid #A9741F;background:#FCEAC8;border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Material Symbols Outlined';font-size:17px;color:#7A4E00">hearing_disabled</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#7A4E00">你听成了「你可以告诉我了」</span></div>
+            <div style="font:400 12px/1.65 Roboto,'Noto Sans SC',sans-serif;color:#7A4E00">could've 在口语里读成 /ˈkʊdəv/，几乎听不出 have。少了这个，整句从「你本来可以」变成了「你可以」，抱怨的意思就没了。</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap"><div style="height:26px;padding:0 10px;border-radius:8px;background:#FCEAC8;display:flex;align-items:center;font:500 11px Roboto,'Noto Sans SC',sans-serif;color:#7A4E00">弱读 could've</div><div style="height:26px;padding:0 10px;border-radius:8px;background:#ECE6F0;display:flex;align-items:center;font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#49454F">恋爱 · 表达不满</div></div>
+          <div style="background:#ECE6F0;border-radius:12px;padding:11px 13px;font:400 12px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#49454F">这类弱读你这周错了 4 次。明天会再给你几句。</div>
+        </div>
+        <div style="padding:10px 16px 22px;display:flex;flex-direction:column;gap:8px;flex:none">
+          <div style="height:54px;border-radius:27px;background:#6750A4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;gap:10px;font:500 16px Roboto,'Noto Sans SC',sans-serif"><span style="font-family:'Material Symbols Outlined';font-size:21px">hearing</span>带着意思再听一次</div>
+          <div style="height:40px;display:flex;align-items:center;justify-content:center;font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#6750A4">下一句</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">56 十句总结</span><span style="font:400 12px Roboto;color:#79747E">首听率是主指标</span></div>
+      <div data-screen-label="56 听力-十句总结" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:49</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="flex:1;padding:18px 18px 0;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+          <div style="font:700 23px/1.3 Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">10 句听完了</div>
+          <div style="background:#E8DEF8;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:flex-end;gap:10px"><span style="font:700 40px Roboto,sans-serif;color:#4F378B;line-height:1">78</span><span style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#1D192B;padding-bottom:6px">今日听力分</span></div>
+            <div style="display:flex;gap:16px">
+              <sc-for list="{{ listenStats }}" as="s" hint-placeholder-count="3">
+                <div style="display:flex;flex-direction:column;gap:1px"><span style="font:700 18px Roboto,sans-serif;color:#1D192B">{{ s.n }}</span><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#4F378B">{{ s.label }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <sc-for list="{{ listenBreakdown }}" as="b" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:10px"><span style="width:76px;font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#49454F;flex:none">{{ b.name }}</span><div style="flex:1;height:8px;border-radius:4px;background:#ECE6F0;overflow:hidden"><div style="height:100%;background:{{ b.color }};width:{{ b.pct }}"></div></div><span style="width:34px;font:400 12px Roboto,sans-serif;color:#1D1B20;text-align:right;flex:none">{{ b.n }}</span></div>
+            </sc-for>
+          </div>
+          <div style="background:#F3EDF7;border-radius:14px;padding:13px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Material Symbols Outlined';font-size:17px;color:#2E6B4F">trending_up</span><span style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">最稳的是<span style="font-weight:500">日常高频</span></span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Material Symbols Outlined';font-size:17px;color:#A9741F">trending_down</span><span style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">最容易漏的还是<span style="font-weight:500">弱读</span></span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Material Symbols Outlined';font-size:17px;color:#49454F">graphic_eq</span><span style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">今天最坑的一个：<span style="font-family:Roboto,sans-serif">would've</span></span></div>
+          </div>
+          <div style="background:#ECE6F0;border-radius:14px;padding:13px;font:400 12px/1.65 Roboto,'Noto Sans SC',sans-serif;color:#49454F">明天给你加 3 句弱读的。听不出来不是笨，是这玩意儿本来就没发全。</div>
+        </div>
+        <div style="padding:10px 16px 22px;display:flex;flex-direction:column;gap:6px;flex:none">
+          <div style="height:52px;border-radius:26px;background:#6750A4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,'Noto Sans SC',sans-serif">收工</div>
+          <div style="height:38px;display:flex;align-items:center;justify-content:center;font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#6750A4">把没一遍听懂的 4 句再过一遍</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">57 听力能力档案</span><span style="font:400 12px Roboto;color:#79747E">在「记录」下</span></div>
+      <div data-screen-label="57 听力-能力档案" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:52</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;gap:14px;padding:0 8px 0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">arrow_back</span><span style="font:400 21px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">你的听力</span></div>
+        <div style="flex:1;padding:0 16px;display:flex;flex-direction:column;gap:13px;overflow:hidden">
+          <div style="background:#E8DEF8;border-radius:16px;padding:14px;display:flex;align-items:center;gap:14px"><div style="display:flex;align-items:baseline;gap:5px"><span style="font:700 30px Roboto,sans-serif;color:#4F378B;line-height:1">74</span><span style="font:500 14px Roboto,sans-serif;color:#2E6B4F">+6</span></div><div style="flex:1;font:400 12px/1.5 Roboto,'Noto Sans SC',sans-serif;color:#1D192B">本周比上周好了 6 分。主要是弱读那块追上来了。</div></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#6750A4">听觉难点</span>
+            <sc-for list="{{ listenSkills }}" as="s" hint-placeholder-count="5">
+              <div style="display:flex;align-items:center;gap:10px"><span style="width:72px;font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#49454F;flex:none">{{ s.name }}</span><div style="flex:1;height:8px;border-radius:4px;background:#ECE6F0;overflow:hidden"><div style="height:100%;background:#6750A4;width:{{ s.pct }}"></div></div><span style="width:58px;font:400 11px Roboto,sans-serif;color:#49454F;text-align:right;flex:none">{{ s.delta }}</span></div>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#6750A4">场景熟练度</span>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              <sc-for list="{{ sceneScores }}" as="s" hint-placeholder-count="6">
+                <div style="width:calc(33.333% - 6px);box-sizing:border-box;background:#F3EDF7;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px"><span style="font:700 18px Roboto,sans-serif;color:#1D1B20">{{ s.n }}</span><span style="font:400 11px Roboto,'Noto Sans SC',sans-serif;color:#49454F">{{ s.name }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:#ECE6F0;border-radius:14px;padding:13px;font:400 12px/1.65 Roboto,'Noto Sans SC',sans-serif;color:#49454F">游戏英语 91，商务 70。想补哪块，在听力首页多选那个场景就行。</div>
+        </div>
+        <div style="padding:10px 16px 22px;flex:none"><div style="height:50px;border-radius:25px;border:1px solid #79747E;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,'Noto Sans SC',sans-serif;color:#6750A4">专练弱读 10 句</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">58 听力 · 深色</span><span style="font:400 12px Roboto;color:#79747E">裸听页</span></div>
+      <div data-screen-label="58 听力-裸听深色" style="width:390px;height:800px;background:#141218;border:1px solid #49454F;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.18)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#CAC4D0;flex:none"><span>22:12</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#E6E0E9">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#CAC4D0">3 / 10</span></div>
+        <div style="padding:0 16px 12px;flex:none"><div style="height:4px;border-radius:2px;background:#4A4458;overflow:hidden"><div style="width:30%;height:100%;background:#D0BCFF"></div></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:0 24px">
+          <div style="height:26px;padding:0 12px;border-radius:8px;background:#211F26;display:flex;align-items:center;font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#CAC4D0">商务职场 · 会议</div>
+          <div style="width:112px;height:112px;border-radius:56px;background:#D0BCFF;display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Outlined';font-size:52px;color:#381E72">play_arrow</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><span style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#938F99">已播放 0 次</span><span style="font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#938F99">第一遍就听懂，分数最高</span></div>
+          <div style="font:400 18px Roboto,'Noto Sans SC',sans-serif;color:#E6E0E9">这句话是什么意思？</div>
+        </div>
+        <div style="padding:12px 16px 24px;display:flex;flex-direction:column;gap:8px;flex:none">
+          <div style="height:52px;border-radius:26px;background:#4A4458;color:#E8DEF8;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,'Noto Sans SC',sans-serif">听完了，看选项</div>
+          <div style="height:40px;display:flex;align-items:center;justify-content:center;gap:8px;font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#D0BCFF"><span style="font-family:'Material Symbols Outlined';font-size:18px">lightbulb</span>要点提示</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:20px">
+    <div style="flex:1;min-width:440px;background:#FEF7FF;border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:16px">
+      <div style="font:500 17px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">句子内容模型</div>
+      <div style="font:400 13px/1.7 Roboto,'Noto Sans SC',sans-serif;color:#49454F">生成时按这些字段下条件，而不是「给我一句 B1 的英语」。听觉难点和干扰项类型是这个模块和普通背单词 App 的分界线。</div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <sc-for list="{{ sentenceSchema }}" as="f" hint-placeholder-count="10">
+          <div style="display:grid;grid-template-columns:150px 1fr;gap:14px;padding:9px 0;border-bottom:1px solid #ECE6F0;align-items:baseline"><span style="font:400 12px Roboto Mono,monospace;color:#4F378B">{{ f.key }}</span><span style="font:400 12px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#49454F">{{ f.desc }}</span></div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1;min-width:340px;display:flex;flex-direction:column;gap:20px">
+      <div style="background:#FEF7FF;border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:14px">
+        <div style="font:500 17px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">Listening Score 规则</div>
+        <div style="display:flex;flex-direction:column;gap:0">
+          <sc-for list="{{ scoreRules }}" as="r" hint-placeholder-count="7">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid #ECE6F0"><span style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">{{ r.case }}</span><span style="font:500 13px Roboto,sans-serif;color:{{ r.color }}">{{ r.score }}</span></div>
+          </sc-for>
+        </div>
+        <div style="font:400 12px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#79747E">分数只给用户看自己的变化，不做排行、不做精确科学性宣称。</div>
+      </div>
+      <div style="background:#FEF7FF;border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:14px">
+        <div style="font:500 17px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">10 句怎么组</div>
+        <sc-for list="{{ dailyMix }}" as="m" hint-placeholder-count="4">
+          <div style="display:flex;gap:12px;align-items:baseline"><span style="width:52px;font:500 12px Roboto,sans-serif;color:#4F378B;flex:none">{{ m.range }}</span><span style="flex:1;font:400 13px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#49454F">{{ m.what }}</span></div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:32px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font:500 12px Roboto;letter-spacing:.14em;color:#6750A4">59 — 64 · 新模块</div>
+    <div style="font:700 28px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">拼写训练</div>
+    <div style="font:400 15px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#49454F;max-width:820px">背单词 App 常止步于「认得」。这套流程按识别 → 局部回忆 → 结构回忆 → 引导回忆 → 完整默写 → 长期保持六级逐步撤提示，只在需要处给「最小必要提示」，答错时区分记忆失败与手滑。</div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:32px">
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">59 拼写 · 识别</span><span style="font:400 12px Roboto;color:#79747E">S1 · 四选一</span></div>
+      <div data-screen-label="59 拼写-识别" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:41</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">拼写练习 · 2 / 12</span></div>
+        <div style="padding:0 16px 12px;flex:none"><div style="height:4px;border-radius:2px;background:#E8DEF8;overflow:hidden"><div style="width:17%;height:100%;background:#6750A4"></div></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:22px;padding:8px 24px 0">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:48px;height:48px;border-radius:24px;background:#E8DEF8;display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#4F378B">volume_up</span></div>
+            <div style="font:400 13px Roboto Mono,monospace;color:#79747E">/ɪnˈvaɪrənmənt/</div>
+          </div>
+          <div style="font:400 17px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">哪个拼写是正确的？</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="height:52px;border-radius:12px;border:1.5px solid #6750A4;background:#F3EDF7;display:flex;align-items:center;padding:0 18px;font:500 16px Roboto Mono,monospace;color:#1D192B">environment</div>
+            <div style="height:52px;border-radius:12px;border:1px solid #79747E;display:flex;align-items:center;padding:0 18px;font:400 16px Roboto Mono,monospace;color:#1D1B20">enviroment</div>
+            <div style="height:52px;border-radius:12px;border:1px solid #79747E;display:flex;align-items:center;padding:0 18px;font:400 16px Roboto Mono,monospace;color:#1D1B20">enviornment</div>
+            <div style="height:52px;border-radius:12px;border:1px solid #79747E;display:flex;align-items:center;padding:0 18px;font:400 16px Roboto Mono,monospace;color:#1D1B20">environmant</div>
+          </div>
+        </div>
+        <div style="padding:14px 24px 28px;flex:none"><div style="height:48px;border-radius:24px;background:#6750A4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,'Noto Sans SC',sans-serif">确认</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">60 拼写 · 引导回忆</span><span style="font:400 12px Roboto;color:#79747E">S4 · 提示梯度 Sheet</span></div>
+      <div data-screen-label="60 拼写-引导回忆" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:41</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">拼写练习 · 7 / 12</span></div>
+        <div style="padding:0 16px 12px;flex:none"><div style="height:4px;border-radius:2px;background:#E8DEF8;overflow:hidden"><div style="width:58%;height:100%;background:#6750A4"></div></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:20px;padding:16px 24px 0">
+          <div style="font:400 15px Roboto,'Noto Sans SC',sans-serif;color:#49454F">环境</div>
+          <div style="font:500 30px Roboto Mono,monospace;color:#1D1B20;letter-spacing:.04em">enviro___ment</div>
+          <div style="height:52px;width:100%;border-radius:12px;border:2px solid #B3261E;display:flex;align-items:center;padding:0 18px;font:500 16px Roboto Mono,monospace;color:#1D1B20">enviroent</div>
+          <div style="display:flex;align-items:center;gap:6px;color:#B3261E"><span style="font-family:'Material Symbols Outlined';font-size:16px">error</span><span style="font:400 13px Roboto,'Noto Sans SC',sans-serif">拼写不正确，你少了一个字母。再试一次。</span></div>
+        </div>
+        <div style="padding:14px 24px 28px;display:flex;gap:12px;flex:none">
+          <div style="flex:1;height:48px;border-radius:24px;border:1px solid #6750A4;display:flex;align-items:center;justify-content:center;gap:6px;font:500 15px Roboto,'Noto Sans SC',sans-serif;color:#6750A4"><span style="font-family:'Material Symbols Outlined';font-size:18px">lightbulb</span>再要一点提示</div>
+          <div style="flex:1;height:48px;border-radius:24px;background:#6750A4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,'Noto Sans SC',sans-serif">确认</div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;background:#FEF7FF;border-radius:28px 28px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.12);padding:10px 24px 28px;display:flex;flex-direction:column;gap:14px">
+          <div style="width:32px;height:4px;border-radius:2px;background:#CAC4D0;margin:0 auto"></div>
+          <div style="font:500 15px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">Hint Level 2 · 错误区域</div>
+          <div style="font:500 22px Roboto Mono,monospace;color:#4F378B;letter-spacing:.03em">enviro___ment</div>
+          <div style="font:400 12px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#79747E">再错会给出结构（en + viron + ment），最后才是完整答案。每升一级，本次得分会降低。</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">61 拼写 · 完整默写</span><span style="font:400 12px Roboto;color:#79747E">S5 · 语境填空</span></div>
+      <div data-screen-label="61 拼写-完整默写" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:41</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">拼写练习 · 11 / 12</span></div>
+        <div style="padding:0 16px 12px;flex:none"><div style="height:4px;border-radius:2px;background:#E8DEF8;overflow:hidden"><div style="width:92%;height:100%;background:#6750A4"></div></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:22px;padding:8px 24px 0">
+          <div style="height:28px;padding:0 12px;border-radius:8px;background:#F3EDF7;display:flex;align-items:center;font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#4F378B;align-self:flex-start">无提示 · 已隔 14 天</div>
+          <div style="font:400 18px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">We need to protect the <span style="border-bottom:2px solid #79747E;padding:0 4px">________</span>.</div>
+          <div style="display:flex;align-items:center;gap:12px"><span style="font-family:'Material Symbols Outlined';font-size:22px;color:#4F378B">volume_up</span><span style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#79747E">播放整句</span></div>
+          <div style="height:52px;border-radius:12px;border:1px solid #79747E;display:flex;align-items:center;padding:0 18px;font:400 16px Roboto Mono,monospace;color:#79747E">请输入完整单词</div>
+        </div>
+        <div style="padding:14px 24px 28px;flex:none"><div style="height:48px;border-radius:24px;background:#6750A4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,'Noto Sans SC',sans-serif">提交</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">62 拼写 · 接触</span><span style="font:400 12px Roboto;color:#79747E">S0 · 词块拆分</span></div>
+      <div data-screen-label="62 拼写-接触" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:41</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">新词 · 1 / 12</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:24px;padding:20px 24px 0">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:12px"><span style="font:500 30px Roboto,sans-serif;color:#1D1B20">environment</span><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#4F378B">volume_up</span></div>
+            <div style="font:400 13px Roboto Mono,monospace;color:#79747E">/ɪnˈvaɪrənmənt/ · n. 环境</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#79747E">词块拆分</div>
+            <div style="display:flex;gap:8px">
+              <div style="height:44px;padding:0 16px;border-radius:10px;background:#F3EDF7;display:flex;align-items:center;font:500 18px Roboto Mono,monospace;color:#4F378B">en</div>
+              <div style="height:44px;padding:0 16px;border-radius:10px;background:#FCEAC8;display:flex;align-items:center;font:500 18px Roboto Mono,monospace;color:#7A4E00">viron</div>
+              <div style="height:44px;padding:0 16px;border-radius:10px;background:#F3EDF7;display:flex;align-items:center;font:500 18px Roboto Mono,monospace;color:#4F378B">ment</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;color:#7A4E00"><span style="font-family:'Material Symbols Outlined';font-size:16px">priority_high</span><span style="font:400 12px Roboto,'Noto Sans SC',sans-serif">中间的 viron 是最常拼错的部分</span></div>
+          </div>
+          <div style="background:#F3EDF7;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:6px">
+            <div style="font:400 15px/1.6 Roboto,sans-serif;color:#1D1B20">We need to protect the environment.</div>
+            <div style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">我们需要保护环境。</div>
+          </div>
+        </div>
+        <div style="padding:14px 24px 28px;flex:none"><div style="height:48px;border-radius:24px;background:#6750A4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,'Noto Sans SC',sans-serif">记住了，下一个</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">63 拼写 · 局部补全</span><span style="font:400 12px Roboto;color:#79747E">S2 · 按弱项挖空</span></div>
+      <div data-screen-label="63 拼写-局部补全" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:41</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">close</span><span style="font:500 13px Roboto,'Noto Sans SC',sans-serif;color:#49454F">拼写练习 · 4 / 12</span></div>
+        <div style="padding:0 16px 12px;flex:none"><div style="height:4px;border-radius:2px;background:#E8DEF8;overflow:hidden"><div style="width:33%;height:100%;background:#6750A4"></div></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:22px;padding:12px 24px 0">
+          <div style="height:28px;padding:0 12px;border-radius:8px;background:#FCEAC8;display:flex;align-items:center;font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#7A4E00;align-self:flex-start">你在这里错过 4 次</div>
+          <div style="font:400 15px Roboto,'Noto Sans SC',sans-serif;color:#49454F">环境</div>
+          <div style="display:flex;align-items:center;gap:4px;font:500 28px Roboto Mono,monospace;color:#1D1B20">
+            <span>en</span>
+            <span style="width:26px;height:38px;border-bottom:2px solid #6750A4;display:flex;align-items:flex-end;justify-content:center;color:#6750A4">v</span>
+            <span style="width:26px;height:38px;border-bottom:2px solid #6750A4;display:flex;align-items:flex-end;justify-content:center;color:#6750A4">i</span>
+            <span style="width:26px;height:38px;border-bottom:2px solid #79747E"></span>
+            <span style="width:26px;height:38px;border-bottom:2px solid #79747E"></span>
+            <span style="width:26px;height:38px;border-bottom:2px solid #79747E"></span>
+            <span>ment</span>
+          </div>
+          <div style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#79747E">补全缺失的字母</div>
+        </div>
+        <div style="padding:14px 24px 28px;flex:none"><div style="height:48px;border-radius:24px;background:#6750A4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,'Noto Sans SC',sans-serif">确认</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:500 13px Roboto;color:#1D1B20">64 拼写能力档案</span><span style="font:400 12px Roboto;color:#79747E">Mastery Vector + 弱点</span></div>
+      <div data-screen-label="64 拼写能力档案" style="width:390px;height:800px;background:#FEF7FF;border:1px solid #CAC4D0;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06)">
+        <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:500 11px Roboto;color:#49454F;flex:none"><span>9:41</span><span style="font-family:'Material Symbols Outlined';font-size:14px">wifi</span></div>
+        <div style="height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;flex:none"><span style="font-family:'Material Symbols Outlined';font-size:24px;color:#1D1B20">arrow_back</span><span style="font:500 17px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">拼写能力</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:22px;padding:8px 20px 0;overflow:hidden">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">六个维度</div>
+            <sc-for list="{{ masteryVector }}" as="mv" hint-placeholder-count="6">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="width:76px;font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#49454F">{{ mv.label }}</span>
+                <div style="flex:1;height:8px;border-radius:4px;background:#E8DEF8;overflow:hidden"><div style="height:100%;background:#6750A4;width:{{ mv.pct }}"></div></div>
+                <span style="width:34px;text-align:right;font:500 12px Roboto,sans-serif;color:#4F378B">{{ mv.pct }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">高频错误类型</div>
+            <sc-for list="{{ profileRates }}" as="p" hint-placeholder-count="4">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:12px;background:#F3EDF7">
+                <span style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">{{ p.name }}</span>
+                <span style="font:500 13px Roboto,sans-serif;color:#B3261E">{{ p.rate }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background:#E8DEF8;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px">
+            <div style="font:500 14px Roboto,'Noto Sans SC',sans-serif;color:#1D192B">建议专项训练</div>
+            <div style="font:400 13px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#4F378B">双写与元音顺序是你最集中的两类错误。安排 receive / believe / necessary 一组对比练习。</div>
+            <div style="height:40px;border-radius:20px;background:#6750A4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font:500 14px Roboto,'Noto Sans SC',sans-serif;align-self:flex-start;padding:0 20px">开始专项练习</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:20px">
+    <div style="flex:1;min-width:340px;background:#FEF7FF;border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:14px">
+      <div style="font:500 17px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">六级拼写阶段</div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <sc-for list="{{ spellingStages }}" as="st" hint-placeholder-count="6">
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:14px;padding:9px 0;border-bottom:1px solid #ECE6F0;align-items:baseline"><span style="font:500 12px Roboto,sans-serif;color:#4F378B">{{ st.stage }}</span><span style="font:400 13px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#49454F">{{ st.desc }}</span></div>
+        </sc-for>
+      </div>
+      <div style="font:400 12px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#79747E">升级看连续正确、是否用过提示、跨日期回忆，不是单次答对；遗忘会触发降级，但不因一次手滑就大幅降档。</div>
+    </div>
+    <div style="flex:1;min-width:300px;background:#FEF7FF;border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:14px">
+      <div style="font:500 17px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">提示梯度 Hint Ladder</div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <sc-for list="{{ hintLadder }}" as="h" hint-placeholder-count="6">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid #ECE6F0"><span style="font:400 13px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">{{ h.level }} · {{ h.hint }}</span><span style="font:500 13px Roboto,sans-serif;color:#4F378B">{{ h.credit }}</span></div>
+        </sc-for>
+      </div>
+      <div style="font:400 12px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#79747E">每升一级提示，本次 Mastery Credit 按表递减；答错优先挖用户历史高频出错的位置，而非随机挖字母。</div>
+    </div>
+    <div style="flex:1;min-width:300px;background:#FEF7FF;border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:14px">
+      <div style="font:500 17px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">错误分类与薄弱画像</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <sc-for list="{{ spellingErrorTypes }}" as="e" hint-placeholder-count="8">
+          <div style="height:30px;padding:0 12px;border-radius:8px;background:#F3EDF7;display:flex;align-items:center;font:400 12px Roboto,'Noto Sans SC',sans-serif;color:#4F378B">{{ e }}</div>
+        </sc-for>
+      </div>
+      <div style="font:400 12px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#49454F">按错误类型累计到用户级「拼写画像」（如元音顺序错误率、双写错误率），命中高频弱点后安排针对性 Pattern Training，而不只是重复同一个单词。</div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:20px">
+    <div style="flex:1;min-width:420px;background:#E8DEF8;border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:14px">
+      <div style="font:500 17px Roboto,'Noto Sans SC',sans-serif;color:#1D192B">阶段升降级规则</div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <sc-for list="{{ spellingStateMachine }}" as="s" hint-placeholder-count="6">
+          <div style="display:grid;grid-template-columns:150px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid rgba(79,55,139,.16);align-items:baseline"><span style="font:500 12px Roboto,'Noto Sans SC',sans-serif;color:#4F378B">{{ s.from }} → {{ s.to }}</span><span style="font:400 13px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#1D192B">{{ s.cond }}</span></div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1;min-width:420px;background:#FEF7FF;border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:14px">
+      <div style="font:500 17px Roboto,'Noto Sans SC',sans-serif;color:#1D1B20">数据结构</div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <sc-for list="{{ spellingSchemas }}" as="sc" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:5px"><span style="font:500 13px Roboto Mono,monospace;color:#4F378B">{{ sc.name }}</span><span style="font:400 12px/1.7 Roboto,'Noto Sans SC',sans-serif;color:#49454F">{{ sc.fields }}</span></div>
+        </sc-for>
+      </div>
+      <div style="font:400 12px/1.6 Roboto,'Noto Sans SC',sans-serif;color:#79747E">单次得分 = 正确性 × 提示惩罚 × 用时系数 × 题型难度 × 间隔系数；复习优先级 = 遗忘风险 + 薄弱片段分 + 错误频次 + 词重要度 + 使用频率。间隔基线 10 分钟 / 1 / 3 / 7 / 14 / 30 / 60 天，由 FSRS 动态调整。</div>
+    </div>
+  </div>
+</section>
+
 <section style="display:flex;flex-direction:column;gap:32px;max-width:1180px">
   <div style="display:flex;flex-direction:column;gap:6px">
     <div style="font:500 12px Roboto;letter-spacing:.14em;color:#6750A4">附录</div>
@@ -1663,6 +2153,7 @@ class Component extends DCLogic {
         { icon: "abc", name: "单词", note: "12 个到期" },
         { icon: "rule", name: "语法", note: "2 个到期" },
         { icon: "article", name: "阅读", note: "现在生成一篇" },
+        { icon: "headphones", name: "听力", note: "先听懂，再看英文" },
         { icon: "forum", name: "情景演练", note: "找个难搭的人说话" },
         { icon: "mic", name: "朗读", note: "挑句子来读" }
       ],
@@ -1740,7 +2231,133 @@ class Component extends DCLogic {
         { en: "I understand, but I did pay for a deluxe room.", cn: "承认对方处境，同时不让步" }
       ],
       askSuggestions: ["它和 stay 有什么区别？", "这个词平时说话会用吗？", "再给我两个例句"],
+      listenScenes: [
+        { icon: "wb_sunny", name: "日常高频", note: "每天都遇到", bg: "#E8DEF8", fg: "#4F378B" },
+        { icon: "work", name: "商务职场", note: "会议 · 客户", bg: "#F3EDF7", fg: "#4F378B" },
+        { icon: "favorite", name: "恋爱关系", note: "约会 · 吵架", bg: "#F3EDF7", fg: "#4F378B" },
+        { icon: "movie", name: "影视场景", note: "电影式表达", bg: "#F3EDF7", fg: "#4F378B" },
+        { icon: "sports_esports", name: "游戏世界", note: "组队 · 指令", bg: "#F3EDF7", fg: "#4F378B" },
+        { icon: "flight", name: "旅行", note: "机场 · 酒店", bg: "#F3EDF7", fg: "#4F378B" },
+        { icon: "terminal", name: "科技 IT", note: "Bug · 项目", bg: "#F3EDF7", fg: "#4F378B" },
+        { icon: "group", name: "朋友社交", note: "玩笑 · 聚会", bg: "#F3EDF7", fg: "#4F378B" },
+        { icon: "emergency", name: "生存英语", note: "求助 · 应急", bg: "#F3EDF7", fg: "#4F378B" }
+      ],
+      listenOptions: [
+        "我勉强准时赶到了会议",
+        "我提前参加了会议",
+        "我几乎没参加那个会议"
+      ],
+      hintLevels: [
+        { tag: "L1", name: "这句在说什么事", cost: "不扣分", costColor: "#2E6B4F", body: "跟迟到、赶时间有关。", bg: "#FEF7FF", border: "#CAC4D0", font: "Roboto,'Noto Sans SC',sans-serif", textColor: "#1D1B20" },
+        { tag: "L2", name: "重点听这个词", cost: "−15", costColor: "#7A4E00", body: "注意听 barely，它决定了整句的意思。", bg: "#FEF7FF", border: "#CAC4D0", font: "Roboto,'Noto Sans SC',sans-serif", textColor: "#1D1B20" },
+        { tag: "L3", name: "挖空的英文", cost: "最高 50", costColor: "#7A4E00", body: "I _____ made it to the meeting on time.", bg: "#FCEAC8", border: "#A9741F", font: "Roboto,sans-serif", textColor: "#7A4E00" },
+        { tag: "L4", name: "完整英文", cost: "最高 20", costColor: "#B3261E", body: "I barely made it to the meeting on time.", bg: "#F9DEDC", border: "#B3261E", font: "Roboto,sans-serif", textColor: "#410E0B" }
+      ],
+      listenStats: [
+        { n: "6/10", label: "第一遍就懂" },
+        { n: "1.6", label: "平均播放次数" },
+        { n: "2", label: "用了提示" }
+      ],
+      listenBreakdown: [
+        { name: "首遍听懂", pct: "60%", n: "6", color: "#2E6B4F" },
+        { name: "第二遍", pct: "20%", n: "2", color: "#6750A4" },
+        { name: "提示后", pct: "10%", n: "1", color: "#A9741F" },
+        { name: "没听懂", pct: "10%", n: "1", color: "#B3261E" }
+      ],
+      listenSkills: [
+        { name: "干净语流", pct: "84%", delta: "84 · +2" },
+        { name: "连读", pct: "71%", delta: "71 · +5" },
+        { name: "弱读", pct: "63%", delta: "63 · +12" },
+        { name: "缩写吞音", pct: "58%", delta: "58 · +3" },
+        { name: "数字日期", pct: "49%", delta: "49 · −1" },
+        { name: "快速语速", pct: "55%", delta: "55 · +4" }
+      ],
+      sceneScores: [
+        { n: "91", name: "游戏" }, { n: "81", name: "日常" }, { n: "76", name: "旅行" },
+        { n: "70", name: "商务" }, { n: "62", name: "恋爱" }, { n: "58", name: "新闻" }
+      ],
+      sentenceSchema: [
+        { key: "text / meaning", desc: "英文原句 + 中文自然表达（不是逐词直译）" },
+        { key: "scene / subScene", desc: "一级场景 + 二级场景，如 商务职场 / 会议" },
+        { key: "intent", desc: "沟通意图：请求、拒绝、表达不满、澄清、调侃…" },
+        { key: "register", desc: "语体：Formal / Professional / Neutral / Casual / Very Casual / Slang" },
+        { key: "tone", desc: "情绪，同时作为 TTS 的合成参数" },
+        { key: "cefr", desc: "A1–C1，与下面三项难度分开记录" },
+        { key: "vocabulary / grammar / listeningDifficulty", desc: "各 1–5；听力难度独立于词汇难度" },
+        { key: "sentenceLength", desc: "short / medium / long" },
+        { key: "audioFeatures", desc: "听觉难点标签：linking、reduction、contraction、flap T、gonna、数字、人名、快语速…" },
+        { key: "keyExpressions", desc: "1–2 个学习点，多了就拆成两句" },
+        { key: "wrongAnswers", desc: "三个干扰项，每个标注误听类型（否定词 / 时态 / 连读粘连 / 相似动作）" },
+        { key: "sourceType / source", desc: "generated 或 quote；quote 需确认授权，MVP 以 Inspired Scene 原创为主" }
+      ],
+      scoreRules: [
+        { case: "第一遍裸听答对", score: "100", color: "#2E6B4F" },
+        { case: "第二遍答对", score: "85", color: "#2E6B4F" },
+        { case: "第三遍答对", score: "70", color: "#6750A4" },
+        { case: "播放四次以上", score: "≤ 60", color: "#6750A4" },
+        { case: "用了场景提示（L1）", score: "不扣", color: "#2E6B4F" },
+        { case: "用了关键词提示（L2）", score: "−15", color: "#A9741F" },
+        { case: "看了挖空英文（L3）", score: "最高 50", color: "#A9741F" },
+        { case: "看完整英文才懂（L4）", score: "20", color: "#B3261E" }
+      ],
+      dailyMix: [
+        { range: "1–6", what: "你选的场景" },
+        { range: "7–8", what: "最近听错的，换一句重新考同一个难点" },
+        { range: "9", what: "旧内容复习，走 FSRS 的到期队列" },
+        { range: "10", what: "探索：没选过的场景来一句" }
+      ],
+      spellingStages: [
+        { stage: "S0 接触", desc: "展示单词、音标、词块拆分与例句，不要求拼写" },
+        { stage: "S1 识别", desc: "四选一辨认正确拼写与常见错误形式" },
+        { stage: "S2 局部回忆", desc: "挖去用户历史高频出错的字母位置，非随机挖空" },
+        { stage: "S3 结构回忆", desc: "按词块（如 en + ___ + ment）重建单词" },
+        { stage: "S4 引导回忆", desc: "仅给首字母 / 长度 / 音节数等少量提示，完整输入" },
+        { stage: "S5 完整默写", desc: "无字符提示，可放在语境句子中默写" },
+        { stage: "S6 长期保持", desc: "跨多个时间点（1/3/7/21 天）仍能无提示默写正确" }
+      ],
+      hintLadder: [
+        { level: "L0", hint: "仅提示「拼写不正确，再试一次」", credit: "1.0" },
+        { level: "L1", hint: "指出错误性质（如少了几个字母）", credit: "0.8" },
+        { level: "L2", hint: "标出错误出现的区域", credit: "0.6" },
+        { level: "L3", hint: "给出部分结构片段", credit: "0.4" },
+        { level: "L4", hint: "展示完整词块拆分", credit: "0.2" },
+        { level: "L5", hint: "显示完整答案", credit: "0" }
+      ],
+      masteryVector: [
+        { label: "识别", pct: "98%" },
+        { label: "局部回忆", pct: "91%" },
+        { label: "词块回忆", pct: "82%" },
+        { label: "音形对应", pct: "72%" },
+        { label: "完整默写", pct: "56%" },
+        { label: "长期保持", pct: "41%" }
+      ],
+      profileRates: [
+        { name: "双写错误 accomodation", rate: "25%" },
+        { name: "后缀变化 happyness", rate: "21%" },
+        { name: "元音顺序 recieve", rate: "18%" },
+        { name: "漏字 enviroment", rate: "12%" }
+      ],
+      spellingStateMachine: [
+        { from: "S1 识别", to: "S2 局部", cond: "连续识别正确 ≥ 2 次" },
+        { from: "S2 局部", to: "S3 词块", cond: "两个不同缺失位置答对，且近期错误率 < 30%" },
+        { from: "S3 词块", to: "S4 引导", cond: "词块回忆正确 ≥ 2 次，且至少 1 次未用字符提示" },
+        { from: "S4 引导", to: "S5 默写", cond: "引导回忆成功 ≥ 2 次，且提示强度 ≤ LOW" },
+        { from: "S5 默写", to: "S6 保持", cond: "无提示默写成功 ≥ 3 次，跨 ≥ 2 个日期，且至少一次间隔 ≥ 7 天" },
+        { from: "降级", to: "回退一级", cond: "该阶段连续错误 2 次；单次手滑（编辑距离 1 且用时极短）不降级" }
+      ],
+      spellingSchemas: [
+        { name: "WordSpellingProgress", fields: "stage · 六维分数 · last/next_review_at · success/failure_streak · review_count · free_recall_success_count · current_interval_days" },
+        { name: "SpellingAttempt", fields: "question_type · expected / answer · correct · hint_level · response_time_ms · error_types[] · weak_segment" },
+        { name: "UserSpellingProfile", fields: "omission / insertion / substitution / transposition / doubling / vowel_order / suffix 各错误率 · avg_free_recall_time_ms" }
+      ],
+      spellingErrorTypes: ["漏字 Omission", "多字 Insertion", "替换 Substitution", "顺序颠倒 Transposition", "双写错误 Doubling", "元音顺序 Vowel Order", "拼音式拼写 Phonetic", "词形变化 Morphology"],
       m3map: [
+        { ui: "拼写 · 识别/默写题", cmp: "OutlinedTextField + RadioButton 列表", note: "S1 用选项列表；S4/S5 用单一输入框，实时校验" },
+        { ui: "拼写 · 提示梯度", cmp: "ModalBottomSheet 分级展开", note: "每次仅展开下一级提示，不可跳级查看" },
+        { ui: "听力 · 播放按钮", cmp: "FilledIconButton（112dp）+ ExoPlayer", note: "唯一主操作；播放次数即时累加并展示，不做倒计时" },
+        { ui: "听力 · 渐进提示", cmp: "ModalBottomSheet + 四级 Card", note: "L1/L2 不含拼写；L3 起给英文并压分数上限" },
+        { ui: "听力 · 揭晓页", cmp: "Column + 主 Button「再听一次」", note: "「下一句」是 TextButton；英文只在这一步之后出现" },
+        { ui: "听力 · 能力档案", cmp: "LinearProgressIndicator 组 + Card 网格", note: "听觉难点与场景熟练度分开展示，带周环比" },
         { ui: "摇一摇提问 · 抽屉", cmp: "ModalBottomSheet（可拖拽扩展）", note: "初始 peek 高度约 45%，可上拉到 88%；原页面保持可见，不做整页跳转" },
         { ui: "摇一摇提问 · 触发", cmp: "SensorManager TYPE_ACCELEROMETER", note: "阈值可调，300ms 去抖；无传感器降级为顶栏 IconButton" },
         { ui: "摇一摇提问 · 上下文卡", cmp: "可折叠 Surface", note: "各页面向 AskContextProvider 注册结构化对象，非截图；用户可展开查看 AI 拿到了什么" },
@@ -1803,6 +2420,10 @@ class Component extends DCLogic {
         { where: "演练 · 总结", text: "谈成了，差价退了。五件事做到四件，用了 9 轮。" },
         { where: "提问 · 入口", text: "想问什么？摇一摇随时能叫我出来 · 往下拉关掉。" },
         { where: "提问 · 离线", text: "现在问不了。你可以先把问题记下来，联网后我一起答。" },
+        { where: "听力 · 首页", text: "今天想听什么？约 6 分钟 · 戴耳机效果更好。" },
+        { where: "听力 · 裸听", text: "这句话是什么意思？第一遍就听懂，分数最高。" },
+        { where: "听力 · 揭晓", text: "知道意思了，再听一次。" },
+        { where: "听力 · 总结", text: "明天给你加 3 句弱读的。听不出来不是笨，是这玩意儿本来就没发全。" },
         { where: "隐私说明", text: "没有账号，也不往云上传东西。卸载就一起消失，想留着记得先导出。" }
       ],
       a11y: [
@@ -1822,10 +2443,12 @@ class Component extends DCLogic {
         { tag: "P0", title: "失败不破坏数据", scope: "AI 超时、格式校验失败、离线三条路径；每步完成即落库。", accept: "在任意一步断网，已完成步骤仍计入记录，且能重试 / 跳过 / 稍后继续。" },
         { tag: "P1", title: "自适应测试与画像", scope: "动态升降难度的题目引擎 + 结果页 + 手动微调等级。", accept: "测试可中断续答；结果页给出等级、词汇区间、置信度和待观察项。" },
         { tag: "P1", title: "摇一摇提问", scope: "AskContextProvider 接口（单词 / 语法 / 阅读 / 题目四类页面各自实现）、加速度传感器触发与降级方案、可拖拽提问抽屉、连续追问上下文保持、答案里的新词一键加入复习。", accept: "四类页面摇出的上下文卡内容均正确且可展开查看；关掉抽屉后学习流程原地继续、步骤不重置；追问不需用户重述对象；离线时可暂存问题并在联网后取回。" },
+        { tag: "P1", title: "听力训练（核心 loop）", scope: "场景选择 → TTS 播放与计数 → 中文三选一 → 四级提示 → 英文揭晓 → 再听一次 → Listening Score → 10 句总结。句子按结构化 schema 生成并缓存音频。不做语音识别、Shadowing 评分、多口音、自由输入判定。", accept: "答题前任何位置不出现英文原句（L3 提示除外）；播放次数、提示级别均计入分数且用户可见；揭晓页主按钮是“再听一次”；答错时能指出误听类型而不只是判错；离线可听已缓存音频。" },
         { tag: "P1", title: "渐进式阅读与点词", scope: "生成请求携带复习 / 已掌握 / 新内容清单，生成后本地校验比例与目标词覆盖，未通过则重试或降级。", accept: "阅读中今日复习词的实际出现率可被程序检出并展示，不靠 AI 自述。" },
         { tag: "P2", title: "朗读与录音", scope: "Azure Speech 识别 / 发音评估、按需权限、最多 3 条反馈、录音默认即用即删。", accept: "拒绝权限后朗读整步可跳过且不阻塞今日流程；未配置 Speech 时入口显示“需要配置”。" },
         { tag: "P2", title: "每日提醒", scope: "WorkManager 定时任务 + 提醒设置页（开关、时间、积压提醒），默认 21:00 开启，当天已完成则不发。", accept: "一天最多一条；拒绕通知权限后设置页显示“系统里关着”并可跳转；关掉提醒不影响复习调度。" },
         { tag: "P2", title: "情景演练", scope: "场景生成（自定义 / 推荐 / 随机）、带性格与阻力的角色提示词、四选一与自由输入两种输入、每轮目标判定器、结束后三条反馈与关键句重演。判定器与对话生成分开调用，判定只返回结构化结果。", accept: "对话中除“对方理解相反”外不出现任何纠错 UI；目标清单的每一条都能指向具体轮次；总结固定三条且每条带“你说的 / 改成 / 为什么”；留存的表达能进入 FSRS 复习。" },
+        { tag: "P1", title: "渐进式拼写训练", scope: "S0-S6 阶段状态机、六级提示梯度、8 类错误分类器、薄弱片段与拼写画像、按画像挖空的题目生成。", accept: "同一单词跨天复习时阶段能正确升降；答错时给出的下一级提示只增加一档；错误类型入库并可在画像页看到分布。" },
         { tag: "P2", title: "知识库与数据管理", scope: "单词 / 语法列表筛选、详情页、导出 / 导入 / 清除。", accept: "导出文件可完整导入到新装机，恢复后复习时间不错乱。" }
       ],
       assumptions: [
@@ -1836,6 +2459,10 @@ class Component extends DCLogic {
         "提问只在学习类页面可用（单词、语法、阅读、题目），设置与记录页不响应摇一摇。",
         "提问上下文用结构化字段，不截屏、不发整页文本；抽屉关闭即结束会话，不做全局聊天历史列表。",
         "提问复用用户自己配的 AI 服务，不单独计费也不限次数。",
+        "听力模块第一版只做中文三选一；自由输入、自我判断两种答题模式列入后续。",
+        "听力内容以 Inspired Scene 原创为主，不建立影视 / 游戏台词数据库，避开授权问题。",
+        "TTS 走 Azure Speech（与朗读共用配置）；未配置时听力入口显示“需要配置”。音频生成后缓存到本机，支持离线重听。",
+        "听力分与 FSRS 分开：分数只用于展示成长，句子的复习到期仍由 FSRS 调度。",
         "情景演练放在「学习」下作为第五个入口，不进今日必做流程；一次约 8〜12 轮。",
         "演练只写不说（文字对话），语音输入只做听写转文字，不做口语评分，发音反馈仍归朗读模块。",
         "判定器和对话生成分两次调用：对话管演，判定只返回子目标命中与是否沟通失败。",
@@ -1847,6 +2474,12 @@ class Component extends DCLogic {
         "首启四步中只有 AI 服务必填，Azure Speech 可跳过。"
       ],
       openQuestions: [
+        "拼写训练是并入现有单词流程的一步，还是作为独立入口（像听力那样）？",
+        "「手滑」判定用什么门槛：编辑距离 1 且用时 < 2 秒不计错，还是让用户自己点「我打错了」？",
+        "Mastered 用宽松档（间隔 ≥ 7 天）还是严格档（≥ 14 天）？",
+        "听力选项固定三选一还是四选一（规格里两种都提到了）？",
+        "听力训练算不算进今日必做流程，还是只做自由学习入口？",
+        "听力分要不要在首页展示（可能与“不制造打卡压力”冲突）？",
         "提问的回答要不要限长度（现在没限，长答在抽屉里要滑很久）？",
         "同一词条的历史问答要不要在下次提问时作为上下文带上（影响 token 成本）？",
         "情景演练的难度旋钮要不要让用户自己调，还是只给“换个更难的对手”整体切档？",
@@ -1861,6 +2494,8 @@ class Component extends DCLogic {
         "发音口音只给美音 / 英音两档够吗？"
       ],
       costRisks: [
+        "听力句库需要 12 个字段的结构化生成 + 人工抽检，干扰项要“像真的误听”而不是随便错，是这个模块最难的部分。",
+        "TTS 音频要按 tone 合成并缓存，同一句话的正常 / 慢速两版都要存，占用与成本都要算。",
         "四类页面都要实现一套结构化上下文导出，阅读页还得知道“当前可视段落”，比先想的麻烦。",
         "摇一摇误触在公交、走路场景很常见，阈值需要真机调，并且得提供灵敏度开关。",
         "每轮两次模型调用（对话 + 判定）把演练的 token 成本和延迟都翻倍，需要合并提示词或限制判定频率。",
