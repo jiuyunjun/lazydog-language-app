@@ -72,6 +72,11 @@ interface LearningContentGenerator {
   （一次压住 49 秒），而真正的接通只有几十毫秒。等响应头才切状态等于整个思考期都写着"接通中"。
 - reasoning 各家字段名和形状都不一样（`reasoning_content` / `reasoning`，字符串或对象），
   按 `JsonElement` 收，取得出字符串才显示；取不出来就只说"模型在想"，不猜。
+- **OpenAI 官方的 Chat Completions 一个字都不发**：streaming delta 只有 content / role /
+  refusal / tool_calls，原始思维链任何接口都不给。上面那套解析是给 DeepSeek / vLLM /
+  OpenRouter 这类加了扩展字段的服务商用的。要在等待期间显示 OpenAI 模型的思考，
+  只能改用 Responses API 的 `reasoning.summary`（流式事件 `response.reasoning_summary_text.delta`），
+  那是一次换接口的改动，没做。
 - 增量块的 `content` 可能是 `null`（不少服务商第一块就是），解析必须容忍，否则整块被丢掉。
 - 思考的字符数一样算进 `MAX_RESPONSE_CHARS`：转起圈来的推理同样是一直收、一直计费。
 

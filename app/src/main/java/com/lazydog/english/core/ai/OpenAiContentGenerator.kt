@@ -890,7 +890,14 @@ class OpenAiContentGenerator(
     private data class StreamDelta(
         /** 有的服务商第一块会发 `"content": null`，声明成非空会让整块解析失败。 */
         val content: String? = null,
-        /** 推理增量。各家字段名和形状都不一样，所以按 JsonElement 收，取得出字符串才用。 */
+        /**
+         * 推理增量。各家字段名和形状都不一样，所以按 JsonElement 收，取得出字符串才用。
+         *
+         * 注意：**OpenAI 官方的 Chat Completions 不发这个字段**（delta 只有 content / role /
+         * refusal / tool_calls），原始思维链任何接口都不给。想看思考只能换 Responses API 的
+         * `reasoning.summary`，它会流式发 `response.reasoning_summary_text.delta`。
+         * 这里留着是给 DeepSeek / vLLM / OpenRouter 这类会加扩展字段的服务商用的。
+         */
         @SerialName("reasoning_content") val reasoningContent: JsonElement? = null,
         val reasoning: JsonElement? = null,
     ) {
