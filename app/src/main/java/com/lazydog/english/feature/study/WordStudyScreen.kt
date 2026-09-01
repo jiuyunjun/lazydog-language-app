@@ -2,11 +2,14 @@ package com.lazydog.english.feature.study
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -482,6 +485,85 @@ private fun SpellingChunks(term: String, facts: SpellingFacts) {
     }
 }
 
+/**
+ * 释义下面的那几个搭配短语。
+ *
+ * 点一下就念，同时把中文翻译显示在下面——搭配是这个词真正的用法，
+ * 但一串裸英文短语在初学者眼里和没写差不多：不知道怎么读，也不确定是什么意思。
+ * 翻译按需现取（第一次点才发请求），取到就留着，反复点只是重念一遍。
+ * 双击查词、三击讲整句仍然照旧，这里只是给单击补了个事做。
+ */
+@Composable
+private fun CollocationChip(phrase: String) {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val scope = rememberCoroutineScope()
+    var translation by remember(phrase) { mutableStateOf("") }
+    var failed by remember(phrase) { mutableStateOf("") }
+    var loading by remember(phrase) { mutableStateOf(false) }
+
+    fun tap() {
+        scope.launch { app.speechController.speak(phrase) }
+        if (translation.isNotBlank() || loading) return
+        loading = true
+        failed = ""
+        scope.launch {
+            val result = app.contentGenerator.explainSentence(
+                phrase,
+                app.userPreferences.vocabLevelDescription.first(),
+            )
+            loading = false
+            when (result) {
+                is GenerationResult.Success -> translation = result.data.translationZh
+                is GenerationResult.Failure -> failed = result.reason
+            }
+        }
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                InteractiveEnglishText(
+                    text = phrase,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    onSingleTap = { tap() },
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                    contentDescription = "读这个搭配",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+            when {
+                translation.isNotBlank() -> Text(
+                    text = translation,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                loading -> Text(
+                    text = "翻译中…",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                failed.isNotBlank() -> Text(
+                    text = "翻译没拿到，再点一下",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StudyCardView(
     card: StudyCard,
@@ -541,20 +623,11 @@ private fun StudyCardView(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 if (card.collocations.isNotEmpty()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        card.collocations.forEach { phrase ->
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                shape = MaterialTheme.shapes.small,
-                            ) {
-                                InteractiveEnglishText(
-                                    text = phrase,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                )
-                            }
-                        }
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        card.collocations.forEach { phrase -> CollocationChip(phrase) }
                     }
                 }
                 // S0 接触（设计稿 62 屏）：新词第一次露面就把词块拆开摆着。
