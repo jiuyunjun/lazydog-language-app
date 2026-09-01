@@ -60,6 +60,8 @@ import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.planning.DailyStep
 import java.time.LocalDate
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -102,6 +104,9 @@ private sealed interface WordStudyPhase {
 }
 
 
+/** 到期复习到了这么多张，才值得提前把新词写好——复习几张就退出的话那一次生成就白花了。 */
+private const val PREFETCH_AFTER_DUE_CARDS = 3
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WordStudyScreen(
@@ -117,6 +122,11 @@ fun WordStudyScreen(
     var newLearnedCount by remember { mutableStateOf(0) }
     var progressChars by remember { mutableStateOf(0) }
     val maxNewWords by app.userPreferences.maxNewWords.collectAsState(initial = 5)
+    /**
+     * 正在后台先生成的新词。复习到期卡片要花上一两分钟，而这段时间正好够把新词写完——
+     * 等用户点"学新词"时内容已经在手上了，不用再对着进度条等一次。
+     */
+    var prefetch by remember { mutableStateOf<Deferred<GenerationResult<List<GeneratedWord>>>?>(null) }
 
     // 走到总结页就算完成了今日的单词步骤。
     LaunchedEffect(phase is WordStudyPhase.Summary) {
@@ -149,21 +159,28 @@ fun WordStudyScreen(
         phase = if (due.isEmpty()) WordStudyPhase.OfferNew(0) else WordStudyPhase.Cards(due, 0, revealed = false)
     }
 
+    suspend fun requestNewWords(): GenerationResult<List<GeneratedWord>> {
+        val prefs = app.userPreferences
+        val known = repository.vocabulary.first().map { it.detail.term }.take(200)
+        return app.contentGenerator.generateNewWords(
+            NewWordsRequest(
+                count = prefs.maxNewWords.first(),
+                learnerLevel = prefs.vocabLevelDescription.first(),
+                topics = prefs.topics.first().toList(),
+                knownTerms = known,
+            ),
+            onProgress = { chars -> progressChars = chars },
+        )
+    }
+
     fun generateNewWords() {
         phase = WordStudyPhase.Generating
         progressChars = 0
         scope.launch {
-            val prefs = app.userPreferences
-            val known = repository.vocabulary.first().map { it.detail.term }.take(200)
-            val result = app.contentGenerator.generateNewWords(
-                NewWordsRequest(
-                    count = prefs.maxNewWords.first(),
-                    learnerLevel = prefs.vocabLevelDescription.first(),
-                    topics = prefs.topics.first().toList(),
-                    knownTerms = known,
-                ),
-                onProgress = { chars -> progressChars = chars },
-            )
+            // 已经在后台跑的那次直接等它，别再发一次重复的请求。
+            val running = prefetch ?: scope.async { requestNewWords() }.also { prefetch = it }
+            val result = running.await()
+            prefetch = null
             phase = when (result) {
                 is GenerationResult.Success -> WordStudyPhase.Cards(
                     cards = result.data.map { it.toCard() },
@@ -205,6 +222,19 @@ fun WordStudyScreen(
                 WordStudyPhase.Summary(reviewedCount, newLearnedCount)
             }
         }
+    }
+
+    /**
+     * 复习卡片够多时，趁人还在复习就把新词先写好（"提前加载"）。
+     *
+     * 只在有一定量到期复习时才提前发：复习几张卡就走人的话，那一次生成就白花了。
+     * 结果缓存在 [prefetch] 里，点"学新词"时直接取。
+     */
+    LaunchedEffect(phase is WordStudyPhase.Cards) {
+        val cards = (phase as? WordStudyPhase.Cards)?.cards ?: return@LaunchedEffect
+        if (cards.any { it.isNew }) return@LaunchedEffect
+        if (cards.size < PREFETCH_AFTER_DUE_CARDS || prefetch != null) return@LaunchedEffect
+        prefetch = scope.async { requestNewWords() }
     }
 
     // 只有正翻着卡片时才能提问；生成中、总结页摇了也不弹。

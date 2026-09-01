@@ -136,88 +136,107 @@ object ListeningValidation {
 
     data class Validated(val valid: List<ListeningItem>, val droppedNotes: List<String>)
 
-    private val allowedCefr = setOf("A1", "A2", "B1", "B2", "C1")
-
     /** 逐条校验，坏的丢掉并记原因；剩几条由调用方决定够不够开一局。 */
     fun validate(items: List<ListeningItem>, maxCount: Int): Validated {
-        val valid = mutableListOf<ListeningItem>()
-        val dropped = mutableListOf<String>()
-        val seen = mutableSetOf<String>()
-        for (raw in items) {
+        val session = Session(maxCount)
+        items.forEach { session.offer(it) }
+        return session.result
+    }
+
+    /**
+     * 一批句子的校验过程，可以一条一条喂。
+     *
+     * 流式生成时第一句刚闭合就要能开练，等不到整批收完（英语听力训练模块DESIGN.md §18），
+     * 所以"本批重复""收够了没有"这些跨条目的状态得留在这里，而不是每次重头算一遍。
+     */
+    class Session(private val maxCount: Int) {
+
+        private val seen = mutableSetOf<String>()
+        private val valid = mutableListOf<ListeningItem>()
+        private val dropped = mutableListOf<String>()
+
+        val full: Boolean get() = valid.size >= maxCount
+
+        val result: Validated get() = Validated(valid.toList(), dropped.toList())
+
+        /** 收下一条，返回校验通过后的条目；被丢掉时返回 null（原因记在 [result] 里）。 */
+        fun offer(raw: ListeningItem): ListeningItem? {
+            if (full) return null
             val item = raw.trimmed()
             val reason = reject(item, seen)
-            if (reason == null) {
-                seen.add(item.textEn.lowercase())
-                valid.add(item)
-            } else {
+            if (reason != null) {
                 dropped.add("${item.textEn.take(40).ifBlank { "(空)" }}：$reason")
+                return null
             }
-            if (valid.size == maxCount) break
-        }
-        return Validated(valid, dropped)
-    }
-
-    private fun reject(item: ListeningItem, seen: Set<String>): String? {
-        val words = wordsOf(item.textEn)
-        return when {
-            item.textEn.isBlank() -> "句子为空"
-            words.size !in 4..30 -> "句子长度应该在 4~30 词"
-            Regex("[\\u4E00-\\u9FFF]").containsMatchIn(item.textEn) -> "英文句子里混了中文"
-            item.textEn.lowercase() in seen -> "本批重复"
-            item.meaningZh.isBlank() || item.meaningZh.length > 120 -> "中文意思缺失或过长"
-            item.distractors.size != 3 -> "干扰项必须正好三条"
-            item.distractors.any { it.meaningZh.isBlank() || it.meaningZh.length > 120 } ->
-                "干扰项缺失或过长"
-            // 选项撞车的话四选一会退化成三选一甚至二选一，题就白出了。
-            item.allOptionsZh.map(::normalizeZh).toSet().size != 4 -> "选项之间重复"
-            // 答错后要统计"你栽在哪一类"，所以每条都得说清自己是哪一类、为什么。
-            item.distractors.any { it.whyZh.isBlank() || it.whyZh.length > 160 } ->
-                "干扰项没说清为什么会听错"
-            item.distractors.map { it.mishearType }.distinct().size != 3 -> "三条干扰项的误听类型重复"
-            item.keyExpression.en.isBlank() || item.keyExpression.meaningZh.isBlank() -> "重点表达不完整"
-            // 揭晓页和挖空提示都要拿这个表达去原句里定位，对不上就整题作废。
-            !item.textEn.lowercase().contains(item.keyExpression.en.lowercase().trim()) ->
-                "重点表达不在句子里"
-            item.cefr.uppercase() !in allowedCefr -> "CEFR 等级不合法"
-            item.listeningDifficulty !in 1..5 -> "听力难度应该是 1~5"
-            item.audioFeatures.isEmpty() || item.audioFeatures.size > 5 -> "听觉难点应该有 1~5 个"
-            item.audioFeatures.any { it.isBlank() || it.length > 30 } -> "听觉难点标签不合法"
-            item.sceneHintZh.isBlank() || item.sceneHintZh.length > 60 -> "场景提示缺失或过长"
-            // 提示是给没听懂的人用的，先把答案抖出来就没意义了。
-            leaksAnswer(item.sceneHintZh, item) -> "场景提示泄露了答案"
-            item.keywordHintZh.isBlank() || item.keywordHintZh.length > 80 -> "关键词提示缺失或过长"
-            item.sceneZh.isBlank() || item.intentZh.isBlank() -> "场景或意图缺失"
-            else -> null
+            seen.add(item.textEn.lowercase())
+            valid.add(item)
+            return item
         }
     }
-
-    /** 提示里出现整句英文，或者把正确中文原样抄了一遍，都算泄露。 */
-    private fun leaksAnswer(hint: String, item: ListeningItem): Boolean =
-        hint.contains(item.textEn, ignoreCase = true) ||
-            normalizeZh(hint).contains(normalizeZh(item.meaningZh))
-
-    private fun normalizeZh(value: String): String =
-        value.filterNot { it.isWhitespace() || it in "，。！？、；：“”‘’,.!?;:\"'" }
-
-    private fun ListeningItem.trimmed() = copy(
-        textEn = textEn.trim(),
-        meaningZh = meaningZh.trim(),
-        sceneZh = sceneZh.trim(),
-        subSceneZh = subSceneZh.trim(),
-        intentZh = intentZh.trim(),
-        toneZh = toneZh.trim(),
-        registerZh = registerZh.trim(),
-        cefr = cefr.trim().uppercase(),
-        audioFeatures = audioFeatures.map { it.trim().lowercase() }.filter { it.isNotBlank() }.distinct(),
-        keyExpression = keyExpression.copy(
-            en = keyExpression.en.trim(),
-            meaningZh = keyExpression.meaningZh.trim(),
-        ),
-        distractors = distractors.map { it.copy(meaningZh = it.meaningZh.trim(), whyZh = it.whyZh.trim()) },
-        sceneHintZh = sceneHintZh.trim(),
-        keywordHintZh = keywordHintZh.trim(),
-    )
 }
+
+private val allowedCefr = setOf("A1", "A2", "B1", "B2", "C1")
+
+private fun reject(item: ListeningItem, seen: Set<String>): String? {
+    val words = wordsOf(item.textEn)
+    return when {
+        item.textEn.isBlank() -> "句子为空"
+        words.size !in 4..30 -> "句子长度应该在 4~30 词"
+        Regex("[\\u4E00-\\u9FFF]").containsMatchIn(item.textEn) -> "英文句子里混了中文"
+        item.textEn.lowercase() in seen -> "本批重复"
+        item.meaningZh.isBlank() || item.meaningZh.length > 120 -> "中文意思缺失或过长"
+        item.distractors.size != 3 -> "干扰项必须正好三条"
+        item.distractors.any { it.meaningZh.isBlank() || it.meaningZh.length > 120 } ->
+            "干扰项缺失或过长"
+        // 选项撞车的话四选一会退化成三选一甚至二选一，题就白出了。
+        item.allOptionsZh.map(::normalizeZh).toSet().size != 4 -> "选项之间重复"
+        // 答错后要统计"你栽在哪一类"，所以每条都得说清自己是哪一类、为什么。
+        item.distractors.any { it.whyZh.isBlank() || it.whyZh.length > 160 } ->
+            "干扰项没说清为什么会听错"
+        item.distractors.map { it.mishearType }.distinct().size != 3 -> "三条干扰项的误听类型重复"
+        item.keyExpression.en.isBlank() || item.keyExpression.meaningZh.isBlank() -> "重点表达不完整"
+        // 揭晓页和挖空提示都要拿这个表达去原句里定位，对不上就整题作废。
+        !item.textEn.lowercase().contains(item.keyExpression.en.lowercase().trim()) ->
+            "重点表达不在句子里"
+        item.cefr.uppercase() !in allowedCefr -> "CEFR 等级不合法"
+        item.listeningDifficulty !in 1..5 -> "听力难度应该是 1~5"
+        item.audioFeatures.isEmpty() || item.audioFeatures.size > 5 -> "听觉难点应该有 1~5 个"
+        item.audioFeatures.any { it.isBlank() || it.length > 30 } -> "听觉难点标签不合法"
+        item.sceneHintZh.isBlank() || item.sceneHintZh.length > 60 -> "场景提示缺失或过长"
+        // 提示是给没听懂的人用的，先把答案抖出来就没意义了。
+        leaksAnswer(item.sceneHintZh, item) -> "场景提示泄露了答案"
+        item.keywordHintZh.isBlank() || item.keywordHintZh.length > 80 -> "关键词提示缺失或过长"
+        item.sceneZh.isBlank() || item.intentZh.isBlank() -> "场景或意图缺失"
+        else -> null
+    }
+}
+
+/** 提示里出现整句英文，或者把正确中文原样抄了一遍，都算泄露。 */
+private fun leaksAnswer(hint: String, item: ListeningItem): Boolean =
+    hint.contains(item.textEn, ignoreCase = true) ||
+        normalizeZh(hint).contains(normalizeZh(item.meaningZh))
+
+private fun normalizeZh(value: String): String =
+    value.filterNot { it.isWhitespace() || it in "，。！？、；：“”‘’,.!?;:\"'" }
+
+private fun ListeningItem.trimmed() = copy(
+    textEn = textEn.trim(),
+    meaningZh = meaningZh.trim(),
+    sceneZh = sceneZh.trim(),
+    subSceneZh = subSceneZh.trim(),
+    intentZh = intentZh.trim(),
+    toneZh = toneZh.trim(),
+    registerZh = registerZh.trim(),
+    cefr = cefr.trim().uppercase(),
+    audioFeatures = audioFeatures.map { it.trim().lowercase() }.filter { it.isNotBlank() }.distinct(),
+    keyExpression = keyExpression.copy(
+        en = keyExpression.en.trim(),
+        meaningZh = keyExpression.meaningZh.trim(),
+    ),
+    distractors = distractors.map { it.copy(meaningZh = it.meaningZh.trim(), whyZh = it.whyZh.trim()) },
+    sceneHintZh = sceneHintZh.trim(),
+    keywordHintZh = keywordHintZh.trim(),
+)
 
 internal fun wordsOf(text: String): List<String> =
     Regex("[A-Za-z][A-Za-z'’-]*").findAll(text).map { it.value }.toList()

@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +66,7 @@ import com.lazydog.english.domain.listening.ListeningAnswer
 import com.lazydog.english.domain.listening.ListeningHintLevel
 import com.lazydog.english.domain.listening.ListeningItem
 import com.lazydog.english.domain.listening.ListeningSetRequest
+import com.lazydog.english.domain.listening.analyzeSoundChanges
 import com.lazydog.english.domain.listening.audioFeatureLabelZh
 import com.lazydog.english.domain.listening.baseScore
 import com.lazydog.english.domain.listening.maskKeyExpression
@@ -75,10 +77,19 @@ import kotlin.random.Random
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private enum class ListeningPhase { Pick, Loading, Question, Reveal, Summary }
+private enum class ListeningPhase { Pick, Loading, Question, Reveal, Waiting, Summary }
 
 /** 一轮训练的句数（设计稿屏 50「开始 10 句训练 · 约 6 分钟」）。 */
 private const val SET_SIZE = 10
+
+/**
+ * 攒够这么多句就开练，剩下的边听边补。
+ *
+ * 十句一次性等下来是几十秒白屏，而第一句到手时训练就已经能开始了；用户听前几句的
+ * 这段时间，后面的句子还在源源不断补进来。留三句余量是因为前几句答得快——真追上了
+ * 会停在"下一句还在写"上，但那已经是最坏情况。
+ */
+private const val MIN_ITEMS_TO_START = 3
 
 /**
  * 听力训练（设计稿屏 50～58、英语听力训练模块DESIGN.md）。核心循环是：
@@ -114,6 +125,8 @@ fun ListeningScreen(onExit: () -> Unit) {
     var lastAnswer by remember { mutableStateOf<ListeningAnswer?>(null) }
     var savedExpression by remember { mutableStateOf(false) }
     var progressChars by remember { mutableStateOf(0) }
+    /** 这一轮的句子还在生成中：总数按 [SET_SIZE] 显示，答到头也先等一下而不是收工。 */
+    var generating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmExit by remember { mutableStateOf(false) }
 
@@ -144,6 +157,7 @@ fun ListeningScreen(onExit: () -> Unit) {
     }
 
     fun startRound(newItems: List<ListeningItem>) {
+        generating = false
         items = newItems
         index = 0
         answers = emptyList()
@@ -156,6 +170,12 @@ fun ListeningScreen(onExit: () -> Unit) {
         phase = ListeningPhase.Loading
         error = null
         progressChars = 0
+        items = emptyList()
+        index = 0
+        answers = emptyList()
+        lastAnswer = null
+        resetQuestion()
+        generating = true
         scope.launch {
             val prefs = app.userPreferences
             val result = app.contentGenerator.generateListeningSet(
@@ -167,12 +187,25 @@ fun ListeningScreen(onExit: () -> Unit) {
                     topics = prefs.topics.first().toList(),
                 ),
                 onProgress = { progressChars = it },
+                // 一句一句接：攒够开局的句数就进答题页，别让人对着进度条等完整批。
+                onItem = { item ->
+                    items = items + item
+                    if (phase == ListeningPhase.Loading && items.size >= MIN_ITEMS_TO_START) {
+                        phase = ListeningPhase.Question
+                    }
+                },
             )
+            generating = false
             when (result) {
-                is GenerationResult.Success -> startRound(result.data)
+                // 服务端没走流式时一句都没增量回调过，这里补上；已经开局的话也是同一批内容。
+                is GenerationResult.Success -> {
+                    items = result.data
+                    if (phase == ListeningPhase.Loading) startRound(result.data)
+                }
                 is GenerationResult.Failure -> {
                     error = result.reason
-                    phase = ListeningPhase.Pick
+                    // 已经开练了就把手上的句子听完，不把人踢回选场景页。
+                    if (phase == ListeningPhase.Loading) phase = ListeningPhase.Pick
                 }
             }
         }
@@ -197,7 +230,8 @@ fun ListeningScreen(onExit: () -> Unit) {
         // 人没走，下一句马上就要放——把揭晓页的重听掐掉，但别放掉已经热起来的蓝牙链路。
         app.speechController.stopSpeaking(keepLink = true)
         if (index + 1 >= items.size) {
-            phase = ListeningPhase.Summary
+            // 答得比写得快：等下一句，而不是把这一轮当成十句都做完了。
+            phase = if (generating) ListeningPhase.Waiting else ListeningPhase.Summary
         } else {
             index += 1
             resetQuestion()
@@ -205,7 +239,26 @@ fun ListeningScreen(onExit: () -> Unit) {
         }
     }
 
-    val midSession = phase == ListeningPhase.Question || phase == ListeningPhase.Reveal
+    // 等下一句期间生成还在跑：新句子一到就接着练，生成结束还没有就说明这一轮到此为止。
+    LaunchedEffect(phase, items.size, generating) {
+        if (phase != ListeningPhase.Waiting) return@LaunchedEffect
+        when {
+            index + 1 < items.size -> {
+                index += 1
+                resetQuestion()
+                phase = ListeningPhase.Question
+            }
+            !generating -> phase = ListeningPhase.Summary
+        }
+    }
+
+    /** 生成还没结束时按整轮的句数显示，免得进度条从「1 / 3」跳成「1 / 7」。 */
+    val total = if (generating) maxOf(SET_SIZE, items.size) else items.size
+
+    // 等下一句也算在局内：这时候退出，已经听完的几句一样会丢，得先问一声。
+    val midSession = phase == ListeningPhase.Question ||
+        phase == ListeningPhase.Reveal ||
+        phase == ListeningPhase.Waiting
     BackHandler(enabled = midSession) { confirmExit = true }
 
     Scaffold(
@@ -214,8 +267,9 @@ fun ListeningScreen(onExit: () -> Unit) {
                 title = {
                     when (phase) {
                         ListeningPhase.Summary -> Text("这一轮的结果")
-                        ListeningPhase.Pick, ListeningPhase.Loading -> Text("听力训练")
-                        else -> QuestionTitle(index = index, total = items.size, item = current)
+                        ListeningPhase.Pick, ListeningPhase.Loading, ListeningPhase.Waiting ->
+                            Text("听力训练")
+                        else -> QuestionTitle(index = index, total = total, item = current)
                     }
                 },
                 navigationIcon = {
@@ -254,7 +308,10 @@ fun ListeningScreen(onExit: () -> Unit) {
                         weight = 1.8f,
                         onClick = { play() },
                     )
-                    SecondaryAction(if (index + 1 >= items.size) "看结果" else "下一句", onClick = ::next)
+                    SecondaryAction(
+                        label = if (index + 1 >= items.size && !generating) "看结果" else "下一句",
+                        onClick = ::next,
+                    )
                 }
                 ListeningPhase.Summary -> BottomActions {
                     val replay = remember(answers) { answers.filterNot { it.firstListen } }
@@ -267,7 +324,7 @@ fun ListeningScreen(onExit: () -> Unit) {
                     }
                     PrimaryAction("收工", onClick = onExit)
                 }
-                ListeningPhase.Loading -> Unit
+                ListeningPhase.Loading, ListeningPhase.Waiting -> Unit
             }
         },
     ) { padding ->
@@ -281,13 +338,26 @@ fun ListeningScreen(onExit: () -> Unit) {
                 error = error,
                 onSelect = { scene = it },
             )
-            ListeningPhase.Loading -> Loading(modifier = content, chars = progressChars, scene = scene.nameZh)
+            ListeningPhase.Loading -> Loading(
+                modifier = content,
+                chars = progressChars,
+                ready = items.size,
+                scene = scene.nameZh,
+            )
+            // 答得比写得快，停在这儿等下一句写完。
+            ListeningPhase.Waiting -> Loading(
+                modifier = content,
+                chars = progressChars,
+                ready = items.size,
+                scene = scene.nameZh,
+                waitingForNext = true,
+            )
             ListeningPhase.Question -> current?.let { item ->
                 Question(
                     modifier = content,
                     item = item,
                     index = index,
-                    total = items.size,
+                    total = total,
                     options = options,
                     optionsShown = optionsShown,
                     selected = selected,
@@ -515,19 +585,88 @@ private fun PickScene(
 }
 
 @Composable
-private fun Loading(modifier: Modifier, chars: Int, scene: String) {
+private fun Loading(
+    modifier: Modifier,
+    chars: Int,
+    ready: Int,
+    scene: String,
+    waitingForNext: Boolean = false,
+) {
     Column(
         modifier = modifier.padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CircularProgressIndicator()
-        Text("正在写 $scene 的 $SET_SIZE 句…", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = if (chars > 0) "已经写了 $chars 个字符" else "接通中，稍等一下",
+            text = if (waitingForNext) "下一句还在写…" else "正在写 $scene 的 $SET_SIZE 句…",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = when {
+                // 写好一句就往这边送，所以这里报的是"攒了几句"，不是干等的字符数。
+                ready > 0 -> "已经写好 $ready 句，攒够 $MIN_ITEMS_TO_START 句就开始"
+                chars > 0 -> "已经写了 $chars 个字符"
+                else -> "接通中，稍等一下"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * 揭晓页的"为什么听起来不是这样"（设计稿屏 55 的讲解区）。
+ *
+ * 光把英文原文摆出来，用户只会觉得"这几个词我都认识啊"——真正没听出来的是
+ * 这些词连起来之后的样子。所以原文旁边要指出这句里发生了哪几处连读、弱读、浊化，
+ * 每处都说清"听着像什么"，并附上这一类的通则，下次换个句子也认得出来。
+ *
+ * 内容由 [analyzeSoundChanges] 本地算，不额外发请求——用户正等着看讲解，不能再等一次网络。
+ */
+@Composable
+private fun SoundChangesCard(item: ListeningItem) {
+    val changes = remember(item.textEn) {
+        analyzeSoundChanges(item.textEn, focusEn = item.keyExpression.en)
+    }
+    if (changes.isEmpty()) return
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    text = "为什么听起来不是这样",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            changes.forEach { change ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "${change.spanEn} · ${change.rule.labelZh}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(change.noteZh, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = change.rule.ruleZh,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -916,6 +1055,8 @@ private fun Reveal(
                 }
             }
         }
+
+        SoundChangesCard(item)
 
         Text(
             text = scoreReason(answer),

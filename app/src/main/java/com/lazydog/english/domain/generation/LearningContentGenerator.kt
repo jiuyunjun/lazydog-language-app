@@ -71,10 +71,14 @@ interface LearningContentGenerator {
     /**
      * 生成一轮听力训练的句子（英语听力训练模块DESIGN.md §18）。
      * 返回前已过 ListeningValidation，条数可能少于请求数——由调用方决定够不够开一局。
+     *
+     * [onItem] 每有一句通过校验就回调一次，顺序与最终返回的一致。十句一次性等太久，
+     * 界面拿到前几句就能开练，剩下的边听边补；不关心增量的调用方不传即可。
      */
     suspend fun generateListeningSet(
         request: com.lazydog.english.domain.listening.ListeningSetRequest,
         onProgress: ((Int) -> Unit)? = null,
+        onItem: ((com.lazydog.english.domain.listening.ListeningItem) -> Unit)? = null,
     ): GenerationResult<List<com.lazydog.english.domain.listening.ListeningItem>>
 
     /** 生成渐进式阅读短文，返回前已通过 ReadingValidation。 */

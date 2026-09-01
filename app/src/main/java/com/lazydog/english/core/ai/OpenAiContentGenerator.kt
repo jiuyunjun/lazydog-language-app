@@ -33,6 +33,7 @@ import com.lazydog.english.domain.generation.GrammarDrillItem
 import com.lazydog.english.domain.generation.GrammarDrillRequest
 import com.lazydog.english.domain.generation.GrammarDrillValidation
 import com.lazydog.english.domain.generation.GrammarLessonRequest
+import com.lazydog.english.domain.generation.JsonArrayScanner
 import com.lazydog.english.domain.generation.JsonStream
 import com.lazydog.english.domain.practice.GrammarErrorTag
 import com.lazydog.english.domain.production.TranslationFeedback
@@ -92,7 +93,7 @@ data class AiConfig(val baseUrl: String, val apiKey: String, val model: String)
  * 配置以挂起函数注入，便于用 MockWebServer 做契约测试。
  */
 class OpenAiContentGenerator(
-    private val config: suspend () -> AiConfig,
+    private val config: suspend (AiTask) -> AiConfig,
     private val okHttpClient: OkHttpClient = defaultOkHttpClient,
     private val retryDelayMs: Long = RETRY_DELAY_MS,
 ) : LearningContentGenerator {
@@ -104,6 +105,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildNewWordsPrompt(request),
+            task = AiTask.Words,
             onProgress = onProgress,
             op = "新词",
         )
@@ -142,6 +144,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildGrammarPrompt(request),
+            task = AiTask.Grammar,
             onProgress = onProgress,
             onTextProgress = onPartialText?.let { callback ->
                 // 哪段先到就先铺哪段：结构公式最先出来，其次是用途和讲解。
@@ -171,6 +174,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildGrammarDrillPrompt(request),
+            task = AiTask.Grammar,
             onProgress = onProgress,
         )
         val content = when (outcome) {
@@ -208,6 +212,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildTranslationTasksPrompt(request),
+            task = AiTask.Translation,
             onProgress = onProgress,
         )
         val content = when (outcome) {
@@ -235,6 +240,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = TRANSLATION_JUDGE_SYSTEM_PROMPT,
             userPrompt = buildTranslationGradePrompt(task, userTextEn, learnerLevel),
+            task = AiTask.Translation,
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -255,6 +261,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildReadingPrompt(request),
+            task = AiTask.Reading,
             onProgress = onProgress,
             op = "阅读",
         )
@@ -289,6 +296,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExplainWordPrompt(term, sentenceContext, learnerLevel),
+            task = AiTask.Explain,
             onTextProgress = onProgress,
             op = "查词",
         )
@@ -312,6 +320,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = ASK_SYSTEM_PROMPT,
             userPrompt = buildAskPrompt(request),
+            task = AiTask.Explain,
             onTextProgress = onPartialAnswer?.let { callback ->
                 { raw -> callback(AskStreaming.partialAnswer(raw)) }
             },
@@ -335,6 +344,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExplainSentencePrompt(sentence, learnerLevel),
+            task = AiTask.Explain,
             onTextProgress = onProgress,
             op = "讲句",
         )
@@ -360,6 +370,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildAssessmentPrompt(cefrLevel, count, topics, skillFilter),
+            task = AiTask.Assessment,
             op = "测试题",
         )
         val content = when (outcome) {
@@ -383,6 +394,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildDeepReadingPrompt(cefrLevel, topics),
+            task = AiTask.Assessment,
             op = "测试阅读",
         )
         val content = when (outcome) {
@@ -407,6 +419,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildCorrectionItemPrompt(cefrLevel, topics),
+            task = AiTask.Assessment,
             op = "纠错题",
         )
         val content = when (outcome) {
@@ -428,6 +441,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExpressionRubricPrompt(taskZh, userTextEn, referenceCefrLevel),
+            task = AiTask.Assessment,
             op = "表达评分",
         )
         val content = when (outcome) {
@@ -449,6 +463,7 @@ class OpenAiContentGenerator(
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildPronunciationTipsPrompt(referenceText, feedback),
+            task = AiTask.Speaking,
             op = "发音提示",
         )
         val content = when (outcome) {
@@ -465,11 +480,29 @@ class OpenAiContentGenerator(
     override suspend fun generateListeningSet(
         request: ListeningSetRequest,
         onProgress: ((Int) -> Unit)?,
+        onItem: ((ListeningItem) -> Unit)?,
     ): GenerationResult<List<ListeningItem>> {
+        // 一句一句往外发：整批收完要几十秒，而第一句闭合时就已经能开练了。
+        // 校验状态留在 session 里，流式发出去的和最后返回的是同一批，不会前后不一致。
+        val session = ListeningValidation.Session(request.count)
+        val scanner = JsonArrayScanner("items")
         val outcome = complete(
             systemPrompt = LISTENING_SYSTEM_PROMPT,
             userPrompt = buildListeningPrompt(request),
+            task = AiTask.Listening,
             onProgress = onProgress,
+            // 没人要增量就不必逐段扫 JSON；扫描本身只为 onItem 服务。
+            onTextProgress = if (onItem == null) {
+                null
+            } else {
+                { raw ->
+                    scanner.feed(raw).forEach { objectText ->
+                        decode<ListeningItemPayload>(objectText)
+                            ?.let { session.offer(it.toDomain(request)) }
+                            ?.let { item -> onItem(item) }
+                    }
+                }
+            },
             maxTokens = LISTENING_MAX_TOKENS,
             op = "听力",
         )
@@ -478,18 +511,18 @@ class OpenAiContentGenerator(
             is Completion.Content -> outcome
         }
         val payload = decode<ListeningSetPayload>(content.text)
-            ?: return GenerationResult.Failure("AI 返回的不是预期的听力 JSON")
-        if (payload.schemaVersion != SCHEMA_VERSION) {
+        if (payload != null && payload.schemaVersion != SCHEMA_VERSION) {
             return GenerationResult.Failure("schema 版本不对：${payload.schemaVersion}")
         }
-        val validated = ListeningValidation.validate(
-            items = payload.items.map { it.toDomain(request) },
-            maxCount = request.count,
-        )
+        // 流式没吃到的部分（末尾几条、或者服务端根本没走流式）在这里补齐。
+        payload?.items?.drop(scanner.emitted)?.forEach { raw ->
+            session.offer(raw.toDomain(request))?.let { item -> onItem?.invoke(item) }
+        }
+        val validated = session.result
         if (validated.valid.size < MIN_LISTENING_ITEMS) {
-            return GenerationResult.Failure(
-                "能用的句子太少（${validated.valid.size} 句）：${validated.droppedNotes.take(3).joinToString("；")}",
-            )
+            val why = validated.droppedNotes.take(3).joinToString("；")
+                .ifBlank { if (payload == null) "AI 返回的不是预期的听力 JSON" else "没给出足够的句子" }
+            return GenerationResult.Failure("能用的句子太少（${validated.valid.size} 句）：$why")
         }
         return GenerationResult.Success(
             data = validated.valid,
@@ -502,7 +535,12 @@ class OpenAiContentGenerator(
     override suspend fun generateScenario(
         request: ScenarioGenerationRequest,
     ): GenerationResult<ScenarioBrief> {
-        val outcome = complete(SYSTEM_PROMPT, buildScenarioPrompt(request), op = "情景生成")
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildScenarioPrompt(request),
+            task = AiTask.Scenario,
+            op = "情景生成",
+        )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -521,7 +559,12 @@ class OpenAiContentGenerator(
     override suspend fun generateScenarioTurn(
         request: ScenarioTurnRequest,
     ): GenerationResult<ScenarioTurn> {
-        val outcome = complete(SCENARIO_ROLE_SYSTEM_PROMPT, buildScenarioTurnPrompt(request), op = "情景对话")
+        val outcome = complete(
+            systemPrompt = SCENARIO_ROLE_SYSTEM_PROMPT,
+            userPrompt = buildScenarioTurnPrompt(request),
+            task = AiTask.Scenario,
+            op = "情景对话",
+        )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -535,7 +578,12 @@ class OpenAiContentGenerator(
     override suspend fun judgeScenarioTurn(
         request: ScenarioTurnRequest,
     ): GenerationResult<ScenarioJudgement> {
-        val outcome = complete(SCENARIO_JUDGE_SYSTEM_PROMPT, buildScenarioJudgePrompt(request), op = "情景判定")
+        val outcome = complete(
+            systemPrompt = SCENARIO_JUDGE_SYSTEM_PROMPT,
+            userPrompt = buildScenarioJudgePrompt(request),
+            task = AiTask.Scenario,
+            op = "情景判定",
+        )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -551,7 +599,12 @@ class OpenAiContentGenerator(
     override suspend fun summarizeScenario(
         request: ScenarioSummaryRequest,
     ): GenerationResult<ScenarioSummary> {
-        val outcome = complete(SYSTEM_PROMPT, buildScenarioSummaryPrompt(request), op = "情景总结")
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildScenarioSummaryPrompt(request),
+            task = AiTask.Scenario,
+            op = "情景总结",
+        )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
             is Completion.Content -> outcome
@@ -579,8 +632,9 @@ class OpenAiContentGenerator(
         onTextProgress: ((String) -> Unit)? = null,
         maxTokens: Int = DEFAULT_MAX_TOKENS,
         op: String = "ai",
+        task: AiTask,
     ): Completion = withContext(Dispatchers.IO) {
-        val (baseUrl, apiKey, model) = config()
+        val (baseUrl, apiKey, model) = config(task)
         val streaming = onProgress != null || onTextProgress != null
         val url = chatCompletionsUrl(baseUrl)
         val startedAt = System.currentTimeMillis()

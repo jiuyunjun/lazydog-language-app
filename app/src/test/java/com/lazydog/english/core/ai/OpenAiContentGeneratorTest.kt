@@ -515,6 +515,29 @@ class OpenAiContentGeneratorTest {
     }
 
     @Test
+    fun `listening sentences are handed over one at a time while the stream is still running`() = runBlocking {
+        // 界面靠这个提前开练：等整批闭合是几十秒，第一句闭合时就该能听了。
+        val chunks = listeningJson.chunked(40).toTypedArray()
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody(sseBody(*chunks)),
+        )
+
+        val delivered = mutableListOf<String>()
+        val result = generator().generateListeningSet(
+            request = listeningRequest,
+            onItem = { delivered.add(it.textEn) },
+        )
+
+        val success = result as GenerationResult.Success
+        // 流式发出去的和最后返回的是同一批，顺序也一致——不能出现"听过的句子又来一遍"。
+        assertEquals(success.data.map { it.textEn }, delivered)
+        assertEquals(6, delivered.size)
+        assertTrue(success.droppedNotes.single().contains("重点表达不在句子里"))
+    }
+
+    @Test
     fun `too few usable listening sentences fails instead of opening a short round`() = runBlocking {
         val onlyOne =
             """{"schemaVersion":1,"items":[
@@ -567,7 +590,7 @@ class OpenAiContentGeneratorTest {
         )
 
         var lastReported = 0
-        val result = generator().generateListeningSet(listeningRequest) { lastReported = it }
+        val result = generator().generateListeningSet(listeningRequest, onProgress = { lastReported = it })
 
         val failure = result as GenerationResult.Failure
         assertTrue(failure.reason.contains("一直没停"))
@@ -613,6 +636,32 @@ class OpenAiContentGeneratorTest {
         assertTrue(second.contains("\"max_completion_tokens\":${OpenAiContentGenerator.LISTENING_MAX_TOKENS}"))
         // 换名重发只做一次，别把一个 400 变成来回打
         assertFalse(second.contains("\"max_tokens\":"))
+    }
+
+    @Test
+    fun `each call asks for the model configured for that feature`() = runBlocking {
+        // 听力值得用最强的模型，点词讲解要的是马上出字——一个全局模型没法同时满足两头。
+        val asked = mutableListOf<AiTask>()
+        val generator = OpenAiContentGenerator(
+            config = { task ->
+                asked += task
+                AiConfig(server.url("/v1").toString(), "test-key", "model-for-${task.key}")
+            },
+            retryDelayMs = 1,
+        )
+        server.enqueue(MockResponse().setBody(chatBody(listeningJson)))
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody("""{"term":"curb","ipa":"/kɜːb/","meaningZh":"v. 控制","usageNoteZh":"控制车流。"}"""),
+            ),
+        )
+
+        generator.generateListeningSet(listeningRequest)
+        generator.explainWord("curb", "We should curb traffic.", "A2")
+
+        assertEquals(listOf(AiTask.Listening, AiTask.Explain), asked)
+        assertTrue(server.takeRequest().body.readUtf8().contains("\"model-for-listening\""))
+        assertTrue(server.takeRequest().body.readUtf8().contains("\"model-for-explain\""))
     }
 
     @Test
