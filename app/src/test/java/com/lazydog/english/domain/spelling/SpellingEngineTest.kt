@@ -161,6 +161,48 @@ class SpellingEngineTest {
     }
 
     @Test
+    fun `stored facts beat the local guesswork`() {
+        val facts = SpellingFacts(
+            chunks = listOf("nec", "ess", "ary"),
+            trickyPart = "cess",
+            misspellings = listOf("neccessary", "necesary", "neccesary"),
+        )
+        // 启发式对 necessary 拆得毫无意义，存下来的说了算。
+        assertEquals(listOf("nec", "ess", "ary"), SpellingEngine.chunkWord("necessary", facts))
+
+        // 四选一给的是真人会写的错法，不是本地调字母调出来的怪东西。
+        val options = SpellingEngine.recognitionOptions("necessary", facts)
+        assertEquals(4, options.size)
+        assertTrue("neccessary" in options)
+        assertTrue("necessary" in options)
+    }
+
+    @Test
+    fun `chunks that cannot spell the word are ignored`() {
+        val broken = SpellingFacts(chunks = listOf("nec", "ess", "aryy"))
+        // 拼不回原词就是坏数据，宁可退回启发式，也不能拿它去挖空。
+        assertEquals(SpellingEngine.chunkWord("necessary"), SpellingEngine.chunkWord("necessary", broken))
+    }
+
+    @Test
+    fun `too few real misspellings fall back to generated ones`() {
+        val thin = SpellingFacts(misspellings = listOf("neccessary"))
+        assertEquals(
+            SpellingEngine.recognitionOptions("necessary"),
+            SpellingEngine.recognitionOptions("necessary", thin),
+        )
+    }
+
+    @Test
+    fun `with no user history the mask targets the known tricky part`() {
+        val facts = SpellingFacts(trickyPart = "par")
+        assertEquals(
+            "se___ate",
+            SpellingEngine.maskedWord("separate", emptyList(), chunk = false, facts = facts),
+        )
+    }
+
+    @Test
     fun `chunking splits prefix stem and suffix`() {
         assertEquals(listOf("en", "viron", "ment"), SpellingEngine.chunkWord("environment"))
     }

@@ -973,9 +973,23 @@ class OpenAiContentGenerator(
         val pos: String = "",
         val collocations: List<String> = emptyList(),
         val memoryHintZh: String = "",
+        val chunks: List<String> = emptyList(),
+        val trickyPart: String = "",
+        val misspellings: List<String> = emptyList(),
     ) {
-        fun toDomain() =
-            GeneratedWord(term, ipa, meaningZh, exampleEn, exampleZh, pos, collocations, memoryHintZh)
+        fun toDomain() = GeneratedWord(
+            term = term,
+            ipa = ipa,
+            meaningZh = meaningZh,
+            exampleEn = exampleEn,
+            exampleZh = exampleZh,
+            pos = pos,
+            collocations = collocations,
+            memoryHintZh = memoryHintZh,
+            chunks = chunks,
+            trickyPart = trickyPart,
+            misspellings = misspellings,
+        )
     }
 
     @Serializable
@@ -1653,6 +1667,25 @@ class OpenAiContentGenerator(
                 "准确体现目标词在这句里的含义，不要逐字硬译。")
         }
 
+        /**
+         * 拼写训练要用的三项词固有属性。一次生成写全，之后本地不再猜——
+         * 本地启发式拆出来的是 necessary → nec/ess/ary，干扰项里给不出 seperate、recieve，
+         * 拿去出题等于教错东西。
+         */
+        private fun spellingFactRules(): String = buildString {
+            appendLine("每个词还要给三项拼写训练用的信息：")
+            appendLine("chunks：把这个词按发音音节或词根词缀拆成 2~4 块，按顺序原样拼起来必须完全等于这个词" +
+                "（不能多字母、少字母或改大小写）。优先按有意义的构词拆，比如 environment 拆成" +
+                "[\"en\",\"viron\",\"ment\"]；拆不出词根就按音节拆。")
+            appendLine("trickyPart：这个词最容易拼错的那一小段，必须是这个词里连续的一段原文" +
+                "（比如 necessary 是 \"cess\"，因为单 c 双 s 最容易写反；separate 是 \"par\"，" +
+                "因为中间那个 a 常被写成 e）。不要给整个词。")
+            appendLine("misspellings：3 个中文母语者**真的会写错**的形式，用作选择题干扰项。" +
+                "必须是常见错法，比如 separate → seperate、receive → recieve、" +
+                "accommodation → accomodation；不要随手调换字母造出 sepanate、recaive 这种" +
+                "一眼就能排除、根本没人会写的假错法。三个都不能等于正确拼写。")
+        }
+
         /** 记忆方法（memoryHintZh）的写法要求。新词生成和点词速查共用。 */
         internal fun memoryHintRules(): String = buildString {
             appendLine("memoryHintZh 是一条真能帮上忙的记忆方法，30~70 字。" +
@@ -1691,10 +1724,12 @@ class OpenAiContentGenerator(
             append(exampleSentenceRules(request.learnerLevel))
             appendLine("同一批例句之间场景和句型要有明显区别，不能只换个人名或地点。")
             append(memoryHintRules())
+            append(spellingFactRules())
             appendLine("输出 JSON schema：")
             appendLine(
                 """{"schemaVersion":1,"words":[{"term":"...","ipa":"...","pos":"v.","meaningZh":"...",""" +
-                    """"exampleEn":"...","exampleZh":"...","collocations":["..."],"memoryHintZh":"..."}]}""",
+                    """"exampleEn":"...","exampleZh":"...","collocations":["..."],"memoryHintZh":"...",""" +
+                    """"chunks":["...","..."],"trickyPart":"...","misspellings":["...","...","..."]}]}""",
             )
         }
 

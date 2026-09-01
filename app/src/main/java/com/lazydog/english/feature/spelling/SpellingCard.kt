@@ -1,7 +1,5 @@
 package com.lazydog.english.feature.spelling
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -67,6 +66,7 @@ import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.domain.spelling.SpellingEngine
 import com.lazydog.english.domain.spelling.SpellingEvaluation
+import com.lazydog.english.domain.spelling.SpellingFacts
 import com.lazydog.english.domain.spelling.SpellingProgress
 import com.lazydog.english.domain.spelling.SpellingQuestionType
 import kotlinx.coroutines.launch
@@ -90,6 +90,8 @@ data class SpellingCard(
     val pos: String,
     val exampleEn: String,
     val exampleZh: String,
+    /** 词固有的拼写事实（词块 / 易错段 / 常见错拼）。空的时候引擎退回本地启发式。 */
+    val facts: SpellingFacts = SpellingFacts.None,
     val progress: SpellingProgress,
     /**
      * 这个词现在到期了没有。没到期的属于额外练习：照样记进拼写画像，
@@ -108,6 +110,7 @@ fun SpellingQueueEntry.toSpellingCard() = SpellingCard(
     pos = pos,
     exampleEn = exampleEn,
     exampleZh = exampleZh,
+    facts = facts,
     progress = progress,
     dueNow = dueNow,
 )
@@ -147,13 +150,14 @@ fun SpellingCardView(
 
     fun submittedAnswer(): String = when (card.questionType) {
         SpellingQuestionType.Recognition ->
-            SpellingEngine.recognitionOptions(card.term).getOrNull(answer.selectedOption).orEmpty()
+            SpellingEngine.recognitionOptions(card.term, card.facts).getOrNull(answer.selectedOption).orEmpty()
         SpellingQuestionType.PartialCompletion, SpellingQuestionType.ChunkRecall ->
             SpellingEngine.fillMasked(
                 word = card.term,
                 typed = answer.typed,
                 weakSegments = card.progress.weakSegments,
                 chunk = card.questionType == SpellingQuestionType.ChunkRecall,
+                facts = card.facts,
             )
         else -> answer.typed
     }
@@ -298,6 +302,7 @@ private fun QuestionView(
                                 answer = result.normalizedAnswer,
                                 level = answer.hintLevel,
                                 weakSegments = entry.progress.weakSegments,
+                                facts = entry.facts,
                             )
                         },
                         style = MaterialTheme.typography.bodyMedium,
@@ -382,6 +387,7 @@ private fun QuestionView(
                         answer = answer.lastResult?.normalizedAnswer.orEmpty(),
                         level = answer.hintLevel,
                         weakSegments = entry.progress.weakSegments,
+                        facts = entry.facts,
                     ),
                     style = MaterialTheme.typography.headlineSmall,
                     fontFamily = FontFamily.Monospace,
@@ -427,7 +433,7 @@ private fun RecognitionBody(
     onPlay: () -> Unit,
 ) {
     val entry = card
-    val options = remember(entry.term) { SpellingEngine.recognitionOptions(entry.term) }
+    val options = remember(entry.term) { SpellingEngine.recognitionOptions(entry.term, entry.facts) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         IconButton(onClick = onPlay) {
             Icon(
@@ -491,7 +497,7 @@ private fun PartialBody(
     }
     Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     LetterSlots(
-        masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = false),
+        masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = false, facts = entry.facts),
         typed = answer.typed,
         onTypedChange = onTypedChange,
         enabled = !answer.resolved,
@@ -513,7 +519,7 @@ private fun ChunkBody(
     val entry = card
     Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     LetterSlots(
-        masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = true),
+        masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = true, facts = entry.facts),
         typed = answer.typed,
         onTypedChange = onTypedChange,
         enabled = !answer.resolved,
@@ -563,99 +569,100 @@ private fun LetterSlots(
     typed: String,
     onTypedChange: (String) -> Unit,
     enabled: Boolean,
-    /**
-     * 这个值一变就把焦点要回来。提示面板是个 ModalBottomSheet，弹出时会把焦点拿走，
-     * 关掉之后不会自己还回来——而真正的输入框被收成了零宽，屏幕上没有能点的地方，
-     * 于是"要过提示之后就打不了字了"。
-     */
+    /** 这个值一变就顺手把焦点要回来（关掉提示面板、答错要重打）。要不回来也没关系，格子本身能点。 */
     refocusKey: Any = Unit,
 ) {
     val blanks = masked.count { it == '_' }
     val focusRequester = remember { FocusRequester() }
-    fun grabFocus() {
+    LaunchedEffect(masked, refocusKey, enabled) {
         if (enabled) runCatching { focusRequester.requestFocus() }
     }
-    LaunchedEffect(masked, refocusKey, enabled) { grabFocus() }
 
-    BasicTextField(
-        value = typed,
-        onValueChange = { onTypedChange(it.filter { char -> !char.isWhitespace() }.take(blanks)) },
-        enabled = enabled,
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.None,
-            autoCorrectEnabled = false,
-            keyboardType = KeyboardType.Ascii,
-        ),
-        cursorBrush = SolidColor(Color.Transparent),
-        modifier = Modifier.focusRequester(focusRequester),
-        decorationBox = { innerTextField ->
-            // 每一格和已给出的字母都按**基线**对齐，不是按底边。
-            // 按底边的话，格子里的字母会被格高和内边距一起顶上去，
-            // 和旁边的固定字母差半行，一眼就能看出来没坐在同一条线上。
-            val letterStyle = MaterialTheme.typography.headlineSmall.copy(fontFamily = FontFamily.Monospace)
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        enabled = enabled,
-                        onClick = ::grabFocus,
-                    )
-                    .semantics {
-                        contentDescription = "补全 $masked，已填 ${typed.length} / $blanks 个字母"
-                    },
-            ) {
-                var typedIndex = 0
-                masked.forEach { char ->
-                    if (char != '_') {
-                        Text(
-                            text = char.toString(),
-                            style = letterStyle,
-                            modifier = Modifier.alignByBaseline(),
-                        )
-                        return@forEach
-                    }
-                    val filled = typed.getOrNull(typedIndex)
-                    val isNext = typedIndex == typed.length
-                    typedIndex += 1
-                    val lineColor = when {
-                        filled != null -> MaterialTheme.colorScheme.primary
-                        isNext && enabled -> MaterialTheme.colorScheme.primary
-                        else -> MaterialTheme.colorScheme.outline
-                    }
-                    val stroke = if (filled != null || isNext) 2.dp else 1.dp
-                    Text(
-                        // 空格子也得是个 Text：没有文字就没有基线，这一格会跟着掉下去。
-                        // 用不换行空格占位，字形高度和真字母一致。
-                        text = filled?.toString() ?: " ",
-                        style = letterStyle,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .alignByBaseline()
-                            // 下划线画在基线下方固定距离处，所以每一格的线都在同一高度，
-                            // 和字母的基线关系也永远一样。
-                            .paddingFromBaseline(bottom = UNDERLINE_BELOW_BASELINE)
-                            .width(24.dp)
-                            .drawBehind {
-                                val width = stroke.toPx()
-                                drawLine(
-                                    color = lineColor,
-                                    start = Offset(0f, size.height - width / 2),
-                                    end = Offset(size.width, size.height - width / 2),
-                                    strokeWidth = width,
-                                )
-                            },
-                    )
-                }
-                // 真正的输入框收进零宽的角落：字母由上面的格子画，
-                // 但这个调用不能省——省了这个框就收不到键盘输入。
-                Box(Modifier.width(0.dp)) { innerTextField() }
-            }
+    // 真正的输入框整块盖在格子上，透明但**有正常尺寸**。
+    //
+    // 上一版把它收成零宽藏在 Row 末尾，于是它既不好聚焦、又没有能点的地方：
+    // 提示面板（ModalBottomSheet）把焦点拿走之后要不回来，界面看着是活的、
+    // 实际不收输入，而用户连"点一下输入框"这条退路都没有。
+    // 盖一整块就没有这个问题：焦点丢了，点一下格子就回来了。
+    Box {
+        SlotRow(masked = masked, typed = typed, enabled = enabled, blanks = blanks)
+        BasicTextField(
+            value = typed,
+            onValueChange = { onTypedChange(it.filter { char -> !char.isWhitespace() }.take(blanks)) },
+            enabled = enabled,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                autoCorrectEnabled = false,
+                keyboardType = KeyboardType.Ascii,
+            ),
+            // 字和光标都不画：看得见的那份由下面的格子负责。
+            textStyle = TextStyle(color = Color.Transparent),
+            cursorBrush = SolidColor(Color.Transparent),
+            modifier = Modifier
+                .matchParentSize()
+                .focusRequester(focusRequester),
+        )
+    }
+}
+
+/** 画出来的那排格子，纯展示，不碰输入。 */
+@Composable
+private fun SlotRow(masked: String, typed: String, enabled: Boolean, blanks: Int) {
+    // 每一格和已给出的字母都按**基线**对齐，不是按底边。
+    // 按底边的话，格子里的字母会被格高和内边距一起顶上去，
+    // 和旁边的固定字母差半行，一眼就能看出来没坐在同一条线上。
+    val letterStyle = MaterialTheme.typography.headlineSmall.copy(fontFamily = FontFamily.Monospace)
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.semantics {
+            contentDescription = "补全 $masked，已填 ${typed.length} / $blanks 个字母"
         },
-    )
+    ) {
+        var typedIndex = 0
+        masked.forEach { char ->
+            if (char != '_') {
+                Text(
+                    text = char.toString(),
+                    style = letterStyle,
+                    modifier = Modifier.alignByBaseline(),
+                )
+                return@forEach
+            }
+            val filled = typed.getOrNull(typedIndex)
+            val isNext = typedIndex == typed.length
+            typedIndex += 1
+            val lineColor = when {
+                filled != null -> MaterialTheme.colorScheme.primary
+                isNext && enabled -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.outline
+            }
+            val stroke = if (filled != null || isNext) 2.dp else 1.dp
+            Text(
+                // 空格子也得是个 Text：没有文字就没有基线，这一格会跟着掉下去。
+                // 用不换行空格占位，字形高度和真字母一致。
+                text = filled?.toString() ?: " ",
+                style = letterStyle,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .alignByBaseline()
+                    // 下划线画在基线下方固定距离处，所以每一格的线都在同一高度，
+                    // 和字母的基线关系也永远一样。
+                    .paddingFromBaseline(bottom = UNDERLINE_BELOW_BASELINE)
+                    .width(24.dp)
+                    .drawBehind {
+                        val width = stroke.toPx()
+                        drawLine(
+                            color = lineColor,
+                            start = Offset(0f, size.height - width / 2),
+                            end = Offset(size.width, size.height - width / 2),
+                            strokeWidth = width,
+                        )
+                    },
+            )
+        }
+    }
 }
 
 /**
@@ -780,7 +787,7 @@ internal fun spellingAskContext(card: SpellingCard, answer: SpellingAnswer): Ask
         details = buildList {
             add(AskDetail("词条", entry.term))
             if (entry.ipa.isNotBlank()) add(AskDetail("音标", entry.ipa))
-            add(AskDetail("词块拆分", SpellingEngine.chunkWord(entry.term).joinToString(" + ")))
+            add(AskDetail("词块拆分", SpellingEngine.chunkWord(entry.term, entry.facts).joinToString(" + ")))
             if (entry.exampleEn.isNotBlank()) add(AskDetail("例句", entry.exampleEn))
         },
         suggestions = listOf("这个词为什么这么拼？", "有哪些和它拼法容易混的词？"),

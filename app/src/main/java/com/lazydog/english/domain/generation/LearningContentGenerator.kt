@@ -202,6 +202,17 @@ data class GeneratedWord(
      * 要针对这个词，不是"多读几遍"这种通用建议。
      */
     val memoryHintZh: String = "",
+    /**
+     * 下面三项是这个词的拼写事实，第一次生成就要给全。
+     * 本地虽然能猜，但猜出来的是 necessary → nec/ess/ary、separate 的干扰项里
+     * 没有 seperate 这种货色——拿去出题等于教错东西。
+     */
+    /** 词块拆分，按顺序拼起来等于 term。 */
+    val chunks: List<String> = emptyList(),
+    /** 最容易拼错的那一段，必须是 term 的子串。 */
+    val trickyPart: String = "",
+    /** 真人常写错的形式，2~3 个，用作四选一干扰项。 */
+    val misspellings: List<String> = emptyList(),
 )
 
 data class GrammarLessonRequest(

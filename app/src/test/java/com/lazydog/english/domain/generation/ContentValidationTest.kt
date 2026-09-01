@@ -15,7 +15,24 @@ class ContentValidationTest {
         pos: String = "v.",
         collocations: List<String> = listOf("curb traffic"),
         memoryHint: String = "curb 是路缘石，把车流「圈」在路里，引申成控制、抑制。",
-    ) = GeneratedWord(term, "/kɜːb/", meaning, example, exampleZh, pos, collocations, memoryHint)
+        // 从 term 推，这样换了词也仍然自洽——校验现在会检查词块能拼回原词、
+        // 易错段是原词的一段，写死 curb 的那一套会让别的词全被判无效。
+        chunks: List<String> = listOf(term.take(2), term.drop(2)),
+        trickyPart: String = term.take(2),
+        misspellings: List<String> = listOf("$term" + "e", "x$term", term.drop(1)),
+    ) = GeneratedWord(
+        term = term,
+        ipa = "/kɜːb/",
+        meaningZh = meaning,
+        exampleEn = example,
+        exampleZh = exampleZh,
+        pos = pos,
+        collocations = collocations,
+        memoryHintZh = memoryHint,
+        chunks = chunks,
+        trickyPart = trickyPart,
+        misspellings = misspellings,
+    )
 
     @Test
     fun `valid word passes`() {
@@ -124,5 +141,35 @@ class ContentValidationTest {
         assertTrue(
             ContentValidation.validateGrammarLesson(lesson.copy(patternEn = "have been doing 表示持续"), emptySet()) != null,
         )
+    }
+
+    @Test
+    fun `drops chunks that do not spell the word`() {
+        val result = ContentValidation.validateNewWords(
+            listOf(word(chunks = listOf("cu", "rrb"))),
+            maxCount = 5,
+            knownTerms = emptySet(),
+        )
+        assertTrue(result.valid.isEmpty())
+    }
+
+    @Test
+    fun `drops a tricky part that is not inside the word`() {
+        val result = ContentValidation.validateNewWords(
+            listOf(word(trickyPart = "zz")),
+            maxCount = 5,
+            knownTerms = emptySet(),
+        )
+        assertTrue(result.valid.isEmpty())
+    }
+
+    @Test
+    fun `drops misspellings that include the correct spelling`() {
+        val result = ContentValidation.validateNewWords(
+            listOf(word(misspellings = listOf("curbe", "curb", "kurb"))),
+            maxCount = 5,
+            knownTerms = emptySet(),
+        )
+        assertTrue(result.valid.isEmpty())
     }
 }

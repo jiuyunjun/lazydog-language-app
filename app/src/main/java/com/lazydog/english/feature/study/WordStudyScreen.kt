@@ -46,6 +46,7 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.VocabularyJson
+import com.lazydog.english.core.data.spellingFacts
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
@@ -61,6 +62,7 @@ import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.spelling.SpellingEngine
+import com.lazydog.english.domain.spelling.SpellingFacts
 import com.lazydog.english.domain.spelling.SpellingProgress
 import com.lazydog.english.domain.spelling.SpellingStage
 import com.lazydog.english.feature.spelling.SpellingCard
@@ -86,6 +88,7 @@ private data class StudyCard(
     val memoryHintZh: String = "",
     /** 熟词产出卡按这个阶段出题；新词和生词用不到。 */
     val spelling: SpellingProgress? = null,
+    val facts: SpellingFacts = SpellingFacts.None,
 ) {
     /**
      * 复习一个词就是考它的拼写：给中文，自己写出英文，程序判分。
@@ -116,6 +119,7 @@ private data class StudyCard(
         pos = pos,
         exampleEn = exampleEn,
         exampleZh = exampleZh,
+        facts = facts,
         progress = spelling ?: SpellingProgress(stage = defaultSpellingStage()),
         // 单词页只发到期的卡，所以这里一定推动复习时间。
         dueNow = true,
@@ -188,6 +192,7 @@ fun WordStudyScreen(
                     stage = it.item.stage,
                     memoryHintZh = it.detail.memoryHintZh,
                     spelling = spellingByItem[it.item.id],
+                    facts = it.detail.spellingFacts(),
                 )
             }
         phase = if (due.isEmpty()) WordStudyPhase.OfferNew(0) else WordStudyPhase.Cards(due, 0, revealed = false)
@@ -239,6 +244,7 @@ fun WordStudyScreen(
                     pos = card.pos,
                     collocations = card.collocations,
                     memoryHintZh = card.memoryHintZh,
+                    facts = card.facts,
                 )
                 if (id != null) {
                     repository.recordReview(id, grade, source = "card")
@@ -417,19 +423,29 @@ private fun GeneratedWord.toCard() = StudyCard(
     pos = pos,
     collocations = collocations,
     memoryHintZh = memoryHintZh,
+    facts = SpellingFacts(chunks = chunks, trickyPart = trickyPart, misspellings = misspellings),
 )
+
+/** 易错段落在哪一块；没标或对不上返回 -1。 */
+private fun List<String>.indexOfTricky(facts: SpellingFacts): Int {
+    val part = facts.trickyPart.trim().lowercase()
+    if (part.isEmpty()) return -1
+    return indexOfFirst { it.lowercase().contains(part) || part.contains(it.lowercase()) }
+}
 
 /**
  * 词块拆分（S0 接触）。中间那块单独标出来：前后缀是规则，词干才是每次拼错的地方，
  * 后面 S2 挖空也优先挖它。拆不出三块的短词不显示——两个字母的"块"没有意义。
  */
 @Composable
-private fun SpellingChunks(term: String) {
-    val chunks = remember(term) { SpellingEngine.chunkWord(term) }
+private fun SpellingChunks(term: String, facts: SpellingFacts) {
+    val chunks = remember(term, facts) { SpellingEngine.chunkWord(term, facts) }
     if (chunks.size < 2) return
     val extended = LazyDogTheme.extendedColors
-    // 剥掉前后缀之后剩下的那块。只有两块时后一块是后缀，要盯的是前一块。
-    val stemIndex = if (chunks.size >= 3) 1 else 0
+    // 生成时标好的易错段落在哪一块就高亮哪一块；没标的话退回"中间那块"，
+    // 但那只是个猜测，所以下面那句断言也跟着不说。
+    val trickyIndex = remember(term, facts, chunks) { chunks.indexOfTricky(facts) }
+    val stemIndex = if (trickyIndex >= 0) trickyIndex else if (chunks.size >= 3) 1 else 0
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = "词块拆分",
@@ -453,11 +469,15 @@ private fun SpellingChunks(term: String) {
                 }
             }
         }
-        Text(
-            text = "中间的 ${chunks[stemIndex]} 是最容易拼错的部分",
-            style = MaterialTheme.typography.bodySmall,
-            color = extended.attention,
-        )
+        // 只有真拿到易错段时才敢下这个断言。猜出来的词块（necessary → nec/ess/ary）
+        // 配上"这里最容易拼错"就是一句假话，宁可不说。
+        if (trickyIndex >= 0) {
+            Text(
+                text = "${chunks[trickyIndex]} 是最容易拼错的部分",
+                style = MaterialTheme.typography.bodySmall,
+                color = extended.attention,
+            )
+        }
     }
 }
 
@@ -538,7 +558,7 @@ private fun StudyCardView(
                 }
                 // S0 接触（设计稿 62 屏）：新词第一次露面就把词块拆开摆着。
                 // 拼写练习后面所有阶段都按这套词块出题，第一眼见到的结构和后面练的是同一套。
-                if (card.isNew) SpellingChunks(card.term)
+                if (card.isNew) SpellingChunks(card.term, card.facts)
                 if (card.memoryHintZh.isNotBlank()) {
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,

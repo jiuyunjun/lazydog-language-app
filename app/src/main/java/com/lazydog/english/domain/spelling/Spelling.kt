@@ -37,6 +37,36 @@ enum class SpellingErrorType(val labelZh: String) {
     Morphology("词形变化"),
 }
 
+/**
+ * 这个词本身的拼写事实，由 AI 生成新词时一次给全，落在 `vocabulary_details`。
+ *
+ * 这些都不是能从用户历史里推出来的东西，而是词固有的属性：
+ * 词块怎么分、哪一段最容易写错、真人会写错成什么样。本地启发式猜过一版，
+ * 猜出来的是 necessary → nec/ess/ary、separate 的干扰项里没有 seperate
+ * 这种货色，拿它当题目等于教错东西。空的时候才退回启发式。
+ */
+data class SpellingFacts(
+    /** 词块拆分，按顺序拼起来必须等于原词。 */
+    val chunks: List<String> = emptyList(),
+    /** 最容易拼错的那一段，必须是原词的子串。 */
+    val trickyPart: String = "",
+    /** 真人常写错的形式，用作四选一的干扰项。 */
+    val misspellings: List<String> = emptyList(),
+) {
+    companion object {
+        val None = SpellingFacts()
+    }
+}
+
+/** 易错段在原词里的位置；标不出来（不是子串）就当没有。 */
+internal fun SpellingFacts.trickyPartSegment(word: String): WeakSegment? {
+    val part = trickyPart.trim().lowercase()
+    if (part.isEmpty()) return null
+    val start = word.indexOf(part)
+    if (start < 0) return null
+    return WeakSegment(part, start, start + part.length, errorCount = 0)
+}
+
 data class WeakSegment(
     val segment: String,
     val start: Int,
@@ -200,9 +230,19 @@ object SpellingEngine {
         )
     }
 
-    fun recognitionOptions(word: String): List<String> {
+    fun recognitionOptions(word: String, facts: SpellingFacts = SpellingFacts.None): List<String> {
         val clean = normalize(word)
         if (clean.length < 3) return listOf(clean)
+        // 真人写错的形式优先。本地生成的干扰项经常荒谬到能被一眼排除
+        // （separate 给不出 seperate，receive 给不出 recieve），
+        // 那样的四选一不用会拼也能做对。
+        val real = facts.misspellings
+            .map { normalize(it) }
+            .filter { it.isNotEmpty() && it != clean }
+            .distinct()
+        if (real.size >= 3) {
+            return (listOf(clean) + real.take(3)).sortedBy { stableOptionOrder(it, clean) }
+        }
         val middle = clean.length / 2
         val candidates = linkedSetOf(clean)
         candidates += clean.removeRange(middle, middle + 1)
@@ -233,10 +273,17 @@ object SpellingEngine {
         return candidates.take(4).sortedBy { stableOptionOrder(it, clean) }
     }
 
-    fun maskedWord(word: String, weakSegments: List<WeakSegment>, chunk: Boolean): String {
+    fun maskedWord(
+        word: String,
+        weakSegments: List<WeakSegment>,
+        chunk: Boolean,
+        facts: SpellingFacts = SpellingFacts.None,
+    ): String {
         val clean = normalize(word)
         if (clean.isEmpty()) return ""
+        // 用户自己的错误记录最准，其次才是这个词公认的难点。
         val preferred = weakSegments.maxByOrNull { it.errorCount }?.takeIf { it.start in clean.indices }
+            ?: facts.trickyPartSegment(clean)
         val start: Int
         val end: Int
         if (preferred != null) {
@@ -255,8 +302,15 @@ object SpellingEngine {
      * 局部补全和词块回忆只让用户打缺的那一段，判定前要拼回完整单词。
      * 直接拿片段和整词比对永远都是错的。
      */
-    fun fillMasked(word: String, typed: String, weakSegments: List<WeakSegment>, chunk: Boolean): String {
-        val masked = maskedWord(word, weakSegments, chunk)
+    fun fillMasked(
+        word: String,
+        typed: String,
+        weakSegments: List<WeakSegment>,
+        chunk: Boolean,
+        facts: SpellingFacts = SpellingFacts.None,
+    ): String {
+        // 必须和界面画出来的那一版挖空完全一致，否则填回去的位置就对不上了。
+        val masked = maskedWord(word, weakSegments, chunk, facts)
         val start = masked.indexOf('_')
         if (start < 0) return normalize(typed)
         val end = masked.lastIndexOf('_') + 1
@@ -271,10 +325,16 @@ object SpellingEngine {
      * 具体地：第 2 级给挖空的错误区域（不是原词），第 3 级给薄弱片段的内芯
      * （严格窄于片段本身），第 4 级给词块骨架但弱块仍然空着。
      */
-    fun hintText(expected: String, answer: String, level: Int, weakSegments: List<WeakSegment>): String {
+    fun hintText(
+        expected: String,
+        answer: String,
+        level: Int,
+        weakSegments: List<WeakSegment>,
+        facts: SpellingFacts = SpellingFacts.None,
+    ): String {
         val clean = normalize(expected)
         val submitted = normalize(answer)
-        val chunks = chunkWord(clean)
+        val chunks = chunkWord(clean, facts)
         if (submitted.isBlank()) {
             // 还没交过答案，只能按词的结构给，没有"你错在哪"可说。
             return when (level.coerceIn(0, 5)) {
@@ -282,7 +342,7 @@ object SpellingEngine {
                 1 -> "一共 ${clean.length} 个字母，可以分成 ${chunks.size} 个词块。"
                 2 -> "开头那块是 ${chunks.first()}。"
                 3 -> if (chunks.size >= 2) "结尾那块是 ${chunks.last()}。" else "开头是 ${clean.take(2)}。"
-                4 -> "词块骨架：${chunkSkeleton(clean, null)}"
+                4 -> "词块骨架：${chunkSkeleton(clean, null, facts)}"
                 else -> "答案：$clean"
             }
         }
@@ -296,7 +356,7 @@ object SpellingEngine {
             // 片段的内芯，掐头去尾，严格窄于片段本身。
             3 -> innerFragment(weak) ?: "开头是 ${clean.take(2)}，结尾是 ${clean.takeLast(2)}。"
             // 词块骨架，弱块仍然空着——这一级给的是结构，不是答案。
-            4 -> "词块骨架：${chunkSkeleton(clean, weak)}"
+            4 -> "词块骨架：${chunkSkeleton(clean, weak, facts)}"
             else -> "答案：$clean"
         }
     }
@@ -339,8 +399,8 @@ object SpellingEngine {
     }
 
     /** 词块骨架，命中薄弱片段的那一块留空；不知道哪块弱就留中间那块。 */
-    private fun chunkSkeleton(word: String, weak: WeakSegment?): String {
-        val chunks = chunkWord(word)
+    private fun chunkSkeleton(word: String, weak: WeakSegment?, facts: SpellingFacts): String {
+        val chunks = chunkWord(word, facts)
         if (chunks.size < 2) return "_".repeat(word.length)
         var cursor = 0
         val ranges = chunks.map { chunk ->
@@ -364,8 +424,11 @@ object SpellingEngine {
      * 设计稿 62 屏画的是 en + viron + ment：中间那块才是要练的，
      * 所以前后缀都剥掉之后剩下的词干必须自成一块，不能被并进旁边。
      */
-    fun chunkWord(word: String): List<String> {
+    fun chunkWord(word: String, facts: SpellingFacts = SpellingFacts.None): List<String> {
         val clean = normalize(word)
+        // 存下来的词块拼回去必须等于原词，对不上就是坏数据，不如用猜的。
+        val stored = facts.chunks.map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        if (stored.size >= 2 && stored.joinToString("") == clean) return stored
         if (clean.length <= 5) return listOf(clean)
         val suffix = COMMON_SUFFIXES.firstOrNull { clean.length - it.length >= 3 && clean.endsWith(it) }
         val withoutSuffix = if (suffix == null) clean else clean.dropLast(suffix.length)

@@ -42,6 +42,10 @@ data class BackupVocabularyDetail(
     val pos: String = "",
     val collocationsJson: String = "[]",
     val memoryHintZh: String = "",
+    // 拼写事实。旧备份没有这几项，解码成默认值后引擎退回本地启发式。
+    val chunksJson: String = "[]",
+    val trickyPart: String = "",
+    val misspellingsJson: String = "[]",
 )
 
 @Serializable
@@ -217,10 +221,12 @@ fun BackupKnowledgeItem.toEntity() = KnowledgeItemEntity(
 
 fun VocabularyDetailEntity.toBackup() = BackupVocabularyDetail(
     itemId, term, ipa, meaningZh, exampleEn, exampleZh, pos, collocationsJson, memoryHintZh,
+    chunksJson, trickyPart, misspellingsJson,
 )
 
 fun BackupVocabularyDetail.toEntity(newItemId: Long) = VocabularyDetailEntity(
     newItemId, term, ipa, meaningZh, exampleEn, exampleZh, pos, collocationsJson, memoryHintZh,
+    chunksJson, trickyPart, misspellingsJson,
 )
 
 fun GrammarDetailEntity.toBackup() = BackupGrammarDetail(

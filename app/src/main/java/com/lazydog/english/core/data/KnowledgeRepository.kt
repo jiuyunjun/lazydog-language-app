@@ -19,6 +19,7 @@ import com.lazydog.english.domain.scheduling.deriveStage
 import com.lazydog.english.domain.spelling.SpellingEngine
 import com.lazydog.english.domain.spelling.SpellingErrorType
 import com.lazydog.english.domain.spelling.SpellingEvaluation
+import com.lazydog.english.domain.spelling.SpellingFacts
 import com.lazydog.english.domain.spelling.SpellingAttemptSummary
 import com.lazydog.english.domain.spelling.SpellingProfile
 import com.lazydog.english.domain.spelling.SpellingProfiles
@@ -69,6 +70,7 @@ class KnowledgeRepository(
         pos: String = "",
         collocations: List<String> = emptyList(),
         memoryHintZh: String = "",
+        facts: SpellingFacts = SpellingFacts.None,
     ): Long? {
         val cleanTerm = term.trim()
         if (dao.vocabularyTermExists(cleanTerm)) return null
@@ -85,6 +87,9 @@ class KnowledgeRepository(
                     pos = pos.trim(),
                     collocationsJson = VocabularyJson.encodeCollocations(collocations),
                     memoryHintZh = memoryHintZh.trim(),
+                    chunksJson = VocabularyJson.encodeList(facts.chunks),
+                    trickyPart = facts.trickyPart.trim(),
+                    misspellingsJson = VocabularyJson.encodeList(facts.misspellings),
                 ),
             )
             id
@@ -324,6 +329,7 @@ class KnowledgeRepository(
                     pos = record.detail.pos,
                     exampleEn = record.detail.exampleEn,
                     exampleZh = record.detail.exampleZh,
+                    facts = record.detail.spellingFacts(),
                     progress = progress,
                     dueNow = (record.item.nextReviewAt ?: Long.MAX_VALUE) <= at.toEpochMilli(),
                     priority = spellingPriority(record.item.nextReviewAt, progress, progress.lastAttemptAt == null, at),
@@ -423,10 +429,18 @@ data class SpellingQueueEntry(
     val pos: String,
     val exampleEn: String,
     val exampleZh: String,
+    val facts: SpellingFacts,
     val progress: SpellingProgress,
     /** 这个词此刻到期了没有。没到期的是加练，判分照记但不推动复习时间。 */
     val dueNow: Boolean,
     val priority: Double,
+)
+
+/** 落库时写好的拼写事实。都为空说明这条是老数据，引擎会退回本地启发式。 */
+fun VocabularyDetailEntity.spellingFacts() = SpellingFacts(
+    chunks = VocabularyJson.decodeList(chunksJson),
+    trickyPart = trickyPart,
+    misspellings = VocabularyJson.decodeList(misspellingsJson),
 )
 
 private fun VocabularyDetailEntity.isExpression(): Boolean =
@@ -480,9 +494,14 @@ object VocabularyJson {
     private val json = Json { ignoreUnknownKeys = true }
     private val serializer = ListSerializer(String.serializer())
 
-    fun encodeCollocations(collocations: List<String>): String = json.encodeToString(serializer, collocations)
+    fun encodeCollocations(collocations: List<String>): String = encodeList(collocations)
 
-    fun decodeCollocations(raw: String): List<String> =
+    fun decodeCollocations(raw: String): List<String> = decodeList(raw)
+
+    fun encodeList(values: List<String>): String = json.encodeToString(serializer, values)
+
+    /** 坏数据返回空列表：拼写事实缺了退回启发式，不该让一条坏 JSON 炸掉整页。 */
+    fun decodeList(raw: String): List<String> =
         runCatching { json.decodeFromString(serializer, raw) }.getOrDefault(emptyList())
 }
 

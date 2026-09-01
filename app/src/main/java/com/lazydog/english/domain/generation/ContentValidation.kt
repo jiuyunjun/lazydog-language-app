@@ -39,6 +39,17 @@ object ContentValidation {
                 word.collocations.isEmpty() || word.collocations.size > 2 -> "搭配数量应该是 1~2 个"
                 word.collocations.any { it.isBlank() || it.length > 60 } -> "搭配缺失或过长"
                 word.memoryHintZh.isBlank() || word.memoryHintZh.length > 160 -> "记忆方法缺失或过长"
+                // 词块必须能原样拼回这个词，否则挖空题会挖出一个不存在的位置。
+                word.chunks.size < 2 -> "词块至少要拆成 2 块"
+                word.chunks.joinToString("").lowercase() != term.lowercase() -> "词块拼起来和原词对不上"
+                // 易错段要能在词里定位，不然"这里最容易错"指不到地方。
+                word.trickyPart.isBlank() -> "缺少易错部分"
+                !term.lowercase().contains(word.trickyPart.trim().lowercase()) -> "易错部分不是这个词的一段"
+                word.misspellings.size < 3 -> "常见错拼至少 3 个（四选一要 3 个干扰项）"
+                word.misspellings.any { it.isBlank() || it.trim().lowercase() == term.lowercase() } ->
+                    "常见错拼里混进了正确拼写或空值"
+                word.misspellings.map { it.trim().lowercase() }.distinct().size < word.misspellings.size ->
+                    "常见错拼有重复"
                 else -> null
             }
             if (reason == null) valid.add(word.copy(term = term)) else dropped.add("${term.ifBlank { "(空)" }}：$reason")

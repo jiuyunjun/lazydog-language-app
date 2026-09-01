@@ -154,7 +154,7 @@ class OpenAiContentGeneratorTest {
 
     private val wordsJson =
         """{"schemaVersion":1,"words":[
-           {"term":"curb","ipa":"/kɜːb/","pos":"v.","meaningZh":"控制","exampleEn":"The city tried to curb traffic.","exampleZh":"市政府想控制车流。","collocations":["curb traffic"],"memoryHintZh":"curb 本义是路缘石，把车流圈在路里，引申成控制、抑制。"},
+           {"term":"curb","ipa":"/kɜːb/","pos":"v.","meaningZh":"控制","exampleEn":"The city tried to curb traffic.","exampleZh":"市政府想控制车流。","collocations":["curb traffic"],"memoryHintZh":"curb 本义是路缘石，把车流圈在路里，引申成控制、抑制。","chunks":["cu","rb"],"trickyPart":"ur","misspellings":["curbe","kurb","curp"]},
            {"term":"","ipa":"","meaningZh":"","exampleEn":"","exampleZh":""}
         ]}"""
 

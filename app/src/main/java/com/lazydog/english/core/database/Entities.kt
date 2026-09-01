@@ -53,6 +53,16 @@ data class VocabularyDetailEntity(
     @ColumnInfo(defaultValue = "'[]'") val collocationsJson: String = "[]",
     /** 记忆方法：词根词缀拆解或联想记忆。老数据为空，UI 按"没有就不显示"处理。 */
     @ColumnInfo(defaultValue = "''") val memoryHintZh: String = "",
+    /**
+     * 词块拆分，JSON 字符串数组，按顺序拼起来等于 term。
+     * 这是词固有的属性，不是从用户历史推出来的，所以和释义一起在第一次落库时就写全；
+     * 为空时本地启发式兜底，但启发式拆出来的东西不能拿去当"这里最容易错"讲。
+     */
+    @ColumnInfo(defaultValue = "'[]'") val chunksJson: String = "[]",
+    /** 这个词最容易拼错的那一段，必须是 term 的子串；挖空题优先挖它。 */
+    @ColumnInfo(defaultValue = "''") val trickyPart: String = "",
+    /** 真人常写错的形式，JSON 字符串数组，用作四选一的干扰项。 */
+    @ColumnInfo(defaultValue = "'[]'") val misspellingsJson: String = "[]",
 )
 
 @Entity(
