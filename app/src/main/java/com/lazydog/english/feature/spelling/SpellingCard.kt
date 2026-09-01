@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.paddingFromBaseline
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
@@ -41,20 +39,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
@@ -123,8 +115,6 @@ data class SpellingAnswer(
     val lastResult: SpellingEvaluation? = null,
     val startedAtMillis: Long = System.currentTimeMillis(),
     val showHintSheet: Boolean = false,
-    /** 每加一次就把焦点要回输入格。关掉提示面板、答错了要重打，都得往回要一次。 */
-    val focusEpoch: Int = 0,
 ) {
     /** 这张卡已经翻篇了：要么写对了，要么提示已经拉到底、答案摆在脸上。 */
     val resolved: Boolean get() = lastResult?.correct == true || hintLevel >= MAX_HINT_LEVEL
@@ -151,14 +141,7 @@ fun SpellingCardView(
     fun submittedAnswer(): String = when (card.questionType) {
         SpellingQuestionType.Recognition ->
             SpellingEngine.recognitionOptions(card.term, card.facts).getOrNull(answer.selectedOption).orEmpty()
-        SpellingQuestionType.PartialCompletion, SpellingQuestionType.ChunkRecall ->
-            SpellingEngine.fillMasked(
-                word = card.term,
-                typed = answer.typed,
-                weakSegments = card.progress.weakSegments,
-                chunk = card.questionType == SpellingQuestionType.ChunkRecall,
-                facts = card.facts,
-            )
+        // 挖空只是题面上的提示，用户打的始终是完整单词，所以判分不用再拼回去。
         else -> answer.typed
     }
 
@@ -186,10 +169,7 @@ fun SpellingCardView(
         onTypedChange = { answer = answer.copy(typed = it) },
         onSelectOption = { answer = answer.copy(selectedOption = it) },
         onSubmit = {
-            record(answer.hintLevel) { evaluation ->
-                // 答错了还要接着改，焦点得回到格子里，不然要重打得先想办法点回去。
-                answer = answer.copy(lastResult = evaluation, focusEpoch = answer.focusEpoch + 1)
-            }
+            record(answer.hintLevel) { evaluation -> answer = answer.copy(lastResult = evaluation) }
         },
         onRequestHint = {
             // 要提示本身不是一次作答：不记 attempt、不动阶段，只是把提示往上抬一级。
@@ -200,19 +180,13 @@ fun SpellingCardView(
             if (nextLevel >= MAX_HINT_LEVEL) record(MAX_HINT_LEVEL) {}
         },
         onNext = { onResolved(answer.lastResult?.correct == true, answer.hintLevel > 0) },
-        onDismissHintSheet = {
-            answer = answer.copy(showHintSheet = false, focusEpoch = answer.focusEpoch + 1)
-        },
+        onDismissHintSheet = { answer = answer.copy(showHintSheet = false) },
     )
 }
 
-/**
- * 这些题型底下才摆一个普通输入框。局部补全和引导回忆用的是逐字母格子，
- * 格子本身就是输入控件，再加一个框等于让人在两个地方之间来回看。
- */
+/** 除了四选一，所有题型都在下面摆一个普通输入框，打的是完整单词。 */
 private fun SpellingQuestionType.needsPlainTextField(): Boolean =
-    this == SpellingQuestionType.FreeRecall ||
-        this == SpellingQuestionType.DelayedFreeRecall
+    this != SpellingQuestionType.Recognition
 
 /**
  * 四选一之外的题型都能逐级要提示。选择题没有提示梯度可言——
@@ -260,9 +234,9 @@ private fun QuestionView(
                     onSelectOption = onSelectOption,
                     onPlay = { scope.launch { app.speechController.speakWord(entry.term) } },
                 )
-                SpellingQuestionType.PartialCompletion -> PartialBody(card, answer, onTypedChange)
-                SpellingQuestionType.ChunkRecall -> ChunkBody(card, answer, onTypedChange)
-                SpellingQuestionType.GuidedRecall -> GuidedBody(card, answer, onTypedChange)
+                SpellingQuestionType.PartialCompletion -> PartialBody(card, answer)
+                SpellingQuestionType.ChunkRecall -> ChunkBody(card, answer)
+                SpellingQuestionType.GuidedRecall -> GuidedBody(card, answer)
                 SpellingQuestionType.FreeRecall, SpellingQuestionType.DelayedFreeRecall -> FreeRecallBody(
                     card = card,
                     answer = answer,
@@ -418,12 +392,7 @@ private fun hintLevelName(level: Int): String = when (level) {
     else -> "还没给提示"
 }
 
-private fun inputLabel(type: SpellingQuestionType): String = when (type) {
-    SpellingQuestionType.PartialCompletion -> "补全缺失的字母"
-    SpellingQuestionType.ChunkRecall -> "写出中间缺的那一块"
-    SpellingQuestionType.GuidedRecall -> "写出完整单词"
-    else -> "请输入完整单词"
-}
+private fun inputLabel(type: SpellingQuestionType): String = "写出完整单词"
 
 @Composable
 private fun RecognitionBody(
@@ -485,45 +454,33 @@ private fun RecognitionBody(
 }
 
 @Composable
-private fun PartialBody(
-    card: SpellingCard,
-    answer: SpellingAnswer,
-    onTypedChange: (String) -> Unit,
-) {
+private fun PartialBody(card: SpellingCard, answer: SpellingAnswer) {
     val entry = card
     val weakest = entry.progress.weakSegments.maxByOrNull { it.errorCount }
     if (weakest != null && weakest.errorCount > 1) {
         Badge(text = "你在这里错过 ${weakest.errorCount} 次", attention = true)
     }
     Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    LetterSlots(
+    SlotRow(
         masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = false, facts = entry.facts),
         typed = answer.typed,
-        onTypedChange = onTypedChange,
         enabled = !answer.resolved,
-        refocusKey = answer.focusEpoch,
     )
     Text(
-        text = "补全缺失的字母",
+        text = "把整个词打出来，打到哪一格就亮到哪一格",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
 @Composable
-private fun ChunkBody(
-    card: SpellingCard,
-    answer: SpellingAnswer,
-    onTypedChange: (String) -> Unit,
-) {
+private fun ChunkBody(card: SpellingCard, answer: SpellingAnswer) {
     val entry = card
     Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    LetterSlots(
+    SlotRow(
         masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = true, facts = entry.facts),
         typed = answer.typed,
-        onTypedChange = onTypedChange,
         enabled = !answer.resolved,
-        refocusKey = answer.focusEpoch,
     )
     Text(
         text = "按词块想，不用一个字母一个字母地拼。",
@@ -533,20 +490,14 @@ private fun ChunkBody(
 }
 
 @Composable
-private fun GuidedBody(
-    card: SpellingCard,
-    answer: SpellingAnswer,
-    onTypedChange: (String) -> Unit,
-) {
+private fun GuidedBody(card: SpellingCard, answer: SpellingAnswer) {
     val entry = card
     Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     // S4 只给首字母和长度，剩下的自己填；长度本身就是这一阶段允许的提示。
-    LetterSlots(
+    SlotRow(
         masked = entry.term.take(1) + "_".repeat((entry.term.length - 1).coerceAtLeast(0)),
         typed = answer.typed,
-        onTypedChange = onTypedChange,
         enabled = !answer.resolved,
-        refocusKey = answer.focusEpoch,
     )
     Text(
         text = "${entry.term.length} 个字母" +
@@ -563,52 +514,20 @@ private fun GuidedBody(
  * 输入用一个透明的 [BasicTextField] 接管，界面上看到的就是这排格子：
  * 底下再摆一个输入框的话，用户得在两个地方之间来回看。
  */
+/**
+ * 逐字母下划线（设计稿 63 屏）：已给出的字母是普通文字，缺的每个字母各占一格，
+ * 一格一条下划线，中间留空——不是一条通长的横线。
+ *
+ * 纯展示，不收输入。输入走下面那个普通输入框，用户打的是**完整单词**，
+ * 打到第几个字母，第几格就亮起来。
+ *
+ * 之前试过把输入框藏进这排格子里（零宽、透明覆盖），两版都不能用：焦点要不回来、
+ * 用户没有能点的地方，而且"格子里填的那几个字母"和"判分拿到的字符串"要各算一遍偏移，
+ * 引导回忆那一档就因为少了首字母永远判错。设计稿 60 屏本来画的就是
+ * 挖空展示 + 一个独立输入框两件东西，我不该把它们并成一个。
+ */
 @Composable
-private fun LetterSlots(
-    masked: String,
-    typed: String,
-    onTypedChange: (String) -> Unit,
-    enabled: Boolean,
-    /** 这个值一变就顺手把焦点要回来（关掉提示面板、答错要重打）。要不回来也没关系，格子本身能点。 */
-    refocusKey: Any = Unit,
-) {
-    val blanks = masked.count { it == '_' }
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(masked, refocusKey, enabled) {
-        if (enabled) runCatching { focusRequester.requestFocus() }
-    }
-
-    // 真正的输入框整块盖在格子上，透明但**有正常尺寸**。
-    //
-    // 上一版把它收成零宽藏在 Row 末尾，于是它既不好聚焦、又没有能点的地方：
-    // 提示面板（ModalBottomSheet）把焦点拿走之后要不回来，界面看着是活的、
-    // 实际不收输入，而用户连"点一下输入框"这条退路都没有。
-    // 盖一整块就没有这个问题：焦点丢了，点一下格子就回来了。
-    Box {
-        SlotRow(masked = masked, typed = typed, enabled = enabled, blanks = blanks)
-        BasicTextField(
-            value = typed,
-            onValueChange = { onTypedChange(it.filter { char -> !char.isWhitespace() }.take(blanks)) },
-            enabled = enabled,
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.None,
-                autoCorrectEnabled = false,
-                keyboardType = KeyboardType.Ascii,
-            ),
-            // 字和光标都不画：看得见的那份由下面的格子负责。
-            textStyle = TextStyle(color = Color.Transparent),
-            cursorBrush = SolidColor(Color.Transparent),
-            modifier = Modifier
-                .matchParentSize()
-                .focusRequester(focusRequester),
-        )
-    }
-}
-
-/** 画出来的那排格子，纯展示，不碰输入。 */
-@Composable
-private fun SlotRow(masked: String, typed: String, enabled: Boolean, blanks: Int) {
+private fun SlotRow(masked: String, typed: String, enabled: Boolean) {
     // 每一格和已给出的字母都按**基线**对齐，不是按底边。
     // 按底边的话，格子里的字母会被格高和内边距一起顶上去，
     // 和旁边的固定字母差半行，一眼就能看出来没坐在同一条线上。
@@ -616,22 +535,22 @@ private fun SlotRow(masked: String, typed: String, enabled: Boolean, blanks: Int
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.semantics {
-            contentDescription = "补全 $masked，已填 ${typed.length} / $blanks 个字母"
+            contentDescription = "目标词形 $masked，已经打了 ${typed.length} 个字母"
         },
     ) {
-        var typedIndex = 0
-        masked.forEach { char ->
+        masked.forEachIndexed { index, char ->
             if (char != '_') {
                 Text(
                     text = char.toString(),
                     style = letterStyle,
                     modifier = Modifier.alignByBaseline(),
                 )
-                return@forEach
+                return@forEachIndexed
             }
-            val filled = typed.getOrNull(typedIndex)
-            val isNext = typedIndex == typed.length
-            typedIndex += 1
+            // 用户打的是完整单词，所以第 index 个字母就落在第 index 格，
+            // 不用再算"第几个空对应第几个输入字符"——那套偏移正是上一版判错的根源。
+            val filled = typed.getOrNull(index)
+            val isNext = index == typed.length
             val lineColor = when {
                 filled != null -> MaterialTheme.colorScheme.primary
                 isNext && enabled -> MaterialTheme.colorScheme.primary

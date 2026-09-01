@@ -298,33 +298,6 @@ object SpellingEngine {
         return clean.replaceRange(start, end, blank)
     }
 
-    /**
-     * 局部补全和词块回忆只让用户打缺的那一段，判定前要拼回完整单词。
-     * 直接拿片段和整词比对永远都是错的。
-     */
-    fun fillMasked(
-        word: String,
-        typed: String,
-        weakSegments: List<WeakSegment>,
-        chunk: Boolean,
-        facts: SpellingFacts = SpellingFacts.None,
-    ): String {
-        // 必须和界面画出来的那一版挖空完全一致，否则填回去的位置就对不上了。
-        val masked = maskedWord(word, weakSegments, chunk, facts)
-        val start = masked.indexOf('_')
-        if (start < 0) return normalize(typed)
-        val end = masked.lastIndexOf('_') + 1
-        return normalize(masked.take(start) + typed.trim() + masked.drop(end))
-    }
-
-    /**
-     * 提示梯度（设计稿「提示梯度 Hint Ladder」）。
-     *
-     * 每一级只能比上一级多给一点，**第 5 级之前任何一级都不能把整个词交出去**——
-     * 否则第 5 级就没有存在意义，而"逐级要提示"也退化成"点四下看答案"。
-     * 具体地：第 2 级给挖空的错误区域（不是原词），第 3 级给薄弱片段的内芯
-     * （严格窄于片段本身），第 4 级给词块骨架但弱块仍然空着。
-     */
     fun hintText(
         expected: String,
         answer: String,

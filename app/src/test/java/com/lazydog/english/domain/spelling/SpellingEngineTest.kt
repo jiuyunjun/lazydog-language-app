@@ -132,19 +132,6 @@ class SpellingEngineTest {
     }
 
     @Test
-    fun `a filled-in blank is judged as the whole word`() {
-        val weak = listOf(WeakSegment("viron", 2, 7, 4))
-        assertEquals(
-            "environment",
-            SpellingEngine.fillMasked("environment", "viron", weak, chunk = true),
-        )
-        assertEquals(
-            "enviroment",
-            SpellingEngine.fillMasked("environment", "viro", weak, chunk = true),
-        )
-    }
-
-    @Test
     fun `a word already in rotation does not start back at multiple choice`() {
         // 一律从 Seen 起考的话，每个词都要先答对两轮四选一才轮得到挖空，
         // 结果就是"逐字母下划线"那几屏实际上永远见不到。
