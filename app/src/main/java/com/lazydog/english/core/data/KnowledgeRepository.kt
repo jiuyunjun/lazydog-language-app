@@ -244,6 +244,12 @@ class KnowledgeRepository(
         hintLevel: Int,
         responseTimeMillis: Long,
         audioPrompted: Boolean = false,
+        /**
+         * 这次作答算不算一次到期复习。加练没到期的词时传 false：
+         * 拼写画像照记，但不推动通用复习时间——两个入口共用一套 nextReviewAt，
+         * 加练把没到期的词往后推，等于让拼写练习悄悄改写单词复习的队列。
+         */
+        advanceReviewSchedule: Boolean = true,
     ): SpellingEvaluation? = database.withTransaction {
         val item = dao.getItem(itemId) ?: return@withTransaction null
         val at = now()
@@ -277,7 +283,7 @@ class KnowledgeRepository(
             ),
         )
         val resolvesCard = evaluation.correct || hintLevel >= SpellingEngine.MAX_HINT_LEVEL
-        if (resolvesCard) {
+        if (resolvesCard && advanceReviewSchedule) {
             val memory = scheduler.schedule(item.toMemoryState(), evaluation.reviewGrade, at)
             dao.insertEvent(
                 LearningEventEntity(
@@ -321,12 +327,18 @@ class KnowledgeRepository(
                     exampleEn = record.detail.exampleEn,
                     exampleZh = record.detail.exampleZh,
                     progress = progress,
+                    dueNow = (record.item.nextReviewAt ?: Long.MAX_VALUE) <= at.toEpochMilli(),
                     priority = spellingPriority(record.item.nextReviewAt, progress, progress.lastAttemptAt == null, at),
                 )
             }
-            .sortedByDescending { it.priority }
+            // 到期的先排完，不够一轮再拿没到期的补位——补位的那些算加练，不动复习时间。
+            .sortedWith(compareByDescending<SpellingQueueEntry> { it.dueNow }.thenByDescending { it.priority })
             .take(limit)
     }
+
+    /** 熟词的产出卡要按各自的拼写阶段出题，进页面时一次取齐，别一张卡查一次库。 */
+    suspend fun spellingProgressByItem(): Map<Long, SpellingProgress> =
+        spellingDao.getAllProgress().associate { it.itemId to it.toDomain() }
 
     /** 画像页要的全量聚合。数据量是"这个人练过的拼写次数"，直接全读没问题。 */
     suspend fun spellingProfile(): SpellingProfile = SpellingProfiles.build(
@@ -411,6 +423,8 @@ data class SpellingQueueEntry(
     val exampleEn: String,
     val exampleZh: String,
     val progress: SpellingProgress,
+    /** 这个词此刻到期了没有。没到期的是加练，判分照记但不推动复习时间。 */
+    val dueNow: Boolean,
     val priority: Double,
 )
 
