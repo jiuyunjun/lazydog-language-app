@@ -64,7 +64,7 @@ class SpellingEngineTest {
     @Test
     fun `asking for a hint without an answer gives stable structural help`() {
         assertEquals(
-            "首字母是 e，一共 11 个字母。",
+            "一共 11 个字母，可以分成 3 个词块。",
             SpellingEngine.hintText("environment", "", 1, emptyList()),
         )
     }
@@ -89,11 +89,45 @@ class SpellingEngineTest {
     }
 
     @Test
-    fun `recognition offers four distinct spellings, exactly one of them right`() {
-        val options = SpellingEngine.recognitionOptions("environment")
-        assertEquals(4, options.size)
-        assertEquals(4, options.toSet().size)
-        assertEquals(1, options.count { it == "environment" })
+    fun `no hint below the last one spells the word out`() {
+        // 逐级要提示不能是"点四下看答案"：第 5 级之前，任何一级都不该
+        // 让完整拼写出现在提示里。
+        for (level in 0..4) {
+            val withAnswer = SpellingEngine.hintText("environment", "enviroment", level, emptyList())
+            val withoutAnswer = SpellingEngine.hintText("environment", "", level, emptyList())
+            assertTrue("level $level leaked: $withAnswer", !withAnswer.contains("environment"))
+            assertTrue("level $level leaked: $withoutAnswer", !withoutAnswer.contains("environment"))
+        }
+        assertTrue(SpellingEngine.hintText("environment", "enviroment", 5, emptyList()).contains("environment"))
+    }
+
+    @Test
+    fun `the error region hint blanks the region instead of showing it`() {
+        val hint = SpellingEngine.hintText("environment", "enviroment", 2, emptyList())
+        assertTrue(hint, hint.contains("_"))
+        assertTrue(hint, !hint.contains("viron"))
+    }
+
+    @Test
+    fun `the fragment hint is strictly narrower than the weak segment`() {
+        val weak = listOf(WeakSegment("viron", 2, 7, 4))
+        val hint = SpellingEngine.hintText("environment", "enviroment", 3, weak)
+        assertTrue(hint, !hint.contains("viron"))
+    }
+
+    @Test
+    fun `the chunk skeleton keeps the weak chunk blank`() {
+        val hint = SpellingEngine.hintText("environment", "enviroment", 4, emptyList())
+        assertTrue(hint, hint.contains("en") && hint.contains("ment"))
+        assertTrue(hint, !hint.contains("viron"))
+    }
+
+    @Test
+    fun `the first hint names the kind of mistake without locating it`() {
+        val doubling = SpellingEngine.hintText("necessary", "neccessary", 1, emptyList())
+        assertTrue(doubling, doubling.contains("双写"))
+        val order = SpellingEngine.hintText("receive", "recieve", 1, emptyList())
+        assertTrue(order, order.contains("元音"))
     }
 
     @Test

@@ -2,7 +2,9 @@ package com.lazydog.english.feature.spelling
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -10,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Close
@@ -40,8 +44,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -251,6 +265,15 @@ fun SpellingScreen(
     }
 }
 
+/**
+ * 这些题型底下才摆一个普通输入框。局部补全和引导回忆用的是逐字母格子，
+ * 格子本身就是输入控件，再加一个框等于让人在两个地方之间来回看。
+ */
+private fun SpellingQuestionType.needsPlainTextField(): Boolean =
+    this == SpellingQuestionType.ChunkRecall ||
+        this == SpellingQuestionType.FreeRecall ||
+        this == SpellingQuestionType.DelayedFreeRecall
+
 /** 题面靠声音给的题型，命中「音形对应」这一维。 */
 private fun SpellingQuestionType.isAudioPrompted(): Boolean =
     this == SpellingQuestionType.Recognition ||
@@ -288,9 +311,9 @@ private fun QuestionView(
                     onSelectOption = onSelectOption,
                     onPlay = { scope.launch { app.speechController.speakWord(entry.term) } },
                 )
-                SpellingQuestionType.PartialCompletion -> PartialBody(phase = phase)
+                SpellingQuestionType.PartialCompletion -> PartialBody(phase, onTypedChange)
                 SpellingQuestionType.ChunkRecall -> ChunkBody(phase = phase)
-                SpellingQuestionType.GuidedRecall -> GuidedBody(phase = phase)
+                SpellingQuestionType.GuidedRecall -> GuidedBody(phase, onTypedChange)
                 SpellingQuestionType.FreeRecall, SpellingQuestionType.DelayedFreeRecall -> FreeRecallBody(
                     phase = phase,
                     onPlay = {
@@ -302,7 +325,7 @@ private fun QuestionView(
                 )
             }
 
-            if (phase.questionType != SpellingQuestionType.Recognition) {
+            if (phase.questionType.needsPlainTextField()) {
                 OutlinedTextField(
                     value = phase.typed,
                     onValueChange = onTypedChange,
@@ -368,7 +391,7 @@ private fun QuestionView(
                     Text("下一个")
                 }
             } else {
-                if (phase.questionType != SpellingQuestionType.Recognition) {
+                if (phase.questionType.needsPlainTextField()) {
                     OutlinedButton(
                         onClick = onRequestHint,
                         modifier = Modifier
@@ -509,20 +532,24 @@ private fun RecognitionBody(
 }
 
 @Composable
-private fun PartialBody(phase: SpellingPhase.Question) {
+private fun PartialBody(
+    phase: SpellingPhase.Question,
+    onTypedChange: (String) -> Unit,
+) {
     val entry = phase.entry
     val weakest = entry.progress.weakSegments.maxByOrNull { it.errorCount }
     if (weakest != null && weakest.errorCount > 1) {
         Badge(text = "你在这里错过 ${weakest.errorCount} 次", attention = true)
     }
     Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(
-        text = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = false),
-        style = MaterialTheme.typography.headlineMedium,
-        fontFamily = FontFamily.Monospace,
+    LetterSlots(
+        masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = false),
+        typed = phase.typed,
+        onTypedChange = onTypedChange,
+        enabled = !phase.resolved,
     )
     Text(
-        text = "把下划线的部分补出来就行，不用重打整个词。",
+        text = "补全缺失的字母",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -546,19 +573,109 @@ private fun ChunkBody(phase: SpellingPhase.Question) {
 }
 
 @Composable
-private fun GuidedBody(phase: SpellingPhase.Question) {
+private fun GuidedBody(
+    phase: SpellingPhase.Question,
+    onTypedChange: (String) -> Unit,
+) {
     val entry = phase.entry
     Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(
-        text = "${entry.term.take(1)}${"_".repeat((entry.term.length - 1).coerceAtLeast(0))}",
-        style = MaterialTheme.typography.headlineMedium,
-        fontFamily = FontFamily.Monospace,
+    // S4 只给首字母和长度，剩下的自己填；长度本身就是这一阶段允许的提示。
+    LetterSlots(
+        masked = entry.term.take(1) + "_".repeat((entry.term.length - 1).coerceAtLeast(0)),
+        typed = phase.typed,
+        onTypedChange = onTypedChange,
+        enabled = !phase.resolved,
     )
     Text(
         text = "${entry.term.length} 个字母" +
             if (entry.ipa.isNotBlank()) " · ${entry.ipa}" else "",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/**
+ * 逐字母下划线（设计稿 63 屏）：已给出的字母是普通文字，缺的每个字母各占一格，
+ * 一格一条下划线，中间有间隔——不是一条通长的横线。打进去的字母按顺序落进空格里。
+ *
+ * 输入用一个透明的 [BasicTextField] 接管，界面上看到的就是这排格子：
+ * 底下再摆一个输入框的话，用户得在两个地方之间来回看。
+ */
+@Composable
+private fun LetterSlots(
+    masked: String,
+    typed: String,
+    onTypedChange: (String) -> Unit,
+    enabled: Boolean,
+) {
+    val blanks = masked.count { it == '_' }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(masked) { runCatching { focusRequester.requestFocus() } }
+
+    BasicTextField(
+        value = typed,
+        onValueChange = { onTypedChange(it.filter { char -> !char.isWhitespace() }.take(blanks)) },
+        enabled = enabled,
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.None,
+            autoCorrectEnabled = false,
+            keyboardType = KeyboardType.Ascii,
+        ),
+        cursorBrush = SolidColor(Color.Transparent),
+        modifier = Modifier.focusRequester(focusRequester),
+        decorationBox = {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.semantics {
+                    contentDescription = "补全 $masked，已填 ${typed.length} / $blanks 个字母"
+                },
+            ) {
+                var typedIndex = 0
+                masked.forEach { char ->
+                    if (char != '_') {
+                        Text(
+                            text = char.toString(),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                        return@forEach
+                    }
+                    val filled = typed.getOrNull(typedIndex)
+                    val isNext = typedIndex == typed.length
+                    typedIndex += 1
+                    val lineColor = when {
+                        filled != null -> MaterialTheme.colorScheme.primary
+                        isNext && enabled -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.outline
+                    }
+                    Box(
+                        contentAlignment = Alignment.BottomCenter,
+                        modifier = Modifier
+                            .width(24.dp)
+                            .height(38.dp)
+                            .drawBehind {
+                                val stroke = if (filled != null || isNext) 2.dp.toPx() else 1.dp.toPx()
+                                drawLine(
+                                    color = lineColor,
+                                    start = Offset(0f, size.height - stroke / 2),
+                                    end = Offset(size.width, size.height - stroke / 2),
+                                    strokeWidth = stroke,
+                                )
+                            },
+                    ) {
+                        Text(
+                            text = filled?.toString().orEmpty(),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
+                }
+            }
+        },
     )
 }
 

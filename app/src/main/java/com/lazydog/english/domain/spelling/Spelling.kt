@@ -248,40 +248,100 @@ object SpellingEngine {
         return normalize(masked.take(start) + typed.trim() + masked.drop(end))
     }
 
+    /**
+     * 提示梯度（设计稿「提示梯度 Hint Ladder」）。
+     *
+     * 每一级只能比上一级多给一点，**第 5 级之前任何一级都不能把整个词交出去**——
+     * 否则第 5 级就没有存在意义，而"逐级要提示"也退化成"点四下看答案"。
+     * 具体地：第 2 级给挖空的错误区域（不是原词），第 3 级给薄弱片段的内芯
+     * （严格窄于片段本身），第 4 级给词块骨架但弱块仍然空着。
+     */
     fun hintText(expected: String, answer: String, level: Int, weakSegments: List<WeakSegment>): String {
         val clean = normalize(expected)
         val submitted = normalize(answer)
+        val chunks = chunkWord(clean)
         if (submitted.isBlank()) {
+            // 还没交过答案，只能按词的结构给，没有"你错在哪"可说。
             return when (level.coerceIn(0, 5)) {
                 0 -> "先试着写一次；需要时再要提示。"
-                1 -> "首字母是 ${clean.take(1)}，一共 ${clean.length} 个字母。"
-                2 -> "可以分成 ${chunkWord(clean).size} 个词块。"
-                3 -> "开头是 ${clean.take(2)}，结尾是 ${clean.takeLast(2)}。"
-                4 -> "分块看：${chunkWord(clean).joinToString(" + ")}"
+                1 -> "一共 ${clean.length} 个字母，可以分成 ${chunks.size} 个词块。"
+                2 -> "开头那块是 ${chunks.first()}。"
+                3 -> if (chunks.size >= 2) "结尾那块是 ${chunks.last()}。" else "开头是 ${clean.take(2)}。"
+                4 -> "词块骨架：${chunkSkeleton(clean, null)}"
                 else -> "答案：$clean"
             }
         }
+        val weak = findWeakSegment(clean, submitted) ?: weakSegments.maxByOrNull { it.errorCount }
         return when (level.coerceIn(0, 5)) {
             0 -> "拼写不正确，再试一次。"
-            1 -> {
-                val delta = clean.length - submitted.length
-                when {
-                    delta > 0 -> "少了 $delta 个字母。"
-                    delta < 0 -> "多了 ${-delta} 个字母。"
-                    else -> "字母数量对了，但有位置不对。"
-                }
-            }
-            2 -> {
-                val weak = findWeakSegment(clean, submitted)
-                if (weak == null) "有一小段顺序不对。" else "错误大约在第 ${weak.start + 1}～${weak.endExclusive} 个字母附近。"
-            }
-            3 -> {
-                val weak = findWeakSegment(clean, submitted) ?: weakSegments.maxByOrNull { it.errorCount }
-                if (weak == null) "开头是 ${clean.take(2)}，结尾是 ${clean.takeLast(2)}。" else "这一段是：…${weak.segment}…"
-            }
-            4 -> "分块看：${chunkWord(clean).joinToString(" + ")}"
+            // 只说错的性质，不说在哪。知道"该双写"往往就够自己找出来了。
+            1 -> errorNature(clean, submitted)
+            // 错误区域挖空。给的是挖过的词，不是原词。
+            2 -> if (weak == null) "有一小段顺序不对。" else maskRange(clean, weak.start, weak.endExclusive)
+            // 片段的内芯，掐头去尾，严格窄于片段本身。
+            3 -> innerFragment(weak) ?: "开头是 ${clean.take(2)}，结尾是 ${clean.takeLast(2)}。"
+            // 词块骨架，弱块仍然空着——这一级给的是结构，不是答案。
+            4 -> "词块骨架：${chunkSkeleton(clean, weak)}"
             else -> "答案：$clean"
         }
+    }
+
+    /** 第 1 级：把错误归到一类说出来，一个字母都不给。 */
+    private fun errorNature(expected: String, submitted: String): String {
+        val errors = classifyErrors(expected, submitted)
+        val delta = expected.length - submitted.length
+        return when {
+            SpellingErrorType.VowelOrder in errors -> "两个元音的顺序反了。"
+            SpellingErrorType.Transposition in errors -> "有两个相邻的字母写反了。"
+            SpellingErrorType.Doubling in errors -> "双写不对：该双写的地方没双，或者不该双的双了。"
+            SpellingErrorType.Phonetic in errors -> "你是照读音拼的，这个词的写法和它的读音对不上。"
+            SpellingErrorType.Morphology in errors -> "词尾的变化形式不对。"
+            delta > 0 -> "少了 $delta 个字母。"
+            delta < 0 -> "多了 ${-delta} 个字母。"
+            else -> {
+                val wrong = expected.indices.count { expected[it] != submitted.getOrNull(it) }
+                "字母数量对了，有 $wrong 处写错了。"
+            }
+        }
+    }
+
+    /** 把一段挖成下划线。给出的是挖过的词，不是原词。 */
+    private fun maskRange(word: String, start: Int, endExclusive: Int): String {
+        val from = start.coerceIn(0, word.length)
+        val to = endExclusive.coerceIn(from, word.length)
+        if (from == to) return word
+        return word.replaceRange(from, to, "_".repeat(to - from))
+    }
+
+    /**
+     * 薄弱片段的内芯：掐掉首尾各一个字母。
+     * 直接把整段给出去，对"错的就是这一段"的题来说等于给答案。
+     */
+    private fun innerFragment(weak: WeakSegment?): String? {
+        val segment = weak?.segment ?: return null
+        if (segment.length < 3) return null
+        return "中间这几个字母是：…${segment.substring(1, segment.length - 1)}…"
+    }
+
+    /** 词块骨架，命中薄弱片段的那一块留空；不知道哪块弱就留中间那块。 */
+    private fun chunkSkeleton(word: String, weak: WeakSegment?): String {
+        val chunks = chunkWord(word)
+        if (chunks.size < 2) return "_".repeat(word.length)
+        var cursor = 0
+        val ranges = chunks.map { chunk ->
+            val range = cursor until (cursor + chunk.length)
+            cursor += chunk.length
+            range
+        }
+        val blankIndex = if (weak == null) {
+            if (chunks.size >= 3) 1 else 0
+        } else {
+            ranges.indexOfFirst { it.first < weak.endExclusive && weak.start < it.last + 1 }
+                .takeIf { it >= 0 } ?: if (chunks.size >= 3) 1 else 0
+        }
+        return chunks.mapIndexed { index, chunk ->
+            if (index == blankIndex) "_".repeat(chunk.length) else chunk
+        }.joinToString(" + ")
     }
 
     /**
