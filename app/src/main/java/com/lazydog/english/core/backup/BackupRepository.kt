@@ -32,6 +32,7 @@ class BackupRepository(
             drillMistakes = database.drillMistakeDao().getAll().map { it.toBackup() },
             spellingProgress = spellingDao.getAllProgress().map { it.toBackup() },
             spellingAttempts = spellingDao.getAllAttempts().map { it.toBackup() },
+            memoryHints = database.memoryHintDao().getAllHints().map { it.toBackup() },
             preferences = BackupPreferences(
                 learningGoal = prefs.learningGoal.first(),
                 topics = prefs.topics.first(),
@@ -59,6 +60,7 @@ class BackupRepository(
         val scenarioDao = database.scenarioSessionDao()
         val mistakeDao = database.drillMistakeDao()
         val spellingDao = database.spellingDao()
+        val memoryHintDao = database.memoryHintDao()
         database.withTransaction {
             knowledgeDao.clearAll()
             readingDao.clearAll()
@@ -88,6 +90,10 @@ class BackupRepository(
             for (attempt in payload.spellingAttempts) {
                 val newId = idMap[attempt.itemId] ?: continue
                 spellingDao.insertAttempt(attempt.toEntity(newId))
+            }
+            for (hint in payload.memoryHints) {
+                val newId = idMap[hint.itemId] ?: continue
+                memoryHintDao.saveHint(hint.toEntity(newId))
             }
             for (material in payload.readingMaterials) {
                 readingDao.insert(material.toEntity())

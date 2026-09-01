@@ -97,6 +97,19 @@ interface LearningContentGenerator {
         onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<GeneratedReading>
 
+    /**
+     * 一个词的记忆提示（词汇记忆提示DESIGN.md）。**和新词生成分开的一次调用**：
+     * 新词生成一次要写十几个词，塞不下"先判断这个词最值得记什么再只写那一两种"这一整套；
+     * 而且记忆提示是要重来的——第一条没帮上忙就该换个策略再要一条，
+     * 不该连着例句、音标、拼写事实一起重新生成。
+     */
+    suspend fun generateMemoryAssistance(
+        request: MemoryAssistanceRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已到达的记忆钩子，用于边生成边显示；最终仍以完整解析加校验为准。 */
+        onPartialHook: ((String) -> Unit)? = null,
+    ): GenerationResult<MemoryAssistance>
+
     /** 点词解释：结合所在句子解释一个词。 */
     suspend fun explainWord(
         term: String,

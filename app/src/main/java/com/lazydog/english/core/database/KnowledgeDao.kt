@@ -53,6 +53,9 @@ interface KnowledgeDao {
     @Insert
     suspend fun insertEvent(event: LearningEventEntity): Long
 
+    @Query("SELECT * FROM vocabulary_details WHERE itemId = :itemId")
+    suspend fun getVocabularyDetail(itemId: Long): VocabularyDetailEntity?
+
     @Query("SELECT EXISTS(SELECT 1 FROM vocabulary_details WHERE term = :term)")
     suspend fun vocabularyTermExists(term: String): Boolean
 

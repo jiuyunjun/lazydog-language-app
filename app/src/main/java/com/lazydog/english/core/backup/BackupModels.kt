@@ -9,6 +9,7 @@ import com.lazydog.english.core.database.ScenarioSessionEntity
 import com.lazydog.english.core.database.SpellingAttemptEntity
 import com.lazydog.english.core.database.SpellingProgressEntity
 import com.lazydog.english.core.database.VocabularyDetailEntity
+import com.lazydog.english.core.database.VocabularyMemoryHintEntity
 import kotlinx.serialization.Serializable
 
 /**
@@ -150,6 +151,22 @@ data class BackupSpellingAttempt(
     val occurredAt: Long,
 )
 
+/**
+ * 词汇记忆提示。可以重新生成，但每一条都花过一次调用，而且带着这个人当时的薄弱片段，
+ * 不跟着备份走就等于换手机之后全部重来一遍（词汇记忆提示DESIGN.md §6）。
+ */
+@Serializable
+data class BackupMemoryHint(
+    val itemId: Long,
+    val term: String = "",
+    val payloadJson: String = "",
+    val model: String = "",
+    val promptVersion: Int = 0,
+    val schemaVersion: Int = 0,
+    val droppedNotes: String = "",
+    val createdAt: Long = 0,
+)
+
 /** 只备份学习偏好；AI/Speech 密钥和 Base URL 一律不导出（AGENTS.md §6）。 */
 @Serializable
 data class BackupPreferences(
@@ -185,6 +202,8 @@ data class BackupPayload(
     val drillMistakes: List<BackupDrillMistake> = emptyList(),
     val spellingProgress: List<BackupSpellingProgress> = emptyList(),
     val spellingAttempts: List<BackupSpellingAttempt> = emptyList(),
+    /** 旧备份没有这一项，解码成空列表；恢复后页面按"还没生成过"处理，可以重新生成。 */
+    val memoryHints: List<BackupMemoryHint> = emptyList(),
     val preferences: BackupPreferences = BackupPreferences(),
 )
 
@@ -408,4 +427,26 @@ fun BackupScenarioSession.toEntity() = ScenarioSessionEntity(
     snapshotJson = snapshotJson,
     createdAt = createdAt,
     updatedAt = updatedAt,
+)
+
+fun VocabularyMemoryHintEntity.toBackup() = BackupMemoryHint(
+    itemId = itemId,
+    term = term,
+    payloadJson = payloadJson,
+    model = model,
+    promptVersion = promptVersion,
+    schemaVersion = schemaVersion,
+    droppedNotes = droppedNotes,
+    createdAt = createdAt,
+)
+
+fun BackupMemoryHint.toEntity(newItemId: Long) = VocabularyMemoryHintEntity(
+    itemId = newItemId,
+    term = term,
+    payloadJson = payloadJson,
+    model = model,
+    promptVersion = promptVersion,
+    schemaVersion = schemaVersion,
+    droppedNotes = droppedNotes,
+    createdAt = createdAt,
 )

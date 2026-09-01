@@ -62,6 +62,7 @@ import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.VocabularyRecord
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.feature.vocabulary.MemoryHintPanel
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.KnowledgeType
 import com.lazydog.english.core.model.ReviewGrade
@@ -210,6 +211,9 @@ fun LibraryScreen(
             explanation = selectedVocab.detail.meaningZh,
             example = example,
             memoryHint = selectedVocab.detail.memoryHintZh,
+            // 整句表达不给记忆提示：这套提示是按"一个词最值得记什么"设计的，
+            // 对一整句话拆构词、标重音、找易错段都无从谈起。
+            memoryHintItemId = selectedVocab.item.id.takeIf { selectedExpression == null },
             item = selectedVocab.item,
             onSpeakWord = {
                 scope.launch {
@@ -511,6 +515,8 @@ private fun ItemDetailSheet(
     explanation: String,
     example: String,
     memoryHint: String,
+    /** 非空时显示可重新生成的记忆提示面板；整句表达没有 itemId 意义上的"词"可记，传 null。 */
+    memoryHintItemId: Long?,
     item: KnowledgeItemEntity,
     onSpeakWord: (() -> Unit)?,
     speakDescription: String,
@@ -576,7 +582,9 @@ private fun ItemDetailSheet(
                     }
                 }
             }
-            if (memoryHint.isNotBlank()) {
+            if (memoryHintItemId != null) {
+                MemoryHintPanel(itemId = memoryHintItemId, fallbackHintZh = memoryHint)
+            } else if (memoryHint.isNotBlank()) {
                 Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                     Column(
                         Modifier.fillMaxWidth().padding(14.dp),

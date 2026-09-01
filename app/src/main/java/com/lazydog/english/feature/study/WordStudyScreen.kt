@@ -66,6 +66,7 @@ import com.lazydog.english.domain.spelling.SpellingFacts
 import com.lazydog.english.domain.spelling.SpellingProgress
 import com.lazydog.english.domain.spelling.SpellingStage
 import com.lazydog.english.feature.spelling.SpellingCard
+import com.lazydog.english.feature.vocabulary.MemoryHintPanel
 import com.lazydog.english.feature.spelling.SpellingCardView
 import java.time.LocalDate
 import kotlinx.coroutines.Deferred
@@ -559,7 +560,11 @@ private fun StudyCardView(
                 // S0 接触（设计稿 62 屏）：新词第一次露面就把词块拆开摆着。
                 // 拼写练习后面所有阶段都按这套词块出题，第一眼见到的结构和后面练的是同一套。
                 if (card.isNew) SpellingChunks(card.term, card.facts)
-                if (card.memoryHintZh.isNotBlank()) {
+                // 已经入库的词才给记忆提示面板：那条提示要挂在 itemId 上存起来，
+                // 也要用到这个词的薄弱片段。新词卡还没有 id，先显示生成时带出来的那一句。
+                if (card.itemId != null) {
+                    MemoryHintPanel(itemId = card.itemId, fallbackHintZh = card.memoryHintZh)
+                } else if (card.memoryHintZh.isNotBlank()) {
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
                         shape = MaterialTheme.shapes.medium,

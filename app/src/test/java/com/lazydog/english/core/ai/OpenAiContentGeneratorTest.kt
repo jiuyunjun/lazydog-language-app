@@ -3,6 +3,8 @@ package com.lazydog.english.core.ai
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.GrammarLessonRequest
+import com.lazydog.english.domain.generation.MemoryAssistanceRequest
+import com.lazydog.english.domain.generation.MemoryType
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.listening.ListeningSetRequest
 import kotlinx.coroutines.runBlocking
@@ -954,5 +956,144 @@ data: {"model":"gpt-test","choices":[{"delta":{"reasoning_content":"再挑难听
 
         assertTrue(result is GenerationResult.Failure)
         assertEquals(1, server.requestCount)
+    }
+}
+
+/**
+ * 记忆提示的契约测试（词汇记忆提示DESIGN.md §6）。
+ * 重点在两件事：文档示例里那些 null 要能解析，以及"再来一条"确实带上了要避开的东西。
+ */
+class MemoryAssistanceGeneratorTest {
+
+    private lateinit var server: MockWebServer
+
+    @Before
+    fun setUp() {
+        server = MockWebServer()
+        server.start()
+    }
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
+
+    private fun generator() = OpenAiContentGenerator(
+        config = { AiConfig(server.url("/v1").toString(), "test-key", "gpt-test") },
+        retryDelayMs = 1,
+    )
+
+    private fun chatBody(content: String): String {
+        val escaped = content.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\n")
+        return """{"model":"gpt-test","choices":[{"message":{"role":"assistant","content":"$escaped"}}]}"""
+    }
+
+    private val request = MemoryAssistanceRequest(
+        term = "purchase",
+        meaningZh = "购买",
+        pos = "v.",
+        learnerLevel = "B1",
+    )
+
+    /** 文档 §6 的示例原样：morphology 和 note 是 null，confusions 只有一条。 */
+    private val designExample =
+        """{"schemaVersion":1,"word":"purchase","core_meaning":"购买",
+           "primary_memory_type":"CONTEXT","secondary_memory_type":"CONTRAST",
+           "memory_hook":"正式场合里的 buy","morphology":null,
+           "spelling":{"weak_segment":"pur","common_errors":[]},
+           "pronunciation":{"syllables":["pur","chase"],"stress":1,"note":null},
+           "visual_association":"在店里柜台付款，把商品正式买下来。",
+           "confusions":[{"word":"buy","difference":"buy 更日常，purchase 更正式"}],
+           "collocations":["purchase equipment","purchase a ticket"],
+           "example":"We need to purchase new equipment.",
+           "recall_question":"正式表达「购买设备」时可以用哪个词？"}"""
+
+    @Test
+    fun `the design document's own example parses`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody(designExample)))
+
+        val success = generator().generateMemoryAssistance(request) as GenerationResult.Success
+
+        assertEquals("purchase", success.data.term)
+        assertEquals("正式场合里的 buy", success.data.memoryHookZh)
+        assertEquals(MemoryType.Context, success.data.primaryType)
+        assertEquals(MemoryType.Contrast, success.data.secondaryType)
+        // morphology 是 null 不是缺字段：这个词本来就没有可靠构词可拆。
+        assertEquals("", success.data.morphologyZh)
+        assertEquals(listOf("pur", "chase"), success.data.pronunciation.syllables)
+        assertEquals(1, success.data.confusions.size)
+        assertTrue(success.data.hasDetails)
+    }
+
+    @Test
+    fun `a hook that blows past the length limit fails instead of being shown`() = runBlocking {
+        val tooLong = designExample.replace(
+            "\"memory_hook\":\"正式场合里的 buy\"",
+            "\"memory_hook\":\"这个词的意思是购买而且比一般的买要正式得多常见于合同商务和书面场合\"",
+        )
+        server.enqueue(MockResponse().setBody(chatBody(tooLong)))
+
+        val result = generator().generateMemoryAssistance(request)
+
+        assertTrue(result is GenerationResult.Failure)
+    }
+
+    @Test
+    fun `unparseable answers fail rather than saving an empty hint`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody("抱歉，我没法回答")))
+
+        assertTrue(generator().generateMemoryAssistance(request) is GenerationResult.Failure)
+    }
+
+    @Test
+    fun `regenerating tells the model what to avoid`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody(designExample)))
+
+        generator().generateMemoryAssistance(
+            request.copy(
+                avoidHookZh = "正式场合里的 buy",
+                avoidTypes = listOf(MemoryType.Context),
+                weakSegments = listOf("chase"),
+                observedErrors = listOf("purchace"),
+            ),
+        )
+
+        val body = server.takeRequest().body.readUtf8()
+        // 换一条的关键就在这几句上：不说清楚避开什么，模型多半只是换几个字重说同一件事。
+        assertTrue(body.contains("已经看过这条记忆钩子"))
+        assertTrue(body.contains("CONTEXT"))
+        assertTrue(body.contains("chase"))
+        assertTrue(body.contains("purchace"))
+    }
+}
+
+class MemoryAssistancePromptTest {
+
+    @Test
+    fun `prompt keeps the seven strategies and the no-invention rules`() {
+        val prompt = OpenAiContentGenerator.buildMemoryAssistancePrompt(
+            MemoryAssistanceRequest(term = "purchase", meaningZh = "购买", pos = "v.", learnerLevel = "B1"),
+        )
+
+        MemoryType.entries.forEach { assertTrue(prompt.contains(it.name)) }
+        assertTrue(prompt.contains("只选最有效的 1~2 种"))
+        assertTrue(prompt.contains("不超过 20 个汉字"))
+        assertTrue(prompt.contains("宁缺毋滥"))
+        assertTrue(prompt.contains("禁止编造词源"))
+        // 输出结构要和文档 §6 一致，字段名对不上解析就全落空。
+        assertTrue(prompt.contains("primary_memory_type"))
+        assertTrue(prompt.contains("weak_segment"))
+        assertTrue(prompt.contains("recall_question"))
+    }
+
+    @Test
+    fun `without practice history the prompt stays clean`() {
+        val prompt = OpenAiContentGenerator.buildMemoryAssistancePrompt(
+            MemoryAssistanceRequest(term = "purchase", learnerLevel = "B1"),
+        )
+
+        // 没练过的词不该凭空多出一句"他反复错在"——那是编造出来的上下文。
+        assertFalse(prompt.contains("反复错在"))
+        assertFalse(prompt.contains("已经看过这条记忆钩子"))
     }
 }

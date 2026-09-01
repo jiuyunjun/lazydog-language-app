@@ -19,8 +19,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DrillMistakeEntity::class,
         SpellingProgressEntity::class,
         SpellingAttemptEntity::class,
+        VocabularyMemoryHintEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -29,6 +30,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 4, to = 5),
         AutoMigration(from = 5, to = 6),
         AutoMigration(from = 8, to = 9),
+        // v10 只是多一张 vocabulary_memory_hints，没有改动老表，交给自动迁移。
+        AutoMigration(from = 9, to = 10),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,6 +45,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun drillMistakeDao(): DrillMistakeDao
 
     abstract fun spellingDao(): SpellingDao
+
+    abstract fun memoryHintDao(): MemoryHintDao
 
     companion object {
         fun create(context: Context): AppDatabase =

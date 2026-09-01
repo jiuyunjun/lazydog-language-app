@@ -46,6 +46,12 @@ import com.lazydog.english.domain.production.TranslationTask
 import com.lazydog.english.domain.production.TranslationValidation
 import com.lazydog.english.domain.production.TranslationVerdict
 import com.lazydog.english.domain.generation.LearningContentGenerator
+import com.lazydog.english.domain.generation.MemoryAssistance
+import com.lazydog.english.domain.generation.MemoryAssistanceRequest
+import com.lazydog.english.domain.generation.MemoryAssistanceValidation
+import com.lazydog.english.domain.generation.MemoryConfusion
+import com.lazydog.english.domain.generation.MemoryPronunciation
+import com.lazydog.english.domain.generation.MemoryType
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
@@ -163,6 +169,44 @@ class OpenAiContentGenerator(
             model = content.model,
             promptVersion = PROMPT_VERSION,
             droppedNotes = validated.droppedNotes,
+        )
+    }
+
+    override suspend fun generateMemoryAssistance(
+        request: MemoryAssistanceRequest,
+        onStage: ((GenerationStage) -> Unit)?,
+        onPartialHook: ((String) -> Unit)?,
+    ): GenerationResult<MemoryAssistance> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildMemoryAssistancePrompt(request),
+            task = AiTask.Words,
+            onStage = onStage,
+            onTextProgress = onPartialHook?.let { callback ->
+                // 钩子先到就先铺钩子；它还没写出来时退回核心意思，总比只显示一个进度条强。
+                { raw -> callback(JsonStream.firstNonEmpty(raw, "memoryHookZh", "coreMeaningZh")) }
+            },
+            op = "记忆提示",
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<MemoryAssistancePayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        if (payload.schemaVersion != SCHEMA_VERSION) {
+            return GenerationResult.Failure("schema 版本不对：${payload.schemaVersion}")
+        }
+        // 先按"宁缺毋滥"删掉站不住的项，再判断剩下的够不够用（§10）。
+        val cleaned = MemoryAssistanceValidation.clean(payload.toDomain(request.term))
+        MemoryAssistanceValidation.validate(cleaned.value, request.term)?.let {
+            return GenerationResult.Failure("记忆提示没通过校验：$it")
+        }
+        return GenerationResult.Success(
+            data = cleaned.value,
+            model = content.model,
+            promptVersion = MEMORY_PROMPT_VERSION,
+            droppedNotes = cleaned.droppedNotes,
         )
     }
 
@@ -992,6 +1036,74 @@ class OpenAiContentGenerator(
         )
     }
 
+    /**
+     * 这几个 payload 里凡是设计文档示例中出现过 null 的字段都声明成可空。
+     * 文档 §6 的样例本身就写着 "morphology": null、"note": null——那是"这个词没有可靠构词"的
+     * 正常表达，不是缺字段。声明成非空的话，模型照文档写一次就整条解析失败。
+     */
+    @Serializable
+    private data class MemorySpellingPayload(
+        @SerialName("weak_segment") val weakSegment: String? = null,
+        @SerialName("common_errors") val commonErrors: List<String>? = null,
+    )
+
+    @Serializable
+    private data class MemoryPronunciationPayload(
+        val syllables: List<String>? = null,
+        val stress: Int? = null,
+        val note: String? = null,
+    )
+
+    @Serializable
+    private data class MemoryConfusionPayload(
+        val word: String = "",
+        val difference: String = "",
+    )
+
+    /**
+     * 字段名照 词汇记忆提示DESIGN.md §6 的 JSON 原样来（snake_case、嵌套 spelling/pronunciation），
+     * 不改写成本地风格：提示词里贴的就是那份结构，两边不一致时模型照着文档写，解析这边就落空。
+     */
+    @Serializable
+    private data class MemoryAssistancePayload(
+        val schemaVersion: Int = 0,
+        val word: String = "",
+        @SerialName("core_meaning") val coreMeaning: String = "",
+        @SerialName("primary_memory_type") val primaryMemoryType: String = "",
+        @SerialName("secondary_memory_type") val secondaryMemoryType: String? = null,
+        @SerialName("memory_hook") val memoryHook: String = "",
+        val morphology: String? = null,
+        val spelling: MemorySpellingPayload? = null,
+        val pronunciation: MemoryPronunciationPayload? = null,
+        @SerialName("visual_association") val visualAssociation: String? = null,
+        val confusions: List<MemoryConfusionPayload>? = null,
+        val collocations: List<String>? = null,
+        val example: String? = null,
+        @SerialName("recall_question") val recallQuestion: String? = null,
+    ) {
+        /** 词形以请求的为准：模型偶尔会把词还原成原形，那样这条提示就挂不回原来那个词条了。 */
+        fun toDomain(requestedTerm: String) = MemoryAssistance(
+            term = word.trim().ifBlank { requestedTerm },
+            coreMeaningZh = coreMeaning.trim(),
+            primaryType = MemoryType.normalize(primaryMemoryType),
+            secondaryType = MemoryType.normalizeOrNull(secondaryMemoryType.orEmpty()),
+            memoryHookZh = memoryHook.trim(),
+            morphologyZh = morphology.orEmpty().trim(),
+            weakSegment = spelling?.weakSegment.orEmpty().trim(),
+            commonErrors = spelling?.commonErrors.orEmpty(),
+            pronunciation = MemoryPronunciation(
+                syllables = pronunciation?.syllables.orEmpty(),
+                stress = pronunciation?.stress ?: 0,
+                noteZh = pronunciation?.note.orEmpty().trim(),
+            ),
+            visualAssociationZh = visualAssociation.orEmpty().trim(),
+            confusions = confusions.orEmpty().map { MemoryConfusion(it.word.trim(), it.difference.trim()) },
+            collocations = collocations.orEmpty(),
+            exampleEn = example.orEmpty().trim(),
+            recallQuestionZh = recallQuestion.orEmpty().trim(),
+        )
+    }
+
     @Serializable
     private data class NewWordsPayload(
         val schemaVersion: Int = 0,
@@ -1458,6 +1570,7 @@ class OpenAiContentGenerator(
         const val SCENARIO_PROMPT_VERSION = 1
         const val ASK_PROMPT_VERSION = 1
         const val LISTENING_PROMPT_VERSION = 1
+        const val MEMORY_PROMPT_VERSION = 1
 
         /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
         const val MIN_LISTENING_ITEMS = 5
@@ -1703,6 +1816,92 @@ class OpenAiContentGenerator(
                 "并明确写成「谐音联想：」，绝不能说成真实词源。")
             appendLine("不要牵强、冗长、或需要先记住另一堆陌生知识的联想；" +
                 "memoryHintZh 必须针对这个词，不能是「多读几遍」「结合例句记」这类放到哪个词上都成立的空话。")
+        }
+
+        /**
+         * 单个词的记忆提示（词汇记忆提示DESIGN.md §5 的推荐提示词）。
+         *
+         * 和 [memoryHintRules] 的分工：那一条是新词生成顺手带出来的一句话记忆方法，
+         * 十几个词一次写完，只能给一句；这里是**为一个词单独发一次调用**，
+         * 先判断该记什么再只写那一两种，还带上这个人自己写错过的地方。
+         */
+        internal fun buildMemoryAssistancePrompt(request: MemoryAssistanceRequest): String = buildString {
+            appendLine("你是一个语言学习记忆辅助生成器。")
+            appendLine("你的任务不是解释单词本身，而是为学习者生成「容易记住、容易回忆、容易区分」的记忆线索。")
+            appendLine("目标单词：${request.term}")
+            if (request.pos.isNotBlank() || request.meaningZh.isNotBlank()) {
+                appendLine(
+                    "学习者知识库里记的就是这个词义，提示必须对着它写，不要滑到这个词的别的意思：" +
+                        listOf(request.pos, request.meaningZh).filter { it.isNotBlank() }.joinToString(" "),
+                )
+            }
+            appendLine("目标语言：英语。学习者母语：中文。学习者水平：${request.learnerLevel}。")
+
+            // §11/§12：这个人真写错过的地方进提示词，生成的才是针对他的提示。
+            if (request.weakSegments.isNotEmpty()) {
+                appendLine(
+                    "这个学习者在拼写练习里反复错在这几段上：${request.weakSegments.joinToString("、")}。" +
+                        "写词形提示时优先讲清楚这几段。",
+                )
+            }
+            if (request.observedErrors.isNotEmpty()) {
+                appendLine(
+                    "他真写出来过的错误形式：${request.observedErrors.joinToString("、")}。" +
+                        "记忆线索要能挡住这些具体的错法，不要泛泛说「注意拼写」。",
+                )
+            }
+            if (request.focusZh.isNotBlank()) {
+                appendLine("他现在最弱的一环是：${request.focusZh}。重点服务这一环，别重复他已经会的部分。")
+            }
+            // 「再来一条」：上一条既然没帮上忙，就该换个角度，而不是把同一句话重写一遍。
+            if (request.avoidHookZh.isNotBlank()) {
+                appendLine(
+                    "他已经看过这条记忆钩子但没记住：「${request.avoidHookZh}」。" +
+                        "这次必须换一个明显不同的角度，不要换几个字重说同一件事。",
+                )
+            }
+            if (request.avoidTypes.isNotEmpty()) {
+                appendLine("已经试过这些记忆方式，这次优先换别的：${request.avoidTypes.joinToString("、") { it.name }}。")
+            }
+
+            appendLine("先判断这个词最适合哪种记忆方式，从这七类里选：" + MemoryType.entries.joinToString("、") {
+                "${it.name}（${it.labelZh}：${it.noteZh}）"
+            } + "。")
+            appendLine("只选最有效的 1~2 种：primary_memory_type 必填，secondary_memory_type 可以为 null。" +
+                "不要每种都写一点——每个词都生成全部类型只会产出一堆低价值信息。")
+
+            appendLine("各字段要求：")
+            appendLine("core_meaning：用最短的话说明最核心、最常用的那个意思，不罗列次要释义。")
+            appendLine("memory_hook：一条不超过 20 个汉字的记忆提示，是首屏唯一显示的那句话。" +
+                "只表达一个记忆关系，不要把词根、发音、故事和例句全塞进去；" +
+                "学习者看到它应该能在 3~5 秒内重新想起这个词。")
+            appendLine("morphology：只有存在**可靠的**前缀/词根/后缀或复合关系时才拆，" +
+                "写成 \"un + happy = 不 + 开心\" 这种能直接对照的形式；" +
+                "没有把握就填 null——编一个假词源比不拆更糟。")
+            appendLine("spelling.weak_segment：这个词最容易拼错的一小段，必须是这个词里连续的一段原文；" +
+                "spelling.common_errors：真人常写错的形式（比如 receive → recieve），没有就给空数组。")
+            appendLine("pronunciation.syllables：音节，按顺序拼起来必须完全等于这个词；" +
+                "stress：重音落在第几个音节，从 1 数；note：只写真正值得注意的发音点，没有就 null。" +
+                "不要默认用中文谐音——谐音只有在发音确实接近、且不会带偏正确读音时才用。")
+            appendLine("visual_association：只有确实有帮助时才给，1~2 句，具体、夸张、有动作、能瞬间成像；" +
+                "抽象的、要额外记一堆东西的、和词义联系弱的，一律填 null。")
+            appendLine("confusions：最多 3 个真正容易混的词，每个只说一个关键区别；不要为了凑数加无关词。")
+            appendLine("collocations：这个词真实高频的固定搭配，最多 3 条。")
+            appendLine("example：1 个自然、高频、简单的例句，必须包含这个词，体现最典型的用法。")
+            appendLine("recall_question：一个不直接暴露答案的问题，用于之后的回忆测试。")
+
+            appendLine("输出原则：简洁优先；每一条都必须服务于记忆；" +
+                "禁止百科式解释、禁止编造词源、禁止强行谐音、禁止牵强联想。" +
+                "宁缺毋滥——没有好的联想时留空，比写一条牵强的强。")
+            appendLine("输出 JSON schema（用不上的字段填 null 或空数组，不要省略）：")
+            appendLine(
+                """{"schemaVersion":1,"word":"...","core_meaning":"...","primary_memory_type":"CONTEXT",""" +
+                    """"secondary_memory_type":null,"memory_hook":"...","morphology":null,""" +
+                    """"spelling":{"weak_segment":"...","common_errors":["..."]},""" +
+                    """"pronunciation":{"syllables":["...","..."],"stress":1,"note":null},""" +
+                    """"visual_association":null,"confusions":[{"word":"...","difference":"..."}],""" +
+                    """"collocations":["..."],"example":"...","recall_question":"..."}""",
+            )
         }
 
         internal fun buildNewWordsPrompt(request: NewWordsRequest): String = buildString {

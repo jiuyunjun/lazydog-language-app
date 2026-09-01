@@ -244,3 +244,40 @@ data class ScenarioSessionEntity(
     val createdAt: Long,
     val updatedAt: Long,
 )
+
+/**
+ * 一个词的记忆提示（词汇记忆提示DESIGN.md §6）。
+ *
+ * 一词一条，整取整存成 JSON：这些字段只随提示整条生成、整条替换、整条重来，
+ * 拆成十几列除了让"再来一条"变成一次大更新之外没有别的好处（和 reading_materials 同一个理由）。
+ *
+ * 独立成表而不是往 vocabulary_details 加列，是因为它和释义的生命周期不一样：
+ * 释义是词固有的事实，一次写好就不再动；记忆提示是可以推翻重来的——这一条没帮上忙，
+ * 换个策略再要一条，原来那份词义、例句、拼写事实一个字都不该跟着重新生成。
+ *
+ * 生成参数一并保存（AGENTS.md §6）：[model] / [promptVersion] / [createdAt] 让"当时是怎么生成的"
+ * 可复现，[droppedNotes] 记下校验时删掉了哪几项，排查"为什么没有构词提示"时不用猜。
+ */
+@Entity(
+    tableName = "vocabulary_memory_hints",
+    foreignKeys = [
+        ForeignKey(
+            entity = KnowledgeItemEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["itemId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class VocabularyMemoryHintEntity(
+    @PrimaryKey val itemId: Long,
+    val term: String,
+    /** 整条 MemoryAssistance 的 JSON。解不出来时按"还没有提示"处理，不炸页面。 */
+    val payloadJson: String,
+    val model: String,
+    val promptVersion: Int,
+    val schemaVersion: Int,
+    /** 校验时删掉了哪几项，分号分隔。 */
+    val droppedNotes: String,
+    val createdAt: Long,
+)
