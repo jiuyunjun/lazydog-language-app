@@ -62,6 +62,7 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.listening.ListeningAnswer
 import com.lazydog.english.domain.listening.ListeningHintLevel
 import com.lazydog.english.domain.listening.ListeningItem
@@ -124,7 +125,8 @@ fun ListeningScreen(onExit: () -> Unit) {
     var answers by remember { mutableStateOf<List<ListeningAnswer>>(emptyList()) }
     var lastAnswer by remember { mutableStateOf<ListeningAnswer?>(null) }
     var savedExpression by remember { mutableStateOf(false) }
-    var progressChars by remember { mutableStateOf(0) }
+    /** 生成走到哪一步了：没接通 / 模型在想 / 正文在写。 */
+    var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
     /** 这一轮的句子还在生成中：总数按 [SET_SIZE] 显示，答到头也先等一下而不是收工。 */
     var generating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -169,7 +171,7 @@ fun ListeningScreen(onExit: () -> Unit) {
     fun startSet() {
         phase = ListeningPhase.Loading
         error = null
-        progressChars = 0
+        stage = GenerationStage.Connecting
         items = emptyList()
         index = 0
         answers = emptyList()
@@ -186,7 +188,7 @@ fun ListeningScreen(onExit: () -> Unit) {
                     learnerLevel = prefs.learnerLevelDescription.first(),
                     topics = prefs.topics.first().toList(),
                 ),
-                onProgress = { progressChars = it },
+                onStage = { stage = it },
                 // 一句一句接：攒够开局的句数就进答题页，别让人对着进度条等完整批。
                 onItem = { item ->
                     items = items + item
@@ -340,14 +342,14 @@ fun ListeningScreen(onExit: () -> Unit) {
             )
             ListeningPhase.Loading -> Loading(
                 modifier = content,
-                chars = progressChars,
+                stage = stage,
                 ready = items.size,
                 scene = scene.nameZh,
             )
             // 答得比写得快，停在这儿等下一句写完。
             ListeningPhase.Waiting -> Loading(
                 modifier = content,
-                chars = progressChars,
+                stage = stage,
                 ready = items.size,
                 scene = scene.nameZh,
                 waitingForNext = true,
@@ -587,26 +589,34 @@ private fun PickScene(
 @Composable
 private fun Loading(
     modifier: Modifier,
-    chars: Int,
+    stage: GenerationStage,
     ready: Int,
     scene: String,
     waitingForNext: Boolean = false,
 ) {
+    // 「接通中」只该出现在真的还没接通的时候。推理模型开口前要想一阵，那段是"在想"，
+    // 不是"没连上"——两件事用户该做的反应不一样，一个是等，一个是去查网络。
+    val thinking = (stage as? GenerationStage.Thinking)?.takeIf { ready == 0 }
+    val title = when {
+        waitingForNext -> "下一句还在写…"
+        thinking != null -> "模型正在琢磨这 $SET_SIZE 句…"
+        else -> "正在写 $scene 的 $SET_SIZE 句…"
+    }
     Column(
         modifier = modifier.padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CircularProgressIndicator()
-        Text(
-            text = if (waitingForNext) "下一句还在写…" else "正在写 $scene 的 $SET_SIZE 句…",
-            style = MaterialTheme.typography.titleMedium,
-        )
+        Text(title, style = MaterialTheme.typography.titleMedium)
         Text(
             text = when {
                 // 写好一句就往这边送，所以这里报的是"攒了几句"，不是干等的字符数。
                 ready > 0 -> "已经写好 $ready 句，攒够 $MIN_ITEMS_TO_START 句就开始"
-                chars > 0 -> "已经写了 $chars 个字符"
+                // 服务商肯把思考过程流出来的话就显示尾巴，证明它确实在动。
+                thinking != null && thinking.excerpt.isNotBlank() -> "…${thinking.excerpt}"
+                thinking != null -> "推理模型会先想一会儿再动笔，这段最花时间"
+                stage is GenerationStage.Writing -> "已经写了 ${stage.chars} 个字符"
                 else -> "接通中，稍等一下"
             },
             style = MaterialTheme.typography.bodySmall,

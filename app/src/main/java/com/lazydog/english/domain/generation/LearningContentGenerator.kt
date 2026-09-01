@@ -74,10 +74,13 @@ interface LearningContentGenerator {
      *
      * [onItem] 每有一句通过校验就回调一次，顺序与最终返回的一致。十句一次性等太久，
      * 界面拿到前几句就能开练，剩下的边听边补；不关心增量的调用方不传即可。
+     *
+     * [onStage] 报的是"现在卡在哪一步"。这是所有调用里最慢的一个，等待期间必须让人看出
+     * 到底是没接通还是模型在想——这两件事用户该做的反应不一样。
      */
     suspend fun generateListeningSet(
         request: com.lazydog.english.domain.listening.ListeningSetRequest,
-        onProgress: ((Int) -> Unit)? = null,
+        onStage: ((GenerationStage) -> Unit)? = null,
         onItem: ((com.lazydog.english.domain.listening.ListeningItem) -> Unit)? = null,
     ): GenerationResult<List<com.lazydog.english.domain.listening.ListeningItem>>
 

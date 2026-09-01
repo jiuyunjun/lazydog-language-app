@@ -93,6 +93,11 @@ class UserPreferences(private val context: Context) {
         }.toMap()
     }
 
+    /** 只改默认模型，不动地址和密钥。 */
+    suspend fun setAiModel(model: String) {
+        context.dataStore.edit { it[Keys.AiModel] = model.trim() }
+    }
+
     /** [model] 传 null 表示回到"跟随默认"。 */
     suspend fun setAiTaskModel(task: AiTask, model: String?) {
         context.dataStore.edit {

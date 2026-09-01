@@ -116,3 +116,31 @@ class OpenAiCompatClient(
 /** 拼出 /models 地址；容忍 baseUrl 尾部斜杠。 */
 internal fun modelsUrl(baseUrl: String): String =
     baseUrl.trim().trimEnd('/') + "/models"
+
+/**
+ * 这个模型 id 看着像不像能用来对话的。
+ *
+ * `/models` 会把服务商的全部东西一股脑列出来——生图、嵌入、语音、重排、审核都在里面，
+ * 聚合网关尤其夸张，几百个里真正能聊天的没几个。选中一个生图模型的后果是到生成时才报错，
+ * 所以这里先按 id 里的关键词筛一遍。
+ *
+ * 只是**按名字猜**，所以界面必须留「显示全部」的口子：名字里不带这些词的新模型不会被误伤，
+ * 但万一伤了，用户还能自己翻出来。
+ */
+internal fun looksLikeChatModel(modelId: String): Boolean {
+    val id = modelId.lowercase()
+    return NON_CHAT_MARKERS.none { it in id }
+}
+
+private val NON_CHAT_MARKERS = listOf(
+    // 嵌入与重排
+    "embed", "embedding", "rerank", "bge-", "gte-", "m3e", "text-similarity", "text-search",
+    // 语音
+    "tts", "whisper", "transcrib", "speech", "voice", "audio", "realtime", "asr",
+    // 图像与视频
+    "dall-e", "dalle", "image", "img", "vision-encoder", "stable-diffusion", "sdxl", "flux",
+    "midjourney", "cogview", "cogvideo", "kolors", "wanx", "seedream", "seedance", "sora",
+    "kling", "hailuo", "veo-", "hunyuan-video", "hunyuan-image", "upscal", "inpaint",
+    // 其它非对话用途
+    "moderation", "ocr", "detect", "guard", "davinci", "babbage", "curie", "ada",
+)

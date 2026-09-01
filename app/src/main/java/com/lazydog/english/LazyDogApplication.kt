@@ -2,6 +2,7 @@ package com.lazydog.english
 
 import android.app.Application
 import com.lazydog.english.core.ai.AiConfig
+import com.lazydog.english.core.ai.ModelCatalog
 import com.lazydog.english.core.ai.OpenAiContentGenerator
 import com.lazydog.english.core.backup.BackupFileStore
 import com.lazydog.english.core.backup.BackupRepository
@@ -40,6 +41,9 @@ class LazyDogApplication : Application() {
     val backupRepository: BackupRepository by lazy { BackupRepository(database, userPreferences) }
 
     val backupFileStore: BackupFileStore by lazy { BackupFileStore(this) }
+
+    /** 模型清单拉一次就留着，「各功能使用的模型」两级页面共用（见 ModelCatalog）。 */
+    val modelCatalog: ModelCatalog by lazy { ModelCatalog(userPreferences) }
 
     val contentGenerator: LearningContentGenerator by lazy {
         OpenAiContentGenerator(

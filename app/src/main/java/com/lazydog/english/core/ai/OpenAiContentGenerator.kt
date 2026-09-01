@@ -29,6 +29,7 @@ import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GeneratedReading
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.GrammarDrillItem
 import com.lazydog.english.domain.generation.GrammarDrillRequest
 import com.lazydog.english.domain.generation.GrammarDrillValidation
@@ -78,6 +79,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -479,7 +482,7 @@ class OpenAiContentGenerator(
 
     override suspend fun generateListeningSet(
         request: ListeningSetRequest,
-        onProgress: ((Int) -> Unit)?,
+        onStage: ((GenerationStage) -> Unit)?,
         onItem: ((ListeningItem) -> Unit)?,
     ): GenerationResult<List<ListeningItem>> {
         // 一句一句往外发：整批收完要几十秒，而第一句闭合时就已经能开练了。
@@ -490,7 +493,7 @@ class OpenAiContentGenerator(
             systemPrompt = LISTENING_SYSTEM_PROMPT,
             userPrompt = buildListeningPrompt(request),
             task = AiTask.Listening,
-            onProgress = onProgress,
+            onStage = onStage,
             // 没人要增量就不必逐段扫 JSON；扫描本身只为 onItem 服务。
             onTextProgress = if (onItem == null) {
                 null
@@ -630,12 +633,13 @@ class OpenAiContentGenerator(
         userPrompt: String,
         onProgress: ((Int) -> Unit)? = null,
         onTextProgress: ((String) -> Unit)? = null,
+        onStage: ((GenerationStage) -> Unit)? = null,
         maxTokens: Int = DEFAULT_MAX_TOKENS,
         op: String = "ai",
         task: AiTask,
     ): Completion = withContext(Dispatchers.IO) {
         val (baseUrl, apiKey, model) = config(task)
-        val streaming = onProgress != null || onTextProgress != null
+        val streaming = onProgress != null || onTextProgress != null || onStage != null
         val url = chatCompletionsUrl(baseUrl)
         val startedAt = System.currentTimeMillis()
         AiLog.start(op, model, url, systemPrompt.length + userPrompt.length, streaming)
@@ -686,7 +690,7 @@ class OpenAiContentGenerator(
                     if (response.isSuccessful) {
                         return@withContext done(
                             if (streaming) {
-                                readStreamed(response, model, onProgress, onTextProgress)
+                                readStreamed(response, model, onProgress, onTextProgress, onStage)
                             } else {
                                 readWhole(response, model)
                             },
@@ -727,16 +731,25 @@ class OpenAiContentGenerator(
         }
     }
 
-    /** 读 SSE 流：每收到一段就回调累计字符数。流中断不重试（避免重复计费），直接报错。 */
+    /**
+     * 读 SSE 流：每收到一段就回调累计字符数。流中断不重试（避免重复计费），直接报错。
+     *
+     * 推理模型开口前会先想一阵，这段时间只有 reasoning 增量、没有正文。以前这段全被
+     * 当成"还没接通"，界面一动不动；现在它单独走 [GenerationStage.Thinking] 报出去。
+     */
     private fun readStreamed(
         response: okhttp3.Response,
         fallbackModel: String,
         onProgress: ((Int) -> Unit)?,
         onTextProgress: ((String) -> Unit)?,
+        onStage: ((GenerationStage) -> Unit)?,
     ): Completion {
         val source = response.body?.source() ?: return Completion.Error("AI 返回为空")
         val builder = StringBuilder()
+        val thinking = StringBuilder()
         var model = ""
+        // 响应头已经回来了：从这一刻起就不是"接通中"，而是"在等模型开口"。
+        onStage?.invoke(GenerationStage.Thinking(""))
         try {
             while (true) {
                 val line = source.readUtf8Line() ?: break
@@ -745,9 +758,21 @@ class OpenAiContentGenerator(
                 if (data == "[DONE]") break
                 val chunk = decode<StreamChunk>(data) ?: continue
                 if (model.isBlank()) model = chunk.model
-                val delta = chunk.choices.firstOrNull()?.delta?.content
-                if (!delta.isNullOrEmpty()) {
-                    builder.append(delta)
+                val delta = chunk.choices.firstOrNull()?.delta
+                val reasoning = delta?.reasoningText().orEmpty()
+                if (reasoning.isNotEmpty()) {
+                    thinking.append(reasoning)
+                    // 思考也算进硬上限：转起圈来的推理一样是一直收、一直计费。
+                    if (thinking.length + builder.length > MAX_RESPONSE_CHARS) {
+                        return Completion.Error(
+                            "AI 一直没停（想了 ${thinking.length} 个字符还没开始写），先掐断了。换个模型再试。",
+                        )
+                    }
+                    onStage?.invoke(GenerationStage.Thinking(thinking.takeLast(THINKING_EXCERPT_CHARS).toString()))
+                }
+                val text = delta?.content
+                if (!text.isNullOrEmpty()) {
+                    builder.append(text)
                     // 服务端不认 max_tokens、或者模型自己转起圈来时，这里是最后一道闸。
                     // readTimeout 拦不住：它是每次读的超时，只要一直有数据就一直被重置。
                     if (builder.length > MAX_RESPONSE_CHARS) {
@@ -756,6 +781,7 @@ class OpenAiContentGenerator(
                         )
                     }
                     onProgress?.invoke(builder.length)
+                    onStage?.invoke(GenerationStage.Writing(builder.length))
                     onTextProgress?.invoke(builder.toString())
                 }
             }
@@ -796,7 +822,18 @@ class OpenAiContentGenerator(
     )
 
     @Serializable
-    private data class StreamDelta(val content: String = "")
+    private data class StreamDelta(
+        /** 有的服务商第一块会发 `"content": null`，声明成非空会让整块解析失败。 */
+        val content: String? = null,
+        /** 推理增量。各家字段名和形状都不一样，所以按 JsonElement 收，取得出字符串才用。 */
+        @SerialName("reasoning_content") val reasoningContent: JsonElement? = null,
+        val reasoning: JsonElement? = null,
+    ) {
+        fun reasoningText(): String = plainText(reasoningContent).ifEmpty { plainText(reasoning) }
+
+        private fun plainText(value: JsonElement?): String =
+            (value as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+    }
 
     @Serializable
     private data class StreamChoice(val delta: StreamDelta = StreamDelta())
@@ -1315,6 +1352,9 @@ class OpenAiContentGenerator(
          * 超过就说明对面根本没打算停，继续收只是白花钱。
          */
         const val MAX_RESPONSE_CHARS = 24_000
+
+        /** 思考过程只给用户看个尾巴，证明它在动就够了——不是让人读的。 */
+        private const val THINKING_EXCERPT_CHARS = 80
 
         /** 400 的正文提到上限字段，就说明这个服务端要的是另一个名字。 */
         internal fun mentionsTokenLimit(body: String): Boolean =

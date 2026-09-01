@@ -1,6 +1,7 @@
 package com.lazydog.english.core.ai
 
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.GrammarLessonRequest
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.listening.ListeningSetRequest
@@ -538,6 +539,52 @@ class OpenAiContentGeneratorTest {
     }
 
     @Test
+    fun `reasoning deltas are reported as thinking, not as an empty connection`() = runBlocking {
+        // 推理模型开口前会先想一阵。这段以前全被当成"还没接通"，界面一动不动。
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody(
+                    """data: {"model":"gpt-test","choices":[{"delta":{"content":null,""" +
+                        """"reasoning_content":"先想想会议场景"}}]}
+
+data: {"model":"gpt-test","choices":[{"delta":{"reasoning_content":"再挑难听的连读"}}]}
+
+""" + sseBody(listeningJson),
+                ),
+        )
+
+        val stages = mutableListOf<GenerationStage>()
+        val result = generator().generateListeningSet(listeningRequest, onStage = { stages.add(it) })
+
+        assertTrue(result is GenerationResult.Success)
+        val thinking = stages.filterIsInstance<GenerationStage.Thinking>()
+        // 响应头一到就先报一次"在等模型开口"，之后每段思考再报一次。
+        assertTrue("$stages", thinking.size >= 3)
+        assertTrue(thinking.last().excerpt.contains("再挑难听的连读"))
+        // 正文一开始写就换成 Writing，不能一直停在思考态。
+        assertTrue(stages.last() is GenerationStage.Writing)
+    }
+
+    @Test
+    fun `a chunk whose content is null does not break the stream`() = runBlocking {
+        // 不少服务商的第一块是 {"role":"assistant","content":null}，声明成非空会让整块解析失败。
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody(
+                    """data: {"model":"gpt-test","choices":[{"delta":{"role":"assistant","content":null}}]}
+
+""" + sseBody(listeningJson),
+                ),
+        )
+
+        val result = generator().generateListeningSet(listeningRequest, onItem = {})
+
+        assertEquals(6, (result as GenerationResult.Success).data.size)
+    }
+
+    @Test
     fun `too few usable listening sentences fails instead of opening a short round`() = runBlocking {
         val onlyOne =
             """{"schemaVersion":1,"items":[
@@ -590,7 +637,10 @@ class OpenAiContentGeneratorTest {
         )
 
         var lastReported = 0
-        val result = generator().generateListeningSet(listeningRequest, onProgress = { lastReported = it })
+        val result = generator().generateListeningSet(
+            request = listeningRequest,
+            onStage = { if (it is GenerationStage.Writing) lastReported = it.chars },
+        )
 
         val failure = result as GenerationResult.Failure
         assertTrue(failure.reason.contains("一直没停"))

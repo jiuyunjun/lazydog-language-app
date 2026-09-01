@@ -57,6 +57,7 @@ fun MainScreen(
     onOpenScenario: (Long) -> Unit,
     onOpenMaterial: (Long) -> Unit,
     onStartAssessment: () -> Unit,
+    onOpenModelSettings: () -> Unit,
 ) {
     var currentTab by rememberSaveable { mutableStateOf(MainTab.Today) }
 
@@ -112,6 +113,7 @@ fun MainScreen(
                 modifier = contentModifier,
                 prefs = prefs,
                 onStartAssessment = onStartAssessment,
+                onOpenModelSettings = onOpenModelSettings,
             )
         }
     }

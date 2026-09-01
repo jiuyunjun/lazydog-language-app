@@ -5,6 +5,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -19,6 +20,31 @@ class ModelsUrlTest {
     @Test
     fun `tolerates trailing slash and whitespace`() {
         assertEquals("https://api.openai.com/v1/models", modelsUrl(" https://api.openai.com/v1/ "))
+    }
+}
+
+class ChatModelFilterTest {
+
+    @Test
+    fun `chat models are kept`() {
+        listOf("gpt-5.5", "gpt-4o-mini", "o3", "deepseek-chat", "qwen2.5-72b-instruct", "claude-opus-5")
+            .forEach { assertTrue(it, looksLikeChatModel(it)) }
+    }
+
+    @Test
+    fun `models that cannot chat are filtered out`() {
+        // 选中一个生图或嵌入模型，要到真正生成时才报错——所以在选之前就筛掉。
+        listOf(
+            "text-embedding-3-large", "bge-m3", "jina-reranker-v2", "gpt-image-1", "dall-e-3",
+            "flux.1-dev", "stable-diffusion-3.5", "whisper-1", "gpt-4o-mini-tts",
+            "gpt-4o-realtime-preview", "omni-moderation-latest", "sora-2", "cogvideox",
+        ).forEach { assertFalse(it, looksLikeChatModel(it)) }
+    }
+
+    @Test
+    fun `an unknown name is kept rather than hidden`() {
+        // 筛选只是按名字猜。猜不出来的一律留下，宁可多列一个也别把新模型藏起来。
+        assertTrue(looksLikeChatModel("some-new-model-2027"))
     }
 }
 

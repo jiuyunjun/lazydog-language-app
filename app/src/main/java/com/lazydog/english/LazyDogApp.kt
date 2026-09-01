@@ -23,12 +23,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.lazydog.english.core.ai.AiTask
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.feature.ask.AskHost
 import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.production.ProductionScreen
+import com.lazydog.english.feature.settings.ModelPickScreen
+import com.lazydog.english.feature.settings.ModelSettingsScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
 import com.lazydog.english.feature.onboarding.WelcomeScreen
 import com.lazydog.english.feature.assessment.AssessmentScreen
@@ -52,11 +55,18 @@ object Routes {
     const val GrammarStudy = "study/grammar"
     const val Production = "study/production"
     const val Assessment = "assessment"
+    const val ModelSettings = "settings/models"
+    const val ModelPick = "settings/models/{task}"
     const val Scenario = "scenario/new"
     const val ScenarioOpen = "scenario/open/{sessionId}"
     const val ReadingGenerate = "reading/generate"
     const val ReadingPaste = "reading/paste"
     const val ReadingOpen = "reading/open/{materialId}"
+
+    /** [taskKey] 传 [DEFAULT_MODEL_KEY] 表示改的是默认模型。 */
+    fun modelPick(taskKey: String) = "settings/models/$taskKey"
+
+    const val DEFAULT_MODEL_KEY = "default"
 
     fun readingOpen(materialId: Long) = "reading/open/$materialId"
     fun scenarioOpen(sessionId: Long) = "scenario/open/$sessionId"
@@ -150,6 +160,28 @@ private fun AppNavHost(
                 onOpenScenario = { id -> navController.navigate(Routes.scenarioOpen(id)) },
                 onOpenMaterial = { id -> navController.navigate(Routes.readingOpen(id)) },
                 onStartAssessment = { navController.navigate(Routes.Assessment) },
+                onOpenModelSettings = { navController.navigate(Routes.ModelSettings) },
+            )
+        }
+
+        composable(Routes.ModelSettings) {
+            ModelSettingsScreen(
+                prefs = prefs,
+                onPick = { task ->
+                    navController.navigate(Routes.modelPick(task?.key ?: Routes.DEFAULT_MODEL_KEY))
+                },
+                onExit = { navController.popBackStack() },
+            )
+        }
+
+        composable(
+            route = Routes.ModelPick,
+            arguments = listOf(navArgument("task") { type = NavType.StringType }),
+        ) { entry ->
+            ModelPickScreen(
+                prefs = prefs,
+                task = entry.arguments?.getString("task")?.let(AiTask::fromKey),
+                onExit = { navController.popBackStack() },
             )
         }
 
