@@ -60,7 +60,7 @@ fun ModelSettingsScreen(
     onExit: () -> Unit,
 ) {
     val defaultModel by prefs.aiModel.collectAsState(initial = "")
-    val defaultEffort by prefs.defaultEffort.collectAsState(initial = null)
+    val defaultEffort by prefs.defaultEffort.collectAsState(initial = AiTask.DEFAULT_EFFORT)
     val models by prefs.aiTaskModels.collectAsState(initial = emptyMap())
     val efforts by prefs.aiTaskEfforts.collectAsState(initial = emptyMap())
 
@@ -82,7 +82,7 @@ fun ModelSettingsScreen(
                     name = "默认",
                     value = summaryLine(
                         model = defaultModel.ifBlank { "还没设置" },
-                        effort = defaultEffort?.let(::effortText) ?: "各功能自己的推荐值",
+                        effort = effortText(defaultEffort),
                     ),
                     onClick = { onPick(null) },
                 )
@@ -100,8 +100,7 @@ fun ModelSettingsScreen(
                     value = summaryLine(
                         model = models[task] ?: "跟随默认",
                         effort = efforts[task]?.let(::effortText)
-                            ?: defaultEffort?.let { "${effortText(it)}（跟随默认）" }
-                            ?: "${effortText(task.reasoningEffort)}（推荐）",
+                            ?: "${defaultEffortText(defaultEffort, task)}（跟随默认）",
                     ),
                     onClick = { onPick(task) },
                 )
@@ -131,11 +130,12 @@ fun ModelPickScreen(
     val state by catalog.state.collectAsState()
 
     val defaultModel by prefs.aiModel.collectAsState(initial = "")
-    val defaultEffort by prefs.defaultEffort.collectAsState(initial = null)
+    val defaultEffort by prefs.defaultEffort.collectAsState(initial = AiTask.DEFAULT_EFFORT)
     val models by prefs.aiTaskModels.collectAsState(initial = emptyMap())
     val efforts by prefs.aiTaskEfforts.collectAsState(initial = emptyMap())
 
     val currentModel = if (task == null) defaultModel.ifBlank { null } else models[task]
+    /** 默认那一项永远有值（没设过就是 [AiTask.DEFAULT_EFFORT]）；功能项没设过是 null，即"跟随默认"。 */
     val currentEffort = if (task == null) defaultEffort else efforts[task]
     /** 这个功能实际会用的模型——力度支不支持要按它来判断。 */
     val effectiveModel = currentModel ?: defaultModel
@@ -262,12 +262,20 @@ fun ModelPickScreen(
             }
             item {
                 OptionRow(
-                    label = if (task == null) "各功能用自己的推荐值" else "跟随默认（${defaultEffortText(defaultEffort, task)}）",
-                    selected = currentEffort == null,
+                    label = if (task == null) {
+                        "各功能用自己的推荐值（听力 low、点词 none…）"
+                    } else {
+                        "跟随默认（${defaultEffortText(defaultEffort, task)}）"
+                    },
+                    selected = if (task == null) currentEffort == AiTask.PER_TASK else currentEffort == null,
                     enabled = !modelIgnoresEffort,
                     onClick = {
                         scope.launch {
-                            if (task == null) prefs.setDefaultEffort(null) else prefs.setAiTaskEffort(task, null)
+                            if (task == null) {
+                                prefs.setDefaultEffort(AiTask.PER_TASK)
+                            } else {
+                                prefs.setAiTaskEffort(task, null)
+                            }
                         }
                     },
                 )
@@ -310,12 +318,17 @@ private fun summaryLine(model: String, effort: String): String = "$model · 思�
 private fun effortText(stored: String?): String = when (stored) {
     null -> "推荐值"
     AiTask.MODEL_DEFAULT -> AiTask.MODEL_DEFAULT_LABEL
+    AiTask.PER_TASK -> "各功能的推荐值"
     else -> stored
 }
 
-/** 某个功能"跟随默认"时实际会用到的力度：默认设过就是它，没设过就是这个功能的推荐值。 */
-private fun defaultEffortText(defaultEffort: String?, task: AiTask): String =
-    defaultEffort?.let(::effortText) ?: "${effortText(task.reasoningEffort)}（推荐）"
+/** 某个功能"跟随默认"时实际会用到的力度。默认那一项选了"各功能推荐"时，落到这个功能自己的推荐值。 */
+private fun defaultEffortText(defaultEffort: String, task: AiTask): String =
+    if (defaultEffort == AiTask.PER_TASK) {
+        "${effortText(task.reasoningEffort)}（推荐）"
+    } else {
+        effortText(defaultEffort)
+    }
 
 private fun effortNote(effort: String): String = when (effort) {
     "none" -> "（不思考，最快）"

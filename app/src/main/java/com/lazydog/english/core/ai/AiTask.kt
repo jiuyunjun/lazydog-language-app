@@ -51,6 +51,18 @@ enum class AiTask(
         /** 用户在设置里选"用模型自己的默认值"时存的值：不发这个参数。 */
         const val MODEL_DEFAULT = "model-default"
 
+        /** 选"各功能用自己的推荐值"时存的值：回到每个 [AiTask.reasoningEffort]。 */
+        const val PER_TASK = "per-task"
+
+        /**
+         * 没设过时的全局力度。
+         *
+         * 默认不思考：这个 App 的调用基本都是"按模板填内容"，思考带来的质量提升远不如
+         * 它带来的等待明显（实测一次听力思考 49 秒、写 29 秒）。想要质量的场合，
+         * 用户可以在设置里给那一项单独调高。
+         */
+        const val DEFAULT_EFFORT = "none"
+
         /** 上面那个值在界面上的说法。 */
         const val MODEL_DEFAULT_LABEL = "模型默认"
 
@@ -69,7 +81,9 @@ enum class AiTask(
             rejected: Set<String> = emptySet(),
         ): List<String> {
             if (chosen == MODEL_DEFAULT) return emptyList()
-            val preferred = chosen ?: task.reasoningEffort ?: return emptyList()
+            // PER_TASK 是"我不指定"的意思，不是一个能发给服务端的取值。
+            val picked = chosen?.takeIf { it != PER_TASK }
+            val preferred = picked ?: task.reasoningEffort ?: return emptyList()
             // 只留一个兜底：候选越多，撞不上的模型就要多花几个往返才安定下来。
             // low 几乎所有推理模型都认，用它兜底，也比退回模型默认（多数是 medium）快。
             return listOf(preferred, FALLBACK)

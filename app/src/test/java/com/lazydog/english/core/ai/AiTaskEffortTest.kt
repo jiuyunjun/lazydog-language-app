@@ -36,6 +36,15 @@ class AiTaskEffortTest {
     }
 
     @Test
+    fun `the per-task sentinel never reaches the wire`() {
+        // "各功能用自己的推荐值"是设置里的一个选项，不是一个能发给服务端的取值。
+        assertEquals(
+            listOf("none", "low"),
+            AiTask.effortCandidates(AiTask.Explain, chosen = AiTask.PER_TASK),
+        )
+    }
+
+    @Test
     fun `values this model already rejected are skipped`() {
         // 撞过一次就该记住，否则每次调用都拿被拒过的取值再撞一遍。
         assertEquals(

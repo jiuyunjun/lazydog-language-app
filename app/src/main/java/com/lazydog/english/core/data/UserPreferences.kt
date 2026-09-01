@@ -156,22 +156,27 @@ class UserPreferences(private val context: Context) {
      * [AiTask.MODEL_DEFAULT] 表示不发这个参数、用模型自己的默认。
      */
     fun aiEffortFor(task: AiTask): Flow<String?> = context.dataStore.data.map { prefs ->
-        prefs[taskEffortKey(task)]?.takeIf { it.isNotBlank() }
+        val chosen = prefs[taskEffortKey(task)]?.takeIf { it.isNotBlank() }
             ?: prefs[Keys.DefaultEffort]?.takeIf { it.isNotBlank() }
+            ?: AiTask.DEFAULT_EFFORT
+        // "各功能用自己的推荐值"是一个显式选项，落到这里就是"我不指定"。
+        chosen.takeIf { it != AiTask.PER_TASK }
     }
 
     /** 只看这个功能自己设过什么；设置页用它区分"自己设的"和"跟随默认"。 */
     fun aiTaskEffort(task: AiTask): Flow<String?> =
         context.dataStore.data.map { it[taskEffortKey(task)]?.takeIf { v -> v.isNotBlank() } }
 
-    /** 没单独设过的功能用的力度；null 表示各用各的推荐值。 */
-    val defaultEffort: Flow<String?> =
-        context.dataStore.data.map { it[Keys.DefaultEffort]?.takeIf { v -> v.isNotBlank() } }
+    /**
+     * 没单独设过的功能用的力度。没设过是 [AiTask.DEFAULT_EFFORT]（不思考），
+     * 不是"各用各的推荐值"——后者是设置里的一个显式选项（[AiTask.PER_TASK]）。
+     */
+    val defaultEffort: Flow<String> = context.dataStore.data.map {
+        it[Keys.DefaultEffort]?.takeIf { v -> v.isNotBlank() } ?: AiTask.DEFAULT_EFFORT
+    }
 
-    suspend fun setDefaultEffort(effort: String?) {
-        context.dataStore.edit {
-            if (effort.isNullOrBlank()) it.remove(Keys.DefaultEffort) else it[Keys.DefaultEffort] = effort
-        }
+    suspend fun setDefaultEffort(effort: String) {
+        context.dataStore.edit { it[Keys.DefaultEffort] = effort }
     }
 
     /** 已经单独指定过力度的功能，设置页用它显示当前值。 */
