@@ -17,6 +17,8 @@ enum class SpellingStage(val labelZh: String) {
 }
 
 enum class SpellingQuestionType {
+    /** S0 接触：只展示词形、读音和词块，不要求作答，也不进画像。 */
+    Exposure,
     Recognition,
     PartialCompletion,
     ChunkRecall,
@@ -88,7 +90,10 @@ data class SpellingProgress(
     val freeRecallSuccessCount: Int = 0,
     val successfulRecallDates: Set<String> = emptySet(),
     val longestSuccessfulIntervalDays: Int = 0,
-    val currentIntervalDays: Int = 1,
+    /** 拼写复习阶梯当前停在哪一档（分钟），见 [SpellingEngine.INTERVAL_LADDER_MINUTES]。 */
+    val currentIntervalMinutes: Int = SpellingEngine.FIRST_INTERVAL_MINUTES,
+    /** 这个词下一次该考拼写的时间。null 表示还没练过，由队列按通用复习时间排。 */
+    val nextSpellingAt: Instant? = null,
     val weakSegments: List<WeakSegment> = emptyList(),
     val lastAttemptAt: Instant? = null,
 )
@@ -125,13 +130,30 @@ object SpellingEngine {
     }
 
     fun questionType(progress: SpellingProgress): SpellingQuestionType = when (progress.stage) {
-        SpellingStage.Seen, SpellingStage.Recognition -> SpellingQuestionType.Recognition
+        // S0 是"接触"，不是"考一遍"：第一次见到一个词就丢四个选项过去，
+        // 用户是在猜，不是在建立词形和读音的联系（拼写训练DESIGN.md §S0）。
+        SpellingStage.Seen -> SpellingQuestionType.Exposure
+        SpellingStage.Recognition -> SpellingQuestionType.Recognition
         SpellingStage.PartialRecall -> SpellingQuestionType.PartialCompletion
         SpellingStage.ChunkRecall -> SpellingQuestionType.ChunkRecall
         SpellingStage.GuidedRecall -> SpellingQuestionType.GuidedRecall
         SpellingStage.FreeRecall -> SpellingQuestionType.FreeRecall
         SpellingStage.Retained -> SpellingQuestionType.DelayedFreeRecall
     }
+
+    /**
+     * S0 接触卡看完之后的进度。
+     *
+     * 接触不是一次作答：不记 attempt、不进画像、不给分，只把阶段推到 S1，
+     * 并把复习阶梯留在最低一档——这个词本轮末尾就该以四选一的形式再露一次面。
+     */
+    fun afterExposure(progress: SpellingProgress, at: Instant): SpellingProgress = progress.copy(
+        stage = if (progress.stage == SpellingStage.Seen) SpellingStage.Recognition else progress.stage,
+        stageSuccessCount = 0,
+        currentIntervalMinutes = FIRST_INTERVAL_MINUTES,
+        nextSpellingAt = at.plusSeconds(FIRST_INTERVAL_MINUTES.toLong() * 60),
+        lastAttemptAt = at,
+    )
 
     fun masteryCredit(correct: Boolean, hintLevel: Int): Double {
         if (!correct) return 0.0
@@ -191,6 +213,7 @@ object SpellingEngine {
             progress.longestSuccessfulIntervalDays
         }
 
+        val nextIntervalMinutes = nextIntervalMinutes(progress.currentIntervalMinutes, correct, credit)
         val provisional = progress.copy(
             recognitionScore = updateScore(progress.recognitionScore, questionType == SpellingQuestionType.Recognition, credit),
             partialRecallScore = updateScore(progress.partialRecallScore, questionType == SpellingQuestionType.PartialCompletion, credit),
@@ -208,7 +231,8 @@ object SpellingEngine {
             freeRecallSuccessCount = freeSuccesses,
             successfulRecallDates = successfulDates,
             longestSuccessfulIntervalDays = longestInterval,
-            currentIntervalDays = nextInterval(progress.currentIntervalDays, correct, credit),
+            currentIntervalMinutes = nextIntervalMinutes,
+            nextSpellingAt = attemptedAt.plusSeconds(nextIntervalMinutes.toLong() * 60),
             weakSegments = updatedWeak,
             lastAttemptAt = attemptedAt,
         )
@@ -497,11 +521,22 @@ object SpellingEngine {
     private fun updateScore(current: Double, applies: Boolean, credit: Double): Double =
         if (!applies) current else if (current == 0.0) credit else (current * 0.7 + credit * 0.3).coerceIn(0.0, 1.0)
 
-    private fun nextInterval(current: Int, correct: Boolean, credit: Double): Int = when {
-        !correct -> max(1, current / 3)
-        credit >= 0.8 -> (current * 2).coerceAtMost(60)
-        credit >= 0.4 -> (current + 1).coerceAtMost(60)
-        else -> 1
+    /**
+     * 下一次该隔多久再考（分钟），沿 [INTERVAL_LADDER_MINUTES] 走。
+     *
+     * 不用「乘二」这类连续公式：设计稿 §13 给的是一条固定阶梯，答对上一档、
+     * 答错退两档（14d → 3d 就是退两档）。用了提示的正确只保住当前这档不掉——
+     * 靠提示写出来的词，不该换来一次翻倍的间隔。
+     */
+    internal fun nextIntervalMinutes(current: Int, correct: Boolean, credit: Double): Int {
+        val ladder = INTERVAL_LADDER_MINUTES
+        val index = ladder.indexOfLast { it <= current }.coerceAtLeast(0)
+        val next = when {
+            !correct -> index - 2
+            credit >= 0.8 -> index + 1
+            else -> index
+        }
+        return ladder[next.coerceIn(ladder.indices)]
     }
 
     private fun reviewGrade(
@@ -618,4 +653,15 @@ object SpellingEngine {
 
     /** 提示梯度的最高一级：到这儿答案就直接摆出来了，本次得分为 0。 */
     const val MAX_HINT_LEVEL = 5
+
+    /**
+     * 拼写复习的间隔阶梯（分钟），拼写训练DESIGN.md §13：10 分钟 / 1 / 3 / 7 / 14 / 30 / 60 天。
+     *
+     * 第一档是 10 分钟而不是一天，因为"刚学完立刻答对"根本不说明记住了。落到这一档的词
+     * 由 [FIRST_INTERVAL_MINUTES] 认出来，本轮末尾就会再考一次（延迟重考）。
+     */
+    val INTERVAL_LADDER_MINUTES: List<Int> = listOf(10, 1_440, 4_320, 10_080, 20_160, 43_200, 86_400)
+
+    /** 阶梯最低那一档：10 分钟。落在这一档等于"这一轮结束前还要再考一次"。 */
+    val FIRST_INTERVAL_MINUTES: Int get() = INTERVAL_LADDER_MINUTES.first()
 }

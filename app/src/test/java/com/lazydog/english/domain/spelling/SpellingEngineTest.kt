@@ -244,6 +244,56 @@ class SpellingEngineTest {
         assertTrue(spoken.nextProgress.phonemeGraphemeScore > 0.0)
     }
 
+    @Test
+    fun `a first sighting is an exposure card, not a quiz`() {
+        // S0 是"接触"：第一次见到一个词就丢四个拼写让人挑，用户是在猜。
+        assertEquals(
+            SpellingQuestionType.Exposure,
+            SpellingEngine.questionType(SpellingProgress(stage = SpellingStage.Seen)),
+        )
+        val at = Instant.parse("2026-01-01T00:00:00Z")
+        val after = SpellingEngine.afterExposure(SpellingProgress(stage = SpellingStage.Seen), at)
+        assertEquals(SpellingStage.Recognition, after.stage)
+        // 看过就该在本轮末尾再露一面，所以停在阶梯最低那一档。
+        assertEquals(SpellingEngine.FIRST_INTERVAL_MINUTES, after.currentIntervalMinutes)
+        assertEquals(at.plusSeconds(600), after.nextSpellingAt)
+    }
+
+    @Test
+    fun `the review ladder climbs one step and falls two`() {
+        val ladder = SpellingEngine.INTERVAL_LADDER_MINUTES
+        assertEquals(listOf(10, 1_440, 4_320, 10_080, 20_160, 43_200, 86_400), ladder)
+        // 干净地答对：上一档。
+        assertEquals(1_440, SpellingEngine.nextIntervalMinutes(10, correct = true, credit = 1.0))
+        assertEquals(4_320, SpellingEngine.nextIntervalMinutes(1_440, correct = true, credit = 1.0))
+        // 靠提示写出来的只保住当前这档，不换一次翻倍。
+        assertEquals(4_320, SpellingEngine.nextIntervalMinutes(4_320, correct = true, credit = 0.4))
+        // 设计稿 §13 的例子：14 天答错退到 3 天。
+        assertEquals(4_320, SpellingEngine.nextIntervalMinutes(20_160, correct = false, credit = 0.0))
+        // 退到底就是 10 分钟：这一轮结束前还要再考一次。
+        assertEquals(10, SpellingEngine.nextIntervalMinutes(1_440, correct = false, credit = 0.0))
+        assertEquals(86_400, SpellingEngine.nextIntervalMinutes(86_400, correct = true, credit = 1.0))
+    }
+
+    @Test
+    fun `a miss drops the word back into this session`() {
+        // 干净答对的词按阶梯往上走，明天才见；答错的退到十分钟档，
+        // 也就是本轮结束前还要再考一次，而不是错完就过去了。
+        val clean = evaluate(SpellingProgress(stage = SpellingStage.FreeRecall), SpellingQuestionType.FreeRecall)
+        assertEquals(1_440, clean.nextProgress.currentIntervalMinutes)
+
+        val missed = evaluate(
+            SpellingProgress(stage = SpellingStage.FreeRecall, currentIntervalMinutes = 10),
+            SpellingQuestionType.FreeRecall,
+            answer = "enviroment",
+        )
+        assertEquals(10, missed.nextProgress.currentIntervalMinutes)
+        assertEquals(
+            Instant.parse("2026-01-01T00:10:00Z"),
+            missed.nextProgress.nextSpellingAt,
+        )
+    }
+
     private fun evaluate(
         progress: SpellingProgress,
         type: SpellingQuestionType,

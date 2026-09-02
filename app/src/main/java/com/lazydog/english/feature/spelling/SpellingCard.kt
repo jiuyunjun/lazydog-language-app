@@ -61,6 +61,7 @@ import com.lazydog.english.domain.spelling.SpellingEvaluation
 import com.lazydog.english.domain.spelling.SpellingFacts
 import com.lazydog.english.domain.spelling.SpellingProgress
 import com.lazydog.english.domain.spelling.SpellingQuestionType
+import com.lazydog.english.domain.vocabulary.posLabelZh
 import kotlinx.coroutines.launch
 
 internal const val MAX_HINT_LEVEL = SpellingEngine.MAX_HINT_LEVEL
@@ -82,14 +83,26 @@ data class SpellingCard(
     val pos: String,
     val exampleEn: String,
     val exampleZh: String,
+    /**
+     * 例句里这个词实际出现的形态，空表示就是 [term]。
+     *
+     * 双击查词存的是词条（`go`），例句却是用户读到的原句（"I **went** home"）——
+     * 语境默写要挖的空是句子里真出现的那个形态。
+     */
+    val seenAs: String = "",
     /** 词固有的拼写事实（词块 / 易错段 / 常见错拼）。空的时候引擎退回本地启发式。 */
     val facts: SpellingFacts = SpellingFacts.None,
     val progress: SpellingProgress,
     /**
-     * 这个词现在到期了没有。没到期的属于额外练习：照样记进拼写画像，
+     * 这个**词条**的通用复习时间到了没有。没到期的属于额外练习：照样记进拼写画像，
      * 但不推动通用复习时间——加练不该把复习计划搅乱。
+     *
+     * 注意不是"拼写阶梯到期了没有"：拼写练习页按阶梯排队，一个词可以拼写到期、
+     * 词条没到期，那种情况下它照样出现在这一轮里，只是答完不动 `nextReviewAt`。
      */
-    val dueNow: Boolean,
+    val dueForReview: Boolean,
+    /** 这张是本轮末尾排回来的延迟重考。只影响题面上那行提示，判分照旧。 */
+    val delayed: Boolean = false,
 ) {
     val questionType: SpellingQuestionType get() = SpellingEngine.questionType(progress)
 }
@@ -102,10 +115,38 @@ fun SpellingQueueEntry.toSpellingCard() = SpellingCard(
     pos = pos,
     exampleEn = exampleEn,
     exampleZh = exampleZh,
+    seenAs = seenAs,
     facts = facts,
     progress = progress,
-    dueNow = dueNow,
+    dueForReview = dueForReview,
 )
+
+/**
+ * 一张卡翻篇时交还给调用方的东西。
+ *
+ * 除了对错，还带上这个词的最新拼写进度：本轮要不要在末尾再考一次，
+ * 由它落在复习阶梯的哪一档决定（拼写训练DESIGN.md §13）。
+ */
+data class SpellingResolution(
+    val card: SpellingCard,
+    val correct: Boolean,
+    val usedHint: Boolean,
+    /** 答完之后的进度。接触卡也会更新（阶段推到 S1）；一次提交都没成功记下时为 null。 */
+    val nextProgress: SpellingProgress?,
+) {
+    /** 这张是 S0 接触卡：看过就算，不计对错，也不进这一轮的成绩。 */
+    val wasExposure: Boolean get() = card.questionType == SpellingQuestionType.Exposure
+
+    /**
+     * 复习阶梯停在最低一档（10 分钟）：这一轮结束前得再考一次。
+     *
+     * 「刚学完立刻答对」不等于记住了，这是设计稿 §13 的整条理由；接触卡看完、
+     * 答错退档的词也都会落在这一档，正好都该在本轮里再见一面。
+     */
+    val needsDelayedRetest: Boolean
+        get() = nextProgress != null &&
+            nextProgress.currentIntervalMinutes <= SpellingEngine.FIRST_INTERVAL_MINUTES
+}
 
 /** 用户在这张卡上的作答过程。卡片翻篇后就丢掉，不跨卡保留。 */
 data class SpellingAnswer(
@@ -130,11 +171,13 @@ data class SpellingAnswer(
 fun SpellingCardView(
     card: SpellingCard,
     repository: KnowledgeRepository,
-    onResolved: (correct: Boolean, usedHint: Boolean) -> Unit,
+    onResolved: (SpellingResolution) -> Unit,
     onAnswerChange: (SpellingAnswer) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
-    var answer by remember(card.itemId) { mutableStateOf(SpellingAnswer()) }
+    // 按整张卡重置而不是按 itemId：同一个词会在本轮末尾以延迟重考的身份再来一次，
+    // 只认 id 的话第二次进来还端着上一次的输入和判定。
+    var answer by remember(card) { mutableStateOf(SpellingAnswer()) }
 
     LaunchedEffect(answer) { onAnswerChange(answer) }
 
@@ -157,9 +200,16 @@ fun SpellingCardView(
                 hintLevel = hintLevel,
                 responseTimeMillis = elapsed,
                 audioPrompted = card.questionType.isAudioPrompted(),
-                advanceReviewSchedule = card.dueNow,
+                advanceReviewSchedule = card.dueForReview,
             )
             onDone(evaluation)
+        }
+    }
+
+    fun finishExposure() {
+        scope.launch {
+            val next = repository.recordSpellingExposure(card.itemId)
+            onResolved(SpellingResolution(card, correct = false, usedHint = false, nextProgress = next))
         }
     }
 
@@ -179,21 +229,31 @@ fun SpellingCardView(
             // 否则"提示要到底然后翻页"会成为一条不留痕迹的绕路。
             if (nextLevel >= MAX_HINT_LEVEL) record(MAX_HINT_LEVEL) {}
         },
-        onNext = { onResolved(answer.lastResult?.correct == true, answer.hintLevel > 0) },
+        onNext = {
+            onResolved(
+                SpellingResolution(
+                    card = card,
+                    correct = answer.lastResult?.correct == true,
+                    usedHint = answer.hintLevel > 0,
+                    nextProgress = answer.lastResult?.nextProgress,
+                ),
+            )
+        },
+        onExposureDone = ::finishExposure,
         onDismissHintSheet = { answer = answer.copy(showHintSheet = false) },
     )
 }
 
 /** 除了四选一，所有题型都在下面摆一个普通输入框，打的是完整单词。 */
 private fun SpellingQuestionType.needsPlainTextField(): Boolean =
-    this != SpellingQuestionType.Recognition
+    this != SpellingQuestionType.Recognition && this != SpellingQuestionType.Exposure
 
 /**
  * 四选一之外的题型都能逐级要提示。选择题没有提示梯度可言——
  * 答案就在四个选项里，再给提示等于直接指出来。
  */
 private fun SpellingQuestionType.hasHintLadder(): Boolean =
-    this != SpellingQuestionType.Recognition
+    this != SpellingQuestionType.Recognition && this != SpellingQuestionType.Exposure
 
 /** 题面靠声音给的题型，命中「音形对应」这一维。 */
 private fun SpellingQuestionType.isAudioPrompted(): Boolean =
@@ -211,6 +271,7 @@ private fun QuestionView(
     onSubmit: () -> Unit,
     onRequestHint: () -> Unit,
     onNext: () -> Unit,
+    onExposureDone: () -> Unit,
     onDismissHintSheet: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -227,7 +288,14 @@ private fun QuestionView(
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+            if (card.delayed) {
+                Badge(text = "刚才见过 · 现在再考一次", attention = false)
+            }
             when (card.questionType) {
+                SpellingQuestionType.Exposure -> ExposureBody(
+                    card = card,
+                    onPlay = { scope.launch { app.speechController.speakWord(entry.term) } },
+                )
                 SpellingQuestionType.Recognition -> RecognitionBody(
                     card = card,
                     answer = answer,
@@ -306,7 +374,18 @@ private fun QuestionView(
             modifier = Modifier.padding(24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (answer.resolved) {
+            if (card.questionType == SpellingQuestionType.Exposure) {
+                // 接触卡没有对错可言，只有"看过了"。它不判分、不写复习时间，
+                // 只把这个词推进 S1，本轮末尾会以四选一的样子再来一次。
+                Button(
+                    onClick = onExposureDone,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                ) {
+                    Text("记住了，等会儿考我")
+                }
+            } else if (answer.resolved) {
                 Button(
                     onClick = onNext,
                     modifier = Modifier
@@ -393,6 +472,106 @@ private fun hintLevelName(level: Int): String = when (level) {
 }
 
 private fun inputLabel(type: SpellingQuestionType): String = "写出完整单词"
+
+/**
+ * S0 接触卡（拼写训练DESIGN.md §S0）。
+ *
+ * 这一屏不考任何东西：第一次见到一个词就丢四个拼写让人挑，用户是在猜，
+ * 建立不起"声音—字形—结构"的联系。所以这里把词形、读音、词块和例句一次摆全，
+ * 看完直接推到 S1，本轮末尾再以四选一的形式来一次——那时候考的才是记住没有。
+ */
+@Composable
+private fun ExposureBody(card: SpellingCard, onPlay: () -> Unit) {
+    val entry = card
+    val extended = LazyDogTheme.extendedColors
+    Badge(text = "第一次见这个词 · 先认个脸", attention = false)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        InteractiveEnglishText(text = entry.term, style = MaterialTheme.typography.displaySmall)
+        IconButton(onClick = onPlay) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                contentDescription = "读一遍",
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+    if (entry.ipa.isNotBlank()) {
+        Text(
+            text = entry.ipa,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    Text(
+        text = listOfNotNull(entry.pos.takeIf { it.isNotBlank() }?.let(::posLabelZh), entry.meaningZh)
+            .joinToString(" · "),
+        style = MaterialTheme.typography.titleMedium,
+    )
+    ExposureChunks(term = entry.term, facts = entry.facts, extendedAttention = extended.attention)
+    if (entry.exampleEn.isNotBlank()) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            InteractiveEnglishText(text = entry.exampleEn, style = MaterialTheme.typography.bodyLarge)
+            if (entry.exampleZh.isNotBlank()) {
+                Text(
+                    text = entry.exampleZh,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** 词块拆分，易错的那一块单独标出来。拆不出两块的短词不显示。 */
+@Composable
+private fun ExposureChunks(term: String, facts: SpellingFacts, extendedAttention: Color) {
+    val chunks = remember(term, facts) { SpellingEngine.chunkWord(term, facts) }
+    if (chunks.size < 2) return
+    val trickyPart = facts.trickyPart.trim().lowercase()
+    val trickyIndex = remember(chunks, trickyPart) {
+        if (trickyPart.isEmpty()) {
+            -1
+        } else {
+            chunks.indexOfFirst { it.lowercase().contains(trickyPart) || trickyPart.contains(it.lowercase()) }
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "词块拆分",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            chunks.forEachIndexed { index, chunk ->
+                val highlight = index == trickyIndex
+                Surface(
+                    color = if (highlight) {
+                        LazyDogTheme.extendedColors.attentionContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    },
+                    shape = MaterialTheme.shapes.small,
+                ) {
+                    Text(
+                        text = chunk,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (highlight) extendedAttention else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                }
+            }
+        }
+        // 只有 AI 真标了易错段才敢下这句断言：本地猜出来的词块配上"这里最容易拼错"是假话。
+        if (trickyIndex >= 0) {
+            Text(
+                text = "${chunks[trickyIndex]} 是最容易拼错的部分",
+                style = MaterialTheme.typography.bodySmall,
+                color = extendedAttention,
+            )
+        }
+    }
+}
 
 @Composable
 private fun RecognitionBody(
@@ -588,9 +767,30 @@ private fun SlotRow(masked: String, typed: String, enabled: Boolean) {
  * 语境默写的挖空句（设计稿 61 屏）：空位是一条画出来的下划线，
  * 不是一串下划线字符。这一级不给字符级提示，所以横线宽度固定，不透露字母数。
  */
+/**
+ * 按**词**找，不是按子串找。
+ *
+ * `indexOf` 会让 `run` 在 "She runs" 里命中，挖出 "___s every morning" 这种残句；
+ * 存了词条之后更常见——`go` 会撞上 `going`。前后必须是非字母才算这个词。
+ */
+internal fun wordIndexOf(sentence: String, word: String): Int {
+    if (word.isBlank()) return -1
+    var from = 0
+    while (true) {
+        val index = sentence.indexOf(word, from, ignoreCase = true)
+        if (index < 0) return -1
+        val before = sentence.getOrNull(index - 1)
+        val after = sentence.getOrNull(index + word.length)
+        val boundedLeft = before == null || !before.isLetter()
+        val boundedRight = after == null || !after.isLetter()
+        if (boundedLeft && boundedRight) return index
+        from = index + 1
+    }
+}
+
 @Composable
 private fun ClozeSentence(sentence: String, blankFor: String) {
-    val index = sentence.indexOf(blankFor, ignoreCase = true)
+    val index = wordIndexOf(sentence, blankFor)
     if (index < 0) {
         Text(sentence, style = MaterialTheme.typography.titleMedium)
         return
@@ -626,9 +826,13 @@ private fun FreeRecallBody(card: SpellingCard, answer: SpellingAnswer, onPlay: (
         attention = false,
     )
     val sentence = entry.exampleEn
-    if (sentence.contains(entry.term, ignoreCase = true)) {
+    // 挖的是句子里真正出现的那个形态：例句可能是用户读到的原句（"I went home"），
+    // 而词条是 go——按词条挖会挖不中，按子串挖会把 going 挖成 ___ing。
+    val blankFor = listOf(entry.seenAs, entry.term)
+        .firstOrNull { it.isNotBlank() && wordIndexOf(sentence, it) >= 0 }
+    if (blankFor != null) {
         // 语境默写：把词从例句里挖掉，剩下的句子照给，别把答案漏在句子里。
-        ClozeSentence(sentence = sentence, blankFor = entry.term)
+        ClozeSentence(sentence = sentence, blankFor = blankFor)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconButton(onClick = onPlay) {
                 Icon(
@@ -684,13 +888,15 @@ private fun Badge(text: String, attention: Boolean) {
  */
 internal fun spellingAskContext(card: SpellingCard, answer: SpellingAnswer): AskContext {
     val entry = card
-    if (!answer.resolved) {
+    // 接触卡上词形本来就摆着，没有什么可保护的；其余题型答完之前一律不给拼写。
+    val revealed = answer.resolved || card.questionType == SpellingQuestionType.Exposure
+    if (!revealed) {
         return AskContext(
             kind = AskContextKind.Word,
             title = "正在默写一个词 · ${entry.meaningZh}",
             details = listOf(
                 AskDetail("中文释义", entry.meaningZh),
-                AskDetail("词性", entry.pos.ifBlank { "未标注" }),
+                AskDetail("词性", entry.pos.takeIf { it.isNotBlank() }?.let(::posLabelZh) ?: "未标注"),
                 AskDetail("题型", card.questionType.name),
                 AskDetail(
                     "状态",
