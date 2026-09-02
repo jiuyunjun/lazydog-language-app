@@ -315,7 +315,7 @@ class OpenAiContentGeneratorTest {
     @Test
     fun `grammar lesson parses and validates`() = runBlocking {
         val lessonJson =
-            """{"schemaVersion":1,"patternEn":"had + past participle","labelZh":"过去完成时","summaryZh":"表示过去某时之前已完成的动作",
+            """{"schemaVersion":1,"patternEn":"had + past participle","category":"PAST","labelZh":"过去完成时","summaryZh":"表示过去某时之前已完成的动作",
                "explanationZh":"用于说明过去的过去。","goodExampleEn":"I had left before she arrived.",
                "goodExampleZh":"她到之前我已经走了。","badExampleEn":"I left before she had arrived.",
                "badExampleNoteZh":"先后关系反了。","tipZh":"先发生的用 had done。"}"""
@@ -333,7 +333,7 @@ class OpenAiContentGeneratorTest {
     @Test
     fun `known grammar point is rejected by validation`() = runBlocking {
         val lessonJson =
-            """{"schemaVersion":1,"patternEn":"have/has + past participle","labelZh":"现在完成时","summaryZh":"表示过去动作与现在有关",
+            """{"schemaVersion":1,"patternEn":"have/has + past participle","category":"PRESENT","labelZh":"现在完成时","summaryZh":"表示过去动作与现在有关",
                "explanationZh":"动作发生在过去，但结果与现在有关。","goodExampleEn":"I have done it.","goodExampleZh":"我做完了。",
                "badExampleEn":"","badExampleNoteZh":"","tipZh":""}"""
         server.enqueue(MockResponse().setBody(chatBody(lessonJson)))

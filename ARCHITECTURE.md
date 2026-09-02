@@ -207,6 +207,16 @@ interface ReviewScheduler {
 
 页面内的「返回 / 关闭」一律走 `LazyDogApp.kt` 的 `popOnce()`，不直接调 `popBackStack()`。快按两下时，第二下会在转场完成前照样派发：第一下弹掉当前页，第二下把起始页也弹了，back stack 一空 NavHost 就没有目的地可画，界面白掉且退不回来。`popOnce()` 两道闸——当前页不在 RESUMED 就丢掉这一下（挡转场途中的连点），以及起始页永远不由页面内的返回键弹掉（挡转场瞬间完成、两下都落在真实状态上的情况）。栈底那一页交给系统返回键。
 
+### 语法点身份：大类 + 归一化公式
+
+- 原来的去重是 `patternEn` 精确串匹配，等于没有去重：同一个现在完成时，模型这次写 `have/has + past participle`、下次写 `has/have + p.p.`、再下次写 `present perfect`，三条都能进库各排一遍复习。
+- 现在身份键是 `grammarPointKey(大类, 公式)`（`domain/grammar/GrammarPoint.kt`），存进 `grammar_details.canonicalKey`：
+  - **大类**是封闭集合 `GrammarCategory`（20 个，参照 Cambridge English Grammar Profile 的 SuperCategory 划分）。它不是给用户看的，是身份键的另一半——`was/were + verb-ing` 和 `am/is/are + verb-ing` 归一化之后一模一样，靠大类才分得开。
+  - **归一化**做三件事：同义写法映射（`p.p.` → past participle、`base form` / `bare infinitive` / 孤立的 `verb` → base verb、`gerund` → -ing）、去掉标点和虚词、token 排序后拼接（所以 `have/has + X` 和 `has/have + X` 相等）。另有一张常见时态名的别名表，让 `present perfect` / `现在完成时` 和它的公式撞在一起。
+  - **只做等值判断，不做子集判断**：`will + base verb`（一般将来）是 `if + present simple, will + base verb`（第一条件句）的子集，但它们是两个语法点。
+- 老数据的 `canonicalKey` 由 `KnowledgeRepository.backfillGrammarKeys()` 在第一次判重时补算，不在 SQL 迁移里做——归一化规则写在 Kotlin 里，迁移脚本抄一份会慢慢跑偏。
+- 生成侧：`category` 进 AI 契约（认不出取值的整条丢掉，否则它进库后参与不了判重），已学过的语法点也按同一套归一化比对，模型换个写法就绕过"不要重复"的路被堵上。
+
 ### 词条身份：lemma + 词性
 
 - 身份键是 **(lemma, 词性)**（`单词记忆DESIGN.md` §3、§12），不是一个字符串。`record/NOUN` 和 `record/VERB` 是两个词条，各自复习。

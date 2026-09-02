@@ -21,7 +21,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SpellingAttemptEntity::class,
         VocabularyMemoryHintEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -34,6 +34,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 9, to = 10),
         // v12 只给 vocabulary_details 多一列 seenAs（带默认值），交给自动迁移。
         AutoMigration(from = 11, to = 12),
+        // v14 只给 grammar_details 多两列（都带默认值），交给自动迁移。
+        // 老行的 canonicalKey 留空，由 KnowledgeRepository 在第一次判重时补算——
+        // 归一化规则写在 Kotlin 里，SQL 迁移里抄一遍只会两处慢慢跑偏。
+        AutoMigration(from = 13, to = 14),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {

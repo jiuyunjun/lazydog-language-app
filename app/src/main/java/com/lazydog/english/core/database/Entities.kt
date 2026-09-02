@@ -112,6 +112,15 @@ data class GrammarDetailEntity(
     @ColumnInfo(defaultValue = "''") val badExampleEn: String = "",
     @ColumnInfo(defaultValue = "''") val badExampleNoteZh: String = "",
     @ColumnInfo(defaultValue = "''") val tipZh: String = "",
+    /** 语法大类（`GrammarCategory.wire`）。老数据为空，只影响它参不参与新的判重。 */
+    @ColumnInfo(defaultValue = "''") val category: String = "",
+    /**
+     * 身份键：大类 + 归一化后的结构公式（`grammarPointKey`）。
+     *
+     * `patternEn` 是模型每次自由发挥的写法，`have/has + past participle` 和
+     * `has/have + p.p.` 是同一个语法点却不是同一个字符串——拿它做键等于没有判重。
+     */
+    @ColumnInfo(defaultValue = "''") val canonicalKey: String = "",
 )
 
 /**

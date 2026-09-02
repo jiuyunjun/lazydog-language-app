@@ -85,6 +85,13 @@ interface KnowledgeDao {
     @Query("SELECT EXISTS(SELECT 1 FROM grammar_details WHERE name = :name)")
     suspend fun grammarNameExists(name: String): Boolean
 
+    /** 按身份键查重（`grammarPointKey`）。空键不参与，否则老数据会互相撞上。 */
+    @Query("SELECT EXISTS(SELECT 1 FROM grammar_details WHERE canonicalKey != '' AND canonicalKey = :key)")
+    suspend fun grammarKeyExists(key: String): Boolean
+
+    @Query("UPDATE grammar_details SET category = :category, canonicalKey = :key WHERE itemId = :itemId")
+    suspend fun updateGrammarKey(itemId: Long, category: String, key: String)
+
     @Query("DELETE FROM knowledge_items WHERE id = :id")
     suspend fun deleteItem(id: Long)
 

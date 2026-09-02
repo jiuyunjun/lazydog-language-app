@@ -260,6 +260,11 @@ data class GrammarLessonRequest(
 data class GeneratedGrammarLesson(
     /** 可直接套用的英文结构公式，如 "be going to + base verb"。 */
     val patternEn: String,
+    /**
+     * 语法大类（`GrammarCategory.wire`）。它是身份键的一半：
+     * 光看公式的话，`was/were + verb-ing` 和 `am/is/are + verb-ing` 归一化后一模一样。
+     */
+    val category: String = "",
     /** 中文语法标签，如“be going to 将来表达”。不作为卡片主标题。 */
     val labelZh: String,
     /** 列表和记忆卡第一眼看到的一句话用途。 */

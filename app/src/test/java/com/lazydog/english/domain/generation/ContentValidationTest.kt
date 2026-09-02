@@ -122,6 +122,7 @@ class ContentValidationTest {
     fun `grammar lesson validation catches gaps`() {
         val lesson = GeneratedGrammarLesson(
             patternEn = "have/has been + verb-ing",
+            category = "PRESENT",
             labelZh = "现在完成进行时",
             summaryZh = "表示过去开始并持续至今的动作",
             explanationZh = "一直在做的事。",

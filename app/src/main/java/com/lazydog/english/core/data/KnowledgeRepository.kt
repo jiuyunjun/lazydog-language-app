@@ -28,6 +28,8 @@ import com.lazydog.english.domain.spelling.SpellingProgress
 import com.lazydog.english.domain.spelling.SpellingQuestionType
 import com.lazydog.english.domain.spelling.SpellingStage
 import com.lazydog.english.domain.spelling.WeakSegment
+import com.lazydog.english.domain.grammar.GrammarCategory
+import com.lazydog.english.domain.grammar.grammarPointKey
 import com.lazydog.english.domain.vocabulary.PartOfSpeech
 import com.lazydog.english.domain.vocabulary.normalizePos
 import java.time.Instant
@@ -152,6 +154,8 @@ class KnowledgeRepository(
     /** @return 新知识项 id；同名语法点已存在时返回 null。 */
     suspend fun addGrammar(
         patternEn: String,
+        /** 语法大类（`GrammarCategory.wire`）。给不出来时判重退回老口径。 */
+        category: String = "",
         labelZh: String = "",
         summaryZh: String = "",
         explanationZh: String = "",
@@ -165,7 +169,14 @@ class KnowledgeRepository(
         if (cleanPattern.isBlank() || !cleanPattern.any { it in 'A'..'Z' || it in 'a'..'z' } ||
             cleanPattern.any { it.code in 0x4E00..0x9FFF }
         ) return null
+        // 老口径先挡一道：字面完全一样的肯定是同一条。
         if (dao.grammarNameExists(cleanPattern)) return null
+        val parsedCategory = GrammarCategory.parse(category)
+        val key = grammarPointKey(parsedCategory, cleanPattern)
+        if (key.isNotEmpty()) {
+            backfillGrammarKeys()
+            if (dao.grammarKeyExists(key)) return null
+        }
         return database.withTransaction {
             val id = insertNewItem(KnowledgeType.Grammar)
             dao.insertGrammarDetail(
@@ -181,9 +192,32 @@ class KnowledgeRepository(
                     badExampleEn = badExampleEn.trim(),
                     badExampleNoteZh = badExampleNoteZh.trim(),
                     tipZh = tipZh.trim(),
+                    category = parsedCategory?.wire.orEmpty(),
+                    canonicalKey = key,
                 ),
             )
             id
+        }
+    }
+
+    /**
+     * 给还没有身份键的老语法点补算一次。
+     *
+     * 归一化规则写在 Kotlin 里（`grammarPointKey`），SQL 迁移里没法调用，
+     * 在迁移脚本里照抄一份的话两处会慢慢跑偏。语法表只有几十行，
+     * 第一次判重时顺手补完，之后每次都是空转。
+     */
+    private suspend fun backfillGrammarKeys() {
+        for (detail in dao.getAllGrammarDetails()) {
+            if (detail.canonicalKey.isNotEmpty()) continue
+            val pattern = detail.patternEn.ifBlank { detail.name }
+            // 老数据没存大类，只能按公式本身归一化：同类里的写法差异照样能挡住，
+            // 跨类的重名（很少见）留给字面判重。
+            val category = GrammarCategory.parse(detail.category)
+            val key = grammarPointKey(category, pattern)
+            if (key.isNotEmpty()) {
+                dao.updateGrammarKey(detail.itemId, category?.wire.orEmpty(), key)
+            }
         }
     }
 

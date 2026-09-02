@@ -107,6 +107,12 @@ interface LearningContentGenerator {
 
 `generateNewWords` 的 `term` 同样要求是词典形式（动词原形、名词单数）。这一条只写在提示词和契约里，不做本地校验：本地能验的只是"看起来像不像变形"，而那正是判不准的部分。
 
+### 语法点的大类
+
+`generateGrammarLesson` 要返回 `category`，取值是封闭集合（`GrammarCategory.wire`，参照 Cambridge English Grammar Profile 的 SuperCategory：`PRESENT` / `PAST` / `FUTURE` / `MODALITY` / `PASSIVE` …）。它是语法点身份键的一半，**认不出取值的整条丢掉**——没有大类的语法点进库之后参与不了判重，下次模型换个写法又会存一条。
+
+`patternEn` 用标准写法，不用缩写（写 `past participle` 不写 `p.p.`，写 `base verb` 不写 `v.`）。归一化能吃下大部分变体，但让模型每次写成同一个公式，判重才不用全靠归一化兜底。
+
 ### 词性与词形
 
 - `pos` 取值是封闭集合（`PartOfSpeech.wire`，Universal POS 风格：`NOUN` / `VERB` / `ADJ` …），生成新词和点词速查都要给。词性是词条身份的一半（`单词记忆DESIGN.md` §3），自由文本会把 `v.` / `vi` / `verb` 拆成三个词条，所以本地统一归一化，**取值认不出来的词整条丢掉**。

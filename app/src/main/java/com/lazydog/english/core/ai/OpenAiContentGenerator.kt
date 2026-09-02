@@ -38,6 +38,7 @@ import com.lazydog.english.domain.generation.GrammarDrillItem
 import com.lazydog.english.domain.generation.GrammarDrillRequest
 import com.lazydog.english.domain.generation.GrammarDrillValidation
 import com.lazydog.english.domain.generation.GrammarLessonRequest
+import com.lazydog.english.domain.grammar.GrammarCategory
 import com.lazydog.english.domain.generation.JsonArrayScanner
 import com.lazydog.english.domain.generation.JsonStream
 import com.lazydog.english.domain.practice.GrammarErrorTag
@@ -1588,6 +1589,7 @@ class OpenAiContentGenerator(
     private data class GrammarPayload(
         val schemaVersion: Int = 0,
         val patternEn: String = "",
+        val category: String = "",
         val labelZh: String = "",
         val summaryZh: String = "",
         val explanationZh: String = "",
@@ -1599,6 +1601,7 @@ class OpenAiContentGenerator(
     ) {
         fun toDomain() = GeneratedGrammarLesson(
             patternEn = patternEn.trim(),
+            category = GrammarCategory.parse(category)?.wire.orEmpty(),
             labelZh = labelZh.trim(),
             summaryZh = summaryZh.trim(),
             explanationZh = explanationZh.trim(),
@@ -1937,6 +1940,23 @@ class OpenAiContentGenerator(
                 appendLine("已经试过这些记忆方式，这次优先换别的：${request.avoidTypes.joinToString("、") { it.name }}。")
             }
 
+            // §16.2：构词/词形/发音属于词形，一个词条只生成一次，其它词义直接复用。
+            request.sharedWordLevel?.takeIf { !it.isEmpty }?.let { shared ->
+                appendLine(
+                    "这个词的构词、易错段和发音已经写过了，直接沿用，不要重写也不要另起一套说法：" +
+                        listOfNotNull(
+                            shared.morphologyZh.takeIf { it.isNotBlank() }?.let { "构词 $it" },
+                            shared.weakSegment.takeIf { it.isNotBlank() }?.let { "易错段 $it" },
+                            shared.pronunciation.syllables.takeIf { it.isNotEmpty() }
+                                ?.let { "音节 " + it.joinToString("-") },
+                        ).joinToString("；"),
+                )
+                appendLine(
+                    "morphology、spelling、pronunciation 三项一律填 null——它们属于这个词形，" +
+                        "和是哪个意思无关；你这次只写这个词义自己的东西：" +
+                        "core_meaning、memory_hook、场景、易混词、搭配、例句。",
+                )
+            }
             appendLine("先判断这个词最适合哪种记忆方式，从这七类里选：" + MemoryType.entries.joinToString("、") {
                 "${it.name}（${it.labelZh}：${it.noteZh}）"
             } + "。")
@@ -2359,7 +2379,10 @@ class OpenAiContentGenerator(
                 appendLine("这些语法点已经学过，不要重复：${request.knownGrammar.joinToString("、")}。")
             }
             appendLine("字段必须严格分工，不要把标题和讲解揉在一起：")
+            appendLine("category 是这条语法点的大类，只能取：${GrammarCategory.wireList}。")
             appendLine("patternEn 是唯一主标题，只写可套用的英文结构公式，不得含中文或完整例句。")
+            appendLine("patternEn 用标准写法，不要用缩写：写 past participle 不写 p.p.，" +
+                "写 base verb 不写 v.；同一个语法点每次都该写成同一个公式。")
             appendLine("例如：be going to + base verb；have/has + past participle；if + past simple, would + base verb。")
             appendLine("labelZh 是 2～12 字的中文语法标签；summaryZh 是不超过 18 个汉字的一句话用途，如“表示已有计划或打算”。")
             appendLine("explanationZh 用两三句大白话讲清何时用、语气以及和易混结构的区别，不要重复 summaryZh；")
@@ -2367,7 +2390,7 @@ class OpenAiContentGenerator(
             appendLine("badExampleEn 一个中国学习者容易写错的句子，badExampleNoteZh 说明错在哪；tipZh 一句易混点提醒。")
             appendLine("输出 JSON schema：")
             appendLine(
-                """{"schemaVersion":1,"patternEn":"...","labelZh":"...","summaryZh":"...","explanationZh":"...",""" +
+                """{"schemaVersion":1,"patternEn":"...","category":"PRESENT","labelZh":"...","summaryZh":"...","explanationZh":"...",""" +
                     """"goodExampleEn":"...","goodExampleZh":"...","badExampleEn":"...","badExampleNoteZh":"...","tipZh":"..."}""",
             )
         }
