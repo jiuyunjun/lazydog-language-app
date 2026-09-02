@@ -56,11 +56,30 @@ interface KnowledgeDao {
     @Query("SELECT * FROM vocabulary_details WHERE itemId = :itemId")
     suspend fun getVocabularyDetail(itemId: Long): VocabularyDetailEntity?
 
-    @Query("SELECT EXISTS(SELECT 1 FROM vocabulary_details WHERE term = :term)")
+    /**
+     * 大小写不敏感：`Went` 和 `went` 是同一个词，各存一条的话它们会各自走一遍
+     * S0～S6、各攒一份画像，用户以为在练一个词，系统当成两个。
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM vocabulary_details WHERE term = :term COLLATE NOCASE)")
     suspend fun vocabularyTermExists(term: String): Boolean
 
+    /**
+     * 同一个词条（lemma + 词性）下已经存了哪些词义。
+     *
+     * 身份键是 (lemma, pos) 而不是 term（单词记忆DESIGN.md §3、§12）：`record/NOUN`
+     * 和 `record/VERB` 是两个词条，而 `run/VERB` 的"跑"和"经营"是同一个词条的两个词义。
+     */
+    @Query(
+        "SELECT * FROM vocabulary_details WHERE term = :lemma COLLATE NOCASE " +
+            "AND pos = :pos COLLATE NOCASE ORDER BY senseOrder",
+    )
+    suspend fun getSensesOf(lemma: String, pos: String): List<VocabularyDetailEntity>
+
     @Transaction
-    @Query("SELECT * FROM knowledge_items WHERE id = (SELECT itemId FROM vocabulary_details WHERE term = :term LIMIT 1)")
+    @Query(
+        "SELECT * FROM knowledge_items WHERE id = " +
+            "(SELECT itemId FROM vocabulary_details WHERE term = :term COLLATE NOCASE LIMIT 1)",
+    )
     suspend fun getVocabularyByTerm(term: String): VocabularyRecord?
 
     @Query("SELECT EXISTS(SELECT 1 FROM grammar_details WHERE name = :name)")

@@ -81,6 +81,8 @@ import com.lazydog.english.domain.scenario.ScenarioSummaryRequest
 import com.lazydog.english.domain.scenario.ScenarioTurn
 import com.lazydog.english.domain.scenario.ScenarioTurnRequest
 import com.lazydog.english.domain.scenario.ScenarioValidation
+import com.lazydog.english.domain.vocabulary.PartOfSpeech
+import com.lazydog.english.domain.vocabulary.normalizePos
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -1051,6 +1053,7 @@ class OpenAiContentGenerator(
         val exampleEn: String = "",
         val exampleZh: String = "",
         val pos: String = "",
+        val forms: List<String> = emptyList(),
         @Serializable(with = CollocationListSerializer::class)
         val collocations: List<CollocationPayload> = emptyList(),
         val memoryHintZh: String = "",
@@ -1064,7 +1067,10 @@ class OpenAiContentGenerator(
             meaningZh = meaningZh,
             exampleEn = exampleEn,
             exampleZh = exampleZh,
-            pos = pos,
+            // 词性归一到封闭集合：模型给 v. 还是 VERB 都收，但存下去的只有一种写法，
+            // 否则 (lemma, 词性) 这个身份键会被写法差异拆成好几个词条。
+            pos = normalizePos(pos),
+            forms = forms.map { it.trim() }.filter { it.isNotBlank() },
             collocations = collocations.map { it.toDomain() },
             memoryHintZh = memoryHintZh,
             chunks = chunks,
@@ -1374,6 +1380,9 @@ class OpenAiContentGenerator(
     @Serializable
     private data class WordExplanationPayload(
         val term: String = "",
+        val lemma: String = "",
+        val pos: String = "",
+        val forms: List<String> = emptyList(),
         val ipa: String = "",
         val meaningZh: String = "",
         val usageNoteZh: String = "",
@@ -1383,6 +1392,9 @@ class OpenAiContentGenerator(
     ) {
         fun toDomain() = WordExplanation(
             term = term.trim(),
+            lemma = lemma.trim(),
+            pos = normalizePos(pos),
+            forms = forms.map { it.trim() }.filter { it.isNotBlank() },
             ipa = ipa.trim(),
             meaningZh = meaningZh.trim(),
             usageNoteZh = usageNoteZh.trim(),
@@ -1836,6 +1848,19 @@ class OpenAiContentGenerator(
                 "一眼就能排除、根本没人会写的假错法。三个都不能等于正确拼写。")
         }
 
+        /**
+         * 不规则变形（forms）的写法要求。新词生成和点词速查共用。
+         *
+         * 只要不规则的：规则变形本地按词法规则就能推，`walk → walked` 存进每个词的
+         * 数据里等于把同一条规则抄一百份（单词记忆DESIGN.md §4）。
+         */
+        private fun wordFormRules(): String = buildString {
+            appendLine("forms：这个词**不规则**的变形，比如 go 给 [\"went\",\"gone\"]、" +
+                "child 给 [\"children\"]、good 给 [\"better\",\"best\"]。" +
+                "规则变形（加 -s / -ed / -ing、直接加 -er/-est）不要给，留空数组；" +
+                "本身没有变形的词（多数名词、形容词）也留空数组。不要把原词本身列进去。")
+        }
+
         /** 记忆方法（memoryHintZh）的写法要求。新词生成和点词速查共用。 */
         internal fun memoryHintRules(): String = buildString {
             // 词汇记忆提示DESIGN.md §2.1/§9/§10 的批量版：先判断这个词最值得记什么，只写那一个点。
@@ -1971,10 +1996,12 @@ class OpenAiContentGenerator(
                 "更常见的词——这个水平的学习者应该已经掌握了入门词汇，选的应该是他们大概率还不认识、" +
                 "但达到这个水平该会用的词。大部分（八成左右）贴着这个水平走，可以有一两个稍高一级的" +
                 "作为提前热身，但不要选到明显超纲、需要专业背景才懂的生僻词。")
-            appendLine("不要只给孤立单词——每个词给 pos（词性缩写，如 v./n./adj.）和 collocations：" +
+            appendLine("不要只给孤立单词——每个词给 pos（只能取：${PartOfSpeech.wireList}）和 collocations：" +
                 "1~2 个这个词真实常用的搭配短语，写成 {\"en\":\"resolve an issue\",\"zh\":\"解决一个问题\"} 这种对象" +
                 "（比如 issue 配 resolve an issue，不是造一个不自然的短语）。" +
                 "zh 是这个搭配整体的中文说法，短、自然、口语，不是逐词直译，也不要再解释一遍这个词。")
+            appendLine("term 必须是原型（词典形式）：动词给原形、名词给单数，不要给 -ed / -ing / 复数这类变形。")
+            append(wordFormRules())
             appendLine("meaningZh 是这个具体词义的简洁中文释义；exampleEn 是包含该词的自然英文例句，exampleZh 是它的翻译。")
             append(exampleSentenceRules(request.learnerLevel))
             appendLine("同一批例句之间场景和句型要有明显区别，不能只换个人名或地点。")
@@ -1982,7 +2009,8 @@ class OpenAiContentGenerator(
             append(spellingFactRules())
             appendLine("输出 JSON schema：")
             appendLine(
-                """{"schemaVersion":1,"words":[{"term":"...","ipa":"...","pos":"v.","meaningZh":"...",""" +
+                """{"schemaVersion":1,"words":[{"term":"...","ipa":"...","pos":"VERB","forms":["..."],""" +
+                    """"meaningZh":"...",""" +
                     """"exampleEn":"...","exampleZh":"...","collocations":[{"en":"...","zh":"..."}],""" +
                     """"memoryHintZh":"...",""" +
                     """"chunks":["...","..."],"trickyPart":"...","misspellings":["...","...","..."]}]}""",
@@ -2151,12 +2179,24 @@ class OpenAiContentGenerator(
             appendLine("解释单词 \"$term\" 在下面这句话里的意思，给水平 $level 的中文母语学习者看：")
             appendLine(sentence)
             appendLine("meaningZh 是简洁中文释义（含词性）；usageNoteZh 用一句话说明它在这句里的用法，可以为空字符串。")
+            appendLine(
+                "pos 是这个词在这句里的词性，只能取：${PartOfSpeech.wireList}；判不出来给空字符串。",
+            )
+            append(wordFormRules())
+            appendLine(
+                "lemma 是这个词的原型（词典形式）：动词还原成原形、名词还原成单数、" +
+                    "比较级最高级还原成原级；本来就是原型就原样返回。" +
+                    "还原要结合上面这句话判断——saw 在这句里可能是 see 的过去式，也可能是名词「锯子」。" +
+                    "只做词形还原：不要归并成短语（点的是 gave 就还原成 give，不要给 give up），" +
+                    "不要纠正拼写，判不出来就原样返回这个词。",
+            )
             appendLine("再给一个新的例句：exampleEn 换一个跟上面这句不同的场景，" +
                 "仍然用这个词在这里的词义，exampleZh 是它的翻译。")
             append(exampleSentenceRules(level))
             append(memoryHintRules())
             appendLine(
-                """输出 JSON schema：{"term":"$term","ipa":"...","meaningZh":"...","usageNoteZh":"...",""" +
+                """输出 JSON schema：{"term":"$term","lemma":"...","pos":"VERB","forms":["..."],""" +
+                    """"ipa":"...","meaningZh":"...","usageNoteZh":"...",""" +
                     """"exampleEn":"...","exampleZh":"...","memoryHintZh":"..."}""",
             )
         }

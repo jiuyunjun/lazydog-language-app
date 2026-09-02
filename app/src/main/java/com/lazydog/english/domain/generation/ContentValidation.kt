@@ -1,5 +1,7 @@
 package com.lazydog.english.domain.generation
 
+import com.lazydog.english.domain.vocabulary.PartOfSpeech
+
 /**
  * AI 输出的本地业务校验（AI_CONTRACTS.md §5 精神）：
  * 字段完整、长度受控、例句真的包含目标词、避开已知词。
@@ -35,7 +37,10 @@ object ContentValidation {
                 word.exampleEn.isBlank() || word.exampleEn.length > 200 -> "例句缺失或过长"
                 word.exampleZh.isBlank() || word.exampleZh.length > 200 -> "例句译文缺失或过长"
                 !exampleContainsTerm(word.exampleEn, term) -> "例句里没有这个词"
-                word.pos.isBlank() || word.pos.length > 20 -> "词性缺失或过长"
+                // 词性是词条身份的一半（单词记忆DESIGN.md §3），认不出来的值进不了身份键，
+                // 那样 record/NOUN 和 record/VERB 就分不开了，所以这里直接挡掉。
+                PartOfSpeech.parse(word.pos) == null -> "词性不在允许的取值里：${word.pos}"
+                word.forms.any { it.isBlank() || it.length > 40 } -> "变形为空或过长"
                 word.collocations.isEmpty() || word.collocations.size > 2 -> "搭配数量应该是 1~2 个"
                 // 翻译允许空：模型偶尔只给英文，界面上那条还能点开现翻，不值得把整个词丢掉。
                 word.collocations.any { it.en.isBlank() || it.en.length > 60 || it.zh.length > 60 } ->

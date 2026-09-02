@@ -218,8 +218,13 @@ data class GeneratedWord(
     val meaningZh: String,
     val exampleEn: String,
     val exampleZh: String,
-    /** 词性，如 "v."/"n."/"adj."（CEFR 设计文档 §6.2 的词义单位字段之一）。 */
+    /** 词性，封闭集合里的值（`PartOfSpeech.wire`，如 "VERB"/"NOUN"）。 */
     val pos: String = "",
+    /**
+     * 不规则变形（单词记忆DESIGN.md §4）：go → went/gone、child → children。
+     * 规则变形不给——那是词法规则不是这个词的属性，存下来等于把同一条规则抄一百份。
+     */
+    val forms: List<String> = emptyList(),
     /** 1~2 个高价值搭配，不是孤立单词（§6.5"每个附带 1~2 个高价值搭配"）。 */
     val collocations: List<Collocation> = emptyList(),
     /**

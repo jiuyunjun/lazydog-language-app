@@ -44,6 +44,7 @@ import com.lazydog.english.core.data.VocabularyJson
 import com.lazydog.english.core.data.stageOrDefault
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.model.ReviewGrade
+import com.lazydog.english.domain.vocabulary.posLabelZh
 import com.lazydog.english.feature.library.dueLabel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -161,7 +162,7 @@ fun WordDetailScreen(
                 if (detail.meaningZh.isNotBlank()) {
                     Text(
                         text = if (!isExpression && detail.pos.isNotBlank()) {
-                            "${detail.pos} ${detail.meaningZh}"
+                            "${posLabelZh(detail.pos)} ${detail.meaningZh}"
                         } else {
                             detail.meaningZh
                         },
