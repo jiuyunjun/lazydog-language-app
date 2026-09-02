@@ -94,6 +94,15 @@ data class SentenceExplanation(
 /** 单词在语境里的解释（点词查询用）。 */
 data class WordExplanation(
     val term: String,
+    /**
+     * 这个词的原型（词典形式）。用户点的是句子里的形态（`went`），要复习的是词条（`go`），
+     * 这是两件事——[term] 保留他点到的那个形态，入库时用的是这里。
+     *
+     * 只做词形还原，不做短语归并（点 `gave` 不该变成 `give up`），也不做拼写纠正。
+     * 还原本身必须结合句子判断（`saw` 可能是 see 的过去式，也可能是"锯子"），
+     * 所以由 AI 给，本地不猜；判不出来就留空。
+     */
+    val lemma: String = "",
     val ipa: String,
     val meaningZh: String,
     /** 对这句话里用法的一句话说明，可空。 */
@@ -101,6 +110,16 @@ data class WordExplanation(
     /** 换一个场景的例句，可空。 */
     val exampleEn: String = "",
     val exampleZh: String = "",
+    /** 词性，封闭集合里的值（`PartOfSpeech.wire`）。判不出来时为空。 */
+    val pos: String = "",
+    /** 不规则变形（go → went/gone）。规则变形不给。 */
+    val forms: List<String> = emptyList(),
     /** 记忆方法：词根词缀拆解或联想记忆，可空。 */
     val memoryHintZh: String = "",
-)
+) {
+    /** 真正该进生词本的那个词形。AI 没给原型时就是用户点到的形态。 */
+    val headword: String get() = lemma.trim().ifBlank { term.trim() }
+
+    /** 用户点的形态和词条不是同一个词形，界面上要把这层关系说出来。 */
+    val inflected: Boolean get() = !headword.equals(term.trim(), ignoreCase = true)
+}

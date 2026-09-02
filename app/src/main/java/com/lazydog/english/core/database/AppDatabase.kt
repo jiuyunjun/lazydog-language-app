@@ -21,7 +21,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SpellingAttemptEntity::class,
         VocabularyMemoryHintEntity::class,
     ],
-    version = 10,
+    version = 14,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -32,6 +32,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 8, to = 9),
         // v10 只是多一张 vocabulary_memory_hints，没有改动老表，交给自动迁移。
         AutoMigration(from = 9, to = 10),
+        // v12 只给 vocabulary_details 多一列 seenAs（带默认值），交给自动迁移。
+        AutoMigration(from = 11, to = 12),
+        // v14 只给 grammar_details 多两列（都带默认值），交给自动迁移。
+        // 老行的 canonicalKey 留空，由 KnowledgeRepository 在第一次判重时补算——
+        // 归一化规则写在 Kotlin 里，SQL 迁移里抄一遍只会两处慢慢跑偏。
+        AutoMigration(from = 13, to = 14),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -51,7 +57,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "lazydog.db")
-                .addMigrations(MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_10_11, MIGRATION_12_13)
                 .build()
 
         /**
@@ -117,6 +123,85 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_spelling_attempts_itemId` ON `spelling_attempts` (`itemId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_spelling_attempts_occurredAt` ON `spelling_attempts` (`occurredAt`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_spelling_attempts_questionType` ON `spelling_attempts` (`questionType`)")
+            }
+        }
+
+        /**
+         * 拼写复习从「天」换成拼写训练DESIGN.md §13 的分钟阶梯，并给拼写单独记一份到期时间。
+         *
+         * 换列名要重建表：老的 `currentIntervalDays` 按 1 天 = 1440 分钟折过去；
+         * 已经练过的词按「最后一次作答 + 原间隔」补出下次到期时间，没练过的留空，
+         * 由队列回退到通用复习时间，不至于升级完一口气全部到期。
+         */
+        internal val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("PRAGMA defer_foreign_keys = TRUE")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `spelling_progress_new` (" +
+                        "`itemId` INTEGER NOT NULL, `stage` TEXT NOT NULL, " +
+                        "`recognitionScore` REAL NOT NULL, `partialRecallScore` REAL NOT NULL, " +
+                        "`chunkRecallScore` REAL NOT NULL, `phonemeGraphemeScore` REAL NOT NULL, " +
+                        "`freeRecallScore` REAL NOT NULL, `retentionScore` REAL NOT NULL, " +
+                        "`successStreak` INTEGER NOT NULL, `failureStreak` INTEGER NOT NULL, " +
+                        "`stageSuccessCount` INTEGER NOT NULL, `freeRecallSuccessCount` INTEGER NOT NULL, " +
+                        "`successfulRecallDatesJson` TEXT NOT NULL, " +
+                        "`longestSuccessfulIntervalDays` INTEGER NOT NULL, " +
+                        "`currentIntervalMinutes` INTEGER NOT NULL, `nextSpellingAt` INTEGER, " +
+                        "`weakSegmentsJson` TEXT NOT NULL, `lastAttemptAt` INTEGER, " +
+                        "PRIMARY KEY(`itemId`), FOREIGN KEY(`itemId`) REFERENCES `knowledge_items`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                db.execSQL(
+                    "INSERT INTO `spelling_progress_new` SELECT `itemId`, `stage`, " +
+                        "`recognitionScore`, `partialRecallScore`, `chunkRecallScore`, " +
+                        "`phonemeGraphemeScore`, `freeRecallScore`, `retentionScore`, " +
+                        "`successStreak`, `failureStreak`, `stageSuccessCount`, " +
+                        "`freeRecallSuccessCount`, `successfulRecallDatesJson`, " +
+                        "`longestSuccessfulIntervalDays`, " +
+                        "MAX(`currentIntervalDays`, 1) * 1440, " +
+                        "CASE WHEN `lastAttemptAt` IS NULL THEN NULL " +
+                        "ELSE `lastAttemptAt` + MAX(`currentIntervalDays`, 1) * 86400000 END, " +
+                        "`weakSegmentsJson`, `lastAttemptAt` FROM `spelling_progress`",
+                )
+                db.execSQL("DROP TABLE `spelling_progress`")
+                db.execSQL("ALTER TABLE `spelling_progress_new` RENAME TO `spelling_progress`")
+            }
+        }
+
+        /**
+         * 词条身份从「一个字符串」换成「lemma + 词性」（单词记忆DESIGN.md §3），
+         * 并给词形和词义序号留出位置。
+         *
+         * 顺手把老数据里的词性规范化：`v.` / `n.` / `expression` 这些认得出来的换成
+         * 封闭集合的值，认不出来的原样留着——它们只是进不了身份键，界面照常显示。
+         * 这不是语义迁移，是同一个值换个写法；词条本身一条都没动。
+         */
+        internal val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `vocabulary_details` ADD COLUMN `formsJson` TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE `vocabulary_details` ADD COLUMN `senseOrder` INTEGER NOT NULL DEFAULT 0")
+                val posMap = listOf(
+                    "NOUN" to listOf("n", "n.", "noun"),
+                    "VERB" to listOf("v", "v.", "vi", "vi.", "vt", "vt.", "verb"),
+                    "ADJ" to listOf("adj", "adj.", "a.", "adjective"),
+                    "ADV" to listOf("adv", "adv.", "adverb"),
+                    "PRON" to listOf("pron", "pron.", "pronoun"),
+                    "DET" to listOf("det", "det.", "art", "art.", "article"),
+                    "ADP" to listOf("prep", "prep.", "preposition"),
+                    "NUM" to listOf("num", "num.", "numeral"),
+                    "CONJ" to listOf("conj", "conj.", "conjunction"),
+                    "INTJ" to listOf("int", "int.", "intj", "interjection"),
+                    "AUX" to listOf("aux", "aux."),
+                    "PROPN" to listOf("propn"),
+                    "PHRASE" to listOf("expression", "phrase", "idiom"),
+                )
+                for ((wire, legacy) in posMap) {
+                    val list = legacy.joinToString(", ") { "'" + it + "'" }
+                    db.execSQL(
+                        "UPDATE `vocabulary_details` SET `pos` = '" + wire + "' " +
+                            "WHERE LOWER(TRIM(`pos`)) IN (" + list + ")",
+                    )
+                }
             }
         }
 

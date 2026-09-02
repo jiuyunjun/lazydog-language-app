@@ -172,6 +172,9 @@ interface ReviewScheduler {
 
 - `SpellingEngine`（`domain/spelling/`）是纯 Kotlin 状态机，维护六维掌握分量、当前拼写阶段、成功日期和薄弱片段，不依赖 Compose，可单测。
 - `spelling_attempts` 追加保存每次提交，字段包含题型、原答案、提示级别、耗时、错误类型、薄弱片段和 Mastery Credit。
+- **S0 接触是一张不判分的卡**：`questionType(Seen)` 给的是 `Exposure`，摆词形、读音、词块和例句，看完调 `recordSpellingExposure` 把阶段推到 S1——不写 attempt、不进画像、不动 `nextReviewAt`。第一次见到一个词就丢四个拼写让人挑，用户是在猜，不是在建立"声音—字形—结构"的联系。单词页的复习卡不会出接触卡（那个词早在新词流里露过脸），最低从 S1 起考。
+- **复习间隔走固定阶梯**（`INTERVAL_LADDER_MINUTES`：10 分钟 / 1 / 3 / 7 / 14 / 30 / 60 天，拼写训练DESIGN.md §13）：干净答对上一档，靠提示写对保住当前档，答错退两档（14d → 3d）。档位和下一次拼写到期时间存在 `spelling_progress.currentIntervalMinutes` / `nextSpellingAt`，与通用 `nextReviewAt` 分开——拼写阶梯说的是"下次以多强的提示考写"，通用复习时间说的是"这个词条什么时候再出现"。
+- **落回最低一档的词在本轮末尾重考一次**：接触完的、答错退档的、靠提示写对的都会落到 10 分钟档，`SpellingScreen` 把它们排回队尾（每个词一轮最多一次）。"刚学完立刻答对"不说明记住了，这是 §13 整条规则的理由。
 - 一张卡可以有多次提交，但只在这张卡真正翻篇时（写对了，或提示已拉到 5 级、答案摆在脸上）调用一次通用 `ReviewScheduler`——否则来回试三次会被记成三轮复习，把 `lapseCount` 撑得虚高。提示要到底也记一次零分提交，不留“不留痕迹的绕路”。
 - 请求提示不是一次作答：只抬提示等级，不写 attempt、不动阶段。
 - **第 5 级之前任何一级都不给出完整拼写**，由 `SpellingEngineTest` 断言守着。第 1 级只说错的性质（双写 / 元音顺序 / 少几个字母），不说在哪；第 2 级给的是挖过空的错误区域（`en_____ment`），不是原词；第 3 级给薄弱片段的内芯，掐头去尾，严格窄于片段本身；第 4 级给词块骨架但弱块仍然空着（`en + _____ + ment`）。这样五级才是单调递增的，否则第 4 级就等于答案，逐级要提示退化成点四下看答案。
@@ -197,11 +200,37 @@ interface ReviewScheduler {
 - 校验分两级（`MemoryAssistanceValidation`）：站不住的单项删掉，只有核心意思和记忆钩子缺失或超长才整条失败。这是设计文档 §10「宁缺毋滥」的直接翻译——牵强的联想、凑数的易混词、指不到位置的易错段，留着比没有更糟，但它们不该连累那条真正有用的记忆钩子。
 - UI（`feature/vocabulary/MemoryHintPanel.kt`）按 §7 分两层：首屏只有核心意思、记忆钩子和策略标签，其余收在「更多记忆提示」里。一次性全铺出来的话，用户读到第三块就已经不在记这个词了。
 - 挂在两处：记录页的词条详情，和单词复习卡（新词卡还没有 itemId，仍显示生成时带出来的那句 `memoryHintZh`）。整句表达不给——这套提示按"一个词最值得记什么"设计，对一整句话拆构词、标重音都无从谈起。
+- **两份规格的分工**（D-037）：记忆材料的类型集合、生成规则、展示口径以 `词汇记忆提示DESIGN.md` 为准；`单词记忆DESIGN.md` §34～§46 只贡献了一条结构上的改动——记忆材料分两层挂载：构词 / 词形 / 发音属于词形，挂词条，所有词义共用；场景 / 对比 / 搭配 / 联想属于意思，各词义各一份。多义词各自成条之后，不分层的话 `run` 的五个词义会各自生成一遍一模一样的构词和拼写提示。
 - 与拼写系统共用薄弱片段（设计文档 §11）：`spelling_progress` 的 weak segment 和 `spelling_attempts` 里这个词最近写错的形式进提示词，生成的才是针对这个人的提示，而不是对着词典重写一遍。
 
 ### 页面内返回
 
 页面内的「返回 / 关闭」一律走 `LazyDogApp.kt` 的 `popOnce()`，不直接调 `popBackStack()`。快按两下时，第二下会在转场完成前照样派发：第一下弹掉当前页，第二下把起始页也弹了，back stack 一空 NavHost 就没有目的地可画，界面白掉且退不回来。`popOnce()` 两道闸——当前页不在 RESUMED 就丢掉这一下（挡转场途中的连点），以及起始页永远不由页面内的返回键弹掉（挡转场瞬间完成、两下都落在真实状态上的情况）。栈底那一页交给系统返回键。
+
+### 语法点身份：大类 + 归一化公式
+
+- 原来的去重是 `patternEn` 精确串匹配，等于没有去重：同一个现在完成时，模型这次写 `have/has + past participle`、下次写 `has/have + p.p.`、再下次写 `present perfect`，三条都能进库各排一遍复习。
+- 现在身份键是 `grammarPointKey(大类, 公式)`（`domain/grammar/GrammarPoint.kt`），存进 `grammar_details.canonicalKey`：
+  - **大类**是封闭集合 `GrammarCategory`（20 个，参照 Cambridge English Grammar Profile 的 SuperCategory 划分）。它不是给用户看的，是身份键的另一半——`was/were + verb-ing` 和 `am/is/are + verb-ing` 归一化之后一模一样，靠大类才分得开。
+  - **归一化**做三件事：同义写法映射（`p.p.` → past participle、`base form` / `bare infinitive` / 孤立的 `verb` → base verb、`gerund` → -ing）、去掉标点和虚词、token 排序后拼接（所以 `have/has + X` 和 `has/have + X` 相等）。另有一张常见时态名的别名表，让 `present perfect` / `现在完成时` 和它的公式撞在一起。
+  - **只做等值判断，不做子集判断**：`will + base verb`（一般将来）是 `if + present simple, will + base verb`（第一条件句）的子集，但它们是两个语法点。
+- 老数据的 `canonicalKey` 由 `KnowledgeRepository.backfillGrammarKeys()` 在第一次判重时补算，不在 SQL 迁移里做——归一化规则写在 Kotlin 里，迁移脚本抄一份会慢慢跑偏。
+- 生成侧：`category` 进 AI 契约（认不出取值的整条丢掉，否则它进库后参与不了判重），已学过的语法点也按同一套归一化比对，模型换个写法就绕过"不要重复"的路被堵上。
+
+### 词条身份：lemma + 词性
+
+- 身份键是 **(lemma, 词性)**（`单词记忆DESIGN.md` §3、§12），不是一个字符串。`record/NOUN` 和 `record/VERB` 是两个词条，各自复习。
+- 词性收成封闭集合 `domain/vocabulary/PartOfSpeech`（Universal POS 风格 + 本地扩展 `PHRASE`）。原来是自由文本：AI 给 `v.`、查词那条给空、情景表达给 `expression`——同一个词性三种写法，拿它做键会把一个词条拆成三条。`wire` 存库和过 AI，`labelZh` 才上界面；认不出来的值原样留着，只是进不了身份键。
+- **一个词条下可以有多个词义**（§5、Principle 3）。`run` 的"跑"和"经营"是两条记录、各自复习，不是挤进一个"跑；运行；经营"的字符串——那样没法知道用户会了哪个。第二个词义由用户在查词面板上明说（"这个意思也记下来"），本地不拿中文释义做模糊比对：释义像不像和是不是同一个词义是两回事。`senseOrder` 记顺序。
+- **不规则变形存在 `formsJson`**（§4）：go → went/gone。规则变形不存——那是词法规则不是词的属性，`walk → walked` 存进每个词等于把同一条规则抄一百份。眼下的消费者是查词：点 `went` 本地就能命中 `go`，省一次生成（§4.1「Word Form != 独立生词」）。
+
+### 词条以原型入库
+
+- `vocabulary_details.term` 存的是**原型**：双击查词由 `explainWord` 返回的 `lemma` 还原（`WordExplanation.headword`），生成新词由提示词要求词典形式。本地不做词形还原。
+- 去重键是 `term` 的**大小写不敏感**匹配（`vocabularyTermExists` 带 `COLLATE NOCASE`）。原来是精确串匹配，`Went` 和 `went` 能各存一条。
+- 只对新词生效，老数据原样留着（用户决定）：库里已有的表面形式词条不回填，它们和后来存进去的原型是两条独立记录。
+- `seenAs` 记用户当初遇到它时的形态。不是留纪念：`exampleEn` 存的是他读到的原句，句子里出现的是 `went` 而不是 `go`，语境默写要挖的空是它。挖空按**词边界**匹配（`wordIndexOf`），子串匹配会让 `go` 撞上 `going`、`run` 撞上 `runs`，挖出 `___ing` 这种残句。
+- 双击查词要查两次库：先按点到的形态查（多数时候他点的就是原型，命中就零成本摊开），没命中才讲解，讲解回来拿到原型再查一次——否则库里有 `go`、用户点 `went` 时会白花一次生成再存一条重复的。面板标题显示词条、底下说明"你点的是 went"，朗读仍读他点的那个形态，按钮写明存的是哪个词。
 
 ### 拼写数据的分工
 
@@ -276,7 +305,7 @@ interface ReadingSource {
 - 拼写是「学习」下的独立入口，不是单词流程里的一步（设计稿 59～61、63 屏顶部是自成一轮的「拼写练习 · n / 12」，而 62 屏的词块拆分标的是「新词 · 1 / 12」）。这样单词页仍然管词义，拼写页只管写得出，两边不互相挤时间。
 - S0 接触是唯一并进单词流程的一段：新词卡揭示答案后显示词块拆分并标出词干，和后面所有阶段用的是同一套 `SpellingEngine.chunkWord` 切分。
 - 队列由 `KnowledgeRepository.spellingQueue()` 组，**到期的先排完，不够一轮才拿没到期的补位**；补位的算加练，`advanceReviewSchedule = false`：拼写画像照记，但不推动 `nextReviewAt`。两个入口共用一套复习时间，不加这道闸的话，练一轮拼写会把没到期的词也往后推，等于让拼写练习悄悄改写单词复习的队列。
-- 排序优先级 = 到期天数 + 薄弱片段分 + 连续错误 + 没练过的补一次。多词条目（表达、整句）不进拼写练习。
+- 排序优先级 = 到期天数 + 薄弱片段分 + 连续错误 + 没练过的补一次；到期与否先看 `spelling_progress.nextSpellingAt`，没练过拼写的才回退到通用 `nextReviewAt`。多词条目（表达、整句）不进拼写练习。
 - 拼写能力档案（64 屏）是练习总结页和入口都能到的只读页，样本不足时明说不足，不拿两次错误画一张像模像样的分布图。
 
 ### 错题画像与选题
@@ -300,6 +329,8 @@ interface ReadingSource {
 - 触发在 `core/ask/ShakeDetector.kt`：只在学习页面注册 `TYPE_ACCELEROMETER`，合力超过灵敏度阈值即触发，300 ms 去抖、1.2 s 冷却；没有传感器或用户关掉摇一摇时，降级为学习页顶栏的问号 `AskTopBarAction`。
 - 上下文由页面自己注册：`core/ask/AskController.kt` 的 `ProvideAskContext` 把结构化的 `AskContext`（词条 / 语法点 / 阅读材料 / 刚做的题 / 演练处境）挂到外层 `feature/ask/AskHost`。不截屏、不发整页文本，抽屉顶部的上下文卡展开后就是发给 AI 的全部内容。
 - 页面状态不合适提问时注册 `null`（生成中、失败页、词卡未揭示答案时只给词形不给释义），摇了也不弹。
+- **注册上下文才算接上**：`AskHost` 只提供触发和抽屉，页面不调 `ProvideAskContext` 的话 `canAsk` 恒为 false，传感器都不注册。听力页曾经只包了 `AskHost` 却没注册上下文，等于没接。
+- 答题类页面分揭晓前后两份上下文：听力揭晓前只给场景、语气、难度，英文原文和中文答案一个字不给（这一页的规矩是"英文永远最后出现"）；拼写同理，未翻篇前只给中文和题型。揭晓后才把原文、关键表达、听觉难点全交出去。
 - 提问复用同一个 OpenAI 兼容接口（`askAboutContext`），SSE 流式；`AskStreaming.partialAnswer` 从未闭合的 JSON 里增量取出 `answerZh` 供展示，最终仍以完整解析加校验为准。
 - 一次会话只活在抽屉里：关掉即清空，不落库、没有全局聊天历史。答案里的新词经用户点“加进复习”才写入知识库。
 

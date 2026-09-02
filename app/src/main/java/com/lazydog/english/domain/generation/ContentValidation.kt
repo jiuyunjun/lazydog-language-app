@@ -1,5 +1,9 @@
 package com.lazydog.english.domain.generation
 
+import com.lazydog.english.domain.grammar.GrammarCategory
+import com.lazydog.english.domain.grammar.grammarPatternKey
+import com.lazydog.english.domain.vocabulary.PartOfSpeech
+
 /**
  * AI 输出的本地业务校验（AI_CONTRACTS.md §5 精神）：
  * 字段完整、长度受控、例句真的包含目标词、避开已知词。
@@ -35,7 +39,10 @@ object ContentValidation {
                 word.exampleEn.isBlank() || word.exampleEn.length > 200 -> "例句缺失或过长"
                 word.exampleZh.isBlank() || word.exampleZh.length > 200 -> "例句译文缺失或过长"
                 !exampleContainsTerm(word.exampleEn, term) -> "例句里没有这个词"
-                word.pos.isBlank() || word.pos.length > 20 -> "词性缺失或过长"
+                // 词性是词条身份的一半（单词记忆DESIGN.md §3），认不出来的值进不了身份键，
+                // 那样 record/NOUN 和 record/VERB 就分不开了，所以这里直接挡掉。
+                PartOfSpeech.parse(word.pos) == null -> "词性不在允许的取值里：${word.pos}"
+                word.forms.any { it.isBlank() || it.length > 40 } -> "变形为空或过长"
                 word.collocations.isEmpty() || word.collocations.size > 2 -> "搭配数量应该是 1~2 个"
                 // 翻译允许空：模型偶尔只给英文，界面上那条还能点开现翻，不值得把整个词丢掉。
                 word.collocations.any { it.en.isBlank() || it.en.length > 60 || it.zh.length > 60 } ->
@@ -103,12 +110,17 @@ object ContentValidation {
 
     /** 语法讲解整体校验：关键字段缺一不可。@return 失败原因，null 表示通过。 */
     fun validateGrammarLesson(lesson: GeneratedGrammarLesson, knownGrammar: Collection<String>): String? {
-        val known = knownGrammar.map { normalizeGrammarPattern(it) }.toSet()
+        // 已学过的按同一套归一化比对：模型换个写法（p.p. / past participle）就不算数的话，
+        // 「不要重复」这条约束等于没有。
+        val known = knownGrammar.map { grammarPatternKey(it) }.filter { it.isNotEmpty() }.toSet()
         return when {
             lesson.patternEn.isBlank() || lesson.patternEn.length > 80 -> "语法结构缺失或过长"
             !lesson.patternEn.any { it in 'A'..'Z' || it in 'a'..'z' } -> "语法结构必须包含英文形式"
             Regex("[\\u4E00-\\u9FFF]").containsMatchIn(lesson.patternEn) -> "语法结构不能混入中文说明"
-            normalizeGrammarPattern(lesson.patternEn) in known -> "这个语法点已经学过"
+            // 大类是身份键的一半（grammarPointKey）：认不出来的话这条语法点进库之后
+            // 参与不了判重，下次模型换个写法又会存一条。
+            GrammarCategory.parse(lesson.category) == null -> "语法大类不在允许的取值里"
+            grammarPatternKey(lesson.patternEn) in known -> "这个语法点已经学过"
             lesson.labelZh.isBlank() || lesson.labelZh.length > 40 -> "中文语法标签缺失或过长"
             lesson.summaryZh.isBlank() || lesson.summaryZh.length > 36 -> "一句话用途缺失或过长"
             lesson.explanationZh.isBlank() || lesson.explanationZh.length > 500 -> "讲解缺失或过长"
@@ -118,6 +130,4 @@ object ContentValidation {
         }
     }
 
-    private fun normalizeGrammarPattern(value: String): String =
-        value.lowercase().replace(Regex("\\s+"), " ").trim()
 }

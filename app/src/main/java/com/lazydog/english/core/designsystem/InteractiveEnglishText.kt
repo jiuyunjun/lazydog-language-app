@@ -176,6 +176,8 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
     val scope = rememberCoroutineScope()
     var inLibrary by remember { mutableStateOf<WordExplanation?>(null) }
     var explanation by remember { mutableStateOf<WordExplanation?>(null) }
+    /** 词条已经在库里，但这次查出来的是它的另一个词义。 */
+    var otherSense by remember { mutableStateOf<WordExplanation?>(null) }
     var streamedJson by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
@@ -185,20 +187,34 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
         onDispose { app.speechController.stopSpeaking() }
     }
 
-    LaunchedEffect(word, sentence) {
-        val existing = app.knowledgeRepository.vocabulary.first()
-            .firstOrNull { it.detail.term.equals(word, ignoreCase = true) }
-        if (existing != null) {
-            // 已经在库里就直接摊开库里存的那份，不再花一次生成。
-            inLibrary = WordExplanation(
-                term = existing.detail.term,
-                ipa = existing.detail.ipa,
-                meaningZh = existing.detail.meaningZh,
+    /**
+     * 查库要查两次，因为原型得等 AI 回来才知道。
+     *
+     * 第一次按用户点到的形态查——大多数时候他点的就是原型，命中就直接摊开库里那份，
+     * 一次生成都不用花。没命中才讲解；讲解回来拿到原型再查一次：库里有 `go`、
+     * 用户点的是 `went`，只查第一次的话会白花一次生成，还会再存一条重复的词条。
+     */
+    suspend fun lookup(form: String): WordExplanation? =
+        // 按词形找：库里存的是原型，不规则变形也记着，所以点 went 能命中 go
+        // （单词记忆DESIGN.md §4.1「Word Form != 独立生词」），一次生成都不用花。
+        app.knowledgeRepository.findByWordForm(form).firstOrNull()?.let {
+            WordExplanation(
+                term = it.detail.term,
+                lemma = it.detail.term,
+                pos = it.detail.pos,
+                ipa = it.detail.ipa,
+                meaningZh = it.detail.meaningZh,
                 usageNoteZh = "",
-                exampleEn = existing.detail.exampleEn,
-                exampleZh = existing.detail.exampleZh,
-                memoryHintZh = existing.detail.memoryHintZh,
+                exampleEn = it.detail.exampleEn,
+                exampleZh = it.detail.exampleZh,
+                memoryHintZh = it.detail.memoryHintZh,
             )
+        }
+
+    LaunchedEffect(word, sentence) {
+        val existing = lookup(word)
+        if (existing != null) {
+            inLibrary = existing
         } else {
             when (val result = app.contentGenerator.explainWord(
                 word,
@@ -206,7 +222,22 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                 app.userPreferences.learnerLevelDescription.first(),
                 onProgress = { streamedJson = it },
             )) {
-                is GenerationResult.Success -> explanation = result.data
+                is GenerationResult.Success -> {
+                    val fresh = result.data
+                    // 还原出来的原型可能早就在库里了（点 went，库里有 go）。
+                    // 命中的话把用户点到的形态带回去，那行"你点的是 went"才显示得出来。
+                    val known = if (fresh.inflected) lookup(fresh.headword)?.copy(term = word) else null
+                    if (known != null) {
+                        inLibrary = known
+                        // 库里那条是同一个词条的另一个词义时，这一条仍然值得单独存
+                        // （run 的"跑"和"经营"各自复习，单词记忆DESIGN.md §5）。
+                        otherSense = fresh.takeIf {
+                            it.meaningZh.isNotBlank() && it.meaningZh != known.meaningZh
+                        }
+                    } else {
+                        explanation = fresh
+                    }
+                }
                 is GenerationResult.Failure -> error = result.reason
             }
         }
@@ -214,14 +245,26 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val shown = explanation ?: inLibrary
+            // 标题是词条（`go`），不是他点到的形态（`went`）——存进生词本、以后复习的都是词条。
+            // 但朗读仍读他点的那个形态：他要听的是这句话里这个词怎么念。
+            val headword = shown?.headword ?: word
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(word, style = MaterialTheme.typography.headlineSmall)
-                (explanation ?: inLibrary)?.ipa?.takeIf { it.isNotBlank() }?.let {
+                Text(headword, style = MaterialTheme.typography.headlineSmall)
+                shown?.ipa?.takeIf { it.isNotBlank() }?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = { scope.launch { app.speechController.speakWord(word) } }) {
                     Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = "朗读这个词", tint = MaterialTheme.colorScheme.primary)
                 }
+            }
+            // 换了个词形就得说清楚，不然用户会以为自己点错了行、或者存进去的词丢了。
+            if (shown?.inflected == true) {
+                Text(
+                    text = "你点的是 $word，它是 $headword 的变形",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             when {
                 inLibrary != null -> {
@@ -230,6 +273,40 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                     WordExample(value.exampleEn, value.exampleZh)
                     MemoryHint(value.memoryHintZh)
                     Text("已经在你的知识库里。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // 同一个词的另一个意思不是重复：把两个词义挤进一条记录，
+                    // 就没法知道用户到底会了哪个（单词记忆DESIGN.md Principle 3）。
+                    val another = otherSense
+                    if (another != null) {
+                        Text(
+                            text = "这句里它是另一个意思：${another.meaningZh}",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    saved = app.knowledgeRepository.addVocabulary(
+                                        term = another.headword,
+                                        meaningZh = another.meaningZh,
+                                        ipa = another.ipa,
+                                        exampleEn = sentence.ifBlank { another.exampleEn },
+                                        exampleZh = if (sentence.isBlank()) another.exampleZh else "",
+                                        pos = another.pos,
+                                        memoryHintZh = another.memoryHintZh,
+                                        seenAs = if (sentence.isBlank()) "" else word,
+                                        forms = another.forms,
+                                        asNewSense = true,
+                                    ) != null
+                                }
+                            },
+                            enabled = !saved,
+                        ) {
+                            Icon(Icons.Outlined.LibraryAdd, contentDescription = null)
+                            Text(
+                                text = if (saved) "已记入，会安排复习" else "这个意思也记下来",
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                    }
                 }
                 explanation != null -> {
                     val value = explanation!!
@@ -243,20 +320,35 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                         onClick = {
                             scope.launch {
                                 saved = app.knowledgeRepository.addVocabulary(
-                                    term = word,
+                                    // 存词条，不存句子里那个形态：went 和 go 是同一个词，
+                                    // 分开存就会各自走一遍拼写阶段、各攒一份画像。
+                                    term = value.headword,
                                     meaningZh = value.meaningZh,
                                     ipa = value.ipa,
                                     // 例句优先用这个词出现的原句：它才是用户真正读到的语境。
                                     exampleEn = sentence.ifBlank { value.exampleEn },
                                     exampleZh = if (sentence.isBlank()) value.exampleZh else "",
+                                    pos = value.pos,
                                     memoryHintZh = value.memoryHintZh,
+                                    // 原句里出现的是变形，语境默写要挖的空是它而不是词条。
+                                    seenAs = if (sentence.isBlank()) "" else word,
+                                    forms = value.forms,
                                 ) != null
                             }
                         },
                         enabled = !saved,
                     ) {
                         Icon(Icons.Outlined.LibraryAdd, contentDescription = null)
-                        Text(if (saved) "已记入，会安排复习" else "放进生词本", Modifier.padding(start = 8.dp))
+                        // 存的是词条，按钮就得报词条的名字：用户点 went 存完，
+                        // 回记录里只找得到 go，不明说他会以为丢了。
+                        Text(
+                            text = when {
+                                saved -> "已记入，会安排复习"
+                                value.inflected -> "把 ${value.headword} 放进生词本"
+                                else -> "放进生词本"
+                            },
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
                     }
                 }
                 error != null -> Text("查询失败：$error", color = MaterialTheme.colorScheme.error)

@@ -28,6 +28,10 @@ import com.lazydog.english.domain.spelling.SpellingProgress
 import com.lazydog.english.domain.spelling.SpellingQuestionType
 import com.lazydog.english.domain.spelling.SpellingStage
 import com.lazydog.english.domain.spelling.WeakSegment
+import com.lazydog.english.domain.grammar.GrammarCategory
+import com.lazydog.english.domain.grammar.grammarPointKey
+import com.lazydog.english.domain.vocabulary.PartOfSpeech
+import com.lazydog.english.domain.vocabulary.normalizePos
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -72,9 +76,31 @@ class KnowledgeRepository(
         collocations: List<Collocation> = emptyList(),
         memoryHintZh: String = "",
         facts: SpellingFacts = SpellingFacts.None,
+        /** 用户当初遇到它时的形态（双击查词点的是 `went`，存的是 `go`）。同形时留空。 */
+        seenAs: String = "",
+        /** 不规则变形（go → went/gone）。规则变形不存，见 `VocabularyDetailEntity.formsJson`。 */
+        forms: List<String> = emptyList(),
+        /**
+         * 这是这个词条的**另一个词义**，不是重复。
+         *
+         * 默认 false：同一个 (lemma, 词性) 再存一条会被挡掉，挡的是重复入库。
+         * 但"run = 跑"和"run = 经营"是两个词义，该各自复习（单词记忆DESIGN.md §5），
+         * 那种情况由用户在查词面板上明说，本地不拿中文释义做模糊比对——
+         * 释义像不像和是不是同一个词义，是两回事。
+         */
+        asNewSense: Boolean = false,
     ): Long? {
+        // 存进来的必须已经是原型：双击查词那条路由 AI 结合句子还原（`WordExplanation.headword`），
+        // 生成新词那条由提示词要求词典形式。本地不做词形还原——saw / left / found 这类
+        // 离开句子根本判不了，猜出来的词条会污染整个复习队列。
         val cleanTerm = term.trim()
-        if (dao.vocabularyTermExists(cleanTerm)) return null
+        val cleanPos = normalizePos(pos)
+        val siblings = dao.getSensesOf(cleanTerm, cleanPos)
+        // 词性认不出来时退回老口径（整个词只能有一条），否则一个没标注词性的词
+        // 会和任何一个同名词条撞在一起，或者反过来无限重复入库。
+        val known = PartOfSpeech.parse(cleanPos) != null
+        val duplicate = if (known) siblings.isNotEmpty() else dao.vocabularyTermExists(cleanTerm)
+        if (duplicate && !(asNewSense && known)) return null
         return database.withTransaction {
             val id = insertNewItem(KnowledgeType.Vocabulary)
             dao.insertVocabularyDetail(
@@ -85,21 +111,51 @@ class KnowledgeRepository(
                     meaningZh = meaningZh.trim(),
                     exampleEn = exampleEn.trim(),
                     exampleZh = exampleZh.trim(),
-                    pos = pos.trim(),
+                    pos = cleanPos,
                     collocationsJson = VocabularyJson.encodeCollocations(collocations),
                     memoryHintZh = memoryHintZh.trim(),
                     chunksJson = VocabularyJson.encodeList(facts.chunks),
                     trickyPart = facts.trickyPart.trim(),
                     misspellingsJson = VocabularyJson.encodeList(facts.misspellings),
+                    seenAs = seenAs.trim().takeIf { !it.equals(cleanTerm, ignoreCase = true) }.orEmpty(),
+                    formsJson = VocabularyJson.encodeList(
+                        forms.map { it.trim() }
+                            .filter { it.isNotBlank() && !it.equals(cleanTerm, ignoreCase = true) }
+                            .distinctBy { it.lowercase() },
+                    ),
+                    senseOrder = (siblings.maxOfOrNull { it.senseOrder } ?: -1) + 1,
                 ),
             )
             id
         }
     }
 
+    /**
+     * 库里已经存着的、和这个词形对得上的词条。
+     *
+     * 先按词形本身找，再按不规则变形找：点 `went` 要能命中 `go`（§4.1
+     * 「Word Form != 独立生词」）。命中就不用再花一次讲解，也不会又存一条。
+     */
+    suspend fun findByWordForm(form: String): List<VocabularyRecord> {
+        val clean = form.trim()
+        if (clean.isBlank()) return emptyList()
+        val all = vocabulary.first()
+        val direct = all.filter { it.detail.term.equals(clean, ignoreCase = true) }
+        if (direct.isNotEmpty()) return direct
+        return all.filter { record ->
+            VocabularyJson.decodeList(record.detail.formsJson).any { it.equals(clean, ignoreCase = true) }
+        }
+    }
+
+    /** 同一个词条（lemma + 词性）下已经存下的词义，按顺序。 */
+    suspend fun sensesOf(lemma: String, pos: String): List<VocabularyDetailEntity> =
+        dao.getSensesOf(lemma.trim(), normalizePos(pos))
+
     /** @return 新知识项 id；同名语法点已存在时返回 null。 */
     suspend fun addGrammar(
         patternEn: String,
+        /** 语法大类（`GrammarCategory.wire`）。给不出来时判重退回老口径。 */
+        category: String = "",
         labelZh: String = "",
         summaryZh: String = "",
         explanationZh: String = "",
@@ -113,7 +169,14 @@ class KnowledgeRepository(
         if (cleanPattern.isBlank() || !cleanPattern.any { it in 'A'..'Z' || it in 'a'..'z' } ||
             cleanPattern.any { it.code in 0x4E00..0x9FFF }
         ) return null
+        // 老口径先挡一道：字面完全一样的肯定是同一条。
         if (dao.grammarNameExists(cleanPattern)) return null
+        val parsedCategory = GrammarCategory.parse(category)
+        val key = grammarPointKey(parsedCategory, cleanPattern)
+        if (key.isNotEmpty()) {
+            backfillGrammarKeys()
+            if (dao.grammarKeyExists(key)) return null
+        }
         return database.withTransaction {
             val id = insertNewItem(KnowledgeType.Grammar)
             dao.insertGrammarDetail(
@@ -129,9 +192,32 @@ class KnowledgeRepository(
                     badExampleEn = badExampleEn.trim(),
                     badExampleNoteZh = badExampleNoteZh.trim(),
                     tipZh = tipZh.trim(),
+                    category = parsedCategory?.wire.orEmpty(),
+                    canonicalKey = key,
                 ),
             )
             id
+        }
+    }
+
+    /**
+     * 给还没有身份键的老语法点补算一次。
+     *
+     * 归一化规则写在 Kotlin 里（`grammarPointKey`），SQL 迁移里没法调用，
+     * 在迁移脚本里照抄一份的话两处会慢慢跑偏。语法表只有几十行，
+     * 第一次判重时顺手补完，之后每次都是空转。
+     */
+    private suspend fun backfillGrammarKeys() {
+        for (detail in dao.getAllGrammarDetails()) {
+            if (detail.canonicalKey.isNotEmpty()) continue
+            val pattern = detail.patternEn.ifBlank { detail.name }
+            // 老数据没存大类，只能按公式本身归一化：同类里的写法差异照样能挡住，
+            // 跨类的重名（很少见）留给字面判重。
+            val category = GrammarCategory.parse(detail.category)
+            val key = grammarPointKey(category, pattern)
+            if (key.isNotEmpty()) {
+                dao.updateGrammarKey(detail.itemId, category?.wire.orEmpty(), key)
+            }
         }
     }
 
@@ -218,7 +304,10 @@ class KnowledgeRepository(
         neverPracticed: Boolean,
         at: Instant,
     ): Double {
-        val overdueDays = nextReviewAt
+        // 拼写自己的到期时间优先：一个词的拼写阶梯走到哪儿，和它作为词条什么时候复习，
+        // 本来就是两回事（拼写训练DESIGN.md §13）。没练过拼写的才回退到通用复习时间。
+        val dueAt = progress.nextSpellingAt?.toEpochMilli() ?: nextReviewAt
+        val overdueDays = dueAt
             ?.let { (at.toEpochMilli() - it).toDouble() / MILLIS_PER_DAY }
             ?.coerceAtLeast(0.0)
             ?: 0.0
@@ -301,7 +390,7 @@ class KnowledgeRepository(
     }
 
     /**
-     * 组一轮拼写练习的队列（单词记忆DESIGN.md §14 的复习优先级）。
+     * 组一轮拼写练习的队列（拼写训练DESIGN.md §14 的复习优先级）。
      *
      * 排序参考四件事：到期多久（遗忘风险）、这个词有多少薄弱片段、错误次数、
      * 以及还没练过拼写的词优先来一次。表达（整句）不进拼写练习——
@@ -330,15 +419,35 @@ class KnowledgeRepository(
                     pos = record.detail.pos,
                     exampleEn = record.detail.exampleEn,
                     exampleZh = record.detail.exampleZh,
+                    seenAs = record.detail.seenAs,
                     facts = record.detail.spellingFacts(),
                     progress = progress,
-                    dueNow = (record.item.nextReviewAt ?: Long.MAX_VALUE) <= at.toEpochMilli(),
+                    dueNow = spellingDueAt(progress, record.item.nextReviewAt) <= at.toEpochMilli(),
+                    dueForReview = (record.item.nextReviewAt ?: Long.MAX_VALUE) <= at.toEpochMilli(),
                     priority = spellingPriority(record.item.nextReviewAt, progress, progress.lastAttemptAt == null, at),
                 )
             }
             // 到期的先排完，不够一轮再拿没到期的补位——补位的那些算加练，不动复习时间。
             .sortedWith(compareByDescending<SpellingQueueEntry> { it.dueNow }.thenByDescending { it.priority })
             .take(limit)
+    }
+
+    /** 这个词下一次该考拼写的时刻：先看拼写阶梯，没练过拼写就跟通用复习时间走。 */
+    private fun spellingDueAt(progress: SpellingProgress, nextReviewAt: Long?): Long =
+        progress.nextSpellingAt?.toEpochMilli() ?: nextReviewAt ?: Long.MAX_VALUE
+
+    /**
+     * 记一次 S0 接触：用户把这张接触卡看完了。
+     *
+     * 不是一次作答，所以不写 spelling_attempts、不动通用复习时间、不进拼写画像——
+     * 看过一个词的词形和读音不构成任何"写得出"的证据，只是让它有资格进入 S1。
+     */
+    suspend fun recordSpellingExposure(itemId: Long): SpellingProgress {
+        val at = now()
+        val previous = spellingDao.getProgress(itemId)?.toDomain() ?: spellingProgress(itemId)
+        val next = SpellingEngine.afterExposure(previous, at)
+        spellingDao.saveProgress(next.toEntity(itemId))
+        return next
     }
 
     /** 复习卡要按各自的拼写阶段出题，进页面时一次取齐，别一张卡查一次库。 */
@@ -413,7 +522,8 @@ class KnowledgeRepository(
     }
 
     companion object {
-        private const val EXPRESSION_POS = "expression"
+        /** 表达和固定短语在词性这一列上的取值。 */
+        private val EXPRESSION_POS = PartOfSpeech.Phrase.wire
         private const val MILLIS_PER_DAY = 24.0 * 60 * 60 * 1000
 
         /** 一轮拼写练习的题量，对齐设计稿顶部的「拼写练习 · n / 12」。 */
@@ -430,10 +540,21 @@ data class SpellingQueueEntry(
     val pos: String,
     val exampleEn: String,
     val exampleZh: String,
+    /** 例句里这个词实际出现的形态；空表示就是 term 本身。语境默写按它挖空。 */
+    val seenAs: String,
     val facts: SpellingFacts,
     val progress: SpellingProgress,
     /** 这个词此刻到期了没有。没到期的是加练，判分照记但不推动复习时间。 */
+    /** 拼写阶梯说这个词该考了。决定它排在这一轮的哪个位置。 */
     val dueNow: Boolean,
+    /**
+     * 这个**词条**本身也到期了。只有它才决定要不要推动通用 `nextReviewAt`。
+     *
+     * 两个到期不是一回事：拼写阶梯管"下次以多强的提示考写"，通用复习时间管
+     * "这个词条什么时候再出现"。拼写到期而词条没到期的词照样进队列（加练），
+     * 但答完不能去改单词复习的排期——那正是 D-029 那道闸门要挡的事。
+     */
+    val dueForReview: Boolean,
     val priority: Double,
 )
 
@@ -534,7 +655,8 @@ private fun SpellingProgressEntity.toDomain() = SpellingProgress(
     freeRecallSuccessCount = freeRecallSuccessCount,
     successfulRecallDates = SpellingJson.decodeDates(successfulRecallDatesJson),
     longestSuccessfulIntervalDays = longestSuccessfulIntervalDays,
-    currentIntervalDays = currentIntervalDays,
+    currentIntervalMinutes = currentIntervalMinutes,
+    nextSpellingAt = nextSpellingAt?.let(Instant::ofEpochMilli),
     weakSegments = SpellingJson.decodeWeakSegments(weakSegmentsJson),
     lastAttemptAt = lastAttemptAt?.let(Instant::ofEpochMilli),
 )
@@ -554,7 +676,8 @@ private fun SpellingProgress.toEntity(itemId: Long) = SpellingProgressEntity(
     freeRecallSuccessCount = freeRecallSuccessCount,
     successfulRecallDatesJson = SpellingJson.encodeDates(successfulRecallDates),
     longestSuccessfulIntervalDays = longestSuccessfulIntervalDays,
-    currentIntervalDays = currentIntervalDays,
+    currentIntervalMinutes = currentIntervalMinutes,
+    nextSpellingAt = nextSpellingAt?.toEpochMilli(),
     weakSegmentsJson = SpellingJson.encodeWeakSegments(weakSegments),
     lastAttemptAt = lastAttemptAt?.toEpochMilli(),
 )

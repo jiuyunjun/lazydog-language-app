@@ -157,7 +157,8 @@ class BackupModelsTest {
             freeRecallSuccessCount = 0,
             successfulRecallDatesJson = "[]",
             longestSuccessfulIntervalDays = 0,
-            currentIntervalDays = 3,
+            currentIntervalMinutes = 4_320,
+            nextSpellingAt = 5_000,
             weakSegmentsJson = "[]",
             lastAttemptAt = 1000,
         )

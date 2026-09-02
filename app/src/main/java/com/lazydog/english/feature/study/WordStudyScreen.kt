@@ -69,6 +69,7 @@ import com.lazydog.english.domain.spelling.SpellingEngine
 import com.lazydog.english.domain.spelling.SpellingFacts
 import com.lazydog.english.domain.spelling.SpellingProgress
 import com.lazydog.english.domain.spelling.SpellingStage
+import com.lazydog.english.domain.vocabulary.posLabelZh
 import com.lazydog.english.feature.spelling.SpellingCard
 import com.lazydog.english.feature.vocabulary.CollocationChip
 import com.lazydog.english.feature.vocabulary.MemoryHintPanel
@@ -92,6 +93,10 @@ private data class StudyCard(
     val collocations: List<Collocation> = emptyList(),
     val stage: String = KnowledgeStage.Learning.name,
     val memoryHintZh: String = "",
+    /** 例句里这个词实际出现的形态；空表示就是 term 本身。语境默写按它挖空。 */
+    val seenAs: String = "",
+    /** 不规则变形，随新词一起生成；入库后用于按词形查库。 */
+    val forms: List<String> = emptyList(),
     /** 熟词产出卡按这个阶段出题；新词和生词用不到。 */
     val spelling: SpellingProgress? = null,
     val facts: SpellingFacts = SpellingFacts.None,
@@ -125,10 +130,15 @@ private data class StudyCard(
         pos = pos,
         exampleEn = exampleEn,
         exampleZh = exampleZh,
+        seenAs = seenAs,
         facts = facts,
-        progress = spelling ?: SpellingProgress(stage = defaultSpellingStage()),
+        // 复习卡不出 S0 接触卡：这个词早在新词流里露过脸了，再"认个脸"是白走一趟，
+        // 而且接触卡不判分，这一次复习就白复习了。最低从 S1 起考。
+        progress = (spelling ?: SpellingProgress(stage = defaultSpellingStage())).let {
+            if (it.stage == SpellingStage.Seen) it.copy(stage = SpellingStage.Recognition) else it
+        },
         // 单词页只发到期的卡，所以这里一定推动复习时间。
-        dueNow = true,
+        dueForReview = true,
     )
 }
 
@@ -197,6 +207,7 @@ fun WordStudyScreen(
                     collocations = VocabularyJson.decodeCollocations(it.detail.collocationsJson),
                     stage = it.item.stage,
                     memoryHintZh = it.detail.memoryHintZh,
+                    seenAs = it.detail.seenAs,
                     spelling = spellingByItem[it.item.id],
                     facts = it.detail.spellingFacts(),
                 )
@@ -251,6 +262,7 @@ fun WordStudyScreen(
                     collocations = card.collocations,
                     memoryHintZh = card.memoryHintZh,
                     facts = card.facts,
+                    forms = card.forms,
                 )
                 if (id != null) {
                     repository.recordReview(id, grade, source = "card")
@@ -326,7 +338,7 @@ fun WordStudyScreen(
                         SpellingCardView(
                             card = card.toSpellingCard(),
                             repository = repository,
-                            onResolved = { _, _ ->
+                            onResolved = {
                                 reviewedCount += 1
                                 phase = if (p.index + 1 < p.cards.size) {
                                     WordStudyPhase.Cards(p.cards, p.index + 1, revealed = false)
@@ -429,6 +441,7 @@ private fun GeneratedWord.toCard() = StudyCard(
     pos = pos,
     collocations = collocations,
     memoryHintZh = memoryHintZh,
+    forms = forms,
     facts = SpellingFacts(chunks = chunks, trickyPart = trickyPart, misspellings = misspellings),
 )
 
@@ -543,7 +556,7 @@ private fun StudyCardView(
             }
             if (revealed) {
                 Text(
-                    text = if (card.pos.isNotBlank()) "${card.pos} ${card.meaningZh}" else card.meaningZh,
+                    text = if (card.pos.isNotBlank()) "${posLabelZh(card.pos)} ${card.meaningZh}" else card.meaningZh,
                     style = MaterialTheme.typography.titleMedium,
                 )
                 if (card.collocations.isNotEmpty()) {

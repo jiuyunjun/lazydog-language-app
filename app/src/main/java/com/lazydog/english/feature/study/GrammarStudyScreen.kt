@@ -252,6 +252,7 @@ fun GrammarStudyScreen(
         scope.launch {
             val id = repository.addGrammar(
                 patternEn = lesson.patternEn,
+                category = lesson.category,
                 labelZh = lesson.labelZh,
                 summaryZh = lesson.summaryZh,
                 explanationZh = lesson.explanationZh,

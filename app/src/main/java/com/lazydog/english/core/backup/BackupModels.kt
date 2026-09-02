@@ -47,6 +47,8 @@ data class BackupVocabularyDetail(
     val chunksJson: String = "[]",
     val trickyPart: String = "",
     val misspellingsJson: String = "[]",
+    /** 用户当初遇到这个词时的形态。老备份没有，解码成空即"就是 term 本身"。 */
+    val seenAs: String = "",
 )
 
 @Serializable
@@ -129,7 +131,9 @@ data class BackupSpellingProgress(
     val freeRecallSuccessCount: Int,
     val successfulRecallDatesJson: String,
     val longestSuccessfulIntervalDays: Int,
-    val currentIntervalDays: Int,
+    /** v11 起按分钟记复习阶梯档位。老备份里没有这两项，按一天补上、下次到期时间留空。 */
+    val currentIntervalMinutes: Int = 1_440,
+    val nextSpellingAt: Long? = null,
     val weakSegmentsJson: String,
     val lastAttemptAt: Long?,
 )
@@ -240,12 +244,12 @@ fun BackupKnowledgeItem.toEntity() = KnowledgeItemEntity(
 
 fun VocabularyDetailEntity.toBackup() = BackupVocabularyDetail(
     itemId, term, ipa, meaningZh, exampleEn, exampleZh, pos, collocationsJson, memoryHintZh,
-    chunksJson, trickyPart, misspellingsJson,
+    chunksJson, trickyPart, misspellingsJson, seenAs,
 )
 
 fun BackupVocabularyDetail.toEntity(newItemId: Long) = VocabularyDetailEntity(
     newItemId, term, ipa, meaningZh, exampleEn, exampleZh, pos, collocationsJson, memoryHintZh,
-    chunksJson, trickyPart, misspellingsJson,
+    chunksJson, trickyPart, misspellingsJson, seenAs,
 )
 
 fun GrammarDetailEntity.toBackup() = BackupGrammarDetail(
@@ -361,7 +365,8 @@ fun SpellingProgressEntity.toBackup() = BackupSpellingProgress(
     freeRecallSuccessCount = freeRecallSuccessCount,
     successfulRecallDatesJson = successfulRecallDatesJson,
     longestSuccessfulIntervalDays = longestSuccessfulIntervalDays,
-    currentIntervalDays = currentIntervalDays,
+    currentIntervalMinutes = currentIntervalMinutes,
+    nextSpellingAt = nextSpellingAt,
     weakSegmentsJson = weakSegmentsJson,
     lastAttemptAt = lastAttemptAt,
 )
@@ -381,7 +386,8 @@ fun BackupSpellingProgress.toEntity(newItemId: Long) = SpellingProgressEntity(
     freeRecallSuccessCount = freeRecallSuccessCount,
     successfulRecallDatesJson = successfulRecallDatesJson,
     longestSuccessfulIntervalDays = longestSuccessfulIntervalDays,
-    currentIntervalDays = currentIntervalDays,
+    currentIntervalMinutes = currentIntervalMinutes,
+    nextSpellingAt = nextSpellingAt,
     weakSegmentsJson = weakSegmentsJson,
     lastAttemptAt = lastAttemptAt,
 )

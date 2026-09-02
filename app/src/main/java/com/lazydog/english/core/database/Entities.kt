@@ -63,6 +63,28 @@ data class VocabularyDetailEntity(
     @ColumnInfo(defaultValue = "''") val trickyPart: String = "",
     /** 真人常写错的形式，JSON 字符串数组，用作四选一的干扰项。 */
     @ColumnInfo(defaultValue = "'[]'") val misspellingsJson: String = "[]",
+    /**
+     * 用户当初是以哪个形态遇到这个词的（双击查词存的是原型，他点的可能是 `went`）。
+     *
+     * 不是留个纪念：[exampleEn] 存的是他读到的原句，句子里出现的是这个形态而不是 [term]，
+     * 语境默写要挖的空也是它。和 [term] 相同或没有来源时为空。
+     */
+    @ColumnInfo(defaultValue = "''") val seenAs: String = "",
+    /**
+     * 这个词的**不规则**变形，JSON 字符串数组（单词记忆DESIGN.md §4 word_forms）。
+     *
+     * 只存推不出来的那些（go → went/gone、child → children）。规则变形是词法规则不是
+     * 词的属性，`walk → walked` 存一百遍等于把同一条规则抄一百份。
+     * 眼下的用处是查词时本地认形：点 `went` 能直接命中库里的 `go`，省一次生成。
+     */
+    @ColumnInfo(defaultValue = "'[]'") val formsJson: String = "[]",
+    /**
+     * 同一个词条（lemma + 词性）下这是第几个词义，从 0 开始（§5 senses）。
+     *
+     * `run` 的"跑"和"经营"是两条记录、各自复习——把它们挤进一个
+     * "跑；运行；经营"的字符串，就没法知道用户到底会了哪个（Principle 3）。
+     */
+    @ColumnInfo(defaultValue = "0") val senseOrder: Int = 0,
 )
 
 @Entity(
@@ -90,6 +112,15 @@ data class GrammarDetailEntity(
     @ColumnInfo(defaultValue = "''") val badExampleEn: String = "",
     @ColumnInfo(defaultValue = "''") val badExampleNoteZh: String = "",
     @ColumnInfo(defaultValue = "''") val tipZh: String = "",
+    /** 语法大类（`GrammarCategory.wire`）。老数据为空，只影响它参不参与新的判重。 */
+    @ColumnInfo(defaultValue = "''") val category: String = "",
+    /**
+     * 身份键：大类 + 归一化后的结构公式（`grammarPointKey`）。
+     *
+     * `patternEn` 是模型每次自由发挥的写法，`have/has + past participle` 和
+     * `has/have + p.p.` 是同一个语法点却不是同一个字符串——拿它做键等于没有判重。
+     */
+    @ColumnInfo(defaultValue = "''") val canonicalKey: String = "",
 )
 
 /**
@@ -172,7 +203,10 @@ data class SpellingProgressEntity(
     val freeRecallSuccessCount: Int,
     val successfulRecallDatesJson: String,
     val longestSuccessfulIntervalDays: Int,
-    val currentIntervalDays: Int,
+    /** 复习阶梯当前档位（分钟），见 SpellingEngine.INTERVAL_LADDER_MINUTES。 */
+    val currentIntervalMinutes: Int,
+    /** 下一次该考这个词的拼写的时间；和通用复习时间分开，加练不会互相搅乱。 */
+    val nextSpellingAt: Long?,
     val weakSegmentsJson: String,
     val lastAttemptAt: Long?,
 )

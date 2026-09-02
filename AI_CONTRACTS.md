@@ -97,6 +97,27 @@ interface LearningContentGenerator {
 
 `explainWord` 与 `explainSentence` 支持 SSE 增量回调。增量文本只用于加载期间展示；只有完整 JSON 解析和校验成功后，保存按钮才可使用。
 
+### 词形还原（lemma）
+
+`explainWord` 除释义外还要返回 `lemma`：这个词的原型（词典形式）。入库存的是它，不是用户点到的形态——`went` 和 `go` 分开存的话，它们会各自走一遍拼写 S0～S6、各攒一份画像。三条硬约束：
+
+- **只做词形还原**：动词还原成原形、名词还原成单数、比较级最高级还原成原级。不做短语归并（点 `gave` 就是 `give`，不是 `give up`——那是把词条从"词"升级成"表达"，而表达根本不进拼写队列），不做拼写纠正（用户点了拼错的词也照它讲，否则答非所问）。
+- **必须结合句子判断**：`saw` 可能是 see 的过去式，也可能是名词"锯子"；`left` / `found` 同理。句子本来就在请求里，所以这件事只能由模型做，本地不猜——猜错的词条会污染整个复习队列。
+- **判不出来就原样返回**，界面按"就是这个词"处理。
+
+`generateNewWords` 的 `term` 同样要求是词典形式（动词原形、名词单数）。这一条只写在提示词和契约里，不做本地校验：本地能验的只是"看起来像不像变形"，而那正是判不准的部分。
+
+### 语法点的大类
+
+`generateGrammarLesson` 要返回 `category`，取值是封闭集合（`GrammarCategory.wire`，参照 Cambridge English Grammar Profile 的 SuperCategory：`PRESENT` / `PAST` / `FUTURE` / `MODALITY` / `PASSIVE` …）。它是语法点身份键的一半，**认不出取值的整条丢掉**——没有大类的语法点进库之后参与不了判重，下次模型换个写法又会存一条。
+
+`patternEn` 用标准写法，不用缩写（写 `past participle` 不写 `p.p.`，写 `base verb` 不写 `v.`）。归一化能吃下大部分变体，但让模型每次写成同一个公式，判重才不用全靠归一化兜底。
+
+### 词性与词形
+
+- `pos` 取值是封闭集合（`PartOfSpeech.wire`，Universal POS 风格：`NOUN` / `VERB` / `ADJ` …），生成新词和点词速查都要给。词性是词条身份的一半（`单词记忆DESIGN.md` §3），自由文本会把 `v.` / `vi` / `verb` 拆成三个词条，所以本地统一归一化，**取值认不出来的词整条丢掉**。
+- `forms` 只给**不规则**变形（go → `["went","gone"]`、child → `["children"]`、good → `["better","best"]`）。规则变形（-s / -ed / -ing / -er / -est）留空数组——那是词法规则不是这个词的属性。原词本身不列进去。
+
 对话和判定可以并行请求，但只有两者都通过 schema 与业务校验后，该轮才进入本地状态。判定器返回的目标 id 必须属于场景目标；沟通失败提示必须同时包含“听成了什么、为什么走反、建议改写”。
 
 首版可以只实现一个 provider，但切换 provider 不应要求重写页面和数据库。

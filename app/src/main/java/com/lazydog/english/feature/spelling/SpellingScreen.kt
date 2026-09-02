@@ -21,6 +21,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,7 +51,13 @@ private sealed interface SpellingPhase {
     ) : SpellingPhase {
         val card: SpellingCard get() = cards[index]
     }
-    data class Summary(val total: Int, val correctFirstTry: Int, val hintUsed: Int) : SpellingPhase
+    data class Summary(
+        val answered: Int,
+        val correctFirstTry: Int,
+        val hintUsed: Int,
+        /** 本轮里被排回来重考的词数（10 分钟延迟回忆，拼写训练DESIGN.md §13）。 */
+        val retested: Int,
+    ) : SpellingPhase
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,6 +73,9 @@ fun SpellingScreen(
     var phase by remember { mutableStateOf<SpellingPhase>(SpellingPhase.Loading) }
     var correctFirstTry by remember { mutableStateOf(0) }
     var hintUsed by remember { mutableStateOf(0) }
+    var answered by remember { mutableStateOf(0) }
+    // 每个词本轮最多排回来一次：延迟重考是为了验一遍，不是罚站。
+    val retested = remember { mutableStateListOf<Long>() }
     var answer by remember { mutableStateOf(SpellingAnswer()) }
 
     LaunchedEffect(Unit) {
@@ -131,13 +141,35 @@ fun SpellingScreen(
                         card = p.card,
                         repository = repository,
                         onAnswerChange = { answer = it },
-                        onResolved = { correct, usedHint ->
-                            if (correct && !usedHint) correctFirstTry += 1
-                            if (usedHint) hintUsed += 1
-                            phase = if (p.index + 1 < p.cards.size) {
-                                p.copy(index = p.index + 1)
+                        onResolved = { resolution ->
+                            // 接触卡不计成绩：看过一个词不构成"写得出"的任何证据。
+                            if (!resolution.wasExposure) {
+                                answered += 1
+                                if (resolution.correct && !resolution.usedHint) correctFirstTry += 1
+                                if (resolution.usedHint) hintUsed += 1
+                            }
+                            // 复习阶梯落回最低一档的词（刚接触的、答错退档的、靠提示写对的）
+                            // 排到这一轮末尾再考一次，而不是等明天——刚学完立刻答对说明不了什么。
+                            val requeue = resolution.needsDelayedRetest &&
+                                resolution.nextProgress != null &&
+                                p.card.itemId !in retested
+                            val cards = if (requeue) {
+                                retested += p.card.itemId
+                                // 重考不再推一次复习时间：同一个词在同一轮里答两次，
+                                // 记成两轮复习会把 lapseCount 和 stability 一起撑歪
+                                // （D-028「一张卡只算一轮复习」）。画像照记。
+                                p.cards + p.card.copy(
+                                    progress = resolution.nextProgress,
+                                    delayed = true,
+                                    dueForReview = false,
+                                )
                             } else {
-                                SpellingPhase.Summary(p.cards.size, correctFirstTry, hintUsed)
+                                p.cards
+                            }
+                            phase = if (p.index + 1 < cards.size) {
+                                p.copy(cards = cards, index = p.index + 1)
+                            } else {
+                                SpellingPhase.Summary(answered, correctFirstTry, hintUsed, retested.size)
                             }
                         },
                     )
@@ -167,13 +199,17 @@ private fun SummaryView(
     ) {
         Text("这一轮练完了", style = MaterialTheme.typography.headlineSmall)
         Text(
-            text = "${phase.total} 个词，${phase.correctFirstTry} 个一次就写对；${phase.hintUsed} 个用了提示。",
+            text = "${phase.answered} 道题，${phase.correctFirstTry} 个一次就写对；${phase.hintUsed} 个用了提示。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         Text(
-            text = "用过提示的词会自己排回来，不用记着回头找。",
+            text = if (phase.retested > 0) {
+                "其中 ${phase.retested} 个词在这一轮里排回来又考了一遍——刚写对不算记住。"
+            } else {
+                "用过提示的词会自己排回来，不用记着回头找。"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

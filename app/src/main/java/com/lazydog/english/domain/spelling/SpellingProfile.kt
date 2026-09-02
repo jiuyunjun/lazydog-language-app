@@ -1,7 +1,7 @@
 package com.lazydog.english.domain.spelling
 
 /**
- * 用户级拼写画像（设计稿 64 屏 / 单词记忆DESIGN.md §10）。
+ * 用户级拼写画像（设计稿 64 屏 / 拼写训练DESIGN.md §10）。
  *
  * 和单词级的 [SpellingProgress] 分开：一个词写不出来是这个词的问题，
  * 十个词都栽在双写上就是这个人的问题，后者才值得安排专项训练。
