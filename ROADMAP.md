@@ -166,7 +166,7 @@
 
 ## M12：渐进式拼写记忆
 
-规格见 `单词记忆DESIGN.md` 与设计稿 59～64 屏，核心离线闭环已实现。
+规格见 `拼写训练DESIGN.md` 与设计稿 59～64 屏，核心离线闭环已实现。
 
 - [x] Seen → Recognition → Partial Recall → Chunk Recall → Guided Recall → Free Recall → Retained 状态机，允许遗忘降级
 - [x] 提示阶梯与 Mastery Credit：答错只增加一级提示，提示越多掌握分越低，且不能跳级看答案
