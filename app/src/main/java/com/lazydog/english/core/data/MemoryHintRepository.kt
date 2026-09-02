@@ -7,6 +7,7 @@ import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.generation.MemoryAssistance
 import com.lazydog.english.domain.generation.MemoryAssistanceRequest
+import com.lazydog.english.domain.generation.MemoryWordLevel
 import com.lazydog.english.domain.spelling.SpellingStage
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -58,18 +59,24 @@ class MemoryHintRepository(
         val record = knowledgeDao.getVocabularyDetail(itemId)
             ?: return GenerationResult.Failure("这个词已经不在知识库里了")
         val previous = if (regenerate) get(itemId) else null
+        // 同一个词条的别的词义已经写过构词/词形/发音的话，这次直接沿用（§16.2）。
+        val shared = sharedWordLevel(record.term, record.pos, exceptItemId = itemId)
 
         val result = generator.generateMemoryAssistance(
-            request = buildRequest(itemId, record.term, record.meaningZh, record.pos, learnerLevel, previous),
+            request = buildRequest(
+                itemId, record.term, record.meaningZh, record.pos, learnerLevel, previous, shared,
+            ),
             onStage = onStage,
             onPartialHook = onPartialHook,
         )
         if (result is GenerationResult.Success) {
+            // 词条级那三样以已有的为准：模型即使不听话又写了一遍，也不让两个词义各说一套。
+            val merged = if (shared != null) result.data.withWordLevel(shared) else result.data
             dao.saveHint(
                 VocabularyMemoryHintEntity(
                     itemId = itemId,
                     term = record.term,
-                    payloadJson = json.encodeToString(MemoryAssistance.serializer(), result.data),
+                    payloadJson = json.encodeToString(MemoryAssistance.serializer(), merged),
                     model = result.model,
                     promptVersion = result.promptVersion,
                     schemaVersion = SCHEMA_VERSION,
@@ -77,8 +84,35 @@ class MemoryHintRepository(
                     createdAt = now().toEpochMilli(),
                 ),
             )
+            return GenerationResult.Success(
+                data = merged,
+                model = result.model,
+                promptVersion = result.promptVersion,
+                droppedNotes = result.droppedNotes,
+            )
         }
         return result
+    }
+
+    /**
+     * 同一个词条（lemma + 词性）下别的词义已经写过的词条级材料。
+     *
+     * 构词、易错段、发音属于词形，和是哪个意思无关，所以一个词条只该有一份
+     * （`词汇记忆提示DESIGN.md` §16.2）。多义词各自成条之后，不这么做的话
+     * `run` 的五个词义会各生成一遍，费 token 不说，五份之间还可能互相矛盾。
+     */
+    private suspend fun sharedWordLevel(
+        term: String,
+        pos: String,
+        exceptItemId: Long,
+    ): MemoryWordLevel? {
+        if (term.isBlank()) return null
+        for (sense in knowledgeDao.getSensesOf(term, pos)) {
+            if (sense.itemId == exceptItemId) continue
+            val wordLevel = dao.getHint(sense.itemId)?.decode()?.wordLevel() ?: continue
+            if (!wordLevel.isEmpty) return wordLevel
+        }
+        return null
     }
 
     /**
@@ -92,6 +126,7 @@ class MemoryHintRepository(
         pos: String,
         learnerLevel: String,
         previous: MemoryAssistance?,
+        shared: MemoryWordLevel?,
     ): MemoryAssistanceRequest {
         val progress = spellingDao.getProgress(itemId)?.let { entity ->
             SpellingJson.decodeWeakSegments(entity.weakSegmentsJson) to entity.stage
@@ -117,6 +152,7 @@ class MemoryHintRepository(
             focusZh = focusFor(progress?.second, weakSegments.isNotEmpty()),
             avoidHookZh = previous?.memoryHookZh.orEmpty(),
             avoidTypes = listOfNotNull(previous?.primaryType, previous?.secondaryType),
+            sharedWordLevel = shared,
         )
     }
 

@@ -84,6 +84,17 @@ data class MemoryAssistance(
     /** §9 的检索练习用：一个不直接暴露答案的问题。 */
     val recallQuestionZh: String = "",
 ) {
+    /** 拆出词条级那三样，给同一个词条的其它词义复用（§16.2）。 */
+    fun wordLevel() = MemoryWordLevel(morphologyZh, weakSegment, commonErrors, pronunciation)
+
+    /** 用词条级材料覆盖这一条里对应的三样，保证同一个词条的各词义说法一致。 */
+    fun withWordLevel(shared: MemoryWordLevel) = copy(
+        morphologyZh = shared.morphologyZh,
+        weakSegment = shared.weakSegment,
+        commonErrors = shared.commonErrors,
+        pronunciation = shared.pronunciation,
+    )
+
     /** 首屏之外还有没有东西可展开（§7：先只显示词/意思/钩子/策略）。 */
     val hasDetails: Boolean
         get() = morphologyZh.isNotBlank() || weakSegment.isNotBlank() || commonErrors.isNotEmpty() ||
@@ -102,6 +113,14 @@ data class MemoryAssistance(
  */
 data class MemoryAssistanceRequest(
     val term: String,
+    /**
+     * 这个词条上已经生成过的词条级材料（构词 / 词形 / 发音）。
+     *
+     * 有的话就不再让模型重写一遍：这三样属于词形，和是哪个意思无关，
+     * 一个词条只该有一份（`词汇记忆提示DESIGN.md` §16.2）。
+     * `run` 的五个词义各生成一遍构词，既费 token，五份之间还可能互相矛盾。
+     */
+    val sharedWordLevel: MemoryWordLevel? = null,
     val meaningZh: String = "",
     val pos: String = "",
     val learnerLevel: String,
@@ -114,6 +133,23 @@ data class MemoryAssistanceRequest(
     val avoidHookZh: String = "",
     val avoidTypes: List<MemoryType> = emptyList(),
 )
+
+/**
+ * 一个词条的词条级记忆材料：构词、易错段、常见错拼、发音。
+ *
+ * 这三类属于词形本身，所有词义共用（§16.2）；场景、对比、搭配、联想属于意思，
+ * 每个词义各有一份。
+ */
+data class MemoryWordLevel(
+    val morphologyZh: String = "",
+    val weakSegment: String = "",
+    val commonErrors: List<String> = emptyList(),
+    val pronunciation: MemoryPronunciation = MemoryPronunciation(),
+) {
+    val isEmpty: Boolean
+        get() = morphologyZh.isBlank() && weakSegment.isBlank() &&
+            commonErrors.isEmpty() && pronunciation.isEmpty
+}
 
 /**
  * 记忆提示的本地校验（§10 生成质量过滤）。
