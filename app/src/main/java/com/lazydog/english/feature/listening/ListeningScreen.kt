@@ -59,9 +59,13 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.LazyDogTheme
+import com.lazydog.english.domain.ask.AskContext
+import com.lazydog.english.domain.ask.AskContextKind
+import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.listening.ListeningAnswer
@@ -70,6 +74,7 @@ import com.lazydog.english.domain.listening.ListeningItem
 import com.lazydog.english.domain.listening.ListeningSetRequest
 import com.lazydog.english.domain.listening.analyzeSoundChanges
 import com.lazydog.english.domain.listening.audioFeatureLabelZh
+import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.domain.listening.baseScore
 import com.lazydog.english.domain.listening.maskKeyExpression
 import com.lazydog.english.domain.listening.summarizeListening
@@ -265,6 +270,14 @@ fun ListeningScreen(onExit: () -> Unit) {
         phase == ListeningPhase.Waiting
     BackHandler(enabled = midSession) { confirmExit = true }
 
+    // 摇一摇提问的上下文。揭晓前只交出场景一类的外围信息，英文和答案一个字都不给——
+    // 这一页的规矩是"英文永远最后出现"，提问入口不能成为绕过它的后门。
+    ProvideAskContext(
+        current?.let { item ->
+            listeningAskContext(item = item, revealed = phase != ListeningPhase.Question)
+        },
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -282,6 +295,7 @@ fun ListeningScreen(onExit: () -> Unit) {
                         Icon(Icons.Outlined.Close, contentDescription = "退出")
                     }
                 },
+                actions = { AskTopBarAction() },
             )
         },
         // 设计稿要求主操作固定在底部 88dp 区域内、不随内容滚动，整个学习流单手可完成。
@@ -1181,4 +1195,44 @@ private fun SummaryRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * 听力题的提问上下文（DESIGN.md §5.4）。
+ *
+ * 揭晓前后是两份完全不同的东西：还在答题时把英文原文或中文答案交出去，摇一摇就成了
+ * 一个免费的答案入口，这一页"英文永远最后出现"的规矩也就没了；揭晓之后反过来，
+ * 用户最想问的恰恰是"这里为什么听成那样"，这时候原文、关键表达和听觉难点都得给全。
+ */
+internal fun listeningAskContext(item: ListeningItem, revealed: Boolean): AskContext {
+    if (!revealed) {
+        return AskContext(
+            kind = AskContextKind.Question,
+            title = "正在听一句 ${item.sceneZh} 的对话",
+            details = listOf(
+                AskDetail("场景", "${item.sceneZh} · ${item.subSceneZh}"),
+                AskDetail("语气", item.toneZh),
+                AskDetail("难度", "CEFR ${item.cefr} · 听力 ${item.listeningDifficulty}/5"),
+                AskDetail(
+                    "状态",
+                    "学习者正在盲听这句话做四选一，绝对不能透露这句英文原文、任何英文单词" +
+                        "或它的中文意思，只能讲这个场景里的听力技巧、连读弱读一类的常见难点",
+                ),
+            ),
+            suggestions = listOf("这种场景里一般会说些什么？", "听不清连读的时候有什么办法？"),
+        )
+    }
+    return AskContext(
+        kind = AskContextKind.Question,
+        title = "${item.keyExpression.en} · ${item.keyExpression.meaningZh}",
+        details = buildList {
+            add(AskDetail("原文", item.textEn))
+            add(AskDetail("意思", item.meaningZh))
+            add(AskDetail("场景", "${item.sceneZh} · ${item.subSceneZh}"))
+            if (item.audioFeatures.isNotEmpty()) {
+                add(AskDetail("听觉难点", item.audioFeatures.joinToString("、") { audioFeatureLabelZh(it) }))
+            }
+        },
+        suggestions = listOf("这句为什么听起来不像写出来的样子？", "这个表达平时还能怎么用？"),
+    )
 }
