@@ -8,6 +8,7 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.SystemClock
+import android.util.Log
 import kotlinx.coroutines.delay
 
 /**
@@ -17,9 +18,20 @@ import kotlinx.coroutines.delay
  * 1. SDK 内部按单声道建 AudioTrack，起播那几十毫秒只有左声道出声，戴耳机能明显听出
  *    "先左耳、然后才两只耳朵"。这里把单声道样本复制成左右两份，从第 0 个样本起两边就一样。
  *    （Azure TTS 只出单声道，双声道只能在客户端复制出来。）
- * 2. 音频通路（尤其蓝牙刚被唤醒时）需要一点时间稳定。真正的语音前面垫一段静音，
- *    让抖动和爆音落在静音里，开头那一两个词不会被削掉。静音长度按输出设备来定，
- *    见 [leadInSilenceMs]；静音在 [begin] 就开始播，和等合成的时间重叠。
+ * 2. 音频通路（尤其蓝牙刚被唤醒时）需要一点时间稳定。真正的语音前面垫一段静音，让抖动和
+ *    爆音落在静音里，开头那一两个词不会被削掉。静音长度按输出设备来定，见 [leadInSilenceMs]。
+ *
+ *    静音是在**第一块语音到手时**连同语音一起写进去、然后才开声的，而不是在 [begin] 就先
+ *    开声空放。曾经那样干过（想让唤醒和等合成的几百毫秒重叠），但在 AudioFlinger 面前走不通：
+ *    缓冲一空它就把 track 判为 underrun 并停掉，而被停掉的 track **只有下一次写入**才会
+ *    重新启动（日志里的 restartIfDisabled）。最后一块语音写完之后再被停掉，就再没有写入能
+ *    救它了——剩下的音频烂在缓冲里，用户实测就是"点了整段没声音"，而且是概率性的。
+ *    所以现在的铁律是：**只在缓冲里已经有数据时才 play()，并且一直写到收尾**（见 [drain]）。
+ *
+ * 4. 正常播完用 [AudioTrack.stop]，打断才用 pause + [AudioTrack.flush]。文档写得很清楚：
+ *    MODE_STREAM 下 stop 会"把已写入缓冲的数据播完之后再停"，flush 则"把还没播的部分直接丢掉"。
+ *    收尾时刻是按时间估的（见 [drain]），估早一点点很正常，用 flush 就等于把尾音剪掉——
+ *    用户实测"结尾仓促、有时没读完就断"。用 stop 则估早了也无所谓，剩下的照样播完。
  *
  * 3. 蓝牙下光复用 AudioTrack 还不够。一段读完就 pause+flush，输出流几秒内进入 standby，
  *    A2DP 跟着 suspend，下一次朗读还是冷通路。所以蓝牙输出时空闲期间由 [keepAliveLoop]
@@ -55,7 +67,7 @@ internal class PcmAudioPlayer(
 
     private var released = false
 
-    /** 本段已写入的立体声帧数，用来算还剩多久播完。flush 之后跟播放头一起归零。 */
+    /** 本段已写入的立体声帧数，用来算这段什么时候播完（见 [drain]）。flush 之后归零。 */
     private var writtenFrames = 0L
 
     private var playing = false
@@ -63,66 +75,121 @@ internal class PcmAudioPlayer(
     /** 上一段播完（或被掐断）的时刻，用来判断这次是不是冷起播。 */
     private var lastStopUptimeMs = 0L
 
-    /** 第一块真正的音频还没写进去——写进去之前要先把多余的静音裁掉，见 [write]。 */
+    /** 第一块真正的音频还没写进去——它到手时才垫前置静音、才开声，见 [write]。 */
     private var speaking = false
+
+    /** 本段真正灌进去的语音帧数（不含前后静音），只用来跟收到的音频量对账，见 [lastWrittenMs]。 */
+    private var spokenFrames = 0L
 
     /** 空闲期间灌无声数据的线程；非 null 就说明蓝牙链路正被挂着，见 [keepAliveLoop]。 */
     private var keepAlive: Thread? = null
 
+    /** 本段 [begin] 的时刻，用来在日志里报“等了多久才等到第一块语音”。 */
+    private var beganAtUptimeMs = 0L
+
+    /** 本段要垫多长的前置静音（[leadInSilenceMs]），在第一块语音到手时写进去，见 [write]。 */
+    private var leadInTargetMs = 0
+
+    /** 收尾期间反复补的一小块静音，只为把可能被停掉的 track 重新启动，见 [drain]。 */
+    private val pokeSilence: ByteArray by lazy { silence(POKE_SILENCE_MS) }
+
     /**
-     * 开始一次新的朗读：掐掉上一段，立刻开始播前置静音，返回本次令牌。
+     * 本段真正开声（[AudioTrack.play]）的时刻，0 表示还没开声。
      *
-     * 静音必须在这里就开始播，而不是等第一块音频到了再垫：静音一开声，蓝牙通路就同时在唤醒，
-     * 跟等合成返回的那几百毫秒是重叠的，语音开口时刻是 max(静音, 首块音频到达) 而不是两者相加。
-     * 而且这段静音一次就按最长的写足，等的时间越长通路醒得越透——真正要留在语音前面的
-     * 只有 [TAIL_SILENCE_MS]，多出来的在 [write] 里裁掉，不让它变成干等。
+     * 播放进度只能靠它加上已写入时长来推——[playedFramesLocked] 不可信：track 因 underrun
+     * 被 AudioFlinger 停掉之后播放头会归零且不再推进（用户实测：等了 1018ms 播放头还是 0），
+     * 拿它算余量会一直以为"缓冲还满着"而不再补数据，拿它算剩余会永远等不完。
+     */
+    private var playStartUptimeMs = 0L
+
+    /**
+     * 开始一次新的朗读：掐掉上一段，返回本次令牌。
+     *
+     * 这里只是把上一段清干净、把本次要垫多长静音算好，**不写数据也不开声**——等合成的这几百
+     * 毫秒里让 track 安安静静停着。空放静音去跟合成延迟抢时间的做法见类注释第 2 条，那条路
+     * 会把 track 送进 underrun 被停掉的状态，代价是整段没声音。
      */
     fun begin(): Int = synchronized(lock) {
         check(!released) { "播放器已释放" }
         stopLocked()
+        spokenFrames = 0
         val current = ++token
+        requestFocusLocked()
+        // 路由要在 track 建好之后问：routedDevice 才是真正在出声的那个，见 [currentRoute]。
+        val track = trackLocked()
+        val route = currentRoute()
         val leadInMs = leadInSilenceMs(
-            route = currentRoute(),
+            route = route,
             coldStart = isColdStart(),
             keptAlive = keepAlive != null,
         )
-        requestFocusLocked()
-        val track = trackLocked()
-        if (track != null) {
-            // 静音长度不能超过缓冲区容量：写超了 write 会阻塞，反而把起播拖慢。
-            writeAllLocked(track, silence(leadInMs))
-            track.play()
-            playing = true
-        }
+        beganAtUptimeMs = SystemClock.elapsedRealtime()
+        leadInTargetMs = leadInMs
+        playing = track != null
+        Log.d(TAG, "开播 #$current：路由=$route 前置静音=${leadInMs}ms 链路挂着=${keepAlive != null}")
         current
     }
 
     /** 这个令牌还是当前朗读吗——false 说明已经被新的朗读顶掉，调用方可以直接收工。 */
     fun isCurrent(token: Int): Boolean = token == this.token
 
+    /** 本段真正灌进 AudioTrack 的语音时长（毫秒）；跟收到的音频量一比就知道有没有丢。 */
+    fun lastWrittenMs(): Long = synchronized(lock) { spokenFrames * 1000 / sampleRateHz }
+
     /** 写入一块单声道 16bit PCM（[length] 是 [monoPcm] 里的有效字节数）。 */
     fun write(token: Int, monoPcm: ByteArray, length: Int) {
         if (length <= 0) return
         val stereo = monoToStereo(monoPcm, length)
         synchronized(lock) {
+            // 令牌还是当前的却没在播，说明这段音频没人接着——丢掉之前必须留个记号，
+            // 否则调用方看到的只是"点了没声音"，哪一层丢的完全查不出来。
+            if (token == this.token && !playing) {
+                Log.w(TAG, "丢弃音频：playing=false token=$token track=${track != null} keepAlive=${keepAlive != null}")
+            }
             if (token != this.token || !playing) return
             val track = track ?: return
             if (!speaking) {
-                trimLeadInLocked(track)
+                // 先把前置静音垫进去，再开声：缓冲里有数据 play() 才不会被立刻判 underrun。
+                // 语音紧跟在后面写，中间不会断，所以整段播放期间不会再出现空缓冲。
+                writeAllLocked(track, silence(leadInTargetMs))
+                startPlaybackLocked(track)
+                onFirstSpeechLocked()
                 speaking = true
             }
-            writeAllLocked(track, stereo)
+            writeAllLocked(track, stereo, speech = true)
         }
     }
 
-    /** 等已写入的音频真正播完；被新的朗读顶掉时立即返回。 */
+    /**
+     * 等已写入的音频真正播完；被新的朗读顶掉时立即返回。
+     *
+     * 收尾时间按"开声时刻 + 已写入时长"算，不看播放头——播放头在 underrun 之后会归零且不再
+     * 推进（见 [playStartUptimeMs]），照它等会永远等不完，用户实测卡过 12 秒。截止时间只在
+     * 进来时算一次，后面补的静音不会把它往后推。
+     */
     suspend fun drain(token: Int) {
+        val endsAt = synchronized(lock) {
+            if (token != this.token || !playing) return
+            val startedAt = playStartUptimeMs
+            // 一块语音都没写进去过（合成失败），没什么可等的。
+            if (startedAt == 0L) return
+            // 尾巴后面补一小段静音：设备侧从写入到出声还隔着一段延迟，不留余量的话
+            // 收尾动作正好卡在最后一个音上。补的是静音，听不出来，但尾音有地方落。
+            track?.let { writeAllLocked(it, silence(TAIL_SILENCE_MS)) }
+            startedAt + writtenFrames * 1000 / sampleRateHz + DRAIN_SLACK_MS
+        }
         while (true) {
             val waitMs = synchronized(lock) {
                 if (token != this.token || !playing) return
-                val remaining = writtenFrames - playedFramesLocked()
+                val remaining = endsAt - SystemClock.elapsedRealtime()
                 if (remaining <= 0) return@synchronized 0L
-                (remaining * 1000 / sampleRateHz).coerceIn(MIN_DRAIN_POLL_MS, MAX_DRAIN_POLL_MS)
+                // 一路补一小块静音：track 要是在这期间被判 underrun 停掉，只有写入才能把它
+                // 重新启动（restartIfDisabled）。最后一块语音之后要是再没有写入，剩下的音频
+                // 就烂在缓冲里了——用户实测过整段没声音。静音排在语音后面，听不出来。
+                track?.let {
+                    runCatching { it.write(pokeSilence, 0, pokeSilence.size, AudioTrack.WRITE_NON_BLOCKING) }
+                }
+                remaining.coerceIn(MIN_DRAIN_POLL_MS, MAX_DRAIN_POLL_MS)
             }
             if (waitMs == 0L) break
             delay(waitMs)
@@ -139,10 +206,28 @@ internal class PcmAudioPlayer(
     fun finish(token: Int) {
         synchronized(lock) {
             if (token != this.token) return
-            stopLocked()
+            finishLocked()
             abandonFocusLocked()
             startKeepAliveLocked()
         }
+    }
+
+    /**
+     * 正常播完的收尾：用 [AudioTrack.stop]，它会把已写入缓冲的数据播完之后才停。
+     *
+     * 不能用 [stopLocked] 那套 pause + flush——flush 会把还没播的部分直接丢掉。收尾时刻是
+     * 按时间估的（见 [drain]），估早一点点很正常，用 flush 就等于把尾音剪了。
+     */
+    private fun finishLocked() {
+        speaking = false
+        playStartUptimeMs = 0
+        val track = track ?: return
+        runCatching { track.stop() }
+        if (playing) {
+            playing = false
+            lastStopUptimeMs = SystemClock.elapsedRealtime()
+        }
+        writtenFrames = 0
     }
 
     /**
@@ -184,6 +269,7 @@ internal class PcmAudioPlayer(
      */
     private fun stopLocked() {
         speaking = false
+        playStartUptimeMs = 0
         val track = track ?: return
         runCatching { track.pause() }
         runCatching { track.flush() }
@@ -195,19 +281,25 @@ internal class PcmAudioPlayer(
     }
 
     /**
-     * 第一块语音到手时，把还没播的静音裁到只剩 [TAIL_SILENCE_MS]。
+     * 第一块语音到手了，记一笔账——真正的动作（垫静音、开声）在 [write] 里。
      *
-     * 合成来得快的时候，前面写足的静音大半还堵在缓冲里，不裁就得干等它播完。裁掉不影响防吞音：
-     * 通路从 [begin] 到现在一直在出声，早就醒透了，语音前面留一小段收尾静音就够。
+     * 等待时长要跟前置静音一起看：等得越久，通路睡得越死，垫的静音就越该管用。
      */
-    private fun trimLeadInLocked(track: AudioTrack) {
-        val tailFrames = TAIL_SILENCE_MS.toLong() * sampleRateHz / 1000
-        if (writtenFrames - playedFramesLocked() <= tailFrames) return
-        runCatching { track.pause() }
-        runCatching { track.flush() }
-        writtenFrames = 0
-        writeAllLocked(track, silence(TAIL_SILENCE_MS))
-        track.play()
+    private fun onFirstSpeechLocked() {
+        val waitedMs = SystemClock.elapsedRealtime() - beganAtUptimeMs
+        Log.d(TAG, "首块语音等了 ${waitedMs}ms，垫 ${leadInTargetMs}ms 静音后开声")
+    }
+
+    /**
+     * 开声（幂等），并记下时刻——[drain] 要靠它推算这段什么时候播完。
+     *
+     * 调用前缓冲里必须已经有数据：对着空缓冲 play() 会被 AudioFlinger 立刻判 underrun
+     * 并把 track 停掉，见类注释第 2 条。
+     */
+    private fun startPlaybackLocked(track: AudioTrack) {
+        if (track.playState == AudioTrack.PLAYSTATE_PLAYING) return
+        runCatching { track.play() }
+        if (playStartUptimeMs == 0L) playStartUptimeMs = SystemClock.elapsedRealtime()
     }
 
     /**
@@ -309,14 +401,25 @@ internal class PcmAudioPlayer(
     private fun playedFramesLocked(): Long =
         (track?.playbackHeadPosition?.toLong() ?: 0L) and 0xFFFFFFFFL
 
-    private fun writeAllLocked(track: AudioTrack, data: ByteArray) {
+    private fun writeAllLocked(track: AudioTrack, data: ByteArray, speech: Boolean = false) {
         var offset = 0
         while (offset < data.size) {
             val written = track.write(data, offset, data.size - offset)
-            if (written <= 0) break
+            // 写不进去就只能停手，但绝不能停得无声无息：剩下的音频会被直接丢掉，
+            // 而 drain 只认 writtenFrames，会以为这段已经播完，表现就是话说到一半没了。
+            if (written <= 0) {
+                Log.w(
+                    TAG,
+                    "AudioTrack 写入中断：ret=$written 丢了 ${(data.size - offset) / BYTES_PER_FRAME * 1000 / sampleRateHz}ms",
+                )
+                break
+            }
             offset += written
         }
-        writtenFrames += offset / BYTES_PER_FRAME
+        val frames = offset / BYTES_PER_FRAME
+        writtenFrames += frames
+        // 只有语音计入 spokenFrames：它是拿来跟"收到多少音频"对账的，垫的静音不算数。
+        if (speech) spokenFrames += frames
     }
 
     private fun requestFocusLocked() {
@@ -338,14 +441,23 @@ internal class PcmAudioPlayer(
         runCatching { manager.abandonAudioFocusRequest(request) }
     }
 
+    /**
+     * 声音当前实际走哪儿。
+     *
+     * 不能只看 `getDevices(GET_DEVICES_OUTPUTS)`——它列的是所有连着的输出设备，蓝牙耳机连着、
+     * 声音却走外放时也会判成蓝牙，于是白垫 800ms 静音，还让 [keepAliveLoop] 对着扬声器空转
+     * （用户实测：外放播放，log 里是 AUDIO_DEVICE_OUT_SPEAKER）。track 建起来之后
+     * routedDevice 才是真正在出声的那个；还没建就只能先按连接情况估。
+     */
     private fun currentRoute(): AudioRoute {
-        val devices = audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS).orEmpty()
-        val types = devices.map { it.type }
-        return when {
-            types.any { it in BLUETOOTH_TYPES } -> AudioRoute.Bluetooth
-            types.any { it in WIRED_TYPES } -> AudioRoute.Wired
-            else -> AudioRoute.Speaker
-        }
+        track?.routedDevice?.let { return routeOf(listOf(it.type)) }
+        return routeOf(audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS).orEmpty().map { it.type })
+    }
+
+    private fun routeOf(types: List<Int>): AudioRoute = when {
+        types.any { it in BLUETOOTH_TYPES } -> AudioRoute.Bluetooth
+        types.any { it in WIRED_TYPES } -> AudioRoute.Wired
+        else -> AudioRoute.Speaker
     }
 
     private fun trackLocked(): AudioTrack? {
@@ -386,10 +498,14 @@ internal class PcmAudioPlayer(
         .build()
 
     private companion object {
+        const val TAG = "AzureSpeech"
         const val BYTES_PER_FRAME = 4 // 立体声 × 16bit
         const val BUFFER_MS = 400
         const val MIN_DRAIN_POLL_MS = 5L
         const val MAX_DRAIN_POLL_MS = 60L
+
+        /** 按时间推算收尾时多留的一点余量：写进 AudioTrack 到真正出声还隔着一段设备延迟。 */
+        const val DRAIN_SLACK_MS = 120L
 
         /** 上一段刚播完不久就认为通路还热着，不用再多垫静音。 */
         const val WARM_WINDOW_MS = 3_000L
@@ -406,7 +522,10 @@ internal class PcmAudioPlayer(
         /** [keepAliveLoop] 里表示"该退出了"的哨兵，正常路径只会返回 >= 0 的等待毫秒。 */
         const val EXIT = -1L
 
-        /** 裁完之后留在语音前面的那点静音，只用来吸收 flush 后重新开声的抖动。 */
+        /** 收尾期间反复补的静音块，只为让写入不断，把可能被停掉的 track 拉回来，见 [drain]。 */
+        const val POKE_SILENCE_MS = 20
+
+        /** 语音末尾补的静音，给设备输出延迟留出余量，免得尾音正好卡在收尾那一刻。 */
         const val TAIL_SILENCE_MS = 150
 
         val BLUETOOTH_TYPES = setOf(

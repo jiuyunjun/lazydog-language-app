@@ -1,6 +1,8 @@
 package com.lazydog.english.core.speech
 
 import android.content.Context
+import android.os.SystemClock
+import android.util.Log
 import com.lazydog.english.domain.speaking.AssessmentResult
 import com.lazydog.english.domain.speaking.SpeakResult
 import com.lazydog.english.domain.speaking.SpeechProvider
@@ -27,9 +29,12 @@ import com.microsoft.cognitiveservices.speech.audio.AudioConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Azure Speech SDK 的 [SpeechProvider] 实现。
@@ -69,14 +74,45 @@ class AzureSpeechProvider(
 
     private val stopTranscriptionRequested = AtomicBoolean(false)
 
+    /**
+     * 一次只放一段朗读进来。
+     *
+     * [synthesizer] 和 [player] 都是共享的，两段朗读叠在一起会互相踩：后一段的
+     * StopSpeakingAsync 可能落到它自己的 StartSpeaking 之后，把自己的合成取消掉；
+     * AudioDataStream 也会读到上一段残留在 SDK 缓冲里的音频——用户实测就是这个现象，
+     * 单词（短、音频一次到齐）点了没声音，例句（长、边收边播）反而正常。
+     */
+    private val speakMutex = Mutex()
+
+    /** 给每次朗读编号：一次点击到底进来几次 speak、最后是哪一次出的声，只有编号能对上。 */
+    private val speakSeq = AtomicInteger()
+
     override suspend fun speak(
         text: String,
         rate: SpeechRate,
         voiceName: String?,
         style: SpeechStyle,
+    ): SpeakResult {
+        if (closed) return SpeakResult.Failed("服务已释放")
+        val id = speakSeq.incrementAndGet()
+        Log.d(TAG, "请求朗读 #$id：style=$style text=$text")
+        // 合不出音频时要能一眼看出是哪个音色出的问题。
+        val voice = voiceName ?: this.voiceName
+        val ssml = buildSpeechSsml(text, voice, rate, style)
+        // 抢锁之前先掐掉上一段：上一段的读循环看到令牌失效会立刻收工把锁让出来，
+        // 不然它会攥着锁把整段音频读完，新的朗读得干等。
+        player.stop(keepLink = true)
+        return speakMutex.withLock { speakExclusive(id, ssml, text, voice, "$style") }
+    }
+
+    private suspend fun speakExclusive(
+        id: Int,
+        ssml: String,
+        text: String,
+        voice: String,
+        style: String,
     ): SpeakResult = withContext(Dispatchers.IO) {
         if (closed) return@withContext SpeakResult.Failed("服务已释放")
-        val ssml = buildSpeechSsml(text, voiceName ?: this@AzureSpeechProvider.voiceName, rate, style)
         // 打断正在播放的内容——点了新的就读新的，不排队。先掐声音，再停合成。
         val token = player.begin()
         // 只有确实还有合成在跑才去停——空转时这个调用也要等 SDK 一个来回，白白拖慢起播。
@@ -84,36 +120,70 @@ class AzureSpeechProvider(
 
         var result: SpeechSynthesisResult? = null
         var stream: AudioDataStream? = null
+        val startedAt = SystemClock.elapsedRealtime()
         try {
             // StartSpeaking 只等到合成开始；音频边到边播，长句不用等整段合成完。
             synthesizing = true
             result = synthesizer.StartSpeakingSsmlAsync(ssml).get()
             if (result.reason == ResultReason.Canceled) {
                 val details = SpeechSynthesisCancellationDetails.fromResult(result)
-                return@withContext SpeakResult.Failed("示范音频失败：${details.errorDetails ?: details.reason}")
+                val reason = "${details.errorDetails ?: details.reason}"
+                Log.w(TAG, "#$id 合成没能开始：voice=$voice style=$style text=$text reason=$reason")
+                return@withContext SpeakResult.Failed("示范音频失败：$reason")
             }
             stream = AudioDataStream.fromResult(result)
 
+            var received = 0L
             val buffer = ByteArray(CHUNK_BYTES)
             while (true) {
                 val read = stream.readData(buffer).toInt()
                 if (read <= 0) break
                 // 被下一次朗读顶掉了，剩下的音频没人要了。
-                if (!player.isCurrent(token)) return@withContext SpeakResult.Done
+                if (!player.isCurrent(token)) {
+                    // 静默返回过一版，结果就是"点了没声音"在日志里什么都不留。
+                    Log.w(TAG, "#$id 被后一次朗读顶掉：已收到 ${received / BYTES_PER_MS_MONO}ms text=$text")
+                    return@withContext SpeakResult.Done
+                }
+                // 首块音频到手的时刻是关键：这之前播放器只能靠补静音把通路撑住。
+                if (received == 0L) {
+                    Log.d(TAG, "#$id 首块音频：${SystemClock.elapsedRealtime() - startedAt}ms")
+                }
+                received += read
                 player.write(token, buffer, read)
             }
             when (stream.status) {
                 StreamStatus.AllData, StreamStatus.PartialData -> {
                     player.drain(token)
-                    SpeakResult.Done
+                    // 流"正常"结束但一个字节都没有：SSML 里的音色在这条连接上合不出来就是这样，
+                    // 调用方大多不看返回值，不记一笔的话表现就是点了没声音、哪儿都不报错。
+                    if (received == 0L) {
+                        Log.w(TAG, "#$id 合成流没有音频：voice=$voice style=$style text=$text")
+                        SpeakResult.Failed("示范音频失败：没拿到音频数据")
+                    } else {
+                        // 收到多少 vs 真正灌进 AudioTrack 多少：两个数对不上就是播放侧丢了音频，
+                        // 而不是 Azure 没给。差值只有在这里能看出来，别的地方都是静默的。
+                        Log.d(
+                            TAG,
+                            "朗读完成 #$id：style=$style 收到 ${received / BYTES_PER_MS_MONO}ms" +
+                                "、写入 ${player.lastWrittenMs()}ms" +
+                                "、共 ${SystemClock.elapsedRealtime() - startedAt}ms text=$text",
+                        )
+                        SpeakResult.Done
+                    }
                 }
                 StreamStatus.Canceled -> {
                     val details = SpeechSynthesisCancellationDetails.fromStream(stream)
-                    SpeakResult.Failed("示范音频失败：${details.errorDetails ?: details.reason}")
+                    val reason = "${details.errorDetails ?: details.reason}"
+                    Log.w(TAG, "#$id 合成被取消：voice=$voice style=$style text=$text reason=$reason")
+                    SpeakResult.Failed("示范音频失败：$reason")
                 }
-                else -> SpeakResult.Failed("示范音频失败：没拿到音频数据")
+                else -> {
+                    Log.w(TAG, "#$id 合成没出音频：status=${stream.status} voice=$voice style=$style text=$text")
+                    SpeakResult.Failed("示范音频失败：没拿到音频数据")
+                }
             }
         } catch (e: Exception) {
+            Log.w(TAG, "#$id 合成异常：voice=$voice style=$style text=$text", e)
             SpeakResult.Failed("示范音频失败：${e.message ?: e.javaClass.simpleName}")
         } finally {
             // 流读完了，这次合成就算收工——下次朗读不用再花一个来回去停它。
@@ -336,6 +406,11 @@ class AzureSpeechProvider(
     }
 
     private companion object {
+        const val TAG = "AzureSpeech"
+
+        /** 单声道 16bit @24kHz：1ms = 48 字节。日志里把字节数换算成时长，好跟播放时长直接比。 */
+        const val BYTES_PER_MS_MONO = 48
+
         /** 跟 [SpeechSynthesisOutputFormat.Raw24Khz16BitMonoPcm] 对应，改格式时要一起改。 */
         const val SYNTHESIS_SAMPLE_RATE_HZ = 24_000
 

@@ -23,12 +23,17 @@ class SsmlTest {
     }
 
     @Test
-    fun `word style swaps dragon hd for the plain neural voice`() {
+    fun `word style keeps the configured voice`() {
         val ssml = buildSpeechSsml("curb", "en-US-Ava:DragonHDLatestNeural", SpeechRate.Normal, SpeechStyle.Word)
-        assertTrue(ssml.contains("""<voice name="en-US-AvaNeural">"""))
-        assertFalse(ssml.contains("DragonHD"))
-        // 前后垫停顿，起音不被吃掉。
-        assertTrue(ssml.contains("""<break time="120ms"/><prosody rate="0%" pitch="0%">curb</prosody><break time="120ms"/>"""))
+        // 换成标准 Neural 会让单词在 HD 连接上合不出音频，整段静默——两种风格必须同一个音色。
+        assertTrue(ssml.contains("""<voice name="en-US-Ava:DragonHDLatestNeural">"""))
+        // 前后垫停顿，起收都有个拍子，不至于听着被掐头去尾。
+        assertTrue(
+            ssml.contains(
+                """<break time="${WORD_BREAK_MS}ms"/><prosody rate="0%" pitch="0%">curb</prosody>""" +
+                    """<break time="${WORD_BREAK_MS}ms"/>""",
+            ),
+        )
     }
 
     @Test
@@ -36,14 +41,6 @@ class SsmlTest {
         val ssml = buildSpeechSsml("Slow down.", "en-GB-Ryan:DragonHDLatestNeural", SpeechRate.Normal, SpeechStyle.Sentence)
         assertTrue(ssml.contains("""<voice name="en-GB-Ryan:DragonHDLatestNeural">"""))
         assertFalse(ssml.contains("<break"))
-    }
-
-    @Test
-    fun `broadcast voice mapping`() {
-        assertEquals("en-US-AndrewNeural", broadcastVoiceOf("en-US-Andrew:DragonHDLatestNeural"))
-        assertEquals("en-GB-SoniaNeural", broadcastVoiceOf("en-GB-Sonia:DragonHDLatestNeural"))
-        // 已经是标准音色（或用户自填的名字）就别乱改。
-        assertEquals("en-US-JennyNeural", broadcastVoiceOf("en-US-JennyNeural"))
     }
 
     @Test
