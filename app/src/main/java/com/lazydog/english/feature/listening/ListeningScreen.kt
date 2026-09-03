@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -88,8 +89,46 @@ import kotlin.random.Random
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 private enum class ListeningPhase { Pick, Loading, Question, Reveal, Waiting, Summary }
+
+private val listeningStateJson = Json { ignoreUnknownKeys = true }
+private val listeningItemsSaver = Saver<List<ListeningItem>, String>(
+    save = { listeningStateJson.encodeToString(ListSerializer(ListeningItem.serializer()), it) },
+    restore = {
+        runCatching {
+            listeningStateJson.decodeFromString(ListSerializer(ListeningItem.serializer()), it)
+        }.getOrDefault(emptyList())
+    },
+)
+private val listeningAnswersSaver = Saver<List<ListeningAnswer>, String>(
+    save = { listeningStateJson.encodeToString(ListSerializer(ListeningAnswer.serializer()), it) },
+    restore = {
+        runCatching {
+            listeningStateJson.decodeFromString(ListSerializer(ListeningAnswer.serializer()), it)
+        }.getOrDefault(emptyList())
+    },
+)
+private val listeningRequestSaver = Saver<ListeningSetRequest?, String>(
+    save = { request -> request?.let { listeningStateJson.encodeToString(it) } ?: "" },
+    restore = { encoded ->
+        encoded.takeIf(String::isNotBlank)?.let {
+            runCatching { listeningStateJson.decodeFromString<ListeningSetRequest>(it) }.getOrNull()
+        }
+    },
+)
+private val listeningPhaseSaver = Saver<ListeningPhase, String>(
+    save = { it.name },
+    restore = { saved -> ListeningPhase.entries.firstOrNull { it.name == saved } ?: ListeningPhase.Pick },
+)
+private val listeningHintSaver = Saver<ListeningHintLevel, String>(
+    save = { it.name },
+    restore = { saved -> ListeningHintLevel.entries.firstOrNull { it.name == saved } ?: ListeningHintLevel.None },
+)
 
 /** 一轮训练的句数（设计稿屏 50「开始 10 句训练 · 约 6 分钟」）。 */
 private const val SET_SIZE = 10
@@ -123,28 +162,33 @@ fun ListeningScreen(onExit: () -> Unit) {
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
 
-    var phase by remember { mutableStateOf(ListeningPhase.Pick) }
-    var scene by remember { mutableStateOf(listeningScenes.first()) }
-    var items by remember { mutableStateOf<List<ListeningItem>>(emptyList()) }
-    var index by remember { mutableStateOf(0) }
-    var playCount by remember { mutableStateOf(0) }
+    var phase by rememberSaveable(stateSaver = listeningPhaseSaver) { mutableStateOf(ListeningPhase.Pick) }
+    var sceneName by rememberSaveable { mutableStateOf(listeningScenes.first().nameZh) }
+    val scene = listeningScenes.firstOrNull { it.nameZh == sceneName } ?: customListeningScene(sceneName)
+    var items by rememberSaveable(stateSaver = listeningItemsSaver) { mutableStateOf(emptyList()) }
+    var index by rememberSaveable { mutableStateOf(0) }
+    var playCount by rememberSaveable { mutableStateOf(0) }
     var playing by remember { mutableStateOf(false) }
-    var hintLevel by remember { mutableStateOf(ListeningHintLevel.None) }
+    var hintLevel by rememberSaveable(stateSaver = listeningHintSaver) {
+        mutableStateOf(ListeningHintLevel.None)
+    }
     /** 裸听阶段选项藏着，点"听完了，看选项"才出现（设计稿屏 51 → 屏 52）。 */
-    var optionsShown by remember { mutableStateOf(false) }
-    var selected by remember { mutableStateOf<String?>(null) }
-    var answers by remember { mutableStateOf<List<ListeningAnswer>>(emptyList()) }
-    var lastAnswer by remember { mutableStateOf<ListeningAnswer?>(null) }
-    var savedExpression by remember { mutableStateOf(false) }
+    var optionsShown by rememberSaveable { mutableStateOf(false) }
+    var selected by rememberSaveable { mutableStateOf<String?>(null) }
+    var answers by rememberSaveable(stateSaver = listeningAnswersSaver) { mutableStateOf(emptyList()) }
+    val lastAnswer = answers.lastOrNull()
+    var savedExpression by rememberSaveable { mutableStateOf(false) }
     /** 生成走到哪一步了：没接通 / 模型在想 / 正文在写。 */
     var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
     /** 这一轮的句子还在生成中：总数按 [SET_SIZE] 显示，答到头也先等一下而不是收工。 */
     var generating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmExit by remember { mutableStateOf(false) }
-    var activeRequest by remember { mutableStateOf<ListeningSetRequest?>(null) }
-    var generationModel by remember { mutableStateOf("") }
-    var generationPromptVersion by remember { mutableStateOf(0) }
+    var activeRequest by rememberSaveable(stateSaver = listeningRequestSaver) {
+        mutableStateOf<ListeningSetRequest?>(null)
+    }
+    var generationModel by rememberSaveable { mutableStateOf("") }
+    var generationPromptVersion by rememberSaveable { mutableStateOf(0) }
 
     val current = items.getOrNull(index)
 
@@ -187,7 +231,6 @@ fun ListeningScreen(onExit: () -> Unit) {
         items = newItems
         index = 0
         answers = emptyList()
-        lastAnswer = null
         resetQuestion()
         phase = ListeningPhase.Question
     }
@@ -199,7 +242,6 @@ fun ListeningScreen(onExit: () -> Unit) {
         items = emptyList()
         index = 0
         answers = emptyList()
-        lastAnswer = null
         resetQuestion()
         generating = true
         scope.launch {
@@ -262,7 +304,6 @@ fun ListeningScreen(onExit: () -> Unit) {
             hintLevel = hintLevel,
         )
         answers = answers + record
-        lastAnswer = record
         savedExpression = false
         phase = ListeningPhase.Reveal
     }
@@ -290,6 +331,19 @@ fun ListeningScreen(onExit: () -> Unit) {
                 phase = ListeningPhase.Question
             }
             !generating -> phase = ListeningPhase.Summary
+        }
+    }
+
+    // 网络生成任务不能跨进程恢复。系统回收后保留已收到的题和答题记录，并把临时等待态
+    // 收敛到可继续操作的页面，避免恢复后永远停在加载动画上。
+    LaunchedEffect(Unit) {
+        if (!generating && (phase == ListeningPhase.Loading || phase == ListeningPhase.Waiting)) {
+            phase = when {
+                index < items.size -> ListeningPhase.Question
+                answers.isNotEmpty() -> ListeningPhase.Summary
+                else -> ListeningPhase.Pick
+            }
+            error = "上次生成被系统中断了，已保留拿到的内容。"
         }
     }
 
@@ -388,7 +442,7 @@ fun ListeningScreen(onExit: () -> Unit) {
                 modifier = content,
                 selected = scene,
                 error = error,
-                onSelect = { scene = it },
+                onSelect = { sceneName = it.nameZh },
             )
             ListeningPhase.Loading -> Loading(
                 modifier = content,
@@ -444,7 +498,7 @@ fun ListeningScreen(onExit: () -> Unit) {
         AlertDialog(
             onDismissRequest = { confirmExit = false },
             title = { Text("退出这一轮？") },
-            text = { Text("这一轮还没做完；退出后答题进度会丢失，点过播放的句子仍会留在最近材料里。") },
+            text = { Text("这一轮还没做完；确认退出会结束本轮，点过播放的句子仍会留在最近材料里。") },
             confirmButton = {
                 TextButton(
                     onClick = {

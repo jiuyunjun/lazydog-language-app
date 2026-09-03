@@ -93,6 +93,7 @@ enum class MishearType(val wire: String, val labelZh: String) {
  * 设计稿：「前两级不给拼写，用户仍在听音辨义；只有 Level 3 起才落到文字，
  * 分数上限也从这里开始压。」
  */
+@Serializable
 enum class ListeningHintLevel(val labelZh: String) {
     None("裸听"),
     Scene("场景提示"),
@@ -110,6 +111,7 @@ enum class ListeningHintLevel(val labelZh: String) {
 }
 
 /** 一道题答完后的结果，评分和总结都从它算（§21、§23、设计稿屏 56）。 */
+@Serializable
 data class ListeningAnswer(
     val item: ListeningItem,
     /** 用户选中的那条中文。 */
@@ -130,6 +132,7 @@ data class ListeningAnswer(
     val firstListen: Boolean get() = correct && playCount <= 1 && hintLevel == ListeningHintLevel.None
 }
 
+@Serializable
 data class ListeningSetRequest(
     val sceneZh: String,
     /** 这个场景下的二级分类，交给 AI 分配到各句，避免十句都在说同一件事。 */
