@@ -37,23 +37,16 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class AzureSpeechProvider(
     context: Context,
-    subscriptionKey: String,
-    region: String,
+    private val subscriptionKey: String,
+    private val region: String,
     private val voiceName: String = "en-US-Ava:DragonHDLatestNeural",
 ) : SpeechProvider {
 
     private val speechConfig: SpeechConfig =
         SpeechConfig.fromSubscription(subscriptionKey, region).apply {
-            speechRecognitionLanguage = "en-US"
             speechSynthesisVoiceName = voiceName
             // 音频由 PcmAudioPlayer 自己播，要的是裸 PCM，不是带容器的格式。
             setSpeechSynthesisOutputFormat(SpeechSynthesisOutputFormat.Raw24Khz16BitMonoPcm)
-            // 读完停顿约 0.8 秒就收音，默认值等太久（用户实测反馈）。
-            setProperty(PropertyId.Speech_SegmentationSilenceTimeoutMs, "800")
-            // 实时听写优先尽快返回草稿；值越高文字越稳定，但首字等待也越久。
-            setProperty(PropertyId.SpeechServiceResponse_StablePartialResultThreshold, "1")
-            // 持续识别默认约 15 秒才判定开头一直没说话，提问场景不需要等这么久。
-            setProperty(PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "7000")
         }
 
     /** AudioConfig 传 null = 不让 SDK 自己放音，音频从 AudioDataStream 取（见 [PcmAudioPlayer]）。 */
@@ -146,12 +139,14 @@ class AzureSpeechProvider(
         withContext(Dispatchers.IO) {
             if (closed) return@withContext AssessmentResult.Failed("服务已释放")
             var audioConfig: AudioConfig? = null
+            var recognitionConfig: SpeechConfig? = null
             var recognizer: SpeechRecognizer? = null
             var assessmentConfig: PronunciationAssessmentConfig? = null
             var result: SpeechRecognitionResult? = null
             try {
                 audioConfig = AudioConfig.fromDefaultMicrophoneInput()
-                recognizer = SpeechRecognizer(speechConfig, audioConfig)
+                recognitionConfig = newRecognitionConfig("en-US")
+                recognizer = SpeechRecognizer(recognitionConfig, audioConfig)
                 assessmentConfig = PronunciationAssessmentConfig(
                     referenceText,
                     PronunciationAssessmentGradingSystem.HundredMark,
@@ -167,6 +162,7 @@ class AzureSpeechProvider(
                 runCatching { result?.close() }
                 runCatching { assessmentConfig?.close() }
                 runCatching { recognizer?.close() }
+                runCatching { recognitionConfig?.close() }
                 runCatching { audioConfig?.close() }
             }
         }
@@ -174,6 +170,7 @@ class AzureSpeechProvider(
     override suspend fun transcribeOnce(languages: List<String>): TranscriptionResult = withContext(Dispatchers.IO) {
         if (closed) return@withContext TranscriptionResult.Failed("服务已释放")
         var audioConfig: AudioConfig? = null
+        var recognitionConfig: SpeechConfig? = null
         var languageConfig: AutoDetectSourceLanguageConfig? = null
         var recognizer: SpeechRecognizer? = null
         var result: SpeechRecognitionResult? = null
@@ -181,11 +178,12 @@ class AzureSpeechProvider(
             audioConfig = AudioConfig.fromDefaultMicrophoneInput()
             val candidates = languages.map(String::trim).filter(String::isNotBlank).distinct()
                 .ifEmpty { listOf("en-US") }
+            recognitionConfig = newRecognitionConfig(candidates.first())
             recognizer = if (candidates.size == 1) {
-                SpeechRecognizer(speechConfig, candidates.single(), audioConfig)
+                SpeechRecognizer(recognitionConfig, audioConfig)
             } else {
                 languageConfig = AutoDetectSourceLanguageConfig.fromLanguages(candidates)
-                SpeechRecognizer(speechConfig, languageConfig, audioConfig)
+                SpeechRecognizer(recognitionConfig, languageConfig, audioConfig)
             }
             result = recognizer.recognizeOnceAsync().get()
             when (result.reason) {
@@ -204,6 +202,7 @@ class AzureSpeechProvider(
             runCatching { result?.close() }
             runCatching { recognizer?.close() }
             runCatching { languageConfig?.close() }
+            runCatching { recognitionConfig?.close() }
             runCatching { audioConfig?.close() }
         }
     }
@@ -217,6 +216,7 @@ class AzureSpeechProvider(
         return withContext(Dispatchers.IO) {
             if (closed) return@withContext TranscriptionResult.Failed("服务已释放")
             var audioConfig: AudioConfig? = null
+            var recognitionConfig: SpeechConfig? = null
             var languageConfig: AutoDetectSourceLanguageConfig? = null
             var recognizer: SpeechRecognizer? = null
             val completed = CompletableDeferred<TranscriptionResult?>()
@@ -226,11 +226,12 @@ class AzureSpeechProvider(
                 audioConfig = AudioConfig.fromDefaultMicrophoneInput()
                 val candidates = languages.map(String::trim).filter(String::isNotBlank).distinct()
                     .ifEmpty { listOf("en-US") }
+                recognitionConfig = newRecognitionConfig(candidates.first())
                 recognizer = if (candidates.size == 1) {
-                    SpeechRecognizer(speechConfig, candidates.single(), audioConfig)
+                    SpeechRecognizer(recognitionConfig, audioConfig)
                 } else {
                     languageConfig = AutoDetectSourceLanguageConfig.fromLanguages(candidates)
-                    SpeechRecognizer(speechConfig, languageConfig, audioConfig)
+                    SpeechRecognizer(recognitionConfig, languageConfig, audioConfig)
                 }
 
                 recognizer.recognizing.addEventListener { _, event ->
@@ -285,6 +286,7 @@ class AzureSpeechProvider(
                 runCatching { recognizer?.stopContinuousRecognitionAsync()?.get() }
                 runCatching { recognizer?.close() }
                 runCatching { languageConfig?.close() }
+                runCatching { recognitionConfig?.close() }
                 runCatching { audioConfig?.close() }
             }
         }
@@ -296,6 +298,18 @@ class AzureSpeechProvider(
             runCatching { recognizer.stopContinuousRecognitionAsync() }
         }
     }
+
+    /** 每次识别都用独立配置，避免共享的合成配置或上一轮语言污染当前识别器。 */
+    private fun newRecognitionConfig(sourceLanguage: String): SpeechConfig =
+        SpeechConfig.fromSubscription(subscriptionKey, region).apply {
+            speechRecognitionLanguage = sourceLanguage
+            // 读完停顿约 0.8 秒就收音，默认值等太久（用户实测反馈）。
+            setProperty(PropertyId.Speech_SegmentationSilenceTimeoutMs, "800")
+            // 实时听写优先尽快返回草稿；值越高文字越稳定，但首字等待也越久。
+            setProperty(PropertyId.SpeechServiceResponse_StablePartialResultThreshold, "1")
+            // 持续识别默认约 15 秒才判定开头一直没说话，提问场景不需要等这么久。
+            setProperty(PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "7000")
+        }
 
     private fun toAssessmentResult(result: SpeechRecognitionResult): AssessmentResult =
         when (result.reason) {

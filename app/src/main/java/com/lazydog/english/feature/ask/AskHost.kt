@@ -38,6 +38,7 @@ import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -337,16 +338,25 @@ private fun AskSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 18.dp),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                AssistChip(
-                    onClick = {
-                        transcriptionLocale = if (transcriptionLocale == "zh-CN") "en-US" else "zh-CN"
-                    },
+                Text(
+                    text = "识别语言",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FilterChip(
+                    selected = transcriptionLocale == "zh-CN",
+                    onClick = { transcriptionLocale = "zh-CN" },
                     enabled = !busy && !transcribing,
-                    label = {
-                        Text(if (transcriptionLocale == "zh-CN") "听写：中文" else "Dictation: English")
-                    },
+                    label = { Text("中文") },
+                )
+                FilterChip(
+                    selected = transcriptionLocale == "en-US",
+                    onClick = { transcriptionLocale = "en-US" },
+                    enabled = !busy && !transcribing,
+                    label = { Text("English") },
                 )
             }
 
@@ -370,7 +380,10 @@ private fun AskSheet(
             }
 
             if (transcribing) {
-                RecordingStatus(modifier = Modifier.padding(horizontal = 18.dp))
+                RecordingStatus(
+                    locale = transcriptionLocale,
+                    modifier = Modifier.padding(horizontal = 18.dp),
+                )
             }
 
             if (rounds.isEmpty()) {
@@ -389,7 +402,7 @@ private fun AskSheet(
 }
 
 @Composable
-private fun RecordingStatus(modifier: Modifier = Modifier) {
+private fun RecordingStatus(locale: String, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "recording")
     Row(
         modifier = modifier,
@@ -421,7 +434,7 @@ private fun RecordingStatus(modifier: Modifier = Modifier) {
             }
         }
         Text(
-            text = "正在收音 · 停顿后自动结束，也可再点麦克风停止",
+            text = "正在收音（${if (locale == "zh-CN") "中文" else "English"}）· 停顿后自动结束",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.primary,
         )
