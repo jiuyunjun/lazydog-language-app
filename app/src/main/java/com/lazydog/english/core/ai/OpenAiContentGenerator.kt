@@ -87,6 +87,7 @@ import com.lazydog.english.domain.vocabulary.normalizePos
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -770,7 +771,13 @@ class OpenAiContentGenerator(
         maxTokens: Int = DEFAULT_MAX_TOKENS,
         op: String = "ai",
         task: AiTask,
-    ): Completion = withContext(Dispatchers.IO) {
+    ): Completion {
+        val callerContext = currentCoroutineContext()
+        return withContext(Dispatchers.IO) {
+        suspend fun emitProgress(chars: Int) = withContext(callerContext) { onProgress?.invoke(chars) }
+        suspend fun emitText(text: String) = withContext(callerContext) { onTextProgress?.invoke(text) }
+        suspend fun emitStage(stage: GenerationStage) = withContext(callerContext) { onStage?.invoke(stage) }
+
         val settings = config(task)
         val (baseUrl, apiKey, model) = settings
         val streaming = onProgress != null || onTextProgress != null || onStage != null
@@ -793,12 +800,7 @@ class OpenAiContentGenerator(
                     stream = streaming,
                 ),
             )
-            val hooks = CallHooks(
-                op = op,
-                // 推理模型想完之前连响应头都不发，所以"等模型"从请求发出去那一刻就开始算，
-                // 而不是等响应头——不然整个思考期界面上都写着"接通中"。
-                onRequestSent = { onStage?.invoke(GenerationStage.Thinking("")) },
-            )
+            val hooks = CallHooks(op = op)
             return Request.Builder()
                 .url(url)
                 .tag(CallHooks::class.java, hooks)
@@ -835,11 +837,22 @@ class OpenAiContentGenerator(
             attempt += 1
             correcting = false
             try {
+                // 从发起请求起就进入等待模型阶段。UI 回调必须回到调用者上下文，不能从
+                // OkHttp EventListener 或 IO 线程直接修改 Compose 状态。
+                emitStage(GenerationStage.Thinking(""))
                 okHttpClient.newCall(buildRequest(useCompletionTokens, reasoningEffort)).await().use { response ->
                     if (response.isSuccessful) {
                         return@withContext done(
                             if (streaming) {
-                                readStreamed(response, model, onProgress, onTextProgress, onStage, op, startedAt)
+                                readStreamed(
+                                    response = response,
+                                    fallbackModel = model,
+                                    onProgress = ::emitProgress,
+                                    onTextProgress = ::emitText,
+                                    onStage = ::emitStage,
+                                    op = op,
+                                    startedAt = startedAt,
+                                )
                             } else {
                                 readWhole(response, model)
                             },
@@ -900,6 +913,7 @@ class OpenAiContentGenerator(
             if (attempt < maxAttempts && !correcting) delay(retryDelayMs)
         }
         fail("$lastReason（已重试）")
+        }
     }
 
     private fun readWhole(response: okhttp3.Response, fallbackModel: String): Completion {
@@ -919,12 +933,12 @@ class OpenAiContentGenerator(
      * 推理模型开口前会先想一阵，这段时间只有 reasoning 增量、没有正文。以前这段全被
      * 当成"还没接通"，界面一动不动；现在它单独走 [GenerationStage.Thinking] 报出去。
      */
-    private fun readStreamed(
+    private suspend fun readStreamed(
         response: okhttp3.Response,
         fallbackModel: String,
-        onProgress: ((Int) -> Unit)?,
-        onTextProgress: ((String) -> Unit)?,
-        onStage: ((GenerationStage) -> Unit)?,
+        onProgress: suspend (Int) -> Unit,
+        onTextProgress: suspend (String) -> Unit,
+        onStage: suspend (GenerationStage) -> Unit,
         op: String = "ai",
         startedAt: Long = System.currentTimeMillis(),
     ): Completion {
@@ -933,7 +947,7 @@ class OpenAiContentGenerator(
         val thinking = StringBuilder()
         var model = ""
         // 响应头已经回来了：从这一刻起就不是"接通中"，而是"在等模型开口"。
-        onStage?.invoke(GenerationStage.Thinking(""))
+        onStage(GenerationStage.Thinking(""))
         try {
             while (true) {
                 val line = source.readUtf8Line() ?: break
@@ -953,7 +967,7 @@ class OpenAiContentGenerator(
                             "AI 一直没停（想了 ${thinking.length} 个字符还没开始写），先掐断了。换个模型再试。",
                         )
                     }
-                    onStage?.invoke(GenerationStage.Thinking(thinking.takeLast(THINKING_EXCERPT_CHARS).toString()))
+                    onStage(GenerationStage.Thinking(thinking.takeLast(THINKING_EXCERPT_CHARS).toString()))
                 }
                 val text = delta?.content
                 if (!text.isNullOrEmpty()) {
@@ -966,9 +980,9 @@ class OpenAiContentGenerator(
                             "AI 一直没停（已经返回 ${builder.length} 个字符），先掐断了。换个说法或换个模型再试。",
                         )
                     }
-                    onProgress?.invoke(builder.length)
-                    onStage?.invoke(GenerationStage.Writing(builder.length))
-                    onTextProgress?.invoke(builder.toString())
+                    onProgress(builder.length)
+                    onStage(GenerationStage.Writing(builder.length))
+                    onTextProgress(builder.toString())
                 }
             }
         } catch (e: IOException) {
