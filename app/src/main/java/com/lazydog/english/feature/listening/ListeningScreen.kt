@@ -413,6 +413,7 @@ fun ListeningScreen(onExit: () -> Unit) {
                     optionsShown = optionsShown,
                     selected = selected,
                     playCount = playCount,
+                    playing = playing,
                     hintLevel = hintLevel,
                     onSelect = { selected = it },
                     onHint = { hintLevel = hintLevel.next() },
@@ -802,6 +803,7 @@ private fun Question(
     optionsShown: Boolean,
     selected: String?,
     playCount: Int,
+    playing: Boolean,
     hintLevel: ListeningHintLevel,
     onSelect: (String) -> Unit,
     onHint: () -> Unit,
@@ -819,6 +821,8 @@ private fun Question(
                 .fillMaxWidth()
                 .semantics { contentDescription = "第 ${index + 1} 题，共 $total 题" },
         )
+
+        ListeningPlaybackIndicator(playing && !optionsShown)
 
         PlayCountLine(playCount)
 
@@ -839,6 +843,37 @@ private fun Question(
 
         Hints(item = item, level = hintLevel, onHint = onHint)
         Spacer(Modifier.size(24.dp))
+    }
+}
+
+/** 盲听时正文区只反馈“声音正在走”，不泄露任何英文。 */
+@Composable
+private fun ListeningPlaybackIndicator(playing: Boolean) {
+    if (!playing) return
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { stateDescription = "正在播放" },
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text("正在播放…", style = MaterialTheme.typography.labelLarge)
+            }
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
     }
 }
 
