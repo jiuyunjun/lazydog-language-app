@@ -429,8 +429,11 @@ interface ReadingSource {
 
 - Dragon HD 音色（`*:DragonHDLatestNeural`）只支持部分 SSML：`<break>`、`<lang>`、
   `<say-as>`、`<sub>`、`<phoneme>` 可用；**`<prosody>` 和 `<bookmark>` 不支持**。
-  两个后果：设置里的语速对 HD 音色不生效（服务端忽略），以及做不了"读到哪句高亮哪句"。
-  详见 D-040。
+  两个后果：语速对 HD 音色不生效（服务端忽略），以及做不了"读到哪句高亮哪句"。详见 D-040。
+- **音色按用途分**（D-042）：单词/搭配用同一个人的标准 Neural（`broadcastVoiceOf`）走播音腔，
+  平稳、每次一致、语速真的生效；例句和短文用用户设置里的音色（默认 HD），要的是它的自然。
+  换过的音色万一合不出音频，`speak()` 会退回用户选的音色再念一遍并留下日志——
+  宁可没有播音腔，也不能点了没声音。
 - 设置 pcm 输出格式时，SDK 在网络上传的其实是压缩格式（Android/iOS/macOS 自 1.20 起免配置），
   本地再解码。所以 logcat 里会看到 `c2.android.mp3.decoder`，那是正常的，不是我们的代码。
 

@@ -96,13 +96,25 @@ class AzureSpeechProvider(
         if (closed) return SpeakResult.Failed("服务已释放")
         val id = speakSeq.incrementAndGet()
         Log.d(TAG, "请求朗读 #$id：style=$style text=$text")
-        // 合不出音频时要能一眼看出是哪个音色出的问题。
-        val voice = voiceName ?: this.voiceName
-        val ssml = buildSpeechSsml(text, voice, rate, style)
+        val configured = voiceName ?: this.voiceName
+        // 单词用播音腔：换成同一个人的标准 Neural，理由见 [broadcastVoiceOf]。
+        val voice = if (style == SpeechStyle.Word) broadcastVoiceOf(configured) else configured
         // 抢锁之前先掐掉上一段：上一段的读循环看到令牌失效会立刻收工把锁让出来，
         // 不然它会攥着锁把整段音频读完，新的朗读得干等。
         player.stop(keepLink = true)
-        return speakMutex.withLock { speakExclusive(id, ssml, text, voice, "$style") }
+        val result = speakMutex.withLock {
+            speakExclusive(id, buildSpeechSsml(text, voice, rate, style), text, voice, "$style")
+        }
+        if (result !is SpeakResult.Failed || voice == configured) return result
+
+        // 换过的音色合不出来（这条连接绑在 HD 后端上，历史上怀疑过这种情况）：
+        // 宁可没有播音腔，也不能让用户点了没声音。退回他自己选的音色再念一遍，并留下日志。
+        val retryId = speakSeq.incrementAndGet()
+        Log.w(TAG, "#$retryId：$voice 合不出音频，退回 $configured 再念一遍 text=$text")
+        player.stop(keepLink = true)
+        return speakMutex.withLock {
+            speakExclusive(retryId, buildSpeechSsml(text, configured, rate, style), text, configured, "$style")
+        }
     }
 
     private suspend fun speakExclusive(
