@@ -2,7 +2,6 @@ package com.lazydog.english.feature.listening
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -30,7 +29,6 @@ import androidx.compose.material.icons.outlined.SlowMotionVideo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.designsystem.AiWaiting
+import com.lazydog.english.core.designsystem.InteractiveEnglishBlock
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.domain.ask.AskContext
@@ -336,27 +335,29 @@ fun ListeningScreen(onExit: () -> Unit) {
                 ListeningPhase.Pick -> BottomActions(note = "约 6 分钟 · 戴耳机效果更好") {
                     PrimaryAction("开始 $SET_SIZE 句训练", onClick = ::startSet)
                 }
-                ListeningPhase.Question -> if (optionsShown) {
-                    BottomActions {
-                        PrimaryAction("确认", enabled = selected != null, onClick = ::confirmAnswer)
-                    }
-                } else {
-                    BottomActions {
-                        PrimaryAction(
-                            label = "听完了，看选项",
-                            enabled = playCount > 0,
-                            onClick = { optionsShown = true },
-                        )
-                    }
-                }
+                ListeningPhase.Question -> ListeningQuestionActions(
+                    optionsShown = optionsShown,
+                    playCount = playCount,
+                    playing = playing,
+                    canConfirm = selected != null,
+                    onPlay = { play() },
+                    onPlaySlow = { play(SpeechRate.Slow) },
+                    onShowOptions = { optionsShown = true },
+                    onConfirm = ::confirmAnswer,
+                )
                 // 主按钮是"再听一次"：知道意思之后重听同一条音频才是这个模块的核心动作。
                 ListeningPhase.Reveal -> BottomActions {
                     PrimaryAction(
-                        label = if (lastAnswer?.correct == true) "知道意思了，再听一次" else "带着意思再听一次",
+                        label = if (playing) "播放中…" else "再听一次",
                         icon = Icons.Outlined.Hearing,
                         enabled = !playing,
-                        weight = 1.8f,
                         onClick = { play() },
+                    )
+                    SecondaryAction(
+                        label = "慢读",
+                        icon = Icons.Outlined.SlowMotionVideo,
+                        enabled = !playing,
+                        onClick = { play(SpeechRate.Slow) },
                     )
                     SecondaryAction(
                         label = if (index + 1 >= items.size && !generating) "看结果" else "下一句",
@@ -412,10 +413,7 @@ fun ListeningScreen(onExit: () -> Unit) {
                     optionsShown = optionsShown,
                     selected = selected,
                     playCount = playCount,
-                    playing = playing,
                     hintLevel = hintLevel,
-                    onPlay = { play() },
-                    onPlaySlow = { play(SpeechRate.Slow) },
                     onSelect = { selected = it },
                     onHint = { hintLevel = hintLevel.next() },
                 )
@@ -552,6 +550,54 @@ private fun ActionLabel(label: String, icon: ImageVector?) {
         Spacer(Modifier.size(8.dp))
     }
     Text(label, maxLines = 1)
+}
+
+/** 播放与作答都固定在拇指够得到的底栏；当前阶段的主操作保持为一个。 */
+@Composable
+private fun ListeningQuestionActions(
+    optionsShown: Boolean,
+    playCount: Int,
+    playing: Boolean,
+    canConfirm: Boolean,
+    onPlay: () -> Unit,
+    onPlaySlow: () -> Unit,
+    onShowOptions: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    BottomActions {
+        if (playCount == 0) {
+            PrimaryAction(
+                label = if (playing) "播放中…" else "播放",
+                icon = Icons.AutoMirrored.Outlined.VolumeUp,
+                enabled = !playing,
+                onClick = onPlay,
+            )
+            SecondaryAction(
+                label = "慢速",
+                icon = Icons.Outlined.SlowMotionVideo,
+                enabled = !playing,
+                onClick = onPlaySlow,
+            )
+        } else {
+            SecondaryAction(
+                label = if (playing) "播放中…" else "再听",
+                icon = Icons.Outlined.Replay,
+                enabled = !playing,
+                onClick = onPlay,
+            )
+            SecondaryAction(
+                label = "慢速",
+                icon = Icons.Outlined.SlowMotionVideo,
+                enabled = !playing,
+                onClick = onPlaySlow,
+            )
+            PrimaryAction(
+                label = if (optionsShown) "确认" else "看选项",
+                enabled = if (optionsShown) canConfirm else true,
+                onClick = if (optionsShown) onConfirm else onShowOptions,
+            )
+        }
+    }
 }
 
 // ---- 各阶段页面 ----
@@ -718,19 +764,29 @@ private fun SoundChangesCard(item: ListeningItem) {
                 )
             }
             changes.forEach { change ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "${change.spanEn} · ${change.rule.labelZh}",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    InteractiveEnglishText(change.noteZh, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = change.rule.ruleZh,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                // 整块以干净的英文片段作为查词/讲句上下文，中文说明不会混进三击结果。
+                InteractiveEnglishBlock(
+                    text = change.spanEn,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                    container = MaterialTheme.colorScheme.surfaceContainerLow,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+                    speakOnSingleTap = false,
+                    header = {
+                        Text(
+                            text = change.rule.labelZh,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    },
+                    below = {
+                        Text(change.noteZh, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = change.rule.ruleZh,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                )
             }
         }
     }
@@ -746,10 +802,7 @@ private fun Question(
     optionsShown: Boolean,
     selected: String?,
     playCount: Int,
-    playing: Boolean,
     hintLevel: ListeningHintLevel,
-    onPlay: () -> Unit,
-    onPlaySlow: () -> Unit,
     onSelect: (String) -> Unit,
     onHint: () -> Unit,
 ) {
@@ -767,8 +820,9 @@ private fun Question(
                 .semantics { contentDescription = "第 ${index + 1} 题，共 $total 题" },
         )
 
+        PlayCountLine(playCount)
+
         if (optionsShown) {
-            CompactPlayer(playCount, playing, onPlay, onPlaySlow)
             Text("他在说什么？", style = MaterialTheme.typography.titleMedium)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 options.forEach { option ->
@@ -780,91 +834,11 @@ private fun Question(
                 }
             }
         } else {
-            BigPlayButton(playCount, playing, onPlay)
             Text("这句话是什么意思？", style = MaterialTheme.typography.titleMedium)
         }
 
         Hints(item = item, level = hintLevel, onHint = onHint)
         Spacer(Modifier.size(24.dp))
-    }
-}
-
-/** 裸听阶段：整页只有一个播放键，别的什么都不给（设计稿屏 51）。 */
-@Composable
-private fun BigPlayButton(playCount: Int, playing: Boolean, onPlay: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Surface(
-            onClick = onPlay,
-            enabled = !playing,
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier
-                .size(128.dp)
-                .semantics {
-                    contentDescription = if (playCount == 0) "播放语音" else "再播放一次"
-                    // 音频按钮的状态变化要播报出来（设计稿无障碍清单）。
-                    stateDescription = if (playing) "正在播放" else "已停止"
-                },
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                if (playing) {
-                    CircularProgressIndicator(modifier = Modifier.size(36.dp))
-                } else {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(48.dp),
-                    )
-                }
-            }
-        }
-        PlayCountLine(playCount)
-    }
-}
-
-/** 看到选项之后播放键让位给选项，缩成一行（设计稿屏 52）。 */
-@Composable
-private fun CompactPlayer(
-    playCount: Int,
-    playing: Boolean,
-    onPlay: () -> Unit,
-    onPlaySlow: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(
-                onClick = onPlay,
-                enabled = !playing,
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { stateDescription = if (playing) "正在播放" else "已停止" },
-            ) {
-                Icon(Icons.Outlined.Replay, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
-                Text("再听一遍")
-            }
-            OutlinedButton(
-                onClick = onPlaySlow,
-                enabled = !playing,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.SlowMotionVideo,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.size(8.dp))
-                Text("慢速")
-            }
-        }
-        PlayCountLine(playCount)
     }
 }
 
@@ -1086,22 +1060,19 @@ private fun Reveal(
             }
         }
 
-        OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
+        InteractiveEnglishBlock(
+            text = item.keyExpression.en,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            header = {
                 Text(
                     text = "这句的重点",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                Text(
-                    text = item.keyExpression.en,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                )
-                InteractiveEnglishText(item.keyExpression.meaningZh, style = MaterialTheme.typography.bodyMedium)
+            },
+            below = {
+                Text(item.keyExpression.meaningZh, style = MaterialTheme.typography.bodyMedium)
                 if (item.audioFeatures.isNotEmpty()) {
                     Text(
                         text = "刚才难在这儿：" +
@@ -1119,8 +1090,8 @@ private fun Reveal(
                     Spacer(Modifier.size(8.dp))
                     Text(if (saved) "已加入复习计划" else "加入复习计划")
                 }
-            }
-        }
+            },
+        )
 
         SoundChangesCard(item)
 
