@@ -151,6 +151,28 @@ data class ReadingMaterialEntity(
     val createdAt: Long,
 )
 
+/** 实际播放过的听力句子。normalizedText 是本地稳定身份，避免标点/大小写变化绕过去重。 */
+@Entity(
+    tableName = "listening_materials",
+    indices = [Index(value = ["normalizedText"], unique = true), Index(value = ["lastHeardAt"])],
+)
+data class ListeningMaterialEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val normalizedText: String,
+    val textEn: String,
+    val meaningZh: String,
+    val sceneZh: String,
+    /** 完整 ListeningItem，供材料回看和后续功能复用；解析失败仍可显示上面的事实列。 */
+    val payloadJson: String,
+    val model: String,
+    val promptVersion: Int,
+    val schemaVersion: Int,
+    val generationRequestJson: String,
+    val firstHeardAt: Long,
+    val lastHeardAt: Long,
+    val playCount: Int,
+)
+
 @Entity(
     tableName = "learning_events",
     foreignKeys = [

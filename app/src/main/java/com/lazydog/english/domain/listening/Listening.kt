@@ -1,5 +1,8 @@
 package com.lazydog.english.domain.listening
 
+import java.text.Normalizer
+import kotlinx.serialization.Serializable
+
 /**
  * 听力训练的内容模型（设计稿屏 50～58「句子内容模型」、英语听力训练模块DESIGN.md §17）。
  *
@@ -11,6 +14,7 @@ package com.lazydog.english.domain.listening
  * [ListeningDistractor.mishearType] 则在总结里回答"今天栽在哪儿"。
  * 设计稿屏 57 的听力能力档案要有跨轮次历史才有意义，这一版不做，见 D-020。
  */
+@Serializable
 data class ListeningItem(
     val textEn: String,
     val meaningZh: String,
@@ -40,8 +44,10 @@ data class ListeningItem(
     val allOptionsZh: List<String> get() = listOf(meaningZh) + distractors.map { it.meaningZh }
 }
 
+@Serializable
 data class ListeningKeyExpression(val en: String, val meaningZh: String)
 
+@Serializable
 data class ListeningDistractor(
     val meaningZh: String,
     val mishearType: MishearType,
@@ -55,6 +61,7 @@ data class ListeningDistractor(
  * 取值是封闭集合而不是自由文本：答错后要统计"你栽在哪一类"，类型能自由写的话
  * 这个统计就没法聚合了。AI 按 [wire] 返回稳定的英文 key，展示时才换成中文。
  */
+@Serializable
 enum class MishearType(val wire: String, val labelZh: String) {
     Negation("negation", "否定词漏听"),
     Tense("tense", "时态误判"),
@@ -130,6 +137,8 @@ data class ListeningSetRequest(
     val count: Int,
     val learnerLevel: String,
     val topics: List<String>,
+    /** 已经实际播放过的句子；生成提示用于避开，本地校验再做一次硬拦截。 */
+    val excludedSentences: List<String> = emptyList(),
 )
 
 object ListeningValidation {
@@ -149,9 +158,12 @@ object ListeningValidation {
      * 流式生成时第一句刚闭合就要能开练，等不到整批收完（英语听力训练模块DESIGN.md §18），
      * 所以"本批重复""收够了没有"这些跨条目的状态得留在这里，而不是每次重头算一遍。
      */
-    class Session(private val maxCount: Int) {
+    class Session(
+        private val maxCount: Int,
+        excludedSentences: Collection<String> = emptyList(),
+    ) {
 
-        private val seen = mutableSetOf<String>()
+        private val seen = excludedSentences.mapTo(mutableSetOf(), ::normalizeListeningText)
         private val valid = mutableListOf<ListeningItem>()
         private val dropped = mutableListOf<String>()
 
@@ -168,7 +180,7 @@ object ListeningValidation {
                 dropped.add("${item.textEn.take(40).ifBlank { "(空)" }}：$reason")
                 return null
             }
-            seen.add(item.textEn.lowercase())
+            seen.add(normalizeListeningText(item.textEn))
             valid.add(item)
             return item
         }
@@ -183,7 +195,7 @@ private fun reject(item: ListeningItem, seen: Set<String>): String? {
         item.textEn.isBlank() -> "句子为空"
         words.size !in 4..30 -> "句子长度应该在 4~30 词"
         Regex("[\\u4E00-\\u9FFF]").containsMatchIn(item.textEn) -> "英文句子里混了中文"
-        item.textEn.lowercase() in seen -> "本批重复"
+        normalizeListeningText(item.textEn) in seen -> "已听过或本批重复"
         item.meaningZh.isBlank() || item.meaningZh.length > 120 -> "中文意思缺失或过长"
         item.distractors.size != 3 -> "干扰项必须正好三条"
         item.distractors.any { it.meaningZh.isBlank() || it.meaningZh.length > 120 } ->
@@ -240,3 +252,11 @@ private fun ListeningItem.trimmed() = copy(
 
 internal fun wordsOf(text: String): List<String> =
     Regex("[A-Za-z][A-Za-z'’-]*").findAll(text).map { it.value }.toList()
+
+/** 判重身份：忽略大小写、全半角、标点和多余空格，但不做可能误伤语义的模糊匹配。 */
+fun normalizeListeningText(text: String): String =
+    Normalizer.normalize(text, Normalizer.Form.NFKC)
+        .lowercase()
+        .replace('’', '\'')
+        .replace(Regex("[^\\p{L}\\p{N}']+"), " ")
+        .trim()

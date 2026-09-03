@@ -4,6 +4,7 @@ import com.lazydog.english.core.database.DrillMistakeEntity
 import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
+import com.lazydog.english.core.database.ListeningMaterialEntity
 import com.lazydog.english.core.database.ReadingMaterialEntity
 import com.lazydog.english.core.database.SpellingAttemptEntity
 import com.lazydog.english.core.database.SpellingProgressEntity
@@ -105,6 +106,29 @@ class BackupModelsTest {
         val restored = entity.toBackup().toEntity()
         assertEquals(0L, restored.id)
         assertEquals("T", restored.title)
+    }
+
+    @Test
+    fun `listening material keeps its dedupe identity and history`() {
+        val entity = ListeningMaterialEntity(
+            id = 7,
+            normalizedText = "i have got it",
+            textEn = "I've got it.",
+            meaningZh = "我来处理。",
+            sceneZh = "工作",
+            payloadJson = "{}",
+            model = "gpt-test",
+            promptVersion = 2,
+            schemaVersion = 1,
+            generationRequestJson = "{}",
+            firstHeardAt = 100,
+            lastHeardAt = 200,
+            playCount = 3,
+        )
+
+        val restored = entity.toBackup().toEntity()
+        assertEquals(0L, restored.id)
+        assertEquals(entity.copy(id = 0), restored)
     }
 
     @Test

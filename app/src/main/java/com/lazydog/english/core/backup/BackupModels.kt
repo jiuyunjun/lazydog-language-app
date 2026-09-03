@@ -4,6 +4,7 @@ import com.lazydog.english.core.database.DrillMistakeEntity
 import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
+import com.lazydog.english.core.database.ListeningMaterialEntity
 import com.lazydog.english.core.database.ReadingMaterialEntity
 import com.lazydog.english.core.database.ScenarioSessionEntity
 import com.lazydog.english.core.database.SpellingAttemptEntity
@@ -91,6 +92,22 @@ data class BackupReadingMaterial(
     val schemaVersion: Int,
     val validationNotes: String,
     val createdAt: Long,
+)
+
+@Serializable
+data class BackupListeningMaterial(
+    val normalizedText: String,
+    val textEn: String,
+    val meaningZh: String,
+    val sceneZh: String,
+    val payloadJson: String,
+    val model: String,
+    val promptVersion: Int,
+    val schemaVersion: Int,
+    val generationRequestJson: String,
+    val firstHeardAt: Long,
+    val lastHeardAt: Long,
+    val playCount: Int,
 )
 
 @Serializable
@@ -195,13 +212,14 @@ data class BackupPreferences(
 
 @Serializable
 data class BackupPayload(
-    val schemaVersion: Int = 2,
+    val schemaVersion: Int = 3,
     val exportedAt: Long,
     val knowledgeItems: List<BackupKnowledgeItem> = emptyList(),
     val vocabularyDetails: List<BackupVocabularyDetail> = emptyList(),
     val grammarDetails: List<BackupGrammarDetail> = emptyList(),
     val learningEvents: List<BackupLearningEvent> = emptyList(),
     val readingMaterials: List<BackupReadingMaterial> = emptyList(),
+    val listeningMaterials: List<BackupListeningMaterial> = emptyList(),
     val scenarioSessions: List<BackupScenarioSession> = emptyList(),
     val drillMistakes: List<BackupDrillMistake> = emptyList(),
     val spellingProgress: List<BackupSpellingProgress> = emptyList(),
@@ -317,6 +335,37 @@ fun BackupReadingMaterial.toEntity() = ReadingMaterialEntity(
     schemaVersion = schemaVersion,
     validationNotes = validationNotes,
     createdAt = createdAt,
+)
+
+fun ListeningMaterialEntity.toBackup() = BackupListeningMaterial(
+    normalizedText = normalizedText,
+    textEn = textEn,
+    meaningZh = meaningZh,
+    sceneZh = sceneZh,
+    payloadJson = payloadJson,
+    model = model,
+    promptVersion = promptVersion,
+    schemaVersion = schemaVersion,
+    generationRequestJson = generationRequestJson,
+    firstHeardAt = firstHeardAt,
+    lastHeardAt = lastHeardAt,
+    playCount = playCount,
+)
+
+fun BackupListeningMaterial.toEntity() = ListeningMaterialEntity(
+    id = 0,
+    normalizedText = normalizedText,
+    textEn = textEn,
+    meaningZh = meaningZh,
+    sceneZh = sceneZh,
+    payloadJson = payloadJson,
+    model = model,
+    promptVersion = promptVersion,
+    schemaVersion = schemaVersion,
+    generationRequestJson = generationRequestJson,
+    firstHeardAt = firstHeardAt,
+    lastHeardAt = lastHeardAt,
+    playCount = playCount,
 )
 
 fun ScenarioSessionEntity.toBackup() = BackupScenarioSession(

@@ -142,6 +142,9 @@ fun ListeningScreen(onExit: () -> Unit) {
     var generating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmExit by remember { mutableStateOf(false) }
+    var activeRequest by remember { mutableStateOf<ListeningSetRequest?>(null) }
+    var generationModel by remember { mutableStateOf("") }
+    var generationPromptVersion by remember { mutableStateOf(0) }
 
     val current = items.getOrNull(index)
 
@@ -157,6 +160,16 @@ fun ListeningScreen(onExit: () -> Unit) {
         if (phase == ListeningPhase.Question) playCount += 1
         scope.launch {
             playing = true
+            // 句子以“用户真的点过播放”为入库边界；重复播放只累计次数，不新增材料。
+            runCatching {
+                app.listeningMaterialRepository.recordHeard(
+                    item = current ?: return@launch,
+                    request = activeRequest,
+                    model = generationModel,
+                    promptVersion = generationPromptVersion,
+                    schemaVersion = if (generationModel.isBlank()) 0 else 1,
+                )
+            }
             app.speechController.speak(text, rate)
             playing = false
         }
@@ -191,14 +204,20 @@ fun ListeningScreen(onExit: () -> Unit) {
         generating = true
         scope.launch {
             val prefs = app.userPreferences
+            val excludedSentences = app.listeningMaterialRepository.excludedSentences()
+            val request = ListeningSetRequest(
+                sceneZh = scene.nameZh,
+                subScenesZh = scene.subScenes,
+                count = SET_SIZE,
+                learnerLevel = prefs.learnerLevelDescription.first(),
+                topics = prefs.topics.first().toList(),
+                excludedSentences = excludedSentences,
+            )
+            activeRequest = request
+            generationModel = ""
+            generationPromptVersion = 0
             val result = app.contentGenerator.generateListeningSet(
-                request = ListeningSetRequest(
-                    sceneZh = scene.nameZh,
-                    subScenesZh = scene.subScenes,
-                    count = SET_SIZE,
-                    learnerLevel = prefs.learnerLevelDescription.first(),
-                    topics = prefs.topics.first().toList(),
-                ),
+                request = request,
                 onStage = { stage = it },
                 // 一句一句接：攒够开局的句数就进答题页，别让人对着进度条等完整批。
                 onItem = { item ->
@@ -213,6 +232,15 @@ fun ListeningScreen(onExit: () -> Unit) {
                 // 服务端没走流式时一句都没增量回调过，这里补上；已经开局的话也是同一批内容。
                 is GenerationResult.Success -> {
                     items = result.data
+                    generationModel = result.model
+                    generationPromptVersion = result.promptVersion
+                    app.listeningMaterialRepository.attachGenerationMetadata(
+                        items = result.data,
+                        request = request,
+                        model = result.model,
+                        promptVersion = result.promptVersion,
+                        schemaVersion = 1,
+                    )
                     if (phase == ListeningPhase.Loading) startRound(result.data)
                 }
                 is GenerationResult.Failure -> {
@@ -416,7 +444,7 @@ fun ListeningScreen(onExit: () -> Unit) {
         AlertDialog(
             onDismissRequest = { confirmExit = false },
             title = { Text("退出这一轮？") },
-            text = { Text("这一轮的句子是刚生成的，退出就没了，已经听完的 ${answers.size} 句也不会留下记录。") },
+            text = { Text("这一轮还没做完；退出后答题进度会丢失，点过播放的句子仍会留在最近材料里。") },
             confirmButton = {
                 TextButton(
                     onClick = {

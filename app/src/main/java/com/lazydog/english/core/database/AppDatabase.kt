@@ -20,8 +20,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SpellingProgressEntity::class,
         SpellingAttemptEntity::class,
         VocabularyMemoryHintEntity::class,
+        ListeningMaterialEntity::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -38,6 +39,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         // 老行的 canonicalKey 留空，由 KnowledgeRepository 在第一次判重时补算——
         // 归一化规则写在 Kotlin 里，SQL 迁移里抄一遍只会两处慢慢跑偏。
         AutoMigration(from = 13, to = 14),
+        // v15 只新增听力材料表。
+        AutoMigration(from = 14, to = 15),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -53,6 +56,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun spellingDao(): SpellingDao
 
     abstract fun memoryHintDao(): MemoryHintDao
+
+    abstract fun listeningMaterialDao(): ListeningMaterialDao
 
     companion object {
         fun create(context: Context): AppDatabase =

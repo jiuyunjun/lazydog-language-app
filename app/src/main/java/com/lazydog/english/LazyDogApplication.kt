@@ -8,6 +8,7 @@ import com.lazydog.english.core.ai.OpenAiContentGenerator
 import com.lazydog.english.core.backup.BackupFileStore
 import com.lazydog.english.core.backup.BackupRepository
 import com.lazydog.english.core.data.KnowledgeRepository
+import com.lazydog.english.core.data.ListeningMaterialRepository
 import com.lazydog.english.core.data.MemoryHintRepository
 import com.lazydog.english.core.data.MistakeRepository
 import com.lazydog.english.core.data.ReadingRepository
@@ -42,6 +43,10 @@ class LazyDogApplication : Application() {
     val speechController: SpeechController by lazy { SpeechController(this, userPreferences) }
 
     val readingRepository: ReadingRepository by lazy { ReadingRepository(database) }
+
+    val listeningMaterialRepository: ListeningMaterialRepository by lazy {
+        ListeningMaterialRepository(database)
+    }
 
     val scenarioSessionRepository: ScenarioSessionRepository by lazy { ScenarioSessionRepository(database) }
 

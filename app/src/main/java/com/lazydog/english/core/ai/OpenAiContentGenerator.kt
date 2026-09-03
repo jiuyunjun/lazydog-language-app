@@ -605,7 +605,7 @@ class OpenAiContentGenerator(
     ): GenerationResult<List<ListeningItem>> {
         // 一句一句往外发：整批收完要几十秒，而第一句闭合时就已经能开练了。
         // 校验状态留在 session 里，流式发出去的和最后返回的是同一批，不会前后不一致。
-        val session = ListeningValidation.Session(request.count)
+        val session = ListeningValidation.Session(request.count, request.excludedSentences)
         val scanner = JsonArrayScanner("items")
         val outcome = complete(
             systemPrompt = LISTENING_SYSTEM_PROMPT,
@@ -1657,7 +1657,7 @@ class OpenAiContentGenerator(
         const val TRANSLATION_PROMPT_VERSION = 1
         const val SCENARIO_PROMPT_VERSION = 1
         const val ASK_PROMPT_VERSION = 1
-        const val LISTENING_PROMPT_VERSION = 1
+        const val LISTENING_PROMPT_VERSION = 2
         const val MEMORY_PROMPT_VERSION = 1
 
         /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
@@ -2273,6 +2273,12 @@ class OpenAiContentGenerator(
                 appendLine("在这些二级场景里分散取材，尽量不重复：${request.subScenesZh.joinToString("、")}。")
             }
             if (request.topics.isNotEmpty()) appendLine("学习者兴趣，可以适度靠拢：${request.topics.joinToString("、")}。")
+            if (request.excludedSentences.isNotEmpty()) {
+                appendLine("下面是最近已经听过的句子。本次不得原样或只改标点/大小写后重复；请换表达、事件和措辞：")
+                appendLine("<heard_sentences>")
+                request.excludedSentences.take(150).forEach { appendLine("- ${it.take(180)}") }
+                appendLine("</heard_sentences>")
+            }
             appendLine("每句都要自己指定 intentZh（沟通意图，如请求/拒绝/抱怨/调侃）、toneZh（情绪）、" +
                 "registerZh（语体：正式/职业/中性/口语/很口语/俚语），并且十句之间要有变化。")
             appendLine("句子要求：母语者真实会说的口语；场景和意图明确；每句只有 1～2 个主要学习点；" +

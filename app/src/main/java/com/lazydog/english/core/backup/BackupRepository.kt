@@ -19,6 +19,7 @@ class BackupRepository(
         val knowledgeDao = database.knowledgeDao()
         val readingDao = database.readingDao()
         val scenarioDao = database.scenarioSessionDao()
+        val listeningDao = database.listeningMaterialDao()
         val skills = prefs.skillLevels.first()
         val spellingDao = database.spellingDao()
         return BackupPayload(
@@ -28,6 +29,7 @@ class BackupRepository(
             grammarDetails = knowledgeDao.getAllGrammarDetails().map { it.toBackup() },
             learningEvents = knowledgeDao.getAllEvents().map { it.toBackup() },
             readingMaterials = readingDao.getAllMaterials().map { it.toBackup() },
+            listeningMaterials = listeningDao.getAll().map { it.toBackup() },
             scenarioSessions = scenarioDao.getAll().map { it.toBackup() },
             drillMistakes = database.drillMistakeDao().getAll().map { it.toBackup() },
             spellingProgress = spellingDao.getAllProgress().map { it.toBackup() },
@@ -58,6 +60,7 @@ class BackupRepository(
         val knowledgeDao = database.knowledgeDao()
         val readingDao = database.readingDao()
         val scenarioDao = database.scenarioSessionDao()
+        val listeningDao = database.listeningMaterialDao()
         val mistakeDao = database.drillMistakeDao()
         val spellingDao = database.spellingDao()
         val memoryHintDao = database.memoryHintDao()
@@ -65,6 +68,7 @@ class BackupRepository(
             knowledgeDao.clearAll()
             readingDao.clearAll()
             scenarioDao.clearAll()
+            listeningDao.clearAll()
             mistakeDao.clearAll()
 
             val idMap = mutableMapOf<Long, Long>()
@@ -97,6 +101,9 @@ class BackupRepository(
             }
             for (material in payload.readingMaterials) {
                 readingDao.insert(material.toEntity())
+            }
+            for (material in payload.listeningMaterials) {
+                listeningDao.insert(material.toEntity())
             }
             for (session in payload.scenarioSessions) {
                 scenarioDao.save(session.toEntity())

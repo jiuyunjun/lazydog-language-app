@@ -77,6 +77,26 @@ class ListeningValidationTest {
     }
 
     @Test
+    fun `a historically heard sentence is rejected despite punctuation and case changes`() {
+        val session = ListeningValidation.Session(
+            maxCount = 10,
+            excludedSentences = listOf("I BARELY made it to the meeting on time!"),
+        )
+
+        assertEquals(null, session.offer(sampleItem()))
+        assertTrue(session.result.droppedNotes.single().contains("已听过"))
+    }
+
+    @Test
+    fun `dedupe identity ignores typography but preserves words`() {
+        assertEquals(
+            normalizeListeningText("  Don’t   rush—I've got it. "),
+            normalizeListeningText("DON'T rush; I've got it!"),
+        )
+        assertTrue(normalizeListeningText("I've got it") != normalizeListeningText("I haven't got it"))
+    }
+
+    @Test
     fun `validation stops once maxCount good items are collected`() {
         val items = listOf(
             sampleItem(textEn = "I barely made it to the meeting on time."),

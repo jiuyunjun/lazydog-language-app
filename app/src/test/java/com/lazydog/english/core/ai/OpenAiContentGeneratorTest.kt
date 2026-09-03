@@ -67,6 +67,7 @@ class ListeningPromptTest {
                 count = 10,
                 learnerLevel = "B1",
                 topics = listOf("科技"),
+                excludedSentences = listOf("We've already covered that in the meeting."),
             ),
         )
 
@@ -80,6 +81,8 @@ class ListeningPromptTest {
         assertTrue(prompt.contains("similar_scene"))
         // §15：授权说不清就不要照抄真实台词。
         assertTrue(prompt.contains("不要照搬电影"))
+        assertTrue(prompt.contains("<heard_sentences>"))
+        assertTrue(prompt.contains("We've already covered that in the meeting."))
     }
 }
 

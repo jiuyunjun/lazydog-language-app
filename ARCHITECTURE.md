@@ -141,6 +141,13 @@ app/
 - 校验结果
 - 创建时间
 
+### ListeningMaterial
+
+- 只保存用户实际点过播放的句子，完整题目 JSON 与英文、中文、场景事实列同时保留
+- `normalizedText` 是忽略大小写、全半角、标点和多余空格后的唯一身份，用于数据库唯一约束和生成去重
+- 首次/最近播放时间与累计播放次数
+- 生成请求、模型、prompt/schema 版本；流式生成尚未结束时先入库，生成完成后补齐元数据
+
 ## 6. 复习调度
 
 定义可替换接口，例如：
@@ -280,10 +287,10 @@ interface ReadingSource {
 
 ### 听力训练状态
 
-- 一轮 10 句由一次 `generateListeningSet` 生成，全部通过 `ListeningValidation` 后才开局；能用的句子少于 5 句直接失败，不开一局残缺的训练。
+- 一轮 10 句由一次 `generateListeningSet` 生成，逐句通过 `ListeningValidation` 后交付，攒够 3 句即可开局；最终能用的句子少于 5 句则生成失败。
 - 评分、总结和挖空提示都是 `domain/listening` 里的纯函数（`listeningScore`、`summarizeListening`、`maskKeyExpression`），不依赖 Compose，可单测。
 - 选项顺序按题目下标定死，避免重组时正确答案换位置。四个选项先选后确认，不是点一下就判定。
-- 一轮的状态只活在页面里，不落库：MVP 不做跨轮次的听力画像和周对比（`英语听力训练模块DESIGN.md` §25），因此也没有需要长期保存的东西。中途退出会明确提示这一轮会丢。
+- 答题状态仍只活在页面里，不保存跨轮次画像；但每次实际播放都会把句子 upsert 到 `listening_materials`，供“最近材料”重听和下一轮生成去重。生成前最近 150 句进入提示词，最近 500 句进入本地硬校验，模型不守要求时照样丢弃。
 - 翻到下一句时调 `stopSpeaking(keepLink = true)`：声音照掐，但保留已经热起来的蓝牙链路。不区分的话每翻一页都放手，下一句又从冷通路起播，等于白挂。
 - 揭晓页留下的重点表达走 `KnowledgeRepository.addExpression`，和情景演练留下的表达共用 `pos=expression` 与同一套复习调度。
 
@@ -333,6 +340,7 @@ interface ReadingSource {
 - 答题类页面分揭晓前后两份上下文：听力揭晓前只给场景、语气、难度，英文原文和中文答案一个字不给（这一页的规矩是"英文永远最后出现"）；拼写同理，未翻篇前只给中文和题型。揭晓后才把原文、关键表达、听觉难点全交出去。
 - 提问复用同一个 OpenAI 兼容接口（`askAboutContext`），SSE 流式；`AskStreaming.partialAnswer` 从未闭合的 JSON 里增量取出 `answerZh` 供展示，最终仍以完整解析加校验为准。
 - 一次会话只活在抽屉里：关掉即清空，不落库、没有全局聊天历史。答案里的新词经用户点“加进复习”才写入知识库。
+- 抽屉语音输入复用 `SpeechController.transcribeOnce`；提问使用 Azure 中英自动检测，识别结果只回填草稿，不自动发送。情景演练继续限定英文识别。
 
 ## 9. 数据备份
 

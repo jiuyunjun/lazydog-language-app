@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -35,9 +36,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.ReadingRepository
+import com.lazydog.english.core.database.ListeningMaterialEntity
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 private data class StudyEntry(
     val icon: ImageVector,
@@ -52,6 +55,14 @@ private sealed interface RecentStudyItem {
 
     data class Reading(val id: Long, override val title: String, override val timestamp: Long, val source: String) : RecentStudyItem
     data class Scenario(val id: Long, override val title: String, override val timestamp: Long, val stage: String) : RecentStudyItem
+    data class Listening(
+        override val title: String,
+        override val timestamp: Long,
+        val meaningZh: String,
+        val sceneZh: String,
+        val playCount: Int,
+        val material: ListeningMaterialEntity,
+    ) : RecentStudyItem
 }
 
 @Composable
@@ -71,12 +82,17 @@ fun StudyScreen(
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
+    val scope = rememberCoroutineScope()
     val recentMaterials by app.readingRepository.recent.collectAsState(initial = emptyList())
     val recentScenarios by app.scenarioSessionRepository.recent.collectAsState(initial = emptyList())
-    val recentItems = remember(recentMaterials, recentScenarios) {
+    val recentListening by app.listeningMaterialRepository.recent.collectAsState(initial = emptyList())
+    val recentItems = remember(recentMaterials, recentScenarios, recentListening) {
         (
             recentMaterials.map { RecentStudyItem.Reading(it.id, it.title, it.createdAt, it.source) } +
-                recentScenarios.map { RecentStudyItem.Scenario(it.id, it.titleZh, it.updatedAt, it.stage) }
+                recentScenarios.map { RecentStudyItem.Scenario(it.id, it.titleZh, it.updatedAt, it.stage) } +
+                recentListening.map {
+                    RecentStudyItem.Listening(it.textEn, it.lastHeardAt, it.meaningZh, it.sceneZh, it.playCount, it)
+                }
             ).sortedByDescending { it.timestamp }.take(8)
     }
 
@@ -183,6 +199,10 @@ fun StudyScreen(
                             when (item) {
                                 is RecentStudyItem.Reading -> onMaterialClick(item.id)
                                 is RecentStudyItem.Scenario -> onScenarioSessionClick(item.id)
+                                is RecentStudyItem.Listening -> scope.launch {
+                                    runCatching { app.listeningMaterialRepository.recordReplay(item.material) }
+                                    app.speechController.speak(item.title)
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -193,10 +213,10 @@ fun StudyScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Icon(
-                                imageVector = if (item is RecentStudyItem.Reading) {
-                                    Icons.AutoMirrored.Outlined.Article
-                                } else {
-                                    Icons.Outlined.RecordVoiceOver
+                                imageVector = when (item) {
+                                    is RecentStudyItem.Reading -> Icons.AutoMirrored.Outlined.Article
+                                    is RecentStudyItem.Scenario -> Icons.Outlined.RecordVoiceOver
+                                    is RecentStudyItem.Listening -> Icons.Outlined.Headphones
                                 },
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -214,6 +234,8 @@ fun StudyScreen(
                                                     if (item.source == ReadingRepository.SOURCE_AI) "AI 定制" else "粘贴导入"
                                                 is RecentStudyItem.Scenario ->
                                                     if (item.stage == "Finished") "情景演练 · 已完成" else "情景演练 · 继续"
+                                                is RecentStudyItem.Listening ->
+                                                    "${item.sceneZh.ifBlank { "听力" }} · 播过 ${item.playCount} 次 · ${item.meaningZh}"
                                             },
                                         )
                                     },
