@@ -127,9 +127,9 @@ fun AskHost(content: @Composable () -> Unit) {
                 onAsk = { request, onPartial ->
                     app.contentGenerator.askAboutContext(request, onPartial)
                 },
-                onTranscribe = { partial ->
+                onTranscribe = { locale, partial ->
                     app.speechController.transcribeContinuously(
-                        languages = listOf("zh-CN", "en-US"),
+                        languages = listOf(locale),
                         onPartial = partial,
                     )
                 },
@@ -170,7 +170,7 @@ private fun AskSheet(
     askContext: AskContext,
     onDismiss: () -> Unit,
     onAsk: suspend (AskRequest, ((String) -> Unit)?) -> GenerationResult<AskAnswer>,
-    onTranscribe: suspend ((String) -> Unit) -> TranscriptionResult,
+    onTranscribe: suspend (String, (String) -> Unit) -> TranscriptionResult,
     onStopTranscribing: () -> Unit,
     learnerLevel: suspend () -> String,
     onAddToReview: suspend (AskAddableTerm) -> AddState,
@@ -181,6 +181,7 @@ private fun AskSheet(
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var transcribing by remember { mutableStateOf(false) }
+    var transcriptionLocale by remember { mutableStateOf("zh-CN") }
     var transcriptionError by remember { mutableStateOf<String?>(null) }
     var contextExpanded by remember { mutableStateOf(false) }
     val added = remember { mutableStateMapOf<String, AddState>() }
@@ -197,7 +198,7 @@ private fun AskSheet(
         transcriptionError = null
         val beforeDictation = input.trim()
         scopeLaunch {
-            val result = onTranscribe { partial ->
+            val result = onTranscribe(transcriptionLocale) { partial ->
                 scopeLaunch {
                     input = listOf(beforeDictation, partial.trim())
                         .filter(String::isNotBlank)
@@ -330,6 +331,23 @@ private fun AskSheet(
                         )
                     }
                 }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                AssistChip(
+                    onClick = {
+                        transcriptionLocale = if (transcriptionLocale == "zh-CN") "en-US" else "zh-CN"
+                    },
+                    enabled = !busy && !transcribing,
+                    label = {
+                        Text(if (transcriptionLocale == "zh-CN") "听写：中文" else "Dictation: English")
+                    },
+                )
             }
 
             InputRow(
