@@ -3,9 +3,13 @@ package com.lazydog.english.core.designsystem
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,6 +38,10 @@ import kotlinx.coroutines.delay
  * 3. **正在做什么**（[title]），由各页面自己说。
  *
  * [detail] 给已经有更好话可说的页面用（比如听力的"已经写好 3 句"），传了就盖掉默认那句。
+ *
+ * [preview] 是已经写出来的正文。字符数是抽象的，正文不是——内容一开始铺，等待就变成了
+ * "已经在看了"。凡是能从未闭合的 JSON 里抽出正文的调用都该传（[JsonStream]），
+ * 唯一的例外是听力：那一页的规矩是英文永远最后出现，提前铺正文等于把答案交出去。
  */
 @Composable
 fun AiWaiting(
@@ -41,6 +49,7 @@ fun AiWaiting(
     stage: GenerationStage,
     modifier: Modifier = Modifier,
     detail: String? = null,
+    preview: String = "",
 ) {
     val seconds = rememberWaitedSeconds()
 
@@ -63,6 +72,26 @@ fun AiWaiting(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        if (preview.isNotBlank()) {
+            // 正文还在长，滚到底才看得到最新的一段。
+            val scroll = rememberScrollState()
+            LaunchedEffect(preview) { scroll.animateScrollTo(scroll.maxValue) }
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = preview,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(scroll)
+                        .padding(14.dp),
+                )
+            }
+        }
     }
 }
 

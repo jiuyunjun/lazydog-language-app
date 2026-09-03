@@ -41,8 +41,10 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.VocabularyJson
+import com.lazydog.english.core.data.spellingFacts
 import com.lazydog.english.core.data.stageOrDefault
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.designsystem.InteractiveTextHint
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.vocabulary.posLabelZh
 import com.lazydog.english.feature.library.dueLabel
@@ -123,6 +125,12 @@ fun WordDetailScreen(
         val collocations = remember(detail.collocationsJson) {
             VocabularyJson.decodeCollocations(detail.collocationsJson)
         }
+        // 记录里的词和学习时的词卡是同一个词，摊开的东西也该一样多：
+        // 词块拆分、不规则变形这些都是落库时就写好的，不显示等于白存。
+        val facts = remember(detail.chunksJson, detail.trickyPart, detail.misspellingsJson) {
+            detail.spellingFacts()
+        }
+        val forms = remember(detail.formsJson) { VocabularyJson.decodeList(detail.formsJson) }
 
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             Column(
@@ -177,6 +185,15 @@ fun WordDetailScreen(
                         collocations.forEach { collocation -> CollocationChip(collocation) }
                     }
                 }
+                // 词块拆分和学习页那张 S0 接触卡是同一份东西。整句表达拆不出词块，跳过。
+                if (!isExpression) SpellingChunks(detail.term, facts)
+                if (forms.isNotEmpty()) {
+                    Text(
+                        text = "变形：${forms.joinToString(" · ")}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (isExpression) {
                     if (detail.memoryHintZh.isNotBlank()) {
                         MemoryHintText(detail.memoryHintZh)
@@ -201,6 +218,7 @@ fun WordDetailScreen(
                                 InteractiveEnglishText(
                                     text = detail.exampleEn,
                                     style = MaterialTheme.typography.bodyLarge,
+                                    speakOnSingleTap = true,
                                     modifier = Modifier.weight(1f, fill = false),
                                 )
                                 IconButton(onClick = { scope.launch { speech.speak(detail.exampleEn) } }) {
@@ -218,6 +236,7 @@ fun WordDetailScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
+                            InteractiveTextHint(speakOnSingleTap = true)
                         }
                     }
                 }

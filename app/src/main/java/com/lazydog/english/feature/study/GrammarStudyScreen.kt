@@ -53,6 +53,9 @@ import com.lazydog.english.core.data.displaySummary
 import com.lazydog.english.core.database.GrammarRecord
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.designsystem.InteractiveTextHint
+import com.lazydog.english.feature.grammar.GrammarPatternZhLine
+import com.lazydog.english.feature.grammar.GrammarTermsCard
 import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
@@ -144,10 +147,13 @@ fun GrammarStudyScreen(
     ) {
         phase = GrammarPhase.DrillLoading(pending.request.patternEn)
         stage = GenerationStage.Connecting
+        partialText = ""
         scope.launch {
             val result = prefetched?.await() ?: app.contentGenerator.generateGrammarDrill(
                 pending.request,
                 onStage = { stage = it },
+                // 题干边写边铺，和讲解那一屏一样：等待里有东西可看，就不算干等。
+                onPartialText = { partialText = it },
             )
             phase = when (result) {
                 is GenerationResult.Success ->
@@ -359,13 +365,10 @@ fun GrammarStudyScreen(
                     }
                 }
                 // 有内容就铺内容，别让人对着转圈干等。
-                GrammarPhase.Generating -> StreamingBlock(
-                    hint = "AI 正在备课…",
-                    text = partialText,
-                    stage = stage,
-                )
+                GrammarPhase.Generating ->
+                    AiWaiting("AI 正在备课…", stage, preview = partialText)
                 is GrammarPhase.DrillLoading ->
-                    AiWaiting("在给「${p.title}」出几道填空题…", stage)
+                    AiWaiting("在给「${p.title}」出几道填空题…", stage, preview = partialText)
                 is GrammarPhase.Failed -> CenterBlock {
                     Text(
                         text = "没拿到讲解：${p.reason}",
@@ -542,7 +545,7 @@ private fun DueOfferView(
                         text = record.detail.displayPattern(),
                         style = MaterialTheme.typography.titleSmall,
                     )
-                    Text(
+                    InteractiveEnglishText(
                         text = record.detail.displaySummary(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -568,18 +571,22 @@ private fun DrillView(
         modifier = Modifier.padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
+        InteractiveEnglishText(
             text = session.pending.request.patternEn,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
         )
-        Text(
+        // 做题时公式就在眼前，看不懂它等于不知道这题在考什么。
+        GrammarPatternZhLine(session.pending.request.patternEn)
+        // 题干里最该查的就是那个不认识的词——它整页最大的一块英文，却是最点不动的一块。
+        InteractiveEnglishText(
             text = if (session.answered) {
                 item.filledWith(item.options[session.selected!!])
             } else {
                 item.sentenceEn
             },
             style = MaterialTheme.typography.headlineSmall,
+            speakOnSingleTap = session.answered,
         )
         item.options.forEachIndexed { index, option ->
             val isAnswer = index == item.answerIndex
@@ -602,9 +609,12 @@ private fun DrillView(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text(
+                    // 选项本身也是英文，答完了正该查一查刚才为什么选错。
+                    // 没答之前单击仍然是"选它"，双击三击才查词讲句。
+                    InteractiveEnglishText(
                         text = option,
                         style = MaterialTheme.typography.bodyLarge,
+                        onSingleTap = if (session.answered) null else ({ onSelect(index) }),
                         modifier = Modifier.weight(1f),
                     )
                     if (session.answered && isAnswer) {
@@ -632,13 +642,29 @@ private fun DrillView(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = if (session.selected == item.answerIndex) "对了" else "不对，正确的是 ${item.answer}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = if (session.selected == item.answerIndex) extended.correct
-                        else MaterialTheme.colorScheme.error,
-                    )
-                    Text(
+                    val right = session.selected == item.answerIndex
+                    if (right) {
+                        Text(
+                            text = "对了",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = extended.correct,
+                        )
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "不对，正确的是",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            // 正确答案是这一屏最该查的那几个词，别把它锁死成一张图。
+                            InteractiveEnglishText(
+                                text = item.answer,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                    InteractiveEnglishText(
                         text = item.explanationZh,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -711,25 +737,29 @@ private fun LessonView(
             text = lesson.patternEn,
             style = MaterialTheme.typography.headlineSmall,
         )
-        Text(
+        GrammarPatternZhLine(lesson.patternEn)
+        InteractiveEnglishText(
             text = lesson.labelZh,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
         )
     }
-    Text(
+    InteractiveEnglishText(
         text = lesson.summaryZh,
         style = MaterialTheme.typography.bodyLarge,
         fontWeight = FontWeight.Medium,
     )
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("怎么用", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Text(
+        // 讲解正文里少不了夹英文（`have gone`、`will`），那些正是要查的词。
+        InteractiveEnglishText(
             text = lesson.explanationZh,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    // 公式和讲解里出现的英语术语逐个解释一次，不然"过去分词"四个字本身也是天书。
+    GrammarTermsCard(lesson.patternEn, lesson.explanationZh, lesson.tipZh)
     ExampleBlock(
         icon = Icons.Outlined.CheckCircle,
         tint = extended.correct,
@@ -756,7 +786,7 @@ private fun LessonView(
         ) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("易混提醒", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Text(
+                InteractiveEnglishText(
                     text = lesson.tipZh,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -780,24 +810,8 @@ private fun LessonView(
     }
 }
 
-/** 生成中的展示：提示语在上，已经到达的正文在下，随流增长。 */
-@Composable
-private fun StreamingBlock(hint: String, text: String, stage: GenerationStage) {
-    // 正文一到就铺正文——那是最好的进度条。还没到的时候退回统一等待区，
-    // 它至少会说清现在是没接通还是模型在想，以及等了多久。
-    if (text.isBlank()) {
-        AiWaiting(hint, stage)
-        return
-    }
-    CenterBlock {
-        Text(
-            text = hint,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(text, style = MaterialTheme.typography.bodyMedium)
-    }
-}
+// 原来这里有个 StreamingBlock：正文一到就整块换成正文，把"等到哪一步了、等了多久"
+// 挤掉了。现在这件事归 AiWaiting 的 preview 管，所有等 AI 的页面用的是同一个。
 
 @Composable
 private fun CenterBlock(content: @Composable () -> Unit) {
@@ -853,7 +867,12 @@ private fun ExampleBlock(
                     }
                 }
             }
-            InteractiveEnglishText(text = sentence, style = MaterialTheme.typography.bodyLarge)
+            InteractiveEnglishText(
+                text = sentence,
+                style = MaterialTheme.typography.bodyLarge,
+                // 反面例句故意是错的，读出来只会把错的读法记进耳朵。
+                speakOnSingleTap = onSpeak != null,
+            )
             if (note.isNotBlank()) {
                 Text(
                     text = note,
@@ -861,6 +880,7 @@ private fun ExampleBlock(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            InteractiveTextHint(speakOnSingleTap = onSpeak != null)
         }
     }
 }

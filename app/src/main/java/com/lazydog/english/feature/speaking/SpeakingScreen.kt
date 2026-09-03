@@ -377,8 +377,9 @@ private fun FeedbackSection(feedback: PronunciationFeedback, tips: List<Pronunci
                     ) {
                         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(tip.titleZh, style = MaterialTheme.typography.bodyLarge)
-                            Text(
+                            InteractiveEnglishText(tip.titleZh, style = MaterialTheme.typography.bodyLarge)
+                            // 发音提示正文里全是英文音和例词，那正是要查的东西。
+                            InteractiveEnglishText(
                                 text = tip.bodyZh,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

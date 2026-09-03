@@ -109,5 +109,6 @@ object SampleData {
 
     val goalOptions = listOf("日常口语", "工作邮件", "看剧不看字幕", "考试")
 
-    val topicOptions = listOf("旅行", "美食", "职场", "健康", "音乐", "历史", "游戏", "科技", "电影")
+    /** 勾兴趣是一次性的粗筛，摆全集反而没人勾；全集在 [TopicCatalog.all]，起始页用。 */
+    val topicOptions = TopicCatalog.starter
 }

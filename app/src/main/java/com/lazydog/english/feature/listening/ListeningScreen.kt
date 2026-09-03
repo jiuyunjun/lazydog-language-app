@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.Casino
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.SlowMotionVideo
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +38,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -48,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -531,6 +535,22 @@ private fun PickScene(
     error: String?,
     onSelect: (ListeningScene) -> Unit,
 ) {
+    // 用户自己写的场景和九张卡是互斥的两条路：输入框一有字就以它为准，
+    // 清空了要退回他刚才点的那张卡，而不是无声地退回第一张。
+    var custom by rememberSaveable { mutableStateOf(if (selected.custom) selected.nameZh else "") }
+    var preset by remember { mutableStateOf(if (selected.custom) listeningScenes.first() else selected) }
+
+    fun choosePreset(scene: ListeningScene) {
+        preset = scene
+        custom = ""
+        onSelect(scene)
+    }
+
+    fun typeCustom(text: String) {
+        custom = text.take(20)
+        onSelect(if (custom.isBlank()) preset else customListeningScene(custom))
+    }
+
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
@@ -542,6 +562,12 @@ private fun PickScene(
             text = "先听声音，再猜意思。听不出来可以要提示，也可以多听几遍。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        // 挑不出来的时候比挑得出来的时候多，给一颗骰子。
+        AssistChip(
+            onClick = { choosePreset(listeningScenes.filterNot { it == preset }.random()) },
+            label = { Text("随便给我一个") },
+            leadingIcon = { Icon(Icons.Outlined.Casino, contentDescription = null) },
         )
         if (error != null) {
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
@@ -557,7 +583,7 @@ private fun PickScene(
             listeningScenes.chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     row.forEach { item ->
-                        val active = item == selected
+                        val active = custom.isBlank() && item == selected
                         Surface(
                             color = if (active) {
                                 MaterialTheme.colorScheme.secondaryContainer
@@ -565,7 +591,7 @@ private fun PickScene(
                                 MaterialTheme.colorScheme.surfaceContainer
                             },
                             shape = MaterialTheme.shapes.large,
-                            onClick = { onSelect(item) },
+                            onClick = { choosePreset(item) },
                             modifier = Modifier
                                 .weight(1f)
                                 .semantics {
@@ -598,6 +624,14 @@ private fun PickScene(
                 }
             }
         }
+        OutlinedTextField(
+            value = custom,
+            onValueChange = ::typeCustom,
+            label = { Text("或者自己写一个场景") },
+            placeholder = { Text("比如：给房东报修") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.size(8.dp))
     }
 }
@@ -662,7 +696,7 @@ private fun SoundChangesCard(item: ListeningItem) {
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Medium,
                     )
-                    Text(change.noteZh, style = MaterialTheme.typography.bodyMedium)
+                    InteractiveEnglishText(change.noteZh, style = MaterialTheme.typography.bodyMedium)
                     Text(
                         text = change.rule.ruleZh,
                         style = MaterialTheme.typography.bodySmall,
@@ -1014,7 +1048,7 @@ private fun Reveal(
                             style = MaterialTheme.typography.titleSmall,
                         )
                     }
-                    Text(mishear.whyZh, style = MaterialTheme.typography.bodyMedium)
+                    InteractiveEnglishText(mishear.whyZh, style = MaterialTheme.typography.bodyMedium)
                     Text(
                         text = "这一类叫「${mishear.mishearType.labelZh}」",
                         style = MaterialTheme.typography.bodySmall,
@@ -1039,7 +1073,7 @@ private fun Reveal(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                 )
-                Text(item.keyExpression.meaningZh, style = MaterialTheme.typography.bodyMedium)
+                InteractiveEnglishText(item.keyExpression.meaningZh, style = MaterialTheme.typography.bodyMedium)
                 if (item.audioFeatures.isNotEmpty()) {
                     Text(
                         text = "刚才难在这儿：" +

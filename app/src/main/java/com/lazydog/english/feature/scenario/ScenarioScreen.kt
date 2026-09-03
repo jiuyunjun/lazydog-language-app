@@ -131,6 +131,8 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
     var phase by remember { mutableStateOf(if (sessionId == null) ScenarioPhase.Pick else ScenarioPhase.Loading) }
     /** 生成走到哪一步了：没接通 / 模型在想 / 正在写。 */
     var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
+    /** 这一次生成已经写出来的正文，边写边铺，免得对着转圈干等。 */
+    var preview by remember { mutableStateOf("") }
     var customSeed by remember { mutableStateOf("") }
     var selectedSeed by remember { mutableStateOf<ScenarioSeed?>(recommendedSeeds.first()) }
     var brief by remember { mutableStateOf<ScenarioBrief?>(null) }
@@ -272,6 +274,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
         error = null
         scope.launch {
             val tier = requestedTier
+            preview = ""
             val result = app.contentGenerator.generateScenario(
                 request = ScenarioGenerationRequest(
                     source = source,
@@ -290,6 +293,8 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                     excludedScenarioIds = app.userPreferences.recentScenarioIds(),
                 ),
                 onStage = { stage = it },
+                // 场景设定先到就先铺，读着它就把这一局的处境读进去了。
+                onPartialText = { preview = it },
             )
             when (result) {
                 is GenerationResult.Success -> {
@@ -343,7 +348,14 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
         scope.launch {
             val pair = coroutineScope {
                 // 只有对话这一路报阶段：判定是并行跑的，两路都往同一个状态写会来回跳。
-                val turnCall = async { app.contentGenerator.generateScenarioTurn(request, onStage = { stage = it }) }
+                val turnCall = async {
+                    app.contentGenerator.generateScenarioTurn(
+                        request,
+                        onStage = { stage = it },
+                        // 对手这句话就是他在等的东西，写一个字就铺一个字。
+                        onPartialText = { preview = it },
+                    )
+                }
                 val judgeCall = async { app.contentGenerator.judgeScenarioTurn(request) }
                 turnCall.await() to judgeCall.await()
             }
@@ -397,6 +409,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                 val result = app.contentGenerator.summarizeScenario(
                     request = ScenarioSummaryRequest(current, messages, achievedGoals.keys),
                     onStage = { stage = it },
+                    onPartialText = { preview = it },
                 )
             ) {
                 is GenerationResult.Success -> {
@@ -460,6 +473,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                 )
                 ScenarioPhase.Pick -> ScenarioPicker(
                     stage = stage,
+                    preview = preview,
                     customSeed = customSeed,
                     onCustomSeedChange = { customSeed = it; selectedSeed = null },
                     selectedSeed = selectedSeed,
@@ -478,6 +492,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                 ScenarioPhase.Brief -> brief?.let { current ->
                     ScenarioBriefView(
                         stage = stage,
+                        preview = preview,
                         brief = current,
                         busy = busy,
                         error = error,
@@ -488,6 +503,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
                 ScenarioPhase.Conversation -> brief?.let { current ->
                     ScenarioConversation(
                         stage = stage,
+                        preview = preview,
                         brief = current,
                         messages = messages,
                         options = options,
@@ -608,6 +624,7 @@ private fun askContextFor(
 @Composable
 private fun ScenarioPicker(
     stage: GenerationStage,
+    preview: String,
     customSeed: String,
     onCustomSeedChange: (String) -> Unit,
     selectedSeed: ScenarioSeed?,
@@ -662,6 +679,7 @@ private fun ScenarioPicker(
                 title = "正在搭场景和对手…",
                 detail = "会先准备完成清单，再给四种开场说法。",
                 stage = stage,
+                preview = preview,
             )
         }
         Button(onClick = onUse, enabled = !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
@@ -678,6 +696,7 @@ private fun ScenarioPicker(
 @Composable
 private fun ScenarioBriefView(
     stage: GenerationStage,
+    preview: String,
     brief: ScenarioBrief,
     busy: Boolean,
     error: String?,
@@ -691,13 +710,13 @@ private fun ScenarioBriefView(
         Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("你的处境", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Text(brief.situationZh, style = MaterialTheme.typography.bodyLarge)
+                InteractiveEnglishText(brief.situationZh, style = MaterialTheme.typography.bodyLarge)
             }
         }
         Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("${brief.opponentName} · ${brief.opponentRoleZh}", style = MaterialTheme.typography.titleMedium)
-                Text(brief.opponentPersonalityZh, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                InteractiveEnglishText(brief.opponentPersonalityZh, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Text("要做到这 ${brief.goals.size} 件事", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -724,6 +743,7 @@ private fun ScenarioBriefView(
                 title = "正在换一个更难缠的对手…",
                 detail = "词汇难度不变，只增加信息量、追问和阻力。",
                 stage = stage,
+                preview = preview,
             )
         }
         Spacer(Modifier.weight(1f))
@@ -737,6 +757,7 @@ private fun ScenarioBriefView(
 @Composable
 private fun ScenarioConversation(
     stage: GenerationStage,
+    preview: String,
     brief: ScenarioBrief,
     messages: List<ScenarioMessage>,
     options: List<ScenarioReplyOption>,
@@ -806,7 +827,8 @@ private fun ScenarioConversation(
                 FriendlyLoading(
                     title = "对手正在想怎么回…",
                     detail = "同时检查你完成了哪些目标，不会在中途纠错。",
-                stage = stage,
+                    stage = stage,
+                    preview = preview,
                 )
             }
         }
@@ -833,7 +855,14 @@ private fun ScenarioConversation(
                                         text = option.en,
                                         onSingleTap = { onSubmit(option.en) },
                                     )
-                                    Text(option.zh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    // 中文那行照样能双击查词（它常夹着英文），但单击仍然是"就说这句"——
+                                    // 卡片的主用途是选它，别让副功能把主用途挡了。
+                                    InteractiveEnglishText(
+                                        text = option.zh,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        onSingleTap = { onSubmit(option.en) },
+                                    )
                                 }
                             }
                         }
@@ -909,7 +938,7 @@ private fun MessageBubble(message: ScenarioMessage) {
                     }
                 }
                 if (!user && message.subtextZh.isNotBlank()) {
-                    Text(message.subtextZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    InteractiveEnglishText(message.subtextZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -929,8 +958,8 @@ private fun CommunicationFailureCard(
                 Spacer(Modifier.size(8.dp))
                 Text("他理解反了", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onErrorContainer)
             }
-            Text("他听成了：${failure.heardAsZh}", color = MaterialTheme.colorScheme.onErrorContainer)
-            Text(failure.explanationZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            InteractiveEnglishText("他听成了：${failure.heardAsZh}", color = MaterialTheme.colorScheme.onErrorContainer)
+            InteractiveEnglishText(failure.explanationZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
             Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
                 InteractiveEnglishText(failure.suggestedRewriteEn, Modifier.padding(12.dp))
             }
@@ -984,7 +1013,7 @@ private fun ImprovementCard(number: Int, item: ScenarioImprovement) {
             )
             Text("改成", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             InteractiveEnglishText(item.improvedEn, color = MaterialTheme.colorScheme.primary)
-            Text("为什么：${item.reasonZh}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            InteractiveEnglishText("为什么：${item.reasonZh}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -1007,7 +1036,7 @@ private fun ScenarioReplayView(
             Text("${index + 1} / $total", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
-            Text(improvement.replayContextZh, Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            InteractiveEnglishText(improvement.replayContextZh, Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         MessageBubble(ScenarioMessage(0, ScenarioSpeaker.Opponent, improvement.opponentLineEn))
         Text("你上次说的", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
@@ -1116,6 +1145,7 @@ private fun FriendlyLoading(
     detail: String,
     modifier: Modifier = Modifier,
     stage: GenerationStage? = null,
+    preview: String = "",
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -1138,6 +1168,15 @@ private fun FriendlyLoading(
                         text = stageDetail(stage, rememberWaitedSeconds()),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // 正文已经在写了就铺出来：字符数是抽象的，正文不是。
+                if (preview.isNotBlank()) {
+                    Text(
+                        text = preview,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 6,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

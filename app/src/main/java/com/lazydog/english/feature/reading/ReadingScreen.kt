@@ -2,9 +2,13 @@ package com.lazydog.english.feature.reading
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,6 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Casino
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,7 +51,9 @@ import com.lazydog.english.core.data.ReadingJson
 import com.lazydog.english.core.data.ReadingRepository
 import com.lazydog.english.core.data.displayPattern
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.designsystem.InteractiveTextHint
 import com.lazydog.english.core.model.KnowledgeStage
+import com.lazydog.english.core.model.TopicCatalog
 import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
@@ -112,6 +120,8 @@ fun ReadingScreen(
         )
     }
     var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
+    /** 生成中已经写出来的正文，边写边铺。 */
+    var preview by remember { mutableStateOf("") }
 
     LaunchedEffect(mode) {
         if (mode is ReadingMode.Open) {
@@ -137,6 +147,7 @@ fun ReadingScreen(
     fun generate(topic: String) {
         phase = ReadingPhase.Generating
         stage = GenerationStage.Connecting
+        preview = ""
         scope.launch {
             val now = System.currentTimeMillis()
             val vocab = app.knowledgeRepository.vocabulary.first()
@@ -161,7 +172,13 @@ fun ReadingScreen(
                 reviewGrammar = dueGrammar,
                 maxNewWords = MAX_NEW_WORDS,
             )
-            when (val result = app.contentGenerator.generateReading(request, onStage = { stage = it })) {
+            val generated = app.contentGenerator.generateReading(
+                request,
+                onStage = { stage = it },
+                // 正文一到就铺出来：这篇文章本来就是给他读的，早读一分钟没有坏处。
+                onPartialText = { preview = it },
+            )
+            when (val result = generated) {
                 is GenerationResult.Failure -> phase = ReadingPhase.Failed(result.reason)
                 is GenerationResult.Success -> {
                     val id = readingRepo.saveGenerated(
@@ -235,7 +252,7 @@ fun ReadingScreen(
                 ReadingPhase.Setup -> SetupView(onGenerate = ::generate)
                 ReadingPhase.PasteInput -> PasteView(onSave = ::savePasted)
                 ReadingPhase.Generating ->
-                    AiWaiting("AI 正在写文章，会把到期复习词编进去…", stage)
+                    AiWaiting("AI 正在写文章，会把到期复习词编进去…", stage, preview = preview)
                 ReadingPhase.Loading -> CenterColumn { CircularProgressIndicator() }
                 is ReadingPhase.Failed -> CenterColumn {
                     Text(
@@ -274,6 +291,7 @@ fun ReadingScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SetupView(onGenerate: (String) -> Unit) {
     val context = LocalContext.current
@@ -281,49 +299,87 @@ private fun SetupView(onGenerate: (String) -> Unit) {
     val savedTopics by app.userPreferences.topics.collectAsState(initial = emptySet())
     var selectedTopic by rememberSaveable { mutableStateOf("") }
     var customTopic by rememberSaveable { mutableStateOf("") }
+    // 勾过的兴趣排最前，后面接全集：今天想读什么和当初勾了什么兴趣不是一回事，
+    // 只摆那四个勾过的等于每天在同一小撮词里挑。
+    val topics = remember(savedTopics) { TopicCatalog.withPreferred(savedTopics) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(
-            text = "挑个主题，AI 会写一篇约 $TARGET_LENGTH 词的短文，把你到期的复习词编进去，再带最多 $MAX_NEW_WORDS 个新词。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            savedTopics.take(4).forEach { topic ->
-                FilterChip(
-                    selected = selectedTopic == topic,
-                    onClick = {
-                        selectedTopic = if (selectedTopic == topic) "" else topic
-                        customTopic = ""
-                    },
-                    label = { Text(topic) },
-                )
-            }
-        }
-        OutlinedTextField(
-            value = customTopic,
-            onValueChange = {
-                customTopic = it
-                if (it.isNotBlank()) selectedTopic = ""
-            },
-            label = { Text("或者自己写一个主题") },
-            placeholder = { Text("比如：一次搞砸的露营") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Button(
-            onClick = { onGenerate(customTopic.trim().ifBlank { selectedTopic }) },
-            enabled = selectedTopic.isNotBlank() || customTopic.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
+    fun pick(topic: String) {
+        selectedTopic = topic
+        customTopic = ""
+    }
+
+    // 标签多到要滚了，输入框和生成按钮就不能跟着滚：选完标签还得往下翻一屏才能开始，
+    // 而且选的是哪个已经看不见了。滚动区只放标签，操作区钉在底下。
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(top = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
-            Text("生成短文", modifier = Modifier.padding(start = 8.dp))
+            Text(
+                text = "挑个主题，AI 会写一篇约 $TARGET_LENGTH 词的短文，把你到期的复习词编进去，再带最多 $MAX_NEW_WORDS 个新词。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // 挑不出来的时候比挑得出来的时候多：给一颗骰子，省得对着几十个词发呆。
+            AssistChip(
+                onClick = { pick(TopicCatalog.random(exclude = selectedTopic)) },
+                label = { Text("随便给我一个") },
+                leadingIcon = { Icon(Icons.Outlined.Casino, contentDescription = null) },
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                topics.forEach { topic ->
+                    FilterChip(
+                        selected = selectedTopic == topic,
+                        onClick = { if (selectedTopic == topic) selectedTopic = "" else pick(topic) },
+                        label = { Text(topic) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // 选了标签也在这儿回显一次：滚上去看不见了，按钮旁边得说清这次要生成什么。
+                val chosen = customTopic.trim().ifBlank { selectedTopic }
+                OutlinedTextField(
+                    value = customTopic,
+                    onValueChange = {
+                        customTopic = it
+                        if (it.isNotBlank()) selectedTopic = ""
+                    },
+                    label = { Text("或者自己写一个主题") },
+                    placeholder = { Text(selectedTopic.ifBlank { "比如：一次搞砸的露营" }) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    onClick = { onGenerate(chosen) },
+                    enabled = chosen.isNotBlank(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                ) {
+                    Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
+                    Text(
+                        text = if (chosen.isBlank()) "生成短文" else "生成「$chosen」的短文",
+                        modifier = Modifier.padding(start = 8.dp),
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }
@@ -431,12 +487,7 @@ private fun MaterialContent(
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
-            Text(
-                "快速双击查词 · 快速三击讲句",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp),
-            )
+            InteractiveTextHint(modifier = Modifier.padding(top = 12.dp))
         }
         InteractiveEnglishText(
             text = material.body,
@@ -464,7 +515,7 @@ private fun MaterialContent(
                                 InteractiveEnglishText(text = target.term, style = MaterialTheme.typography.titleSmall)
                                 Tag(if (target.role == "new") "新词" else "复习")
                             }
-                            Text(
+                            InteractiveEnglishText(
                                 text = target.meaningZh,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -520,7 +571,7 @@ private fun QuestionList(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                Text(
+                InteractiveEnglishText(
                     text = "${qIndex + 1}. ${question.promptZh}",
                     style = MaterialTheme.typography.bodyLarge,
                 )
@@ -554,7 +605,7 @@ private fun QuestionList(
                     }
                 }
                 if (selected != null && question.explanationZh.isNotBlank()) {
-                    Text(
+                    InteractiveEnglishText(
                         text = (if (selected == question.answerIndex) "对了。" else "不对。") + question.explanationZh,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

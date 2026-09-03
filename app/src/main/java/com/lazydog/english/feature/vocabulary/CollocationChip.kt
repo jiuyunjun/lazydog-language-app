@@ -1,15 +1,11 @@
 package com.lazydog.english.feature.vocabulary
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,12 +13,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
-import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.designsystem.InteractiveEnglishBlock
 import com.lazydog.english.domain.generation.Collocation
 import com.lazydog.english.domain.generation.GenerationResult
 import kotlinx.coroutines.flow.first
@@ -67,28 +62,29 @@ fun CollocationChip(collocation: Collocation) {
         }
     }
 
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    // 整块都能点：这块小到只有两三个词，还要人去瞄准那行英文的字面，
+    // 点在喇叭上或者翻译那行上什么都不发生，看着就像坏了。
+    InteractiveEnglishBlock(
+        text = phrase,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        container = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = MaterialTheme.shapes.small,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                InteractiveEnglishText(
-                    text = phrase,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    onSingleTap = { tap() },
-                )
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                    contentDescription = "读这个搭配",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(14.dp),
-                )
-            }
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+        spacing = 2.dp,
+        fillWidth = false,
+        showHint = false,
+        // 单击不只是念：老词条没存翻译，这一下还要把翻译现取回来。
+        onSingleTap = { tap() },
+        trailing = {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                contentDescription = "读这个搭配",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp),
+            )
+        },
+        below = {
             when {
                 translation.isNotBlank() -> Text(
                     text = translation,
@@ -106,6 +102,6 @@ fun CollocationChip(collocation: Collocation) {
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-        }
-    }
+        },
+    )
 }

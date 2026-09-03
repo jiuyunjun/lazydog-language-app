@@ -132,6 +132,8 @@ fun AssessmentScreen(onExit: () -> Unit) {
     /** 生成走到哪一步了：没接通 / 模型在想 / 正在写。 */
 
     var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
+    /** 这一次生成已经写出来的正文，边写边铺，免得对着转圈干等。 */
+    var preview by remember { mutableStateOf("") }
     var ladderState by remember { mutableStateOf(AssessmentEngine.initial()) }
     var deepReadingOutcome by remember { mutableStateOf<DeepReadingOutcome?>(null) }
     var expressionAssessment by remember { mutableStateOf<ExpressionAssessment?>(null) }
@@ -152,6 +154,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
 
     fun fetchDeepReading() {
         phase = AssessmentPhase.FetchingDeepReading
+        preview = ""
         scope.launch {
             val topics = prefs.topics.first().toList()
             when (
@@ -159,6 +162,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                     cefrLevel = labelForScore(ladderState.score),
                     topics = topics,
                     onStage = { stage = it },
+                    onPartialText = { preview = it },
                 )
             ) {
                 is GenerationResult.Failure -> phase = AssessmentPhase.DeepReadingFailed(result.reason)
@@ -174,6 +178,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
         when (val step = AssessmentEngine.nextStep(ladderState)) {
             is NextLadderStep.Question -> {
                 phase = AssessmentPhase.FetchingQuestion
+                preview = ""
                 scope.launch {
                     val topics = prefs.topics.first().toList()
                     when (
@@ -183,6 +188,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                             topics = topics,
                             skillFilter = step.skill,
                             onStage = { stage = it },
+                            onPartialText = { preview = it },
                         )
                     ) {
                         is GenerationResult.Failure -> phase = AssessmentPhase.LadderFailed(result.reason)
@@ -200,6 +206,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
             }
             is NextLadderStep.Correction -> {
                 phase = AssessmentPhase.FetchingCorrection
+                preview = ""
                 correctionText = ""
                 scope.launch {
                     val topics = prefs.topics.first().toList()
@@ -208,6 +215,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                             cefrLevel = step.level,
                             topics = topics,
                             onStage = { stage = it },
+                            onPartialText = { preview = it },
                         )
                     ) {
                         is GenerationResult.Failure -> phase = AssessmentPhase.CorrectionFailed(result.reason)
@@ -268,12 +276,14 @@ fun AssessmentScreen(onExit: () -> Unit) {
 
     fun submitWriting(task: WritingTask, text: String) {
         phase = AssessmentPhase.WritingSubmitting
+        preview = ""
         scope.launch {
             val firstResult = app.contentGenerator.evaluateExpressionRubric(
                 taskZh = task.promptZh,
                 userTextEn = text,
                 referenceCefrLevel = null,
                 onStage = { stage = it },
+                onPartialText = { preview = it },
             )
             val first = when (firstResult) {
                 is GenerationResult.Failure -> {
@@ -287,6 +297,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                 userTextEn = text,
                 referenceCefrLevel = labelForScore(ladderState.score),
                 onStage = { stage = it },
+                onPartialText = { preview = it },
             )
             val second = when (secondResult) {
                 is GenerationResult.Failure -> {
@@ -377,7 +388,8 @@ fun AssessmentScreen(onExit: () -> Unit) {
                         advanceLadder()
                     },
                 )
-                AssessmentPhase.FetchingQuestion -> LoadingView("正在出 ${labelForScore(ladderState.score)} 难度的题…", stage)
+                AssessmentPhase.FetchingQuestion ->
+                    LoadingView("正在出 ${labelForScore(ladderState.score)} 难度的题…", stage, preview)
                 is AssessmentPhase.LadderFailed -> FailedView(
                     reason = p.reason,
                     onRetry = { advanceLadder() },
@@ -391,7 +403,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                     onConfirm = { onLadderAnswer(p.question, p.levelScore, p.selected, p.shownAtMillis) },
                     onSkip = { onLadderAnswer(p.question, p.levelScore, null, p.shownAtMillis) },
                 )
-                AssessmentPhase.FetchingCorrection -> LoadingView("正在出一道纠错题…", stage)
+                AssessmentPhase.FetchingCorrection -> LoadingView("正在出一道纠错题…", stage, preview)
                 is AssessmentPhase.CorrectionFailed -> FailedView(
                     reason = p.reason,
                     onRetry = { advanceLadder() },
@@ -404,7 +416,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                     onConfirm = { onCorrectionAnswer(p.item, p.levelScore, p.shownAtMillis, correctionText) },
                     onSkip = { onCorrectionAnswer(p.item, p.levelScore, p.shownAtMillis, "") },
                 )
-                AssessmentPhase.FetchingDeepReading -> LoadingView("正在准备一篇阅读短文…", stage)
+                AssessmentPhase.FetchingDeepReading -> LoadingView("正在准备一篇阅读短文…", stage, preview)
                 is AssessmentPhase.DeepReadingFailed -> FailedView(
                     reason = p.reason,
                     onRetry = { fetchDeepReading() },
@@ -426,7 +438,7 @@ fun AssessmentScreen(onExit: () -> Unit) {
                     onSubmit = { submitWriting(p.task, writingText) },
                     onSkip = { skipWriting() },
                 )
-                AssessmentPhase.WritingSubmitting -> LoadingView("AI 正在评两轮分…", stage)
+                AssessmentPhase.WritingSubmitting -> LoadingView("AI 正在评两轮分…", stage, preview)
                 is AssessmentPhase.WritingFailed -> FailedView(
                     reason = p.reason,
                     onRetry = {
@@ -454,8 +466,13 @@ fun AssessmentScreen(onExit: () -> Unit) {
 }
 
 @Composable
-private fun LoadingView(message: String, stage: GenerationStage) {
-    AiWaiting(title = message, stage = stage, modifier = Modifier.padding(top = 24.dp))
+private fun LoadingView(message: String, stage: GenerationStage, preview: String = "") {
+    AiWaiting(
+        title = message,
+        stage = stage,
+        preview = preview,
+        modifier = Modifier.padding(top = 24.dp),
+    )
 }
 
 @Composable

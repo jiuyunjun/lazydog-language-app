@@ -61,6 +61,8 @@ import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.VocabularyRecord
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.feature.grammar.GrammarPatternZhLine
+import com.lazydog.english.feature.grammar.GrammarTermsCard
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.KnowledgeType
 import com.lazydog.english.core.model.ReviewGrade
@@ -391,8 +393,9 @@ private fun GrammarDetailSheet(
                 text = pattern,
                 style = MaterialTheme.typography.headlineSmall,
             )
+            GrammarPatternZhLine(pattern)
             if (detail.labelZh.isNotBlank()) {
-                Text(detail.labelZh, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                InteractiveEnglishText(detail.labelZh, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
             if (summary.isNotBlank()) {
                 Text(summary, style = MaterialTheme.typography.bodyLarge)
@@ -400,9 +403,10 @@ private fun GrammarDetailSheet(
             if (detail.explanationZh.isNotBlank() && detail.explanationZh != summary) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("详细说明", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    Text(detail.explanationZh, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    InteractiveEnglishText(detail.explanationZh, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            GrammarTermsCard(pattern, detail.explanationZh, detail.tipZh)
             if (detail.exampleEn.isNotBlank()) {
                 Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -416,7 +420,7 @@ private fun GrammarDetailSheet(
                             }
                         }
                         if (detail.exampleZh.isNotBlank()) {
-                            Text(detail.exampleZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            InteractiveEnglishText(detail.exampleZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -426,7 +430,7 @@ private fun GrammarDetailSheet(
                     Text("容易说错", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
                     InteractiveEnglishText(detail.badExampleEn)
                     if (detail.badExampleNoteZh.isNotBlank()) {
-                        Text(detail.badExampleNoteZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        InteractiveEnglishText(detail.badExampleNoteZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -434,7 +438,7 @@ private fun GrammarDetailSheet(
                 Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("易混提醒", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        Text(detail.tipZh, style = MaterialTheme.typography.bodySmall)
+                        InteractiveEnglishText(detail.tipZh, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

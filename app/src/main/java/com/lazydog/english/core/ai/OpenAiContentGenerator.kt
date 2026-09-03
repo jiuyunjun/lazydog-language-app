@@ -145,12 +145,15 @@ class OpenAiContentGenerator(
     override suspend fun generateNewWords(
         request: NewWordsRequest,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<List<GeneratedWord>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildNewWordsPrompt(request),
             task = AiTask.Words,
             onStage = onStage,
+            // 词一个个冒出来：这既是进度，也已经是他要学的内容。
+            onTextProgress = preview(onPartialText) { JsonStream.allStrings(it, "term").joinToString(" · ") },
             op = "新词",
         )
         val content = when (outcome) {
@@ -252,12 +255,15 @@ class OpenAiContentGenerator(
     override suspend fun generateGrammarDrill(
         request: GrammarDrillRequest,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<List<GrammarDrillItem>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildGrammarDrillPrompt(request),
             task = AiTask.Grammar,
             onStage = onStage,
+            // 题干先到就先铺题干；选项和答案不铺，免得预览把答案漏出去。
+            onTextProgress = preview(onPartialText) { JsonStream.allStrings(it, "sentenceEn").joinToString("\n") },
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -290,12 +296,15 @@ class OpenAiContentGenerator(
     override suspend fun generateTranslationTasks(
         request: TranslationRequest,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<List<TranslationTask>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildTranslationTasksPrompt(request),
             task = AiTask.Translation,
             onStage = onStage,
+            // 要翻的中文句子先到先铺。
+            onTextProgress = preview(onPartialText) { JsonStream.allStrings(it, "promptZh").joinToString("\n") },
         )
         val content = when (outcome) {
             is Completion.Error -> return GenerationResult.Failure(outcome.reason)
@@ -319,11 +328,14 @@ class OpenAiContentGenerator(
         userTextEn: String,
         learnerLevel: String,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<TranslationFeedback> {
         val outcome = complete(
             systemPrompt = TRANSLATION_JUDGE_SYSTEM_PROMPT,
             userPrompt = buildTranslationGradePrompt(task, userTextEn, learnerLevel),
             onStage = onStage,
+            // 判定意见比字符数有用得多——他正等着看自己那句错在哪。
+            onTextProgress = preview(onPartialText) { JsonStream.firstNonEmpty(it, "noteZh", "correctedEn") },
             task = AiTask.Translation,
         )
         val content = when (outcome) {
@@ -341,12 +353,15 @@ class OpenAiContentGenerator(
     override suspend fun generateReading(
         request: ReadingGenerationRequest,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<GeneratedReading> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildReadingPrompt(request),
             task = AiTask.Reading,
             onStage = onStage,
+            // 正文一到就铺正文，那是最好的进度条。
+            onTextProgress = preview(onPartialText) { JsonStream.firstNonEmpty(it, "body", "title") },
             op = "阅读",
         )
         val content = when (outcome) {
@@ -451,11 +466,14 @@ class OpenAiContentGenerator(
         topics: List<String>,
         skillFilter: String?,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<List<AssessmentQuestion>> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildAssessmentPrompt(cefrLevel, count, topics, skillFilter),
             onStage = onStage,
+            // 题目先到先铺。
+            onTextProgress = preview(onPartialText) { JsonStream.allStrings(it, "prompt").joinToString("\n") },
             task = AiTask.Assessment,
             op = "测试题",
         )
@@ -477,11 +495,14 @@ class OpenAiContentGenerator(
         cefrLevel: String,
         topics: List<String>,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<DeepReadingTask> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildDeepReadingPrompt(cefrLevel, topics),
             onStage = onStage,
+            // 短文一到就铺。
+            onTextProgress = preview(onPartialText) { JsonStream.firstNonEmpty(it, "passage") },
             task = AiTask.Assessment,
             op = "测试阅读",
         )
@@ -504,11 +525,14 @@ class OpenAiContentGenerator(
         cefrLevel: String,
         topics: List<String>,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<CorrectionItem> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildCorrectionItemPrompt(cefrLevel, topics),
             onStage = onStage,
+            // 要改的那句一到就铺。
+            onTextProgress = preview(onPartialText) { JsonStream.firstNonEmpty(it, "incorrectSentence") },
             task = AiTask.Assessment,
             op = "纠错题",
         )
@@ -528,11 +552,14 @@ class OpenAiContentGenerator(
         userTextEn: String,
         referenceCefrLevel: String?,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<ExpressionRubric> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildExpressionRubricPrompt(taskZh, userTextEn, referenceCefrLevel),
             onStage = onStage,
+            // 评分理由先到先铺；分数是数字，流不出什么可看的东西。
+            onTextProgress = preview(onPartialText) { JsonStream.allStrings(it, "evidenceZh").joinToString("\n") },
             task = AiTask.Assessment,
             op = "表达评分",
         )
@@ -629,11 +656,14 @@ class OpenAiContentGenerator(
     override suspend fun generateScenario(
         request: ScenarioGenerationRequest,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<ScenarioBrief> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildScenarioPrompt(request),
             onStage = onStage,
+            // 场景设定先到就先铺，用户读着它就把这一局的处境读进去了。
+            onTextProgress = preview(onPartialText) { JsonStream.firstNonEmpty(it, "situationZh", "titleZh") },
             task = AiTask.Scenario,
             op = "情景生成",
         )
@@ -655,11 +685,14 @@ class OpenAiContentGenerator(
     override suspend fun generateScenarioTurn(
         request: ScenarioTurnRequest,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<ScenarioTurn> {
         val outcome = complete(
             systemPrompt = SCENARIO_ROLE_SYSTEM_PROMPT,
             userPrompt = buildScenarioTurnPrompt(request),
             onStage = onStage,
+            // 对手这句话就是他在等的东西。
+            onTextProgress = preview(onPartialText) { JsonStream.firstNonEmpty(it, "opponentReplyEn") },
             task = AiTask.Scenario,
             op = "情景对话",
         )
@@ -697,11 +730,14 @@ class OpenAiContentGenerator(
     override suspend fun summarizeScenario(
         request: ScenarioSummaryRequest,
         onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
     ): GenerationResult<ScenarioSummary> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildScenarioSummaryPrompt(request),
             onStage = onStage,
+            // 总述先到先铺。
+            onTextProgress = preview(onPartialText) { JsonStream.firstNonEmpty(it, "overviewZh", "outcomeTitleZh") },
             task = AiTask.Scenario,
             op = "情景总结",
         )
@@ -1797,6 +1833,9 @@ class OpenAiContentGenerator(
             appendLine("干扰项必须是中文母语者真的会写错的形式（比如用一般现在时代替完成进行时、" +
                 "第三人称漏 s、动词原形代替动名词），不要放明显不相关的词。")
             appendLine("explanationZh 一句话说明为什么是这个形式，顺带点出最容易误选的那个错在哪。")
+            // 读解析的人正是刚答错的人，一句 present perfect 就把解析变成了第二道题。
+            appendLine("explanationZh 面向不懂语法术语的中文自学者：术语一律写中文，" +
+                "如「现在完成时」「过去分词」「动词原形」；非要写英文术语时紧跟中文括注。")
             appendLine("几道题之间换不同的句子场景和不同的错误类型，不要同一个句式改个主语重复出。")
             appendLine("errorTag 标这道题考的是哪一类形式，只能从这些里选：${GrammarErrorTag.promptCatalog()}。" +
                 "标不准就用 other，不要自己发明标签——答错时会按它归类，决定之后给你讲什么。")
@@ -2386,6 +2425,11 @@ class OpenAiContentGenerator(
             appendLine("例如：be going to + base verb；have/has + past participle；if + past simple, would + base verb。")
             appendLine("labelZh 是 2～12 字的中文语法标签；summaryZh 是不超过 18 个汉字的一句话用途，如“表示已有计划或打算”。")
             appendLine("explanationZh 用两三句大白话讲清何时用、语气以及和易混结构的区别，不要重复 summaryZh；")
+            // 公式必须是英文才能往句子里套，但读的人是中文母语的自学者：
+            // 讲解里再冒出一个没解释的 past participle，这一屏对他就是天书。
+            appendLine("面向的是不懂语法术语的中文自学者。除 patternEn 外，" +
+                "凡是出现英语语法术语都要紧跟中文，如 past participle（过去分词）、base verb（动词原形）；" +
+                "讲解里第一次提到公式中的成分时，用中文说清它具体指什么形式，并给一个具体的词做例子。")
             appendLine("goodExampleEn/goodExampleZh 给一个正确例句和翻译；")
             appendLine("badExampleEn 一个中国学习者容易写错的句子，badExampleNoteZh 说明错在哪；tipZh 一句易混点提醒。")
             appendLine("输出 JSON schema：")
@@ -2396,6 +2440,18 @@ class OpenAiContentGenerator(
         }
     }
 }
+
+/**
+ * 把"已收到的原始文本"包成"已经写出来的正文"。
+ *
+ * 每个调用各自决定从未闭合的 JSON 里抽哪一段（[JsonStream]）：一次生成一批的抽整串，
+ * 只生成一件事的抽正文。抽出来的东西**只用于展示**，最终仍以完整解析加校验为准
+ * （AI_CONTRACTS §2）。没人要预览就返回 null，连抽都不抽。
+ */
+private fun preview(
+    onPartialText: ((String) -> Unit)?,
+    extract: (String) -> String,
+): ((String) -> Unit)? = onPartialText?.let { callback -> { raw -> callback(extract(raw)) } }
 
 /** 容错取出 content 里的 JSON：去掉可能的 ``` 围栏和 JSON 前后的杂质文本。 */
 internal fun extractJson(content: String): String {

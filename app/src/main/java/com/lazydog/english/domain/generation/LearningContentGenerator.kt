@@ -11,12 +11,16 @@ interface LearningContentGenerator {
     suspend fun generateScenario(
         request: com.lazydog.english.domain.scenario.ScenarioGenerationRequest,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioBrief>
 
     /** 只扮演对手并推进对话；不得纠错或评价用户。 */
     suspend fun generateScenarioTurn(
         request: com.lazydog.english.domain.scenario.ScenarioTurnRequest,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioTurn>
 
     /** 与对话生成分开的目标判定调用；只返回命中目标和沟通失败。 */
@@ -28,6 +32,8 @@ interface LearningContentGenerator {
     suspend fun summarizeScenario(
         request: com.lazydog.english.domain.scenario.ScenarioSummaryRequest,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioSummary>
 
     /**
@@ -37,6 +43,8 @@ interface LearningContentGenerator {
     suspend fun generateNewWords(
         request: NewWordsRequest,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<List<GeneratedWord>>
 
     /**
@@ -56,12 +64,16 @@ interface LearningContentGenerator {
     suspend fun generateGrammarDrill(
         request: GrammarDrillRequest,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<List<GrammarDrillItem>>
 
     /** 中译英产出练习：出几句要用上目标形式的中文。 */
     suspend fun generateTranslationTasks(
         request: com.lazydog.english.domain.production.TranslationRequest,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<List<com.lazydog.english.domain.production.TranslationTask>>
 
     /**
@@ -73,6 +85,8 @@ interface LearningContentGenerator {
         userTextEn: String,
         learnerLevel: String,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.production.TranslationFeedback>
 
     /**
@@ -95,6 +109,8 @@ interface LearningContentGenerator {
     suspend fun generateReading(
         request: ReadingGenerationRequest,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<GeneratedReading>
 
     /**
@@ -147,6 +163,8 @@ interface LearningContentGenerator {
         topics: List<String>,
         skillFilter: String? = null,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<List<com.lazydog.english.domain.assessment.AssessmentQuestion>>
 
     /** 能力测试的独立阅读模块：一篇按等级定长的短文 + 4 道分技能标签的理解题。 */
@@ -154,6 +172,8 @@ interface LearningContentGenerator {
         cefrLevel: String,
         topics: List<String>,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.assessment.DeepReadingTask>
 
     /**
@@ -164,6 +184,8 @@ interface LearningContentGenerator {
         cefrLevel: String,
         topics: List<String>,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.assessment.CorrectionItem>
 
     /**
@@ -177,6 +199,8 @@ interface LearningContentGenerator {
         userTextEn: String,
         referenceCefrLevel: String?,
         onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
     ): GenerationResult<com.lazydog.english.domain.assessment.ExpressionRubric>
 
     /**

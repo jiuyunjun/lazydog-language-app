@@ -245,10 +245,17 @@ class OpenAiContentGeneratorTest {
         )
 
         val stages = mutableListOf<GenerationStage>()
-        val result = generator().generateNewWords(wordsRequest) { stages.add(it) }
+        val previews = mutableListOf<String>()
+        val result = generator().generateNewWords(
+            wordsRequest,
+            onStage = { stages.add(it) },
+            onPartialText = { previews.add(it) },
+        )
 
         val success = result as GenerationResult.Success
         assertEquals(listOf("curb"), success.data.map { it.term })
+        // 等待期间铺出去的是已经写好的词本身，不是一个字符数。
+        assertTrue(previews.last().contains("curb"))
         val written = stages.filterIsInstance<GenerationStage.Writing>()
         assertEquals(2, written.size)
         assertTrue(written.last().chars > written.first().chars)

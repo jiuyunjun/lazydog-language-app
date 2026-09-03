@@ -100,11 +100,14 @@ fun ProductionScreen(onExit: () -> Unit) {
     var phase by remember { mutableStateOf<ProductionPhase>(ProductionPhase.Generating) }
 
     var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
+    /** 这一次生成已经写出来的正文，边写边铺。 */
+    var preview by remember { mutableStateOf("") }
     var input by remember { mutableStateOf("") }
     var done by remember { mutableStateOf<List<WrittenLine>>(emptyList()) }
 
     fun generate() {
         phase = ProductionPhase.Generating
+        preview = ""
         scope.launch {
             val prefs = app.userPreferences
             val now = System.currentTimeMillis()
@@ -126,6 +129,7 @@ fun ProductionScreen(onExit: () -> Unit) {
                     weakSpots = app.mistakeRepository.weakSpots(now),
                 ),
                 onStage = { stage = it },
+                onPartialText = { preview = it },
             )
             phase = when (result) {
                 is GenerationResult.Success -> ProductionPhase.Writing(result.data, 0)
@@ -140,10 +144,13 @@ fun ProductionScreen(onExit: () -> Unit) {
         val written = input.trim()
         if (written.isBlank()) return
         phase = ProductionPhase.Checking(tasks, index)
+        preview = ""
         scope.launch {
             val task = tasks[index]
             val result = app.contentGenerator.gradeTranslation(
                 onStage = { stage = it },
+                // 他正等着看自己那句错在哪，判定意见一到就先给他看。
+                onPartialText = { preview = it },
                 task = task,
                 userTextEn = written,
                 learnerLevel = app.userPreferences.expressionLevelDescription.first(),
@@ -231,7 +238,7 @@ fun ProductionScreen(onExit: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             when (val p = phase) {
-                ProductionPhase.Generating -> AiWaiting("在挑两句你现在最该练的…", stage)
+                ProductionPhase.Generating -> AiWaiting("在挑两句你现在最该练的…", stage, preview = preview)
                 is ProductionPhase.Failed -> Hint {
                     Text(
                         text = "没拿到句子：${p.reason}",
@@ -250,7 +257,7 @@ fun ProductionScreen(onExit: () -> Unit) {
                     onShowHint = { phase = p.copy(hintShown = true) },
                     onSubmit = { submit(p.tasks, p.index) },
                 )
-                is ProductionPhase.Checking -> AiWaiting("在看你这句…", stage)
+                is ProductionPhase.Checking -> AiWaiting("在看你这句…", stage, preview = preview)
                 is ProductionPhase.CheckFailed -> Hint {
                     Text(
                         text = "判不了：${p.reason}",
@@ -323,7 +330,7 @@ private fun WritingView(
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
         )
-        Text(text = task.promptZh, style = MaterialTheme.typography.headlineSmall)
+        InteractiveEnglishText(text = task.promptZh, style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(
             value = input,
             onValueChange = onInputChange,
@@ -347,7 +354,7 @@ private fun WritingView(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp),
                     )
-                    Text(text = task.hintZh, style = MaterialTheme.typography.bodyMedium)
+                    InteractiveEnglishText(text = task.hintZh, style = MaterialTheme.typography.bodyMedium)
                 }
             }
         } else if (task.hintZh.isNotBlank()) {
@@ -387,7 +394,7 @@ private fun FeedbackView(
         modifier = Modifier.padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(text = task.promptZh, style = MaterialTheme.typography.titleMedium)
+        InteractiveEnglishText(text = task.promptZh, style = MaterialTheme.typography.titleMedium)
         Text(
             text = feedback.verdict.labelZh,
             style = MaterialTheme.typography.headlineSmall,
@@ -403,7 +410,7 @@ private fun FeedbackView(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(text = feedback.noteZh, style = MaterialTheme.typography.bodyMedium)
+                InteractiveEnglishText(text = feedback.noteZh, style = MaterialTheme.typography.bodyMedium)
                 val tags = TranslationValidation.mistakeTags(feedback)
                 if (tags.isNotEmpty()) {
                     Text(
@@ -459,7 +466,7 @@ private fun SummaryView(lines: List<WrittenLine>, onExit: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(line.task.promptZh, style = MaterialTheme.typography.bodySmall)
+                    InteractiveEnglishText(line.task.promptZh, style = MaterialTheme.typography.bodySmall)
                     InteractiveEnglishText(
                         text = line.feedback.correctedEn,
                         style = MaterialTheme.typography.bodyMedium,

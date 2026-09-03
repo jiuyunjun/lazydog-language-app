@@ -1,9 +1,14 @@
 package com.lazydog.english.core.designsystem
 
+import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,8 +28,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -32,7 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -43,18 +51,93 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.WordExplanation
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/** 多击窗口：这段时间内再点一下就升级成双击/三击。 */
+private const val MULTI_TAP_WINDOW_MILLIS = 280L
+
+/**
+ * 单击/双击/三击这一整套的状态：判定、朗读、以及要弹哪个面板。
+ *
+ * 抽出来是因为有两个入口共用它——[InteractiveEnglishText] 把手势装在文字上，
+ * [InteractiveEnglishBlock] 装在整块上。判定逻辑只该有一份。
+ */
+@Stable
+private class EnglishTapState(
+    val text: String,
+    private val scope: CoroutineScope,
+    private val context: Context,
+) {
+    var word by mutableStateOf<Pair<String, String>?>(null)
+    var sentence by mutableStateOf<String?>(null)
+
+    private var tapCount = 0
+    private var settleJob: Job? = null
+
+    fun speak() {
+        scope.launch {
+            (context.applicationContext as LazyDogApplication).speechController.speak(text)
+        }
+    }
+
+    /**
+     * 收到一次点击，[offset] 是点到的文本下标。
+     *
+     * 单击要等窗口关掉才执行：不等的话双击会先触发一次单击，查词之前先念一遍。
+     */
+    fun onTap(offset: Int, speakOnSingleTap: Boolean, onSingleTap: (() -> Unit)?) {
+        tapCount = (tapCount + 1).coerceAtMost(3)
+        settleJob?.cancel()
+        settleJob = scope.launch {
+            delay(MULTI_TAP_WINDOW_MILLIS)
+            when (tapCount) {
+                1 -> if (onSingleTap != null) onSingleTap() else if (speakOnSingleTap) speak()
+                2 -> wordAt(text, offset)?.let { word = it to sentenceAround(text, offset) }
+                else -> sentence = sentenceAround(text, offset).takeIf { it.isNotBlank() }
+            }
+            tapCount = 0
+        }
+    }
+}
+
+@Composable
+private fun rememberEnglishTapState(text: String): EnglishTapState {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    return remember(text, scope, context) { EnglishTapState(text, scope, context) }
+}
+
+/** 查词和讲句的面板。两个入口都要挂，所以单独放一份。 */
+@Composable
+private fun EnglishSheets(state: EnglishTapState) {
+    state.word?.let { (word, sentence) ->
+        GlobalWordSheet(word, sentence) { state.word = null }
+    }
+    state.sentence?.let { sentence ->
+        GlobalSentenceSheet(sentence) { state.sentence = null }
+    }
+}
+
 /**
  * 全局英文文本交互：快速双击查当前位置的词，快速三击讲解当前位置的句子。
  * 单击回调可选；存在时会等多击窗口结束再触发，避免把双击误当成两次单击。
+ *
+ * [speakOnSingleTap] 打开后单击就朗读这段文字。
+ *
+ * 按下不做任何点亮。这一版试过按下高亮那段文字/那一块，实际用起来是满屏乱闪——
+ * 界面上到处都是可点的英文，随手一碰就亮一块，比"点了没动静"更烦。
+ *
+ * 点击范围就是文字本身，这是默认形态。整块可点的 [InteractiveEnglishBlock] 是特例，
+ * 目前只有词组小块用它。
  */
 @Composable
 fun InteractiveEnglishText(
@@ -68,15 +151,11 @@ fun InteractiveEnglishText(
     overflow: TextOverflow = TextOverflow.Clip,
     highlightWords: Set<String> = emptySet(),
     highlightStyle: SpanStyle? = null,
+    speakOnSingleTap: Boolean = false,
     onSingleTap: (() -> Unit)? = null,
 ) {
+    val state = rememberEnglishTapState(text)
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    var selectedWord by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var selectedSentence by remember { mutableStateOf<String?>(null) }
-    var tapCount by remember { mutableIntStateOf(0) }
-    var settleJob by remember { mutableStateOf<Job?>(null) }
-    val scope = rememberCoroutineScope()
-    val timeoutMillis = 280L
     val highlightLower = remember(highlightWords) { highlightWords.map { it.lowercase() }.toSet() }
     val primary = MaterialTheme.colorScheme.primary
     val annotated = remember(text, highlightLower, primary, highlightStyle) {
@@ -89,22 +168,13 @@ fun InteractiveEnglishText(
 
     Text(
         text = annotated,
-        modifier = modifier.pointerInput(text, onSingleTap) {
-            detectTapGestures { position ->
-                val offset = layout?.getOffsetForPosition(position) ?: return@detectTapGestures
-                tapCount = (tapCount + 1).coerceAtMost(3)
-                settleJob?.cancel()
-                settleJob = scope.launch {
-                    delay(timeoutMillis)
-                    when (tapCount) {
-                        1 -> onSingleTap?.invoke()
-                        2 -> wordAt(text, offset)?.let { selectedWord = it to sentenceAround(text, offset) }
-                        else -> selectedSentence = sentenceAround(text, offset).takeIf { it.isNotBlank() }
-                    }
-                    tapCount = 0
+        modifier = modifier
+            .pointerInput(text, onSingleTap, speakOnSingleTap) {
+                detectTapGestures { position ->
+                    val offset = layout?.getOffsetForPosition(position) ?: return@detectTapGestures
+                    state.onTap(offset, speakOnSingleTap, onSingleTap)
                 }
-            }
-        },
+            },
         style = style,
         color = color,
         fontWeight = fontWeight,
@@ -114,12 +184,118 @@ fun InteractiveEnglishText(
         onTextLayout = { layout = it },
     )
 
-    selectedWord?.let { (word, sentence) ->
-        GlobalWordSheet(word, sentence) { selectedWord = null }
+    EnglishSheets(state)
+}
+
+/**
+ * 一整块可点的英文。
+ *
+ * 和 [InteractiveEnglishText] 的区别只有一个：手势和点亮都作用在**整块**上。
+ * 一行英文加一行中文翻译加一行提示，眼里它就是一张卡片，只有那行英文的字面能点
+ * 等于让人去瞄准——点空了还没有任何反应，和坏了没区别。
+ *
+ * **只给词组小块（[com.lazydog.english.feature.vocabulary.CollocationChip]）用**。
+ * 别处的英文仍然是文字级的点击范围：整块可点会把块里其它东西的点击也吃掉，
+ * 那些地方的卡片各有各的主用途，不该被朗读顶掉。
+ *
+ * 双击三击仍然要知道点的是哪个词，所以按下的位置会换算回英文那一行的坐标系
+ * （[LayoutCoordinates.localPositionOf]）；点在中文那行上就落到最近的词，
+ * 这比"什么也不发生"强。
+ *
+ * [header] 放在英文上面（标签、喇叭之类），[trailing] 和英文同一行，[below] 在英文下面。
+ */
+@Composable
+fun InteractiveEnglishBlock(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyLarge,
+    color: Color = Color.Unspecified,
+    container: Color = MaterialTheme.colorScheme.surfaceContainer,
+    border: BorderStroke? = null,
+    shape: Shape = MaterialTheme.shapes.medium,
+    contentPadding: PaddingValues = PaddingValues(16.dp),
+    spacing: Dp = 10.dp,
+    /** 撑满一行。词组那种并排摆的小块要关掉，否则一行只放得下一个。 */
+    fillWidth: Boolean = true,
+    showHint: Boolean = true,
+    speakOnSingleTap: Boolean = true,
+    onSingleTap: (() -> Unit)? = null,
+    header: (@Composable RowScope.() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    below: (@Composable ColumnScope.() -> Unit)? = null,
+) {
+    val state = rememberEnglishTapState(text)
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var blockCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var textCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    Surface(
+        // 底色恒定。按下高亮整块实测就是满屏乱闪，比没有反馈更烦。
+        color = container,
+        border = border,
+        shape = shape,
+        modifier = modifier
+            .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
+            .onGloballyPositioned { blockCoords = it }
+            .pointerInput(text, speakOnSingleTap, onSingleTap) {
+                detectTapGestures { position ->
+                    val inText = textCoords?.let { t ->
+                        blockCoords?.let { b -> t.localPositionOf(b, position) }
+                    } ?: position
+                    val offset = layout?.getOffsetForPosition(inText) ?: return@detectTapGestures
+                    state.onTap(offset, speakOnSingleTap, onSingleTap)
+                }
+            },
+    ) {
+        Column(
+            modifier = Modifier.padding(contentPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+        ) {
+            if (header != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    content = header,
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = text,
+                    style = style,
+                    color = color,
+                    // 不撑满一行时不能用 weight：宽度是无界的，weight 分不出东西来。
+                    modifier = (if (fillWidth) Modifier.weight(1f) else Modifier)
+                        .onGloballyPositioned { textCoords = it },
+                    onTextLayout = { layout = it },
+                )
+                trailing?.invoke()
+            }
+            below?.invoke(this)
+            if (showHint) InteractiveTextHint(speakOnSingleTap = speakOnSingleTap)
+        }
     }
-    selectedSentence?.let { sentence ->
-        GlobalSentenceSheet(sentence) { selectedSentence = null }
-    }
+
+    EnglishSheets(state)
+}
+
+/**
+ * "这段英文可以点"的说明。
+ *
+ * 双击和三击是没有任何视觉痕迹的交互——不写这一行，界面上就没有任何东西告诉用户
+ * 这段英文和一张图片有什么区别，功能等于不存在。凡是摆了 [InteractiveEnglishText]
+ * 又不止一两个词的地方（例句、短文、对白），都该在旁边带上它。
+ */
+@Composable
+fun InteractiveTextHint(modifier: Modifier = Modifier, speakOnSingleTap: Boolean = false) {
+    Text(
+        text = if (speakOnSingleTap) "单击朗读 · 双击查词 · 三击讲句" else "快速双击查词 · 快速三击讲句",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline,
+        modifier = modifier,
+    )
 }
 
 private fun highlightedText(text: String, highlights: Set<String>, highlightStyle: SpanStyle): AnnotatedString =
@@ -269,7 +445,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
             when {
                 inLibrary != null -> {
                     val value = inLibrary!!
-                    Text(value.meaningZh)
+                    InteractiveEnglishText(value.meaningZh)
                     WordExample(value.exampleEn, value.exampleZh)
                     MemoryHint(value.memoryHintZh)
                     Text("已经在你的知识库里。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -310,9 +486,9 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                 }
                 explanation != null -> {
                     val value = explanation!!
-                    Text(value.meaningZh)
+                    InteractiveEnglishText(value.meaningZh)
                     if (value.usageNoteZh.isNotBlank()) {
-                        Text(value.usageNoteZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        InteractiveEnglishText(value.usageNoteZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     WordExample(value.exampleEn, value.exampleZh)
                     MemoryHint(value.memoryHintZh)
@@ -415,9 +591,9 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
             }
             when {
                 explanation != null -> {
-                    Text(explanation!!.translationZh, style = MaterialTheme.typography.bodyLarge)
+                    InteractiveEnglishText(explanation!!.translationZh, style = MaterialTheme.typography.bodyLarge)
                     if (explanation!!.explanationZh.isNotBlank()) {
-                        Text(explanation!!.explanationZh, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        InteractiveEnglishText(explanation!!.explanationZh, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Button(
                         onClick = {

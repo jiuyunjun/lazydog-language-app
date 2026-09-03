@@ -42,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
@@ -51,11 +50,11 @@ import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.VocabularyJson
 import com.lazydog.english.core.data.spellingFacts
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.designsystem.InteractiveTextHint
 import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.feature.ask.AskTopBarAction
-import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.core.designsystem.AiWaiting
@@ -73,6 +72,7 @@ import com.lazydog.english.domain.vocabulary.posLabelZh
 import com.lazydog.english.feature.spelling.SpellingCard
 import com.lazydog.english.feature.vocabulary.CollocationChip
 import com.lazydog.english.feature.vocabulary.MemoryHintPanel
+import com.lazydog.english.feature.vocabulary.SpellingChunks
 import com.lazydog.english.feature.spelling.SpellingCardView
 import java.time.LocalDate
 import kotlinx.coroutines.Deferred
@@ -173,6 +173,8 @@ fun WordStudyScreen(
     var reviewedCount by remember { mutableStateOf(0) }
     var newLearnedCount by remember { mutableStateOf(0) }
     var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
+    /** 生成中已经写出来的词，边写边铺。 */
+    var preview by remember { mutableStateOf("") }
     val maxNewWords by app.userPreferences.maxNewWords.collectAsState(initial = 5)
     /**
      * 正在后台先生成的新词。复习到期卡片要花上一两分钟，而这段时间正好够把新词写完——
@@ -226,12 +228,16 @@ fun WordStudyScreen(
                 knownTerms = known,
             ),
             onStage = { stage = it },
+            // 词一个个冒出来的时候，等待就不再是干等——他已经在看今天要学的东西了。
+            onPartialText = { preview = it },
         )
     }
 
     fun generateNewWords() {
         phase = WordStudyPhase.Generating
         stage = GenerationStage.Connecting
+        // 上一轮的词留在屏幕上会被当成这一轮的结果。
+        if (prefetch == null) preview = ""
         scope.launch {
             // 已经在后台跑的那次直接等它，别再发一次重复的请求。
             val running = prefetch ?: scope.async { requestNewWords() }.also { prefetch = it }
@@ -329,7 +335,7 @@ fun WordStudyScreen(
         ) {
             when (val p = phase) {
                 WordStudyPhase.Loading -> CenterHint { CircularProgressIndicator() }
-                WordStudyPhase.Generating -> AiWaiting("AI 正在挑词…", stage)
+                WordStudyPhase.Generating -> AiWaiting("AI 正在挑词…", stage, preview = preview)
                 is WordStudyPhase.Cards -> {
                     val card = p.cards[p.index]
                     if (card.isSpellingCard) {
@@ -444,61 +450,6 @@ private fun GeneratedWord.toCard() = StudyCard(
     forms = forms,
     facts = SpellingFacts(chunks = chunks, trickyPart = trickyPart, misspellings = misspellings),
 )
-
-/** 易错段落在哪一块；没标或对不上返回 -1。 */
-private fun List<String>.indexOfTricky(facts: SpellingFacts): Int {
-    val part = facts.trickyPart.trim().lowercase()
-    if (part.isEmpty()) return -1
-    return indexOfFirst { it.lowercase().contains(part) || part.contains(it.lowercase()) }
-}
-
-/**
- * 词块拆分（S0 接触）。中间那块单独标出来：前后缀是规则，词干才是每次拼错的地方，
- * 后面 S2 挖空也优先挖它。拆不出三块的短词不显示——两个字母的"块"没有意义。
- */
-@Composable
-private fun SpellingChunks(term: String, facts: SpellingFacts) {
-    val chunks = remember(term, facts) { SpellingEngine.chunkWord(term, facts) }
-    if (chunks.size < 2) return
-    val extended = LazyDogTheme.extendedColors
-    // 生成时标好的易错段落在哪一块就高亮哪一块；没标的话退回"中间那块"，
-    // 但那只是个猜测，所以下面那句断言也跟着不说。
-    val trickyIndex = remember(term, facts, chunks) { chunks.indexOfTricky(facts) }
-    val stemIndex = if (trickyIndex >= 0) trickyIndex else if (chunks.size >= 3) 1 else 0
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "词块拆分",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            chunks.forEachIndexed { index, chunk ->
-                val highlight = index == stemIndex
-                Surface(
-                    color = if (highlight) extended.attentionContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    Text(
-                        text = chunk,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontFamily = FontFamily.Monospace,
-                        color = if (highlight) extended.attention else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    )
-                }
-            }
-        }
-        // 只有真拿到易错段时才敢下这个断言。猜出来的词块（necessary → nec/ess/ary）
-        // 配上"这里最容易拼错"就是一句假话，宁可不说。
-        if (trickyIndex >= 0) {
-            Text(
-                text = "${chunks[trickyIndex]} 是最容易拼错的部分",
-                style = MaterialTheme.typography.bodySmall,
-                color = extended.attention,
-            )
-        }
-    }
-}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -624,6 +575,7 @@ private fun StudyCardView(
                                 InteractiveEnglishText(
                                     text = card.exampleEn,
                                     style = MaterialTheme.typography.bodyLarge,
+                                    speakOnSingleTap = true,
                                     modifier = Modifier.weight(1f, fill = false),
                                 )
                                 IconButton(onClick = { scope.launch { speech.speak(card.exampleEn) } }) {
@@ -641,6 +593,9 @@ private fun StudyCardView(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
+                            // 例句里的生词一样能双击查、三击讲，但双击三击是看不见的交互——
+                            // 不写这一行，这块英文和一张图片没区别。
+                            InteractiveTextHint(speakOnSingleTap = true)
                         }
                     }
                 }

@@ -46,6 +46,25 @@ object JsonStream {
     /** 按顺序找第一个已经开始生成的字段，用于"哪段先到就先显示哪段"。 */
     fun firstNonEmpty(raw: String, vararg keys: String): String =
         keys.firstNotNullOfOrNull { key -> partialString(raw, key).takeIf { it.isNotBlank() } }.orEmpty()
+
+    /**
+     * 同一个键在数组里出现的每一个值，按到达顺序。
+     *
+     * 一次生成十个词、十道题时，[partialString] 只给第一条，等待期间那一行就再也不动了。
+     * 逐条列出来，用户能看着单词一个个冒出来——这既是进度，也已经是他要学的内容。
+     */
+    fun allStrings(raw: String, key: String, limit: Int = 20): List<String> {
+        val out = mutableListOf<String>()
+        var from = 0
+        while (out.size < limit) {
+            val keyAt = raw.indexOf("\"$key\"", from)
+            if (keyAt < 0) break
+            val value = partialString(raw.substring(keyAt), key)
+            if (value.isNotBlank()) out.add(value)
+            from = keyAt + key.length + 2
+        }
+        return out
+    }
 }
 
 /**

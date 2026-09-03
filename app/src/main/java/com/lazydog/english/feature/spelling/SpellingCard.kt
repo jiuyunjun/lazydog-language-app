@@ -52,6 +52,7 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.SpellingQueueEntry
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.designsystem.InteractiveTextHint
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
@@ -510,7 +511,11 @@ private fun ExposureBody(card: SpellingCard, onPlay: () -> Unit) {
     ExposureChunks(term = entry.term, facts = entry.facts, extendedAttention = extended.attention)
     if (entry.exampleEn.isNotBlank()) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            InteractiveEnglishText(text = entry.exampleEn, style = MaterialTheme.typography.bodyLarge)
+            InteractiveEnglishText(
+                text = entry.exampleEn,
+                style = MaterialTheme.typography.bodyLarge,
+                speakOnSingleTap = true,
+            )
             if (entry.exampleZh.isNotBlank()) {
                 Text(
                     text = entry.exampleZh,
@@ -518,6 +523,7 @@ private fun ExposureBody(card: SpellingCard, onPlay: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            InteractiveTextHint(speakOnSingleTap = true)
         }
     }
 }
@@ -639,7 +645,7 @@ private fun PartialBody(card: SpellingCard, answer: SpellingAnswer) {
     if (weakest != null && weakest.errorCount > 1) {
         Badge(text = "你在这里错过 ${weakest.errorCount} 次", attention = true)
     }
-    Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    InteractiveEnglishText(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     SlotRow(
         masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = false, facts = entry.facts),
         typed = answer.typed,
@@ -655,7 +661,7 @@ private fun PartialBody(card: SpellingCard, answer: SpellingAnswer) {
 @Composable
 private fun ChunkBody(card: SpellingCard, answer: SpellingAnswer) {
     val entry = card
-    Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    InteractiveEnglishText(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     SlotRow(
         masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = true, facts = entry.facts),
         typed = answer.typed,
@@ -671,7 +677,7 @@ private fun ChunkBody(card: SpellingCard, answer: SpellingAnswer) {
 @Composable
 private fun GuidedBody(card: SpellingCard, answer: SpellingAnswer) {
     val entry = card
-    Text(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    InteractiveEnglishText(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     // S4 只给首字母和长度，剩下的自己填；长度本身就是这一阶段允许的提示。
     SlotRow(
         masked = entry.term.take(1) + "_".repeat((entry.term.length - 1).coerceAtLeast(0)),
@@ -792,12 +798,12 @@ internal fun wordIndexOf(sentence: String, word: String): Int {
 private fun ClozeSentence(sentence: String, blankFor: String) {
     val index = wordIndexOf(sentence, blankFor)
     if (index < 0) {
-        Text(sentence, style = MaterialTheme.typography.titleMedium)
+        InteractiveEnglishText(sentence, style = MaterialTheme.typography.titleMedium)
         return
     }
     val ruleColor = MaterialTheme.colorScheme.outline
     Row(verticalAlignment = Alignment.Bottom) {
-        Text(sentence.take(index), style = MaterialTheme.typography.titleMedium)
+        InteractiveEnglishText(sentence.take(index), style = MaterialTheme.typography.titleMedium)
         Box(
             modifier = Modifier
                 .padding(horizontal = 4.dp)
@@ -813,7 +819,7 @@ private fun ClozeSentence(sentence: String, blankFor: String) {
                     )
                 },
         )
-        Text(sentence.drop(index + blankFor.length), style = MaterialTheme.typography.titleMedium)
+        InteractiveEnglishText(sentence.drop(index + blankFor.length), style = MaterialTheme.typography.titleMedium)
     }
 }
 
@@ -848,7 +854,7 @@ private fun FreeRecallBody(card: SpellingCard, answer: SpellingAnswer, onPlay: (
             )
         }
     } else {
-        Text(entry.meaningZh, style = MaterialTheme.typography.headlineSmall)
+        InteractiveEnglishText(entry.meaningZh, style = MaterialTheme.typography.headlineSmall)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconButton(onClick = onPlay) {
                 Icon(

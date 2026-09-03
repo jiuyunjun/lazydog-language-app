@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.Flight
 import androidx.compose.material.icons.outlined.Movie
@@ -23,6 +24,22 @@ internal data class ListeningScene(
     val noteZh: String,
     val icon: ImageVector,
     val subScenes: List<String>,
+    /** 用户自己写的场景，不在下面这九张卡里。 */
+    val custom: Boolean = false,
+)
+
+/**
+ * 用户自己写的场景。
+ *
+ * 没有二级分类可给——他写的"给房东报修"本来就是一个二级场景，
+ * 再让 AI 往下拆一层只会拆出九句不相干的句子。提示词那边二级为空是允许的。
+ */
+internal fun customListeningScene(nameZh: String) = ListeningScene(
+    nameZh = nameZh.trim(),
+    noteZh = "你自己写的",
+    icon = Icons.Outlined.EditNote,
+    subScenes = emptyList(),
+    custom = true,
 )
 
 internal val listeningScenes = listOf(
