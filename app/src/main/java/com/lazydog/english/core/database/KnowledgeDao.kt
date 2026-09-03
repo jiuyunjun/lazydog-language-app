@@ -32,8 +32,20 @@ interface KnowledgeDao {
     @Query("SELECT * FROM knowledge_items WHERE type = 'Grammar' ORDER BY nextReviewAt ASC")
     fun observeGrammar(): Flow<List<GrammarRecord>>
 
-    @Query("SELECT COUNT(*) FROM knowledge_items WHERE nextReviewAt IS NOT NULL AND nextReviewAt <= :now")
-    fun observeDueCount(now: Long): Flow<Int>
+    @Query(
+        "SELECT COUNT(*) FROM knowledge_items AS item " +
+            "INNER JOIN vocabulary_details AS detail ON detail.itemId = item.id " +
+            "WHERE item.type = 'Vocabulary' " +
+            "AND LOWER(detail.pos) NOT IN ('expression', 'phrase') " +
+            "AND item.nextReviewAt IS NOT NULL AND item.nextReviewAt <= :now",
+    )
+    fun observeDueVocabularyCount(now: Long): Flow<Int>
+
+    @Query(
+        "SELECT COUNT(*) FROM knowledge_items " +
+            "WHERE type = 'Grammar' AND nextReviewAt IS NOT NULL AND nextReviewAt <= :now",
+    )
+    fun observeDueGrammarCount(now: Long): Flow<Int>
 
     @Query("SELECT * FROM knowledge_items WHERE id = :id")
     suspend fun getItem(id: Long): KnowledgeItemEntity?

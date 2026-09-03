@@ -67,10 +67,11 @@ fun TodayScreen(
     val learnerLevel by prefs.learnerLevel.collectAsState(initial = "…")
     val dailyMinutes by prefs.dailyMinutes.collectAsState(initial = 12)
     val doneSteps by prefs.todayDoneSteps(today).collectAsState(initial = emptySet())
-    val dueVocab by app.knowledgeRepository.observeDueCount().collectAsState(initial = 0)
+    val dueVocab by app.knowledgeRepository.observeDueVocabularyCount().collectAsState(initial = 0)
+    val dueGrammar by app.knowledgeRepository.observeDueGrammarCount().collectAsState(initial = 0)
 
-    val plan = remember(dailyMinutes, dueVocab) {
-        DailyPlanner.plan(dailyMinutes, dueVocabCount = dueVocab, dueGrammarCount = 0)
+    val plan = remember(dailyMinutes, dueVocab, dueGrammar) {
+        DailyPlanner.plan(dailyMinutes, dueVocabCount = dueVocab, dueGrammarCount = dueGrammar)
     }
     val allDone = plan.isNotEmpty() && plan.all { it.step.id in doneSteps }
     val nextStep = plan.firstOrNull { it.step.id !in doneSteps }
@@ -128,8 +129,11 @@ fun TodayScreen(
                 Text(
                     text = if (allDone) {
                         "复习计划已经更新，明天见。"
-                    } else if (dueVocab > 0) {
-                        "$dueVocab 个词到期。先还债，再学新的。"
+                    } else if (dueVocab + dueGrammar > 0) {
+                        buildList {
+                            if (dueVocab > 0) add("$dueVocab 个词")
+                            if (dueGrammar > 0) add("$dueGrammar 个语法点")
+                        }.joinToString("、", postfix = "到期。先还债，再学新的。")
                     } else {
                         "没有到期的复习，轻松学点新的。"
                     },

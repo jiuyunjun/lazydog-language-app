@@ -63,7 +63,11 @@ class KnowledgeRepository(
     }
     val grammar: Flow<List<GrammarRecord>> = dao.observeGrammar()
 
-    fun observeDueCount(at: Instant = now()): Flow<Int> = dao.observeDueCount(at.toEpochMilli())
+    fun observeDueVocabularyCount(at: Instant = now()): Flow<Int> =
+        dao.observeDueVocabularyCount(at.toEpochMilli())
+
+    fun observeDueGrammarCount(at: Instant = now()): Flow<Int> =
+        dao.observeDueGrammarCount(at.toEpochMilli())
 
     /** @return 新知识项 id；同名词已存在时返回 null。 */
     suspend fun addVocabulary(
