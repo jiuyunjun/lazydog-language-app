@@ -25,7 +25,10 @@ import com.microsoft.cognitiveservices.speech.SpeechSynthesizer
 import com.microsoft.cognitiveservices.speech.StreamStatus
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Azure Speech SDK 的 [SpeechProvider] 实现。
@@ -62,6 +65,11 @@ class AzureSpeechProvider(
 
     @Volatile
     private var closed = false
+
+    @Volatile
+    private var activeTranscriber: SpeechRecognizer? = null
+
+    private val stopTranscriptionRequested = AtomicBoolean(false)
 
     override suspend fun speak(
         text: String,
@@ -195,6 +203,81 @@ class AzureSpeechProvider(
         }
     }
 
+    override suspend fun transcribeContinuously(
+        languages: List<String>,
+        onPartial: (String) -> Unit,
+    ): TranscriptionResult {
+        // 在切到 IO 线程之前清掉上一轮标志，保证 UI 紧接着点“停止”不会被后台初始化覆盖。
+        stopTranscriptionRequested.set(false)
+        return withContext(Dispatchers.IO) {
+            if (closed) return@withContext TranscriptionResult.Failed("服务已释放")
+            var audioConfig: AudioConfig? = null
+            var languageConfig: AutoDetectSourceLanguageConfig? = null
+            var recognizer: SpeechRecognizer? = null
+            val completed = CompletableDeferred<TranscriptionResult?>()
+            val transcript = StreamingTranscript()
+            try {
+                audioConfig = AudioConfig.fromDefaultMicrophoneInput()
+                val candidates = languages.map(String::trim).filter(String::isNotBlank).distinct()
+                    .ifEmpty { listOf("en-US") }
+                recognizer = if (candidates.size == 1) {
+                    SpeechRecognizer(speechConfig, candidates.single(), audioConfig)
+                } else {
+                    languageConfig = AutoDetectSourceLanguageConfig.fromLanguages(candidates)
+                    SpeechRecognizer(speechConfig, languageConfig, audioConfig)
+                }
+
+                recognizer.recognizing.addEventListener { _, event ->
+                    transcript.preview(event.result.text.orEmpty()).takeIf(String::isNotBlank)?.let(onPartial)
+                }
+                recognizer.recognized.addEventListener { _, event ->
+                    if (event.result.reason == ResultReason.RecognizedSpeech) {
+                        event.result.text.orEmpty().trim().takeIf(String::isNotBlank)?.let { text ->
+                            onPartial(transcript.commit(text))
+                        }
+                    }
+                }
+                recognizer.canceled.addEventListener { _, event ->
+                    if (stopTranscriptionRequested.get()) {
+                        completed.complete(null)
+                    } else {
+                        completed.complete(
+                            TranscriptionResult.Failed(
+                                "听写中断：${event.errorDetails?.takeIf(String::isNotBlank) ?: event.reason}",
+                            ),
+                        )
+                    }
+                }
+                recognizer.sessionStopped.addEventListener { _, _ -> completed.complete(null) }
+
+                activeTranscriber = recognizer
+                recognizer.startContinuousRecognitionAsync().get()
+                if (stopTranscriptionRequested.get()) recognizer.stopContinuousRecognitionAsync()
+
+                completed.await() ?: transcript.finalText().takeIf(String::isNotBlank)
+                    ?.let(TranscriptionResult::Done)
+                    ?: TranscriptionResult.NothingRecognized
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                TranscriptionResult.Failed("听写失败：${e.message ?: e.javaClass.simpleName}")
+            } finally {
+                if (activeTranscriber === recognizer) activeTranscriber = null
+                runCatching { recognizer?.stopContinuousRecognitionAsync()?.get() }
+                runCatching { recognizer?.close() }
+                runCatching { languageConfig?.close() }
+                runCatching { audioConfig?.close() }
+            }
+        }
+    }
+
+    override fun stopTranscribing() {
+        stopTranscriptionRequested.set(true)
+        activeTranscriber?.let { recognizer ->
+            runCatching { recognizer.stopContinuousRecognitionAsync() }
+        }
+    }
+
     private fun toAssessmentResult(result: SpeechRecognitionResult): AssessmentResult =
         when (result.reason) {
             ResultReason.RecognizedSpeech -> {
@@ -213,6 +296,7 @@ class AzureSpeechProvider(
 
     override fun close() {
         closed = true
+        stopTranscribing()
         player.release()
         runCatching { synthesizer.close() }
         runCatching { speechConfig.close() }
@@ -225,4 +309,23 @@ class AzureSpeechProvider(
         /** 每次从合成流里取的字节数，约 33ms 音频——够小，起播不会被凑整块拖慢。 */
         const val CHUNK_BYTES = 1600
     }
+}
+
+/** Azure 的 recognizing 是会反复改写的草稿，recognized 才能追加为下一段。 */
+internal class StreamingTranscript {
+    private val committed = mutableListOf<String>()
+
+    fun preview(draft: String): String = synchronized(committed) {
+        render(committed + draft.trim())
+    }
+
+    fun commit(text: String): String = synchronized(committed) {
+        text.trim().takeIf(String::isNotBlank)?.let(committed::add)
+        render(committed)
+    }
+
+    fun finalText(): String = synchronized(committed) { render(committed) }
+
+    private fun render(parts: List<String>): String =
+        parts.filter(String::isNotBlank).joinToString(" ")
 }

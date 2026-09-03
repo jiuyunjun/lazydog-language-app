@@ -340,7 +340,7 @@ interface ReadingSource {
 - 答题类页面分揭晓前后两份上下文：听力揭晓前只给场景、语气、难度，英文原文和中文答案一个字不给（这一页的规矩是"英文永远最后出现"）；拼写同理，未翻篇前只给中文和题型。揭晓后才把原文、关键表达、听觉难点全交出去。
 - 提问复用同一个 OpenAI 兼容接口（`askAboutContext`），SSE 流式；`AskStreaming.partialAnswer` 从未闭合的 JSON 里增量取出 `answerZh` 供展示，最终仍以完整解析加校验为准。
 - 一次会话只活在抽屉里：关掉即清空，不落库、没有全局聊天历史。答案里的新词经用户点“加进复习”才写入知识库。
-- 抽屉语音输入复用 `SpeechController.transcribeOnce`；提问使用 Azure 中英自动检测，识别结果只回填草稿，不自动发送。情景演练继续限定英文识别。
+- 抽屉语音输入复用 `SpeechController.transcribeContinuously`；提问使用 Azure 中英自动检测，`recognizing` 草稿与 `recognized` 定稿实时合并回填，用户再次点麦克风才停止，不自动发送。情景演练继续使用 `transcribeOnce` 并限定英文识别。
 
 ## 9. 数据备份
 

@@ -65,4 +65,13 @@ class SpeechController(context: Context, private val prefs: UserPreferences) {
 
     suspend fun transcribeOnce(languages: List<String> = listOf("en-US")): TranscriptionResult =
         provider().transcribeOnce(languages)
+
+    suspend fun transcribeContinuously(
+        languages: List<String> = listOf("en-US"),
+        onPartial: (String) -> Unit,
+    ): TranscriptionResult = provider().transcribeContinuously(languages, onPartial)
+
+    fun stopTranscribing() {
+        provider?.stopTranscribing()
+    }
 }

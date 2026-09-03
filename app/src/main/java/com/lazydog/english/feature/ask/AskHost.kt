@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.AssistChip
@@ -114,9 +115,13 @@ fun AskHost(content: @Composable () -> Unit) {
                 onAsk = { request, onPartial ->
                     app.contentGenerator.askAboutContext(request, onPartial)
                 },
-                onTranscribe = {
-                    app.speechController.transcribeOnce(listOf("zh-CN", "en-US"))
+                onTranscribe = { partial ->
+                    app.speechController.transcribeContinuously(
+                        languages = listOf("zh-CN", "en-US"),
+                        onPartial = partial,
+                    )
                 },
+                onStopTranscribing = app.speechController::stopTranscribing,
                 learnerLevel = { app.userPreferences.learnerLevelDescription.first() },
                 onAddToReview = { term ->
                     val id = app.knowledgeRepository.addVocabulary(
@@ -153,7 +158,8 @@ private fun AskSheet(
     askContext: AskContext,
     onDismiss: () -> Unit,
     onAsk: suspend (AskRequest, ((String) -> Unit)?) -> GenerationResult<AskAnswer>,
-    onTranscribe: suspend () -> TranscriptionResult,
+    onTranscribe: suspend ((String) -> Unit) -> TranscriptionResult,
+    onStopTranscribing: () -> Unit,
     learnerLevel: suspend () -> String,
     onAddToReview: suspend (AskAddableTerm) -> AddState,
     scopeLaunch: (suspend () -> Unit) -> Unit,
@@ -170,13 +176,29 @@ private fun AskSheet(
     val context = LocalContext.current
 
     fun transcribe() {
-        if (transcribing || busy) return
+        if (busy) return
+        if (transcribing) {
+            onStopTranscribing()
+            return
+        }
         transcribing = true
         transcriptionError = null
+        val beforeDictation = input.trim()
         scopeLaunch {
-            when (val result = onTranscribe()) {
+            val result = onTranscribe { partial ->
+                scopeLaunch {
+                    input = listOf(beforeDictation, partial.trim())
+                        .filter(String::isNotBlank)
+                        .joinToString(" ")
+                        .take(AskValidation.MAX_QUESTION_LENGTH)
+                }
+            }
+            when (result) {
                 is TranscriptionResult.Done -> {
-                    input = listOf(input.trim(), result.text).filter(String::isNotBlank).joinToString(" ")
+                    input = listOf(beforeDictation, result.text.trim())
+                        .filter(String::isNotBlank)
+                        .joinToString(" ")
+                        .take(AskValidation.MAX_QUESTION_LENGTH)
                 }
                 TranscriptionResult.NothingRecognized -> transcriptionError = "没听清，再说一次试试。"
                 is TranscriptionResult.Failed -> transcriptionError = result.reason
@@ -238,7 +260,13 @@ private fun AskSheet(
         if (rounds.isNotEmpty()) listScroll.animateScrollTo(listScroll.maxValue)
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(
+        onDismissRequest = {
+            if (transcribing) onStopTranscribing()
+            onDismiss()
+        },
+        sheetState = sheetState,
+    ) {
         Column(
             modifier = (if (rounds.isEmpty()) Modifier else Modifier.fillMaxHeight(0.88f))
                 .padding(bottom = 24.dp),
@@ -292,7 +320,7 @@ private fun AskSheet(
                 value = input,
                 onValueChange = { if (it.length <= AskValidation.MAX_QUESTION_LENGTH) input = it },
                 placeholder = if (rounds.isEmpty()) "自己打字问" else "接着问",
-                enabled = !busy && !transcribing,
+                enabled = !busy,
                 transcribing = transcribing,
                 onMic = ::requestTranscription,
                 onSend = { ask(input) },
@@ -303,6 +331,15 @@ private fun AskSheet(
                     text = message,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 18.dp),
+                )
+            }
+
+            if (transcribing) {
+                Text(
+                    text = "正在收音，文字会边说边出来 · 再点麦克风停止",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(horizontal = 18.dp),
                 )
             }
@@ -488,7 +525,7 @@ private fun InputRow(
             value = value,
             onValueChange = onValueChange,
             placeholder = { Text(placeholder) },
-            enabled = enabled,
+            enabled = enabled && !transcribing,
             maxLines = 4,
             shape = MaterialTheme.shapes.extraLarge,
             modifier = Modifier.weight(1f),
@@ -498,22 +535,15 @@ private fun InputRow(
             enabled = enabled,
             modifier = Modifier.size(48.dp),
         ) {
-            if (transcribing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Outlined.Mic,
-                    contentDescription = "语音提问",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
+            Icon(
+                imageVector = if (transcribing) Icons.Outlined.StopCircle else Icons.Outlined.Mic,
+                contentDescription = if (transcribing) "停止收音" else "语音提问",
+                tint = if (transcribing) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            )
         }
         FilledIconButton(
             onClick = onSend,
-            enabled = enabled && value.isNotBlank(),
+            enabled = enabled && !transcribing && value.isNotBlank(),
             modifier = Modifier.size(48.dp),
         ) {
             Icon(

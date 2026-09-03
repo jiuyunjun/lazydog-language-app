@@ -35,6 +35,15 @@ interface SpeechProvider {
     /** 从麦克风听写一句话，只转成文字，不做口语评分。 */
     suspend fun transcribeOnce(languages: List<String> = listOf("en-US")): TranscriptionResult
 
+    /** 持续收音，识别中的临时/最终文本通过 [onPartial] 实时交付，直到 [stopTranscribing]。 */
+    suspend fun transcribeContinuously(
+        languages: List<String> = listOf("en-US"),
+        onPartial: (String) -> Unit,
+    ): TranscriptionResult
+
+    /** 请求结束当前持续听写；没有进行中的听写时为空操作。 */
+    fun stopTranscribing()
+
     /** 释放底层资源。释放后实例不可再用。 */
     fun close()
 }
