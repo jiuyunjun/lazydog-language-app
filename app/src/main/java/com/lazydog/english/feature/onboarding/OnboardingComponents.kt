@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -94,7 +95,10 @@ fun OnboardingBottomBar(content: @Composable () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, bottom = 28.dp, top = 12.dp),
+            // 原来是写死的 bottom = 28dp 去猜导航栏有多高：三键导航是 48dp，猜小了按钮就压在
+            // 导航栏上；全面屏手势条只有 24dp 上下，又白空一截。问系统要真实的高度。
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp, top = 12.dp),
     ) {
         content()
     }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.paddingFromBaseline
 import androidx.compose.foundation.layout.width
@@ -428,7 +429,10 @@ private fun QuestionView(
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(onDismissRequest = onDismissHintSheet, sheetState = sheetState) {
             Column(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Text(
@@ -452,10 +456,7 @@ private fun QuestionView(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(
-                    onClick = onDismissHintSheet,
-                    modifier = Modifier.padding(bottom = 24.dp),
-                ) {
+                TextButton(onClick = onDismissHintSheet) {
                     Text("知道了，再试一次")
                 }
             }

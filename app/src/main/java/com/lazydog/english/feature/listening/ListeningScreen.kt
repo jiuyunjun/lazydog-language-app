@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -482,10 +483,13 @@ private fun QuestionTitle(index: Int, total: Int, item: ListeningItem?) {
 /** 主操作 56dp 高、每屏只有一个，次操作放它旁边（设计稿 M3 组件映射）。 */
 @Composable
 private fun BottomActions(note: String? = null, content: @Composable RowScope.() -> Unit) {
+    // 这是 Scaffold 的 bottomBar 槽位，Scaffold 不会替它挡系统导航栏——
+    // 不主动让出这块，按钮就直接贴着手势条/导航栏画，形同没有下边距。
     Surface(color = MaterialTheme.colorScheme.surface) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {

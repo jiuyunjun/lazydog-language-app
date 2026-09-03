@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -76,6 +77,9 @@ fun WelcomeScreen(onStart: () -> Unit, onRestored: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // 这一屏没有 Scaffold 兜底，自己让开状态栏和导航栏——
+            // 不让的话最底下那个"从备份恢复"会压在手势条上。
+            .safeDrawingPadding()
             .padding(horizontal = 28.dp),
         verticalArrangement = Arrangement.Center,
     ) {

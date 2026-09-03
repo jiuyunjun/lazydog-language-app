@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -278,8 +280,12 @@ private fun AskSheet(
         sheetState = sheetState,
     ) {
         Column(
+            // 这一屏的主体就是底部那个输入框，键盘一弹起来正好把它盖住。
+            // sheet 是独立窗口，根上那次 imePadding 到不了这里，得自己让。
             modifier = (if (rounds.isEmpty()) Modifier else Modifier.fillMaxHeight(0.88f))
-                .padding(bottom = 24.dp),
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (rounds.isEmpty()) {

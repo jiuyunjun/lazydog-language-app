@@ -2,6 +2,7 @@ package com.lazydog.english
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -90,7 +91,18 @@ fun LazyDogApp() {
 
     StopSpeakingWhenNotVisible(app.speechController)
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+    // 键盘弹出时整个界面往上让。
+    //
+    // `enableEdgeToEdge()` 之后窗口不再被系统自动压缩，manifest 里的 adjustResize 也就不起作用了：
+    // 键盘只是一层 inset，没人消费它，界面就一动不动，输入框和它下面的按钮全被盖住。
+    // 放在根上是因为这件事对每一屏都成立——各屏各写一次，漏掉哪屏就哪屏打不了字。
+    // 弹窗和 ModalBottomSheet 是独立窗口，不在这棵树里，得各自处理。
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding(),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
         when (onboardingCompleted) {
             null -> Box(Modifier.fillMaxSize()) // DataStore 首帧未就绪，避免闪错页面
             else -> AppNavHost(

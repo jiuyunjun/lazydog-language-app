@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -69,6 +70,9 @@ import com.lazydog.english.core.model.ReviewGrade
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.launch
+
+/** 列表底部要留出的高度：56dp 的 FAB 加它上下各 16dp 的外边距。 */
+private val FAB_CLEARANCE = 88.dp
 
 @Composable
 fun LibraryScreen(
@@ -242,7 +246,12 @@ private fun WordRecords(
                 else "今天没有到期的单词，懒狗可以歇会儿。",
             )
         } else {
-            LazyColumn(Modifier.weight(1f)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                // 右下角那个加号浮在列表上面。不给列表留出它的位置，
+                // 滚到底时最后一个词就永远压在按钮底下，点不开也删不掉。
+                contentPadding = PaddingValues(bottom = FAB_CLEARANCE),
+            ) {
                 items(records, key = { it.item.id }) { record ->
                     LibraryRow(
                         title = record.detail.term,
@@ -266,7 +275,10 @@ private fun GrammarRecords(
     if (records.isEmpty()) {
         EmptyHint("还没有记过语法点。点右下角加一个。")
     } else {
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(top = 8.dp),
+            contentPadding = PaddingValues(bottom = FAB_CLEARANCE),
+        ) {
             items(records, key = { it.item.id }) { record ->
                 LibraryRow(
                     title = record.detail.displayPattern(),

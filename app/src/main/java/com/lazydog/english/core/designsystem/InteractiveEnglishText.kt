@@ -10,8 +10,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.LibraryAdd
@@ -420,7 +423,16 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            // 一条词条能摊开释义、用法、例句、记忆提示和一个按钮，小屏上装不下——
+            // 不给滚动，"记入生词本"就永远够不着。底部让开导航栏，别把按钮压在手势条底下。
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             val shown = explanation ?: inLibrary
             // 标题是词条（`go`），不是他点到的形态（`went`）——存进生词本、以后复习的都是词条。
             // 但朗读仍读他点的那个形态：他要听的是这句话里这个词怎么念。
@@ -547,7 +559,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                     Text("AI 正在结合这句话查词…")
                 }
             }
-            Text("「$sentence」", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 24.dp))
+            Text("「$sentence」", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }
     }
 }
@@ -582,7 +594,15 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            // 长句加讲解一样会超过一屏，"摘下这句"那个按钮不能被顶出可视区。
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(sentence, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = { scope.launch { app.speechController.speak(sentence) } }) {
@@ -624,7 +644,7 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
                     Text("AI 正在翻译并拆解这句话…")
                 }
             }
-            Text("提示：快速双击查单词，快速三击讲整句。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 24.dp))
+            Text("提示：快速双击查单词，快速三击讲整句。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }
     }
 }
