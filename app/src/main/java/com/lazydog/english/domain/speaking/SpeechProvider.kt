@@ -32,8 +32,8 @@ interface SpeechProvider {
      */
     suspend fun assessReading(referenceText: String): AssessmentResult
 
-    /** 从麦克风听写一句英文，只转成文字，不做口语评分。 */
-    suspend fun transcribeOnce(): TranscriptionResult
+    /** 从麦克风听写一句话，只转成文字，不做口语评分。 */
+    suspend fun transcribeOnce(languages: List<String> = listOf("en-US")): TranscriptionResult
 
     /** 释放底层资源。释放后实例不可再用。 */
     fun close()

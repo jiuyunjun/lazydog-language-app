@@ -63,5 +63,6 @@ class SpeechController(context: Context, private val prefs: UserPreferences) {
     suspend fun assessReading(referenceText: String): AssessmentResult =
         provider().assessReading(referenceText)
 
-    suspend fun transcribeOnce(): TranscriptionResult = provider().transcribeOnce()
+    suspend fun transcribeOnce(languages: List<String> = listOf("en-US")): TranscriptionResult =
+        provider().transcribeOnce(languages)
 }

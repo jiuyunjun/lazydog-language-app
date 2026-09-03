@@ -1,5 +1,9 @@
 package com.lazydog.english.feature.ask
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.AssistChip
@@ -46,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.ask.AskController
 import com.lazydog.english.core.ask.LocalAskController
@@ -59,6 +65,7 @@ import com.lazydog.english.domain.ask.AskExchange
 import com.lazydog.english.domain.ask.AskRequest
 import com.lazydog.english.domain.ask.AskValidation
 import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.speaking.TranscriptionResult
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -107,6 +114,9 @@ fun AskHost(content: @Composable () -> Unit) {
                 onAsk = { request, onPartial ->
                     app.contentGenerator.askAboutContext(request, onPartial)
                 },
+                onTranscribe = {
+                    app.speechController.transcribeOnce(listOf("zh-CN", "en-US"))
+                },
                 learnerLevel = { app.userPreferences.learnerLevelDescription.first() },
                 onAddToReview = { term ->
                     val id = app.knowledgeRepository.addVocabulary(
@@ -143,6 +153,7 @@ private fun AskSheet(
     askContext: AskContext,
     onDismiss: () -> Unit,
     onAsk: suspend (AskRequest, ((String) -> Unit)?) -> GenerationResult<AskAnswer>,
+    onTranscribe: suspend () -> TranscriptionResult,
     learnerLevel: suspend () -> String,
     onAddToReview: suspend (AskAddableTerm) -> AddState,
     scopeLaunch: (suspend () -> Unit) -> Unit,
@@ -151,9 +162,40 @@ private fun AskSheet(
     var rounds by remember { mutableStateOf<List<AskRound>>(emptyList()) }
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var transcribing by remember { mutableStateOf(false) }
+    var transcriptionError by remember { mutableStateOf<String?>(null) }
     var contextExpanded by remember { mutableStateOf(false) }
     val added = remember { mutableStateMapOf<String, AddState>() }
     val listScroll = rememberScrollState()
+    val context = LocalContext.current
+
+    fun transcribe() {
+        if (transcribing || busy) return
+        transcribing = true
+        transcriptionError = null
+        scopeLaunch {
+            when (val result = onTranscribe()) {
+                is TranscriptionResult.Done -> {
+                    input = listOf(input.trim(), result.text).filter(String::isNotBlank).joinToString(" ")
+                }
+                TranscriptionResult.NothingRecognized -> transcriptionError = "没听清，再说一次试试。"
+                is TranscriptionResult.Failed -> transcriptionError = result.reason
+            }
+            transcribing = false
+        }
+    }
+
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) transcribe() else transcriptionError = "需要麦克风权限才能把语音转成文字。"
+    }
+
+    fun requestTranscription() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            transcribe()
+        } else {
+            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     fun ask(question: String) {
         val clean = question.trim()
@@ -250,9 +292,20 @@ private fun AskSheet(
                 value = input,
                 onValueChange = { if (it.length <= AskValidation.MAX_QUESTION_LENGTH) input = it },
                 placeholder = if (rounds.isEmpty()) "自己打字问" else "接着问",
-                enabled = !busy,
+                enabled = !busy && !transcribing,
+                transcribing = transcribing,
+                onMic = ::requestTranscription,
                 onSend = { ask(input) },
             )
+
+            transcriptionError?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 18.dp),
+                )
+            }
 
             if (rounds.isEmpty()) {
                 Text(
@@ -420,6 +473,8 @@ private fun InputRow(
     onValueChange: (String) -> Unit,
     placeholder: String,
     enabled: Boolean,
+    transcribing: Boolean,
+    onMic: () -> Unit,
     onSend: () -> Unit,
 ) {
     Row(
@@ -438,6 +493,24 @@ private fun InputRow(
             shape = MaterialTheme.shapes.extraLarge,
             modifier = Modifier.weight(1f),
         )
+        IconButton(
+            onClick = onMic,
+            enabled = enabled,
+            modifier = Modifier.size(48.dp),
+        ) {
+            if (transcribing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Outlined.Mic,
+                    contentDescription = "语音提问",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
         FilledIconButton(
             onClick = onSend,
             enabled = enabled && value.isNotBlank(),

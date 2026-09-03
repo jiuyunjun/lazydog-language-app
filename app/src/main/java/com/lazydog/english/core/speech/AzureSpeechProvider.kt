@@ -8,6 +8,7 @@ import com.lazydog.english.domain.speaking.SpeechRate
 import com.lazydog.english.domain.speaking.SpeechStyle
 import com.lazydog.english.domain.speaking.TranscriptionResult
 import com.microsoft.cognitiveservices.speech.AudioDataStream
+import com.microsoft.cognitiveservices.speech.AutoDetectSourceLanguageConfig
 import com.microsoft.cognitiveservices.speech.CancellationDetails
 import com.microsoft.cognitiveservices.speech.PropertyId
 import com.microsoft.cognitiveservices.speech.PronunciationAssessmentConfig
@@ -157,14 +158,22 @@ class AzureSpeechProvider(
             }
         }
 
-    override suspend fun transcribeOnce(): TranscriptionResult = withContext(Dispatchers.IO) {
+    override suspend fun transcribeOnce(languages: List<String>): TranscriptionResult = withContext(Dispatchers.IO) {
         if (closed) return@withContext TranscriptionResult.Failed("服务已释放")
         var audioConfig: AudioConfig? = null
+        var languageConfig: AutoDetectSourceLanguageConfig? = null
         var recognizer: SpeechRecognizer? = null
         var result: SpeechRecognitionResult? = null
         try {
             audioConfig = AudioConfig.fromDefaultMicrophoneInput()
-            recognizer = SpeechRecognizer(speechConfig, audioConfig)
+            val candidates = languages.map(String::trim).filter(String::isNotBlank).distinct()
+                .ifEmpty { listOf("en-US") }
+            recognizer = if (candidates.size == 1) {
+                SpeechRecognizer(speechConfig, candidates.single(), audioConfig)
+            } else {
+                languageConfig = AutoDetectSourceLanguageConfig.fromLanguages(candidates)
+                SpeechRecognizer(speechConfig, languageConfig, audioConfig)
+            }
             result = recognizer.recognizeOnceAsync().get()
             when (result.reason) {
                 ResultReason.RecognizedSpeech -> result.text?.trim()?.takeIf { it.isNotBlank() }
@@ -181,6 +190,7 @@ class AzureSpeechProvider(
         } finally {
             runCatching { result?.close() }
             runCatching { recognizer?.close() }
+            runCatching { languageConfig?.close() }
             runCatching { audioConfig?.close() }
         }
     }
