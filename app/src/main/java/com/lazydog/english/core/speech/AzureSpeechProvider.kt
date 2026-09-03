@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -49,6 +50,10 @@ class AzureSpeechProvider(
             setSpeechSynthesisOutputFormat(SpeechSynthesisOutputFormat.Raw24Khz16BitMonoPcm)
             // 读完停顿约 0.8 秒就收音，默认值等太久（用户实测反馈）。
             setProperty(PropertyId.Speech_SegmentationSilenceTimeoutMs, "800")
+            // 实时听写优先尽快返回草稿；值越高文字越稳定，但首字等待也越久。
+            setProperty(PropertyId.SpeechServiceResponse_StablePartialResultThreshold, "1")
+            // 持续识别默认约 15 秒才判定开头一直没说话，提问场景不需要等这么久。
+            setProperty(PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "7000")
         }
 
     /** AudioConfig 传 null = 不让 SDK 自己放音，音频从 AudioDataStream 取（见 [PcmAudioPlayer]）。 */
@@ -216,6 +221,7 @@ class AzureSpeechProvider(
             var recognizer: SpeechRecognizer? = null
             val completed = CompletableDeferred<TranscriptionResult?>()
             val transcript = StreamingTranscript()
+            val autoStopRequested = AtomicBoolean(false)
             try {
                 audioConfig = AudioConfig.fromDefaultMicrophoneInput()
                 val candidates = languages.map(String::trim).filter(String::isNotBlank).distinct()
@@ -236,6 +242,14 @@ class AzureSpeechProvider(
                             onPartial(transcript.commit(text))
                         }
                     }
+                    // 一句提问在停顿后拿到定稿就自动结束；没开口则由 initial-silence 的 NoMatch 结束。
+                    if (
+                        event.result.reason in setOf(ResultReason.RecognizedSpeech, ResultReason.NoMatch) &&
+                        autoStopRequested.compareAndSet(false, true)
+                    ) {
+                        stopTranscriptionRequested.set(true)
+                        recognizer.stopContinuousRecognitionAsync()
+                    }
                 }
                 recognizer.canceled.addEventListener { _, event ->
                     if (stopTranscriptionRequested.get()) {
@@ -254,7 +268,12 @@ class AzureSpeechProvider(
                 recognizer.startContinuousRecognitionAsync().get()
                 if (stopTranscriptionRequested.get()) recognizer.stopContinuousRecognitionAsync()
 
-                completed.await() ?: transcript.finalText().takeIf(String::isNotBlank)
+                val terminal = withTimeoutOrNull(MAX_TRANSCRIPTION_MS) { completed.await() }
+                if (!completed.isCompleted) {
+                    stopTranscriptionRequested.set(true)
+                    recognizer.stopContinuousRecognitionAsync()
+                }
+                terminal ?: transcript.finalText().takeIf(String::isNotBlank)
                     ?.let(TranscriptionResult::Done)
                     ?: TranscriptionResult.NothingRecognized
             } catch (e: CancellationException) {
@@ -308,6 +327,9 @@ class AzureSpeechProvider(
 
         /** 每次从合成流里取的字节数，约 33ms 音频——够小，起播不会被凑整块拖慢。 */
         const val CHUNK_BYTES = 1600
+
+        /** 避免噪声环境或服务端异常让麦克风无限保持开启。 */
+        const val MAX_TRANSCRIPTION_MS = 30_000L
     }
 }
 

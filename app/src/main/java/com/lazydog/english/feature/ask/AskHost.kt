@@ -4,14 +4,23 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -49,6 +58,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -336,12 +346,7 @@ private fun AskSheet(
             }
 
             if (transcribing) {
-                Text(
-                    text = "正在收音，文字会边说边出来 · 再点麦克风停止",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 18.dp),
-                )
+                RecordingStatus(modifier = Modifier.padding(horizontal = 18.dp))
             }
 
             if (rounds.isEmpty()) {
@@ -356,6 +361,46 @@ private fun AskSheet(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun RecordingStatus(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "recording")
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.height(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            repeat(3) { index ->
+                val heightFraction by transition.animateFloat(
+                    initialValue = 0.3f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 420, delayMillis = index * 110),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                    label = "recordingBar$index",
+                )
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .height(16.dp * heightFraction)
+                        .clip(MaterialTheme.shapes.extraSmall)
+                        .background(MaterialTheme.colorScheme.error),
+                )
+            }
+        }
+        Text(
+            text = "正在收音 · 停顿后自动结束，也可再点麦克风停止",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 
@@ -524,7 +569,7 @@ private fun InputRow(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text(placeholder) },
+            placeholder = { Text(if (transcribing) "边说边显示…" else placeholder) },
             enabled = enabled && !transcribing,
             maxLines = 4,
             shape = MaterialTheme.shapes.extraLarge,
