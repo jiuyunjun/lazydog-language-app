@@ -2,6 +2,7 @@ package com.lazydog.english.domain.spelling
 
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.ReviewGrade
+import com.lazydog.english.domain.progress.DifficultyBias
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.max
@@ -129,7 +130,23 @@ object SpellingEngine {
         KnowledgeStage.Mastered -> SpellingStage.FreeRecall
     }
 
-    fun questionType(progress: SpellingProgress): SpellingQuestionType = when (progress.stage) {
+    /**
+     * 这个词这一次考什么题型。[difficulty] 是最近成功率给出的偏置（`持续学习DESIGN.md` §11）。
+     *
+     * **偏置只能把题变难，不能变简单**，这是一条不变量：阶段升级看的是"这一档答对了几次"，
+     * 用更浅的题喂进去，等于让掌握度建立在更弱的证据上——那是在骗自己。
+     * 太吃力时给的帮助走提示阶梯（[startingHintLevel]），提示越多 Mastery Credit 越低，
+     * 掌握度自己会慢下来，这才是诚实的降难度。
+     */
+    fun questionType(
+        progress: SpellingProgress,
+        difficulty: DifficultyBias = DifficultyBias.Steady,
+    ): SpellingQuestionType {
+        val base = baseQuestionType(progress)
+        return if (difficulty == DifficultyBias.Harder) harder(base) else base
+    }
+
+    private fun baseQuestionType(progress: SpellingProgress): SpellingQuestionType = when (progress.stage) {
         // S0 是"接触"，不是"考一遍"：第一次见到一个词就丢四个选项过去，
         // 用户是在猜，不是在建立词形和读音的联系（拼写训练DESIGN.md §S0）。
         SpellingStage.Seen -> SpellingQuestionType.Exposure
@@ -139,6 +156,38 @@ object SpellingEngine {
         SpellingStage.GuidedRecall -> SpellingQuestionType.GuidedRecall
         SpellingStage.FreeRecall -> SpellingQuestionType.FreeRecall
         SpellingStage.Retained -> SpellingQuestionType.DelayedFreeRecall
+    }
+
+    /**
+     * 往上提一档：从"认得出"挪向"写得出"，正是 §11 说的"从选择题切换成生成题"。
+     *
+     * S0 接触卡不提：第一次见到这个词，再难也只是在猜。已经在最难那一档的原样返回。
+     */
+    private fun harder(type: SpellingQuestionType): SpellingQuestionType = when (type) {
+        SpellingQuestionType.Exposure -> SpellingQuestionType.Exposure
+        SpellingQuestionType.Recognition -> SpellingQuestionType.PartialCompletion
+        SpellingQuestionType.PartialCompletion -> SpellingQuestionType.ChunkRecall
+        SpellingQuestionType.ChunkRecall -> SpellingQuestionType.GuidedRecall
+        SpellingQuestionType.GuidedRecall -> SpellingQuestionType.FreeRecall
+        SpellingQuestionType.FreeRecall -> SpellingQuestionType.FreeRecall
+        SpellingQuestionType.DelayedFreeRecall -> SpellingQuestionType.DelayedFreeRecall
+    }
+
+    /**
+     * 这一题从第几级提示起步（§11 的"提供首字母"）。
+     *
+     * 太吃力时直接把首字母摆上，省得对着一片空白干耗。不用担心这样会虚高掌握度：
+     * [masteryCredit] 已经按提示层级打折，用了提示答对只拿 0.8 分。
+     * 四选一和接触卡没有提示阶梯，照旧从 0 起。
+     */
+    fun startingHintLevel(
+        questionType: SpellingQuestionType,
+        difficulty: DifficultyBias,
+    ): Int = when {
+        difficulty != DifficultyBias.Easier -> 0
+        questionType == SpellingQuestionType.Recognition -> 0
+        questionType == SpellingQuestionType.Exposure -> 0
+        else -> 1
     }
 
     /**

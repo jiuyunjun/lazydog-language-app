@@ -4,11 +4,14 @@ import com.lazydog.english.core.database.AppDatabase
 import com.lazydog.english.core.database.LearningEventEntity
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.progress.DailyProgress
+import com.lazydog.english.domain.progress.DifficultyBias
 import com.lazydog.english.domain.progress.LearningActivity
 import com.lazydog.english.domain.progress.ProgressActivity
 import com.lazydog.english.domain.progress.ProgressEvent
 import com.lazydog.english.domain.progress.dailyProgress
+import com.lazydog.english.domain.progress.difficultyBias
 import com.lazydog.english.domain.progress.learningActivity
+import com.lazydog.english.domain.progress.recentAccuracy
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -43,6 +46,19 @@ class ProgressRepository(
         }
     }
 
+    /**
+     * 最近的提取成功率给出的难度偏置（§11）。
+     *
+     * 只回看 [ACCURACY_LOOKBACK_DAYS] 天：更早的表现说明不了今天的状态，
+     * 而调难度要的正是"今天状态如何"。
+     */
+    fun observeDifficulty(): Flow<DifficultyBias> {
+        val since = Instant.now().minusSeconds(ACCURACY_LOOKBACK_DAYS * 86_400L)
+        return dao.observeEventsSince(since.toEpochMilli()).map { rows ->
+            difficultyBias(recentAccuracy(rows.map { it.toProgressEvent() }))
+        }
+    }
+
     /** 学习旅程 / 最近 30 天 / 当前连续（§7.1）。 */
     fun observeActivity(): Flow<LearningActivity> =
         dao.observeActiveDays().map { days ->
@@ -60,6 +76,7 @@ class ProgressRepository(
 
     private companion object {
         const val RECOVERY_LOOKBACK_DAYS = 120L
+        const val ACCURACY_LOOKBACK_DAYS = 21L
     }
 }
 

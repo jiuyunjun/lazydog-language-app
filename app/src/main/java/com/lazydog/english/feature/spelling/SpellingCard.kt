@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.domain.progress.DifficultyBias
 import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.SpellingQueueEntry
@@ -105,11 +106,16 @@ data class SpellingCard(
     val dueForReview: Boolean,
     /** 这张是本轮末尾排回来的延迟重考。只影响题面上那行提示，判分照旧。 */
     val delayed: Boolean = false,
+    /**
+     * 最近成功率给出的难度偏置（`持续学习DESIGN.md` §11）。
+     * 只影响这一次问什么、从第几级提示起，不影响判分口径，也不影响阶段升降。
+     */
+    val difficulty: DifficultyBias = DifficultyBias.Steady,
 ) {
-    val questionType: SpellingQuestionType get() = SpellingEngine.questionType(progress)
+    val questionType: SpellingQuestionType get() = SpellingEngine.questionType(progress, difficulty)
 }
 
-fun SpellingQueueEntry.toSpellingCard() = SpellingCard(
+fun SpellingQueueEntry.toSpellingCard(difficulty: DifficultyBias = DifficultyBias.Steady) = SpellingCard(
     itemId = itemId,
     term = term,
     ipa = ipa,
@@ -121,6 +127,7 @@ fun SpellingQueueEntry.toSpellingCard() = SpellingCard(
     facts = facts,
     progress = progress,
     dueForReview = dueForReview,
+    difficulty = difficulty,
 )
 
 /**
@@ -179,7 +186,12 @@ fun SpellingCardView(
     val scope = rememberCoroutineScope()
     // 按整张卡重置而不是按 itemId：同一个词会在本轮末尾以延迟重考的身份再来一次，
     // 只认 id 的话第二次进来还端着上一次的输入和判定。
-    var answer by remember(card) { mutableStateOf(SpellingAnswer()) }
+    // 吃力的时候首字母直接摆上，别让人对着一片空白干耗（§11）。用了提示的分本来就少给。
+    var answer by remember(card) {
+        mutableStateOf(
+            SpellingAnswer(hintLevel = SpellingEngine.startingHintLevel(card.questionType, card.difficulty)),
+        )
+    }
 
     LaunchedEffect(answer) { onAnswerChange(answer) }
 
@@ -292,6 +304,12 @@ private fun QuestionView(
         ) {
             if (card.delayed) {
                 Badge(text = "刚才见过 · 现在再考一次", attention = false)
+            }
+            // 难度变了要说一声：不解释的话，用户只会觉得这个 App 今天忽然刁难他（§11）。
+            when (card.difficulty) {
+                DifficultyBias.Harder -> Badge(text = "最近答得很稳 · 这次问深一点", attention = false)
+                DifficultyBias.Easier -> Badge(text = "最近有点吃力 · 先给个首字母", attention = false)
+                DifficultyBias.Steady -> Unit
             }
             when (card.questionType) {
                 SpellingQuestionType.Exposure -> ExposureBody(

@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.domain.progress.DifficultyBias
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.data.KnowledgeRepository
@@ -123,7 +124,7 @@ private data class StudyCard(
     )
 
     /** 复习卡就是一张拼写卡。这里是"单词复习 = 拼写"这条的落点。 */
-    fun toSpellingCard(): SpellingCard = SpellingCard(
+    fun toSpellingCard(difficulty: DifficultyBias = DifficultyBias.Steady): SpellingCard = SpellingCard(
         itemId = itemId!!,
         term = term,
         ipa = ipa,
@@ -138,6 +139,7 @@ private data class StudyCard(
         progress = (spelling ?: SpellingProgress(stage = defaultSpellingStage())).let {
             if (it.stage == SpellingStage.Seen) it.copy(stage = SpellingStage.Recognition) else it
         },
+        difficulty = difficulty,
         // 单词页只发到期的卡，所以这里一定推动复习时间。
         dueForReview = true,
     )
@@ -171,6 +173,9 @@ fun WordStudyScreen(
     val scope = rememberCoroutineScope()
 
     var phase by remember { mutableStateOf<WordStudyPhase>(WordStudyPhase.Loading) }
+    // 最近答得太顺就把同一个词问得深一点，太吃力就先给首字母（`持续学习DESIGN.md` §11）。
+    val difficultyFlow = remember { app.progressRepository.observeDifficulty() }
+    val difficulty by difficultyFlow.collectAsState(initial = DifficultyBias.Steady)
     var reviewedCount by remember { mutableStateOf(0) }
     var newLearnedCount by remember { mutableStateOf(0) }
     var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
@@ -343,7 +348,7 @@ fun WordStudyScreen(
                         // 复习就是拼写：出题、提示梯度、判分、写复习时间全在这张共用卡里，
                         // 所以这里不再调 onGrade——再调一次会把同一次复习记成两次。
                         SpellingCardView(
-                            card = card.toSpellingCard(),
+                            card = card.toSpellingCard(difficulty),
                             repository = repository,
                             onResolved = {
                                 reviewedCount += 1

@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import kotlinx.coroutines.flow.first
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.feature.ask.AskTopBarAction
@@ -79,7 +80,9 @@ fun SpellingScreen(
     var answer by remember { mutableStateOf(SpellingAnswer()) }
 
     LaunchedEffect(Unit) {
-        val queue = repository.spellingQueue().map { it.toSpellingCard() }
+        // 难度偏置只在开局取一次：一轮做到一半忽然换题型，用户只会觉得莫名其妙（§11）。
+        val difficulty = app.progressRepository.observeDifficulty().first()
+        val queue = repository.spellingQueue().map { it.toSpellingCard(difficulty) }
         phase = if (queue.isEmpty()) SpellingPhase.Empty else SpellingPhase.Round(queue, 0)
     }
 
