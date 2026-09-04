@@ -4,6 +4,7 @@ import com.lazydog.english.core.database.DrillMistakeEntity
 import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
+import com.lazydog.english.core.database.ListeningAttemptEntity
 import com.lazydog.english.core.database.ListeningMaterialEntity
 import com.lazydog.english.core.database.ReadingMaterialEntity
 import com.lazydog.english.core.database.ScenarioSessionEntity
@@ -110,6 +111,21 @@ data class BackupListeningMaterial(
     val playCount: Int,
 )
 
+/** 听力作答。旧备份没有这一项，解码成空列表——恢复之后画像从零开始重新攒。 */
+@Serializable
+data class BackupListeningAttempt(
+    val normalizedText: String,
+    val textEn: String,
+    val sceneZh: String,
+    val correct: Boolean,
+    val playCount: Int,
+    val hintLevel: String,
+    val audioFeaturesJson: String,
+    val mishearType: String?,
+    val score: Int,
+    val occurredAt: Long,
+)
+
 @Serializable
 data class BackupScenarioSession(
     val scenarioId: String,
@@ -212,7 +228,7 @@ data class BackupPreferences(
 
 @Serializable
 data class BackupPayload(
-    val schemaVersion: Int = 3,
+    val schemaVersion: Int = 4,
     val exportedAt: Long,
     val knowledgeItems: List<BackupKnowledgeItem> = emptyList(),
     val vocabularyDetails: List<BackupVocabularyDetail> = emptyList(),
@@ -220,6 +236,7 @@ data class BackupPayload(
     val learningEvents: List<BackupLearningEvent> = emptyList(),
     val readingMaterials: List<BackupReadingMaterial> = emptyList(),
     val listeningMaterials: List<BackupListeningMaterial> = emptyList(),
+    val listeningAttempts: List<BackupListeningAttempt> = emptyList(),
     val scenarioSessions: List<BackupScenarioSession> = emptyList(),
     val drillMistakes: List<BackupDrillMistake> = emptyList(),
     val spellingProgress: List<BackupSpellingProgress> = emptyList(),
@@ -366,6 +383,33 @@ fun BackupListeningMaterial.toEntity() = ListeningMaterialEntity(
     firstHeardAt = firstHeardAt,
     lastHeardAt = lastHeardAt,
     playCount = playCount,
+)
+
+fun ListeningAttemptEntity.toBackup() = BackupListeningAttempt(
+    normalizedText = normalizedText,
+    textEn = textEn,
+    sceneZh = sceneZh,
+    correct = correct,
+    playCount = playCount,
+    hintLevel = hintLevel,
+    audioFeaturesJson = audioFeaturesJson,
+    mishearType = mishearType,
+    score = score,
+    occurredAt = occurredAt,
+)
+
+fun BackupListeningAttempt.toEntity() = ListeningAttemptEntity(
+    id = 0,
+    normalizedText = normalizedText,
+    textEn = textEn,
+    sceneZh = sceneZh,
+    correct = correct,
+    playCount = playCount,
+    hintLevel = hintLevel,
+    audioFeaturesJson = audioFeaturesJson,
+    mishearType = mishearType,
+    score = score,
+    occurredAt = occurredAt,
 )
 
 fun ScenarioSessionEntity.toBackup() = BackupScenarioSession(

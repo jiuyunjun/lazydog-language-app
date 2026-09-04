@@ -43,6 +43,7 @@ import com.lazydog.english.feature.reading.ReadingMode
 import com.lazydog.english.feature.reading.ReadingScreen
 import com.lazydog.english.feature.speaking.SpeakingScreen
 import com.lazydog.english.feature.scenario.ScenarioScreen
+import com.lazydog.english.feature.listening.ListeningProfileScreen
 import com.lazydog.english.feature.listening.ListeningScreen
 import com.lazydog.english.feature.study.GrammarStudyScreen
 import com.lazydog.english.feature.spelling.SpellingProfileScreen
@@ -61,6 +62,7 @@ object Routes {
     const val WordStudy = "study/words"
     const val Spelling = "study/spelling"
     const val SpellingProfile = "study/spelling/profile"
+    const val ListeningProfile = "listening/profile"
     const val GrammarStudy = "study/grammar"
     const val Production = "study/production"
     const val ProofChallenge = "study/proof"
@@ -226,7 +228,10 @@ private fun AppNavHost(
         // 学习类页面包一层 AskHost：摇一摇提问只在这些页面可用（DESIGN 屏 45～49）。
         composable(Routes.Listening) {
             AskHost {
-                ListeningScreen(onExit = { navController.popOnce() })
+                ListeningScreen(
+                    onExit = { navController.popOnce() },
+                    onOpenProfile = { navController.navigate(Routes.ListeningProfile) },
+                )
             }
         }
 
@@ -265,6 +270,10 @@ private fun AppNavHost(
                     onOpenProfile = { navController.navigate(Routes.SpellingProfile) },
                 )
             }
+        }
+
+        composable(Routes.ListeningProfile) {
+            ListeningProfileScreen(onExit = { navController.popBackStack() })
         }
 
         composable(Routes.SpellingProfile) {

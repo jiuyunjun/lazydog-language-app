@@ -21,8 +21,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SpellingAttemptEntity::class,
         VocabularyMemoryHintEntity::class,
         ListeningMaterialEntity::class,
+        ListeningAttemptEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -41,6 +42,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 13, to = 14),
         // v15 只新增听力材料表。
         AutoMigration(from = 14, to = 15),
+        // v16 只新增听力作答表，老表一列没动。
+        AutoMigration(from = 15, to = 16),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {

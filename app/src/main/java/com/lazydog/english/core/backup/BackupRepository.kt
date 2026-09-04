@@ -30,6 +30,7 @@ class BackupRepository(
             learningEvents = knowledgeDao.getAllEvents().map { it.toBackup() },
             readingMaterials = readingDao.getAllMaterials().map { it.toBackup() },
             listeningMaterials = listeningDao.getAll().map { it.toBackup() },
+            listeningAttempts = listeningDao.getAllAttempts().map { it.toBackup() },
             scenarioSessions = scenarioDao.getAll().map { it.toBackup() },
             drillMistakes = database.drillMistakeDao().getAll().map { it.toBackup() },
             spellingProgress = spellingDao.getAllProgress().map { it.toBackup() },
@@ -69,6 +70,7 @@ class BackupRepository(
             readingDao.clearAll()
             scenarioDao.clearAll()
             listeningDao.clearAll()
+            listeningDao.clearAllAttempts()
             mistakeDao.clearAll()
 
             val idMap = mutableMapOf<Long, Long>()
@@ -104,6 +106,9 @@ class BackupRepository(
             }
             for (material in payload.listeningMaterials) {
                 listeningDao.insert(material.toEntity())
+            }
+            for (attempt in payload.listeningAttempts) {
+                listeningDao.insertAttempt(attempt.toEntity())
             }
             for (session in payload.scenarioSessions) {
                 scenarioDao.save(session.toEntity())

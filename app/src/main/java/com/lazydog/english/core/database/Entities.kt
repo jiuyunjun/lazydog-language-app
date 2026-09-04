@@ -285,6 +285,36 @@ data class DrillMistakeEntity(
     val occurredAt: Long,
 )
 
+/**
+ * 一道听力题的作答。
+ *
+ * 不设外键、冗余存一份原句和听觉难点：和 `drill_mistakes` 同一个理由——
+ * 材料被删（或者压根没进材料表）之后，"你在连读上栽了几次"这个事实仍然成立。
+ */
+@Entity(
+    tableName = "listening_attempts",
+    indices = [Index(value = ["occurredAt"]), Index(value = ["normalizedText"])],
+)
+data class ListeningAttemptEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** 和 `listening_materials` 同一个归一化口径，用来回指是哪一句。 */
+    val normalizedText: String,
+    val textEn: String,
+    val sceneZh: String,
+    val correct: Boolean,
+    /** 揭晓前点了几次播放。 */
+    val playCount: Int,
+    /** ListeningHintLevel.name，取"最高用到过的一级"。 */
+    val hintLevel: String,
+    /** 这句的听觉难点标签（linking / reduction / …），JSON 数组。 */
+    val audioFeaturesJson: String,
+    /** 答错时选中的那条干扰项属于哪类误听；答对为 null。 */
+    val mishearType: String?,
+    /** 这题的得分，存下来免得日后重算口径变了对不上。 */
+    val score: Int,
+    val occurredAt: Long,
+)
+
 /** 可中断恢复的情景演练。具体快照作为一个整体存 JSON，避免每轮对话拆成多张表。 */
 @Entity(
     tableName = "scenario_sessions",

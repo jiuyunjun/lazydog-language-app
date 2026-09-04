@@ -47,4 +47,18 @@ interface ListeningMaterialDao {
 
     @Query("DELETE FROM listening_materials")
     suspend fun clearAll()
+
+    // ---- 作答记录（听力画像、跨轮次统计）----
+
+    @Insert
+    suspend fun insertAttempt(attempt: ListeningAttemptEntity): Long
+
+    @Query("SELECT * FROM listening_attempts ORDER BY occurredAt ASC")
+    fun observeAttempts(): Flow<List<ListeningAttemptEntity>>
+
+    @Query("SELECT * FROM listening_attempts")
+    suspend fun getAllAttempts(): List<ListeningAttemptEntity>
+
+    @Query("DELETE FROM listening_attempts")
+    suspend fun clearAllAttempts()
 }

@@ -160,7 +160,7 @@ private const val MIN_ITEMS_TO_START = 3
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListeningScreen(onExit: () -> Unit) {
+fun ListeningScreen(onExit: () -> Unit, onOpenProfile: () -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
@@ -316,6 +316,9 @@ fun ListeningScreen(onExit: () -> Unit) {
             hintLevel = hintLevel,
         )
         answers = answers + record
+        // 一轮的临时状态照旧不落库，但这一题的结果要留下：
+        // "你在连读上栽了几次"必须跨轮次才算得出来（`持续学习DESIGN.md` §16）。
+        scope.launch { runCatching { app.listeningMaterialRepository.recordAttempt(record) } }
         savedExpression = false
         phase = ListeningPhase.Reveal
     }
@@ -502,7 +505,11 @@ fun ListeningScreen(onExit: () -> Unit) {
                     },
                 )
             }
-            ListeningPhase.Summary -> Summary(modifier = content, answers = answers)
+            ListeningPhase.Summary -> Summary(
+                modifier = content,
+                answers = answers,
+                onOpenProfile = onOpenProfile,
+            )
         }
     }
 
@@ -1233,7 +1240,7 @@ private fun scoreReason(answer: ListeningAnswer): String = buildString {
 
 /** 一轮结束的结果页（设计稿屏 56：首听率是主指标）。 */
 @Composable
-private fun Summary(modifier: Modifier, answers: List<ListeningAnswer>) {
+private fun Summary(modifier: Modifier, answers: List<ListeningAnswer>, onOpenProfile: () -> Unit) {
     val summary = remember(answers) { summarizeListening(answers) }
     Column(
         modifier = modifier
@@ -1316,6 +1323,8 @@ private fun Summary(modifier: Modifier, answers: List<ListeningAnswer>) {
                 }
             }
         }
+        // 这一轮之外的账：连读到底是这次没听清，还是一直没听清，只有跨轮次才看得出来。
+        TextButton(onClick = onOpenProfile) { Text("看看我一直卡在哪一类音上") }
         Spacer(Modifier.size(8.dp))
     }
 }
