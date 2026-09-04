@@ -131,6 +131,8 @@ interface LearningContentGenerator {
         term: String,
         sentenceContext: String,
         learnerLevel: String,
+        /** 学习者关心的领域；讲解里新给的那个例句会优先落在这些场景（`持续学习DESIGN.md` §19.2）。 */
+        topics: List<String> = emptyList(),
         /** 已接收的原始结构化文本；用于在最终校验完成前逐步展示讲解。 */
         onProgress: ((String) -> Unit)? = null,
     ): GenerationResult<WordExplanation>

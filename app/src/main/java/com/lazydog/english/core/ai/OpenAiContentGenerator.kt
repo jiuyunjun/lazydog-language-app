@@ -391,11 +391,12 @@ class OpenAiContentGenerator(
         term: String,
         sentenceContext: String,
         learnerLevel: String,
+        topics: List<String>,
         onProgress: ((String) -> Unit)?,
     ): GenerationResult<WordExplanation> {
         val outcome = complete(
             systemPrompt = SYSTEM_PROMPT,
-            userPrompt = buildExplainWordPrompt(term, sentenceContext, learnerLevel),
+            userPrompt = buildExplainWordPrompt(term, sentenceContext, learnerLevel, topics),
             task = AiTask.Explain,
             onTextProgress = onProgress,
             op = "查词",
@@ -1865,7 +1866,7 @@ class OpenAiContentGenerator(
          * 例句（exampleEn/exampleZh）的写法要求。新词生成和点词速查共用，
          * 免得两处各写一套、慢慢跑偏。
          */
-        internal fun exampleSentenceRules(level: String): String = buildString {
+        internal fun exampleSentenceRules(level: String, topics: List<String> = emptyList()): String = buildString {
             appendLine("写 exampleEn 时你是按 CEFR 等级出例句的英语教学专家：" +
                 "句子必须用上面说的那个词性和词义，不能滑到这个词的其他意思；" +
                 "词形本身可以按语法自然变化（时态、单复数、派生形式都行）。")
@@ -1881,6 +1882,15 @@ class OpenAiContentGenerator(
             appendLine("但绝不能编造出处：拿不准是不是原话、或者想不起准确的原句，就自己写一句" +
                 "带那种画面感的话，不标任何出处。宁可没有出处，也不许张冠李戴。" +
                 "台词也要服从上面的等级和自然度要求，太老、太冷门、离开原片就看不懂的梗不要用。")
+            if (topics.isNotEmpty()) {
+                // §19.2：例句场景优先落在学习者自己的领域。"Tom bought an apple" 这种句子
+                // 语法上没毛病，但它不属于任何人的生活，读完就忘。
+                appendLine("这位学习者关心的领域是：${topics.joinToString("、")}。" +
+                    "挑场景时优先落在这些领域里——同样一个词，写成他明天真会遇到的句子，" +
+                    "比写成教科书里的中性句子好记得多。")
+                appendLine("但这是偏好不是硬要求：这个词和这些领域实在挨不上，就写它最自然的场景，" +
+                    "不要为了贴兴趣把词硬塞进一个别扭的句子里——生硬的句子比无关的句子更糟。")
+            }
             appendLine("exampleEn 里不要出现中文；exampleZh 要说人话，" +
                 "准确体现目标词在这句里的含义，不要逐字硬译。")
         }
@@ -2076,7 +2086,7 @@ class OpenAiContentGenerator(
             appendLine("term 必须是原型（词典形式）：动词给原形、名词给单数，不要给 -ed / -ing / 复数这类变形。")
             append(wordFormRules())
             appendLine("meaningZh 是这个具体词义的简洁中文释义；exampleEn 是包含该词的自然英文例句，exampleZh 是它的翻译。")
-            append(exampleSentenceRules(request.learnerLevel))
+            append(exampleSentenceRules(request.learnerLevel, request.topics))
             appendLine("同一批例句之间场景和句型要有明显区别，不能只换个人名或地点。")
             append(memoryHintRules())
             append(spellingFactRules())
@@ -2248,7 +2258,12 @@ class OpenAiContentGenerator(
             appendLine("""输出 JSON schema：{"translationZh":"...","explanationZh":"..."}""")
         }
 
-        internal fun buildExplainWordPrompt(term: String, sentence: String, level: String): String = buildString {
+        internal fun buildExplainWordPrompt(
+            term: String,
+            sentence: String,
+            level: String,
+            topics: List<String> = emptyList(),
+        ): String = buildString {
             appendLine("解释单词 \"$term\" 在下面这句话里的意思，给水平 $level 的中文母语学习者看：")
             appendLine(sentence)
             appendLine("meaningZh 是简洁中文释义（含词性）；usageNoteZh 用一句话说明它在这句里的用法，可以为空字符串。")
@@ -2265,7 +2280,7 @@ class OpenAiContentGenerator(
             )
             appendLine("再给一个新的例句：exampleEn 换一个跟上面这句不同的场景，" +
                 "仍然用这个词在这里的词义，exampleZh 是它的翻译。")
-            append(exampleSentenceRules(level))
+            append(exampleSentenceRules(level, topics))
             append(memoryHintRules())
             appendLine(
                 """输出 JSON schema：{"term":"$term","lemma":"...","pos":"VERB","forms":["..."],""" +

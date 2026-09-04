@@ -398,6 +398,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                 word,
                 sentence,
                 app.userPreferences.learnerLevelDescription.first(),
+                topics = app.userPreferences.topics.first().toList(),
                 onProgress = { streamedJson = it },
             )) {
                 is GenerationResult.Success -> {
