@@ -179,6 +179,16 @@ class ReadingValidationTest {
     }
 
     @Test
+    fun `依据句能定位到空行或单换行分隔的自然段`() {
+        val blankLines = "First paragraph.\n\nThe clue is here.\n\nLast paragraph."
+        assertEquals(2, ReadingValidation.paragraphNumberContaining(blankLines, "The clue is here."))
+
+        val singleLines = "First paragraph.\nThe clue is here.\nLast paragraph."
+        assertEquals(2, ReadingValidation.paragraphNumberContaining(singleLines, "the clue is here"))
+        assertNull(ReadingValidation.paragraphNumberContaining(singleLines, "Not in the article."))
+    }
+
+    @Test
     fun `没有收获陈述就不算一篇文章`() {
         val outcome = ReadingValidation.validate(reading(payoff = "  "), request())
         assertEquals("没给 readerPayoff", outcome.failure)

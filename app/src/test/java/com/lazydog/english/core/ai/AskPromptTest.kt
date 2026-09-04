@@ -65,4 +65,24 @@ class AskPromptTest {
         val prompt = OpenAiContentGenerator.buildAskPrompt(request(question = "长".repeat(400)))
         assertTrue(prompt.contains("<question>${"长".repeat(300)}</question>"))
     }
+
+    @Test
+    fun `阅读原文在阅读和答题上下文中都不截断`() {
+        val article = "article ".repeat(200) + "FULL_ARTICLE_END"
+        listOf(AskContextKind.Reading, AskContextKind.Question).forEach { kind ->
+            val prompt = OpenAiContentGenerator.buildAskPrompt(
+                AskRequest(
+                    context = AskContext(
+                        kind = kind,
+                        title = "A complete article",
+                        details = listOf(AskDetail("阅读原文", article)),
+                    ),
+                    learnerLevel = "B1",
+                    history = emptyList(),
+                    question = "这里为什么这样写？",
+                ),
+            )
+            assertTrue(prompt.contains("FULL_ARTICLE_END"))
+        }
+    }
 }

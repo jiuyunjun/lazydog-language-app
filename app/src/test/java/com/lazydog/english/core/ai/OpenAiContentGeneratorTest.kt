@@ -6,6 +6,7 @@ import com.lazydog.english.domain.generation.GrammarLessonRequest
 import com.lazydog.english.domain.generation.MemoryAssistanceRequest
 import com.lazydog.english.domain.generation.MemoryType
 import com.lazydog.english.domain.generation.NewWordsRequest
+import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.listening.ListeningSetRequest
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
@@ -83,6 +84,27 @@ class ListeningPromptTest {
         assertTrue(prompt.contains("不要照搬电影"))
         assertTrue(prompt.contains("<heard_sentences>"))
         assertTrue(prompt.contains("We've already covered that in the meeting."))
+    }
+}
+
+class ReadingPromptTest {
+    @Test
+    fun `reading questions request a visible source sentence without tightening gist validation`() {
+        val prompt = OpenAiContentGenerator.buildReadingPrompt(
+            ReadingGenerationRequest(
+                learnerLevel = "B1",
+                topic = "Technology",
+                targetLength = 300,
+                reviewVocabulary = emptyList(),
+                knownVocabulary = emptyList(),
+                reviewGrammar = emptyList(),
+                maxNewWords = 5,
+            ),
+        )
+
+        assertTrue(prompt.contains("每道题都给 evidenceFromText"))
+        assertTrue(prompt.contains("gist 题只有在确实考查全文"))
+        assertTrue(prompt.contains("form/reference 题绝对不能留空"))
     }
 }
 

@@ -5,7 +5,8 @@ import com.lazydog.english.domain.generation.JsonStream
 /**
  * 摇一摇提问的领域模型（DESIGN 屏 45～49）。
  *
- * 上下文由各学习页面主动注册成结构化对象，不截屏、不发整页文本；
+ * 上下文由各学习页面主动注册成结构化对象，不截屏；阅读页会把当前材料全文作为一个字段注册，
+ * 让追问能够联系前后文。
  * 抽屉关掉即结束一次会话，不保留跨会话的问答历史。
  */
 enum class AskContextKind(

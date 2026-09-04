@@ -150,6 +150,22 @@ object ReadingValidation {
         return normalizedFragment.isNotEmpty() && normalizedBody.contains(normalizedFragment, ignoreCase = true)
     }
 
+    /** 返回依据句所在的自然段（从 1 开始）；兼容空行分段和单换行分段。 */
+    fun paragraphNumberContaining(body: String, fragment: String): Int? {
+        if (fragment.isBlank()) return null
+        val blankLineParagraphs = body.split(Regex("(?:\\r?\\n[\\t ]*){2,}"))
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+        val paragraphs = if (blankLineParagraphs.size > 1) {
+            blankLineParagraphs
+        } else {
+            body.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
+        }
+        return paragraphs.indexOfFirst { bodyContainsNormalized(it, fragment) }
+            .takeIf { it >= 0 }
+            ?.plus(1)
+    }
+
     /** 模型常把正文的弯引号/长横线抄成 ASCII；内容相同不应因此误判为“不是正文”。 */
     private fun normalizeQuoteAndSpace(value: String): String = value
         .replace('‘', '\'')

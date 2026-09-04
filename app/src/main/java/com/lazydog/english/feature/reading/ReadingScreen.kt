@@ -67,6 +67,7 @@ import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
 import com.lazydog.english.domain.generation.ReadingQuestionKind
 import com.lazydog.english.domain.generation.ReadingTargetWord
+import com.lazydog.english.domain.generation.ReadingValidation
 import com.lazydog.english.domain.planning.DailyStep
 import java.time.LocalDate
 import kotlinx.coroutines.flow.first
@@ -301,7 +302,7 @@ fun ReadingScreen(
                 is ReadingPhase.Viewing -> MaterialContent(
                     material = p.material,
                     onQuestionAnswered = { question, selectedIndex ->
-                        askQuestionContext = question.toAskContext(selectedIndex)
+                        askQuestionContext = question.toAskContext(selectedIndex, p.material)
                     },
                     onQuestionsCompleted = {
                         scope.launch {
@@ -464,8 +465,7 @@ private fun MaterialView.toAskContext(): AskContext = AskContext(
     details = buildList {
         add(AskDetail("标题", title))
         if (cefr.isNotBlank()) add(AskDetail("难度", cefr))
-        // 正文按段落截断：只发学习者真的在读的这一篇，不发整个知识库。
-        add(AskDetail("正文", body.take(1200)))
+        add(AskDetail("阅读原文", body))
         if (targetWords.isNotEmpty()) {
             add(AskDetail("这篇的目标词", targetWords.joinToString("、") { "${it.term}（${it.meaningZh}）" }))
         }
@@ -473,7 +473,7 @@ private fun MaterialView.toAskContext(): AskContext = AskContext(
     suggestions = listOf("这段在讲什么？", "有哪句话结构比较难？", "挑两个值得记的表达"),
 )
 
-private fun ReadingQuestion.toAskContext(selectedIndex: Int): AskContext = AskContext(
+private fun ReadingQuestion.toAskContext(selectedIndex: Int, material: MaterialView): AskContext = AskContext(
     kind = AskContextKind.Question,
     title = "这道题 · 你选了${optionAt(selectedIndex)}",
     details = buildList {
@@ -484,6 +484,8 @@ private fun ReadingQuestion.toAskContext(selectedIndex: Int): AskContext = AskCo
         add(AskDetail("题型", ReadingQuestionKind.labelZh(kind)))
         if (evidenceFromText.isNotBlank()) add(AskDetail("原文依据", evidenceFromText))
         if (explanationZh.isNotBlank()) add(AskDetail("解析", explanationZh))
+        add(AskDetail("阅读标题", material.title))
+        add(AskDetail("阅读原文", material.body))
     },
     suggestions = listOf("我选的为什么不对？", "怎么在原文里找到依据？", "这类题该看什么线索？"),
 )
@@ -535,6 +537,7 @@ private fun MaterialContent(
             Text("先确认一件事", style = MaterialTheme.typography.titleMedium)
             QuestionList(
                 questions = listOf(firstQuestion),
+                articleBody = material.body,
                 onAnswered = { question, selected ->
                     onQuestionAnswered(question, selected)
                     firstCheckAnswered = true
@@ -557,6 +560,7 @@ private fun MaterialContent(
                 Text("再看几处语言线索", style = MaterialTheme.typography.titleMedium)
                 QuestionList(
                     questions = laterQuestions,
+                    articleBody = material.body,
                     onAnswered = onQuestionAnswered,
                     onAllAnswered = {
                         exercisesCompleted = true
@@ -679,6 +683,7 @@ private fun ReaderPayoffCard(payoff: String) {
 @Composable
 private fun QuestionList(
     questions: List<ReadingQuestion>,
+    articleBody: String,
     onAnswered: (ReadingQuestion, Int) -> Unit,
     onAllAnswered: () -> Unit,
 ) {
@@ -700,6 +705,36 @@ private fun QuestionList(
                     text = "${qIndex + 1}. ${question.promptZh}",
                     style = MaterialTheme.typography.bodyLarge,
                 )
+                val evidence = question.evidenceFromText.takeIf {
+                    ReadingValidation.bodyContainsNormalized(articleBody, it)
+                }
+                if (evidence != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            val paragraph = ReadingValidation.paragraphNumberContaining(articleBody, evidence)
+                            Text(
+                                text = if (paragraph == null) {
+                                    "题目对应原文"
+                                } else {
+                                    "题目对应原文 · 第 ${paragraph} 段"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            InteractiveEnglishText(
+                                text = evidence,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
                 question.options.forEachIndexed { oIndex, option ->
                     val answered = selected != null
                     val isAnswer = oIndex == question.answerIndex
@@ -735,29 +770,6 @@ private fun QuestionList(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                // 形式题和指代题答完把原文那句摆出来，逼一次"回原文核对"。
-                if (selected != null && question.evidenceFromText.isNotBlank()) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = MaterialTheme.shapes.small,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text = "原文这句",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            InteractiveEnglishText(
-                                text = question.evidenceFromText,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
                 }
             }
         }

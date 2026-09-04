@@ -605,7 +605,7 @@ interface ReadingSource {
 ### 摇一摇提问
 
 - 触发在 `core/ask/ShakeDetector.kt`：只在学习页面注册 `TYPE_ACCELEROMETER`，合力超过灵敏度阈值即触发，300 ms 去抖、1.2 s 冷却；没有传感器或用户关掉摇一摇时，降级为学习页顶栏的问号 `AskTopBarAction`。
-- 上下文由页面自己注册：`core/ask/AskController.kt` 的 `ProvideAskContext` 把结构化的 `AskContext`（词条 / 语法点 / 阅读材料 / 刚做的题 / 演练处境）挂到外层 `feature/ask/AskHost`。不截屏、不发整页文本，抽屉顶部的上下文卡展开后就是发给 AI 的全部内容。
+- 上下文由页面自己注册：`core/ask/AskController.kt` 的 `ProvideAskContext` 把结构化的 `AskContext`（词条 / 语法点 / 阅读材料 / 刚做的题 / 演练处境）挂到外层 `feature/ask/AskHost`。不截屏；阅读材料是唯一的全文例外，当前文章以 `阅读原文` 字段完整注册，切到刚做的阅读题上下文后仍携带全文。抽屉顶部的上下文卡展开后就是发给 AI 的全部内容。
 - 页面状态不合适提问时注册 `null`（生成中、失败页、词卡未揭示答案时只给词形不给释义），摇了也不弹。
 - **注册上下文才算接上**：`AskHost` 只提供触发和抽屉，页面不调 `ProvideAskContext` 的话 `canAsk` 恒为 false，传感器都不注册。听力页曾经只包了 `AskHost` 却没注册上下文，等于没接。
 - 答题类页面分揭晓前后两份上下文：听力揭晓前只给场景、语气、难度，英文原文和中文答案一个字不给（这一页的规矩是"英文永远最后出现"）；拼写同理，未翻篇前只给中文和题型。揭晓后才把原文、关键表达、听觉难点全交出去。

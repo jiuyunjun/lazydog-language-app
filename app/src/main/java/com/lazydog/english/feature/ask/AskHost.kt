@@ -490,7 +490,7 @@ private fun ContextCard(
                     }
                 }
                 Text(
-                    text = "只发这些内容给 AI，不截屏、不发整页文本。",
+                    text = "只发卡片里的结构化内容给 AI，不截屏；阅读页会包含当前材料全文。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
