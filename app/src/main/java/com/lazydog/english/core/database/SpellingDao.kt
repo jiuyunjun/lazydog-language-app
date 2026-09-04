@@ -31,4 +31,23 @@ interface SpellingDao {
             "ORDER BY occurredAt DESC LIMIT :limit",
     )
     suspend fun recentWrongAttempts(itemId: Long, limit: Int): List<SpellingAttemptEntity>
+
+    // ---- 长期证明（core/data/ProgressRepository，`持续学习DESIGN.md` §14.3）----
+
+    /**
+     * 最近**没用提示**写对的作答。提示答对不算会了，拿它当"你现在会了"的证据
+     * 经不起用户自己回想。
+     */
+    @Query(
+        "SELECT * FROM spelling_attempts WHERE correct = 1 AND hintLevel = 0 " +
+            "AND occurredAt >= :since ORDER BY occurredAt DESC",
+    )
+    suspend fun recentUnaidedSuccesses(since: Long): List<SpellingAttemptEntity>
+
+    /** 这些词更早写错的作答，用来和上面那批配对。 */
+    @Query(
+        "SELECT * FROM spelling_attempts WHERE correct = 0 AND itemId IN (:itemIds) " +
+            "AND occurredAt <= :before ORDER BY occurredAt ASC",
+    )
+    suspend fun earlierMistakes(itemIds: List<Long>, before: Long): List<SpellingAttemptEntity>
 }

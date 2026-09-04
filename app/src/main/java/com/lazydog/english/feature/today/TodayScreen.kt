@@ -41,6 +41,7 @@ import com.lazydog.english.core.data.TodayReport
 import com.lazydog.english.domain.planning.DailyPlanner
 import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.progress.LearningActivity
+import com.lazydog.english.domain.progress.LongTermProof
 import com.lazydog.english.domain.progress.MINIMUM_RETRIEVALS
 import com.lazydog.english.domain.progress.Mood
 import com.lazydog.english.domain.progress.mood
@@ -241,6 +242,9 @@ fun TodayScreen(
             ProgressEvidence(report, modifier = Modifier.padding(top = 16.dp))
         }
 
+        // 长期证明单独一张：它讲的不是今天，是几个月的跨度（§14.3）。
+        report.proof?.let { LongTermProofCard(it, modifier = Modifier.padding(top = 12.dp)) }
+
         when {
             allDone -> DoneNote("今天的步骤都走完了。想加练随时去「学习」页。")
 
@@ -370,6 +374,39 @@ private fun ProgressEvidence(report: TodayReport, modifier: Modifier = Modifier)
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+        }
+    }
+}
+
+/**
+ * "你以前不会，现在会了"（§14.3）。
+ *
+ * 这张卡的说服力全在**具体**上：指名道姓地摆出当时写错的那个拼法，
+ * 而不是一句"你的拼写进步了"。用户自己会认出那个错误，那一刻的说服力不需要任何数字。
+ */
+@Composable
+private fun LongTermProofCard(proof: LongTermProof, modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "${proof.daysAgo} 天前你还会在这里出错",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Text(
+                text = "当时写的是 ${proof.pastAnswer}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Text(
+                text = "现在：${proof.term} · 没用提示",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
         }
     }
 }

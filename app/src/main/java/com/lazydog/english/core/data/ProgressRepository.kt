@@ -2,17 +2,22 @@ package com.lazydog.english.core.data
 
 import com.lazydog.english.core.database.AppDatabase
 import com.lazydog.english.core.database.LearningEventEntity
+import com.lazydog.english.core.database.SpellingAttemptEntity
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.progress.DailyProgress
 import com.lazydog.english.domain.progress.DifficultyBias
 import com.lazydog.english.domain.progress.Fatigue
 import com.lazydog.english.domain.progress.LearningActivity
+import com.lazydog.english.domain.progress.LongTermProof
+import com.lazydog.english.domain.progress.PROOF_MIN_GAP_DAYS
+import com.lazydog.english.domain.progress.SpellingMoment
 import com.lazydog.english.domain.progress.ProgressActivity
 import com.lazydog.english.domain.progress.ProgressEvent
 import com.lazydog.english.domain.progress.dailyProgress
 import com.lazydog.english.domain.progress.difficultyBias
 import com.lazydog.english.domain.progress.fatigue
 import com.lazydog.english.domain.progress.learningActivity
+import com.lazydog.english.domain.progress.longTermProof
 import com.lazydog.english.domain.progress.recentAccuracy
 import java.time.Instant
 import java.time.LocalDate
@@ -35,6 +40,7 @@ class ProgressRepository(
 ) {
 
     private val dao = database.knowledgeDao()
+    private val spellingDao = database.spellingDao()
 
     /**
      * 今天的战报。查询窗口回看 [RECOVERY_LOOKBACK_DAYS] 天，因为"重新记住了"要知道
@@ -50,6 +56,7 @@ class ProgressRepository(
                 progress = progress,
                 recoveredNames = namesOf(progress.recovered),
                 fatigue = fatigue(todayEvents),
+                proof = longTermProof(),
             )
         }
     }
@@ -73,6 +80,29 @@ class ProgressRepository(
             learningActivity(days.mapNotNull(::parseDay).toSet(), today())
         }
 
+    /**
+     * "你以前不会，现在会了"（§14.3）。
+     *
+     * 两条查询都很窄：最近几天无提示写对的那些词，加上这些词在更早以前写错的记录。
+     * 配不上就返回 null——没有证据时什么都不说，比说一句空话强。
+     */
+    private suspend fun longTermProof(): LongTermProof? {
+        val now = Instant.now()
+        val successes = spellingDao.recentUnaidedSuccesses(
+            since = now.minusSeconds(PROOF_SUCCESS_WINDOW_DAYS * 86_400L).toEpochMilli(),
+        )
+        if (successes.isEmpty()) return null
+        val mistakes = spellingDao.earlierMistakes(
+            itemIds = successes.map { it.itemId }.distinct(),
+            before = now.minusSeconds(PROOF_MIN_GAP_DAYS * 86_400L).toEpochMilli(),
+        )
+        return longTermProof(
+            recentSuccesses = successes.map { it.toSpellingMoment() },
+            olderMistakes = mistakes.map { it.toSpellingMoment() },
+            now = now,
+        )
+    }
+
     /** 翻身的那几个知识点显示成什么。查不到就不显示，宁可少说一个也不要显示一个空名字。 */
     private suspend fun namesOf(itemIds: List<Long>): List<String> {
         if (itemIds.isEmpty()) return emptyList()
@@ -85,6 +115,9 @@ class ProgressRepository(
     private companion object {
         const val RECOVERY_LOOKBACK_DAYS = 120L
         const val ACCURACY_LOOKBACK_DAYS = 21L
+
+        /** 长期证明只认最近几天刚写对的：太久以前的成功说明不了"现在会了"。 */
+        const val PROOF_SUCCESS_WINDOW_DAYS = 7L
     }
 }
 
@@ -94,11 +127,22 @@ data class TodayReport(
     val recoveredNames: List<String>,
     /** 今天看起来累不累（§25）。今天的事件本来就取到了，顺手算，不额外查一次。 */
     val fatigue: Fatigue = Fatigue.Fine,
+    /** "你以前不会，现在会了"（§14.3）。配不出来就是 null。 */
+    val proof: LongTermProof? = null,
 ) {
     companion object {
         val Empty = TodayReport(DailyProgress.Empty, emptyList())
     }
 }
+
+private fun SpellingAttemptEntity.toSpellingMoment() = SpellingMoment(
+    itemId = itemId,
+    expected = expected,
+    answer = answer,
+    correct = correct,
+    hintLevel = hintLevel,
+    at = Instant.ofEpochMilli(occurredAt),
+)
 
 private fun LearningEventEntity.toProgressEvent() = ProgressEvent(
     itemId = itemId,
