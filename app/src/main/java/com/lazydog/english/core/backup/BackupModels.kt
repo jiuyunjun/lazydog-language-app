@@ -84,6 +84,9 @@ data class BackupReadingMaterial(
     val body: String,
     val source: String,
     val topic: String,
+    /** 旧备份没有这两项，解码成空串——恢复后照样能读，只是那篇没有「值得记住的一件事」。 */
+    val readerPayoff: String = "",
+    val archetype: String = "",
     val estimatedCefr: String,
     val targetWordsJson: String,
     val grammarJson: String,
@@ -228,7 +231,7 @@ data class BackupPreferences(
 
 @Serializable
 data class BackupPayload(
-    val schemaVersion: Int = 4,
+    val schemaVersion: Int = 5,
     val exportedAt: Long,
     val knowledgeItems: List<BackupKnowledgeItem> = emptyList(),
     val vocabularyDetails: List<BackupVocabularyDetail> = emptyList(),
@@ -326,6 +329,8 @@ fun ReadingMaterialEntity.toBackup() = BackupReadingMaterial(
     body = body,
     source = source,
     topic = topic,
+    readerPayoff = readerPayoff,
+    archetype = archetype,
     estimatedCefr = estimatedCefr,
     targetWordsJson = targetWordsJson,
     grammarJson = grammarJson,
@@ -343,6 +348,8 @@ fun BackupReadingMaterial.toEntity() = ReadingMaterialEntity(
     body = body,
     source = source,
     topic = topic,
+    readerPayoff = readerPayoff,
+    archetype = archetype,
     estimatedCefr = estimatedCefr,
     targetWordsJson = targetWordsJson,
     grammarJson = grammarJson,

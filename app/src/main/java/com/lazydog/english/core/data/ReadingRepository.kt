@@ -23,6 +23,7 @@ class ReadingRepository(
     suspend fun saveGenerated(
         reading: GeneratedReading,
         topic: String,
+        archetype: String,
         model: String,
         promptVersion: Int,
         schemaVersion: Int,
@@ -33,6 +34,8 @@ class ReadingRepository(
             body = reading.body,
             source = SOURCE_AI,
             topic = topic,
+            readerPayoff = reading.readerPayoff,
+            archetype = archetype,
             estimatedCefr = reading.estimatedCefr,
             targetWordsJson = ReadingJson.encodeWords(reading.targetVocabulary),
             grammarJson = ReadingJson.encodeGrammar(reading.targetGrammar),
@@ -63,6 +66,20 @@ class ReadingRepository(
         ),
     )
 
+    /**
+     * 最近几篇的标题和写法（§20）。
+     *
+     * 不只按主题去重：真正让人腻的是**结构和句式**一模一样——
+     * 十篇不同主题的"Why X is actually Y"仍然是十篇同一个东西。
+     */
+    suspend fun recentShape(limit: Int = 12): RecentReadingShape {
+        val recent = dao.recentGenerated(limit)
+        return RecentReadingShape(
+            titles = recent.map { it.title },
+            archetypes = recent.map { it.archetype }.filter { it.isNotBlank() },
+        )
+    }
+
     suspend fun get(id: Long): ReadingMaterialEntity? = dao.getById(id)
 
     suspend fun delete(id: Long) = dao.deleteById(id)
@@ -72,6 +89,12 @@ class ReadingRepository(
         const val SOURCE_PASTED = "pasted"
     }
 }
+
+/** 最近读过的"形状"：标题和写法，生成下一篇时用来避开雷同。 */
+data class RecentReadingShape(
+    val titles: List<String>,
+    val archetypes: List<String>,
+)
 
 /** 实体内嵌 JSON 的编解码。解码失败返回空列表，坏数据不炸页面。 */
 object ReadingJson {

@@ -62,6 +62,7 @@ import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
+import com.lazydog.english.domain.generation.ReadingArchetype
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
 import com.lazydog.english.domain.generation.ReadingQuestionKind
@@ -82,6 +83,8 @@ private data class MaterialView(
     val id: Long,
     val title: String,
     val body: String,
+    /** 这篇要留给读者的那一个收获（§4）。粘贴导入的材料没有。 */
+    val readerPayoff: String,
     val cefr: String,
     val source: String,
     val targetWords: List<ReadingTargetWord>,
@@ -97,7 +100,12 @@ private sealed interface ReadingPhase {
     data class Viewing(val material: MaterialView) : ReadingPhase
 }
 
-private const val TARGET_LENGTH = 160
+/**
+ * 目标词数。§8 要求 250～700 词、5～9 段——160 词装不下
+ * Hook → 好奇缺口 → 逐步揭示 → 兑现这一套，只够写成一段说明文。
+ * 取 300 是因为 §7.1 的配比（300～500 词配 4～7 个新词）正好对上现有的新词上限。
+ */
+private const val TARGET_LENGTH = 300
 private const val MAX_NEW_WORDS = 4
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -135,6 +143,7 @@ fun ReadingScreen(
                         id = entity.id,
                         title = entity.title,
                         body = entity.body,
+                        readerPayoff = entity.readerPayoff,
                         cefr = entity.estimatedCefr,
                         source = entity.source,
                         targetWords = ReadingJson.decodeWords(entity.targetWordsJson),
@@ -164,6 +173,10 @@ fun ReadingScreen(
                 .map { it.detail.displayPattern() }
                 .take(2)
 
+            // 写法轮换 + 最近读过的标题一起进提示词：主题去重挡不住"十篇一个样"，
+            // 真正让人腻的是结构和句式（`引人入胜的阅读材料DESIGN.md` §20）。
+            val recent = readingRepo.recentShape()
+            val archetype = ReadingArchetype.pick(recent.archetypes)
             val request = ReadingGenerationRequest(
                 learnerLevel = app.userPreferences.readingLevelDescription.first(),
                 topic = topic,
@@ -172,6 +185,8 @@ fun ReadingScreen(
                 knownVocabulary = known,
                 reviewGrammar = dueGrammar,
                 maxNewWords = MAX_NEW_WORDS,
+                archetype = archetype,
+                recentTitles = recent.titles,
             )
             val generated = app.contentGenerator.generateReading(
                 request,
@@ -185,6 +200,7 @@ fun ReadingScreen(
                     val id = readingRepo.saveGenerated(
                         reading = result.data,
                         topic = topic,
+                        archetype = archetype.wire,
                         model = result.model,
                         promptVersion = result.promptVersion,
                         schemaVersion = 1,
@@ -195,6 +211,7 @@ fun ReadingScreen(
                             id = id,
                             title = result.data.title,
                             body = result.data.body,
+                            readerPayoff = result.data.readerPayoff,
                             cefr = result.data.estimatedCefr,
                             source = ReadingRepository.SOURCE_AI,
                             targetWords = result.data.targetVocabulary,
@@ -217,6 +234,8 @@ fun ReadingScreen(
                     id = id,
                     title = finalTitle,
                     body = body.trim(),
+                    // 粘贴进来的材料没有收获陈述：那是生成时声明的，不该由本地编一个。
+                    readerPayoff = "",
                     cefr = "",
                     source = ReadingRepository.SOURCE_PASTED,
                     targetWords = emptyList(),
@@ -538,6 +557,38 @@ private fun MaterialContent(
                 questions = material.questions,
                 onAnswered = onQuestionAnswered,
                 onAllAnswered = onQuestionsCompleted,
+            )
+        }
+
+        if (material.readerPayoff.isNotBlank()) {
+            ReaderPayoffCard(material.readerPayoff)
+        }
+    }
+}
+
+/**
+ * 「值得记住的一件事」（`引人入胜的阅读材料DESIGN.md` §4）。
+ *
+ * 它回答的是"你刚刚到底学到了什么"，所以只有一句，而且必须是文章真正兑现过的那一句——
+ * 写成"本文总结"就白做了：总结是把读过的重说一遍，收获是读之前不知道、读完带得走的东西。
+ */
+@Composable
+private fun ReaderPayoffCard(payoff: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "值得记住的一件事",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            InteractiveEnglishText(
+                text = payoff,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
         }
     }

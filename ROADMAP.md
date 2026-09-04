@@ -345,13 +345,16 @@ M1～M13 里了，所以本里程碑只收"文档要求、代码里还没有"的
 
 对应 §3、§4、§6、§8、§9、§20。全在生成层加一点 UI，不碰推荐系统。
 
-- [ ] 10 种 article archetype（§6）：解释怪现象 / 一问一答 / 小案例 / 隐藏系统 /
-  反直觉 / 短叙事 / 权衡 / 迷思与真相 / 前后对比 / 今天就能观察到
-- [ ] Hook → Curiosity Gap → Progressive Discovery → Payoff → Takeaway 的结构约束（§3）
-- [ ] `reader_payoff`（§4）：一篇只承诺一个收获，读完显示「值得记住的一件事」
-- [ ] 标题规则（§9）：拒绝 clickbait 模板；正文禁止 "In today's world" 这类开头
-- [ ] 节奏（§8）：250～700 词、单段 30～80 词、5～9 段
-- [ ] Anti-Repetition（§20）：最近用过的 archetype 和标题进提示词，不只去重主题
+- [x] 10 种 article archetype（§6），按最近用过的轮换（`domain/generation/ReadingArchetype.kt`）
+- [x] Hook → Curiosity Gap → Progressive Discovery → Payoff → Takeaway 的结构约束（§3）
+- [x] `reader_payoff`（§4）：本地硬校验（非空、不超长、不是标题复述、不是套话），
+  读完显示「值得记住的一件事」
+- [x] 标题与开头的黑名单（§9、§3.1）：标题党和 "In today's world" 一律拒绝，不是警告
+- [x] 节奏（§8）：目标词数从 160 提到 300，并要求 5～9 段、每段 30～80 词
+- [x] Anti-Repetition（§20）：最近 12 篇的标题和写法进提示词
+
+Room v17 给 `reading_materials` 加了 `readerPayoff` 和 `archetype` 两列（都带默认值，
+自动迁移）；备份格式升到 5，旧备份缺这两项解成空串。
 
 ### M15.2：反馈闭环与 Feed（P1）
 

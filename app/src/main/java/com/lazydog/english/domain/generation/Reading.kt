@@ -16,6 +16,10 @@ data class ReadingGenerationRequest(
     val reviewGrammar: List<String>,
     /** 允许引入的新词上限。 */
     val maxNewWords: Int,
+    /** 这篇用哪种写法（`引人入胜的阅读材料DESIGN.md` §6）。 */
+    val archetype: ReadingArchetype = ReadingArchetype.HiddenSystem,
+    /** 最近几篇的标题，进提示词避免重复；越靠前越新（§20）。 */
+    val recentTitles: List<String> = emptyList(),
 )
 
 @Serializable
@@ -78,6 +82,13 @@ data class ReadingQuestion(
 data class GeneratedReading(
     val title: String,
     val body: String,
+    /**
+     * 这篇文章要留给读者的**那一个**收获，一句话（§4）。
+     *
+     * 一篇只承诺一件事：信息多不等于信息价值高。读完页面上显示的
+     * 「值得记住的一件事」就是它，所以它不能是标题的复述，也不能是"原因有很多"这种废话。
+     */
+    val readerPayoff: String,
     val estimatedCefr: String,
     val targetVocabulary: List<ReadingTargetWord>,
     val targetGrammar: List<ReadingTargetGrammar>,

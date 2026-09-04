@@ -20,6 +20,10 @@ interface ReadingDao {
     @Query("DELETE FROM reading_materials WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    /** 最近几篇，用来避免重复（`引人入胜的阅读材料DESIGN.md` §20）。 */
+    @Query("SELECT * FROM reading_materials WHERE source = 'ai' ORDER BY createdAt DESC LIMIT :limit")
+    suspend fun recentGenerated(limit: Int): List<ReadingMaterialEntity>
+
     // ---- 备份 / 恢复（core/backup/BackupRepository）----
 
     @Query("SELECT * FROM reading_materials")

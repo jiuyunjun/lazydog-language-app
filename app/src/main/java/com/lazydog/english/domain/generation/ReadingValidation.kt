@@ -7,6 +7,37 @@ package com.lazydog.english.domain.generation
  */
 object ReadingValidation {
 
+    /** §9 明确拒绝的标题模板。 */
+    private val CLICKBAIT_TITLE_PATTERNS = listOf(
+        "You Won't Believe",
+        "You Will Not Believe",
+        "This Changes Everything",
+        "They Don't Want You to Know",
+        "Doctors Hate",
+        "One Weird Trick",
+    )
+
+    /** 说了等于没说的 payoff。 */
+    private val EMPTY_PAYOFF_PATTERNS = listOf(
+        "there are many reasons",
+        "it depends on many factors",
+        "this article explains",
+        "本文",
+        "有很多原因",
+    )
+
+    /** §3.1 点名不许用的开头。 */
+    private val GENERIC_OPENINGS = listOf(
+        "In today's world",
+        "In today s world",
+        "In the modern world",
+        "English is very important",
+        "There are many reasons",
+        "Have you ever wondered",
+    )
+
+    private const val MAX_PAYOFF_LENGTH = 160
+
     data class Outcome(
         /** null 表示通过。 */
         val failure: String?,
@@ -20,6 +51,26 @@ object ReadingValidation {
         if (reading.title.isBlank() || reading.title.length > 80) {
             return fail("标题缺失或过长")
         }
+        // §9 的拒绝列表。这类标题骗到的点击会连着损伤对后面每一篇的信任，
+        // 所以是硬拒绝而不是警告。
+        CLICKBAIT_TITLE_PATTERNS.firstOrNull { reading.title.contains(it, ignoreCase = true) }
+            ?.let { return fail("标题用了标题党模板：$it") }
+
+        // §4：一篇只承诺一个收获，而且它得真的是个收获。
+        val payoff = reading.readerPayoff.trim()
+        when {
+            payoff.isBlank() -> return fail("没给 readerPayoff")
+            payoff.length > MAX_PAYOFF_LENGTH -> return fail("readerPayoff 太长，一句话说不完就不是一个收获")
+            payoff.equals(reading.title.trim(), ignoreCase = true) ->
+                return fail("readerPayoff 只是把标题重说了一遍")
+            EMPTY_PAYOFF_PATTERNS.any { payoff.contains(it, ignoreCase = true) } ->
+                return fail("readerPayoff 是句套话，没说出具体收获")
+        }
+
+        // §3.1 的禁用开头。这些开头等于告诉读者"下面是一篇作文"。
+        val opening = reading.body.trimStart().take(80)
+        GENERIC_OPENINGS.firstOrNull { opening.startsWith(it, ignoreCase = true) }
+            ?.let { return fail("正文用了套路开头：$it") }
         val wordCount = Regex("[A-Za-z'\\-]+").findAll(reading.body).count()
         if (wordCount < MIN_BODY_WORDS) return fail("正文太短（$wordCount 词）")
         if (wordCount > request.targetLength * 3) return fail("正文太长（$wordCount 词）")

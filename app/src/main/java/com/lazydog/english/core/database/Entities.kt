@@ -140,6 +140,10 @@ data class ReadingMaterialEntity(
     /** ai / pasted */
     val source: String,
     val topic: String,
+    /** 这篇要留给读者的那一个收获（`引人入胜的阅读材料DESIGN.md` §4）。旧材料为空。 */
+    @ColumnInfo(defaultValue = "''") val readerPayoff: String = "",
+    /** 用的哪种写法（§6 的 archetype wire）。旧材料为空，去重时当没用过。 */
+    @ColumnInfo(defaultValue = "''") val archetype: String = "",
     val estimatedCefr: String,
     val targetWordsJson: String,
     val grammarJson: String,

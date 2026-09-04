@@ -23,7 +23,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ListeningMaterialEntity::class,
         ListeningAttemptEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -44,6 +44,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 14, to = 15),
         // v16 只新增听力作答表，老表一列没动。
         AutoMigration(from = 15, to = 16),
+        // v17 给 reading_materials 多两列（都带默认值），交给自动迁移。
+        AutoMigration(from = 16, to = 17),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {

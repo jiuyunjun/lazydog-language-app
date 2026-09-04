@@ -1263,6 +1263,7 @@ class OpenAiContentGenerator(
         val schemaVersion: Int = 0,
         val title: String = "",
         val body: String = "",
+        val readerPayoff: String = "",
         val estimatedCefr: String = "",
         val targetVocabulary: List<ReadingTargetWordPayload> = emptyList(),
         val targetGrammar: List<ReadingTargetGrammarPayload> = emptyList(),
@@ -1271,6 +1272,7 @@ class OpenAiContentGenerator(
         fun toDomain() = GeneratedReading(
             title = title.trim(),
             body = body.trim(),
+            readerPayoff = readerPayoff.trim(),
             estimatedCefr = estimatedCefr.trim(),
             targetVocabulary = targetVocabulary.map {
                 ReadingTargetWord(it.term.trim(), it.meaningZh.trim(), it.exampleFromText.trim(), it.role.trim())
@@ -2134,11 +2136,50 @@ class OpenAiContentGenerator(
             )
         }
 
+        /**
+         * 阅读生成提示词（`引人入胜的阅读材料DESIGN.md` §3、§6、§8、§9、§13）。
+         *
+         * 这份提示词的第一件事不是交代学习目标，而是交代**这篇得值得读**。
+         * §26 原则 1 说得直白：把英语学习功能全删掉之后文章还值不值得读，
+         * 不值得就不该发。所以写作要求排在词汇要求前面，词汇那段还专门写了
+         * "会破坏自然度就换词"（§7）。
+         */
         internal fun buildReadingPrompt(request: ReadingGenerationRequest): String = buildString {
-            appendLine("写一篇约 ${request.targetLength} 个英文单词的短文，给中文母语的英语学习者做渐进式阅读。")
-            appendLine("学习者水平：${request.learnerLevel}。主题：${request.topic}。")
+            appendLine("为中文母语的英语学习者写一篇英文短文。学习者水平：${request.learnerLevel}。主题：${request.topic}。")
+            appendLine()
+            appendLine("第一要务是**写出一篇本身就值得读的东西**：把英语学习的部分全部删掉之后，")
+            appendLine("它仍然应该是一篇有人愿意读完的文章。不要写成教材，不要在正文里提到这是给学习者读的。")
+            appendLine()
+            appendLine("这一篇的写法（archetype）是「${request.archetype.labelZh}」：${request.archetype.briefEn}")
+            appendLine()
+            appendLine("结构按 Hook → 好奇缺口 → 逐步揭示 → 兑现 → 带得走的东西：")
+            appendLine("- 开头 1~3 句必须给出继续读下去的具体理由：一个反常的事实、一个小谜团、")
+            appendLine("  一个具体场景，或者一句矛盾。**禁止**用 In today's world / English is very important /")
+            appendLine("  There are many reasons / Have you ever wondered 这类开头。")
+            appendLine("- 前段抛出的问题不要马上回答，让读者先带着它往下走。")
+            appendLine("- 每 80~150 词至少出现一个新东西：新事实、新线索、新例子、更深一层的解释或一个小反转。")
+            appendLine("  同一个意思换个说法再说一遍，等于把读者赶走。")
+            appendLine("- 结尾必须兑现开头制造的好奇，而不是总结全文。「So there are many reasons」是最差的结尾。")
+            appendLine()
+            appendLine("readerPayoff：用一句英文写出这篇要留给读者的**那一个**收获（§4）。")
+            appendLine("它必须能被正文里的证据或故事支撑，不能是标题的复述，也不能是「原因有很多」这种套话。")
+            appendLine("一篇只承诺一件事——信息多不等于信息价值高。")
+            appendLine()
+            appendLine("标题：具体、可信、让人想点开。可以是问句、藏着解释、或者一个具体的意外。")
+            appendLine("**禁止**标题党（You Won't Believe / This Changes Everything / 他们不想让你知道的秘密）。")
+            appendLine()
+            appendLine("篇幅和节奏：正文约 ${request.targetLength} 个英文单词，分 5~9 段，每段 30~80 词，")
+            appendLine("每段承担一个明确功能。不要写成四个巨长的段落。")
+            if (request.recentTitles.isNotEmpty()) {
+                appendLine()
+                appendLine("这几篇是他最近读过的，**标题、开头方式和结构都不要和它们雷同**：")
+                request.recentTitles.take(12).forEach { appendLine("- ${it.take(80)}") }
+            }
+            appendLine()
+            appendLine("——以下是学习目标，它们必须让位于上面的自然度要求（§7）——")
             if (request.reviewVocabulary.isNotEmpty()) {
-                appendLine("正文必须自然地用上这些复习词（每个都要出现）：${request.reviewVocabulary.joinToString(", ")}。")
+                appendLine("正文自然地用上这些复习词（每个都要出现）：${request.reviewVocabulary.joinToString(", ")}。")
+                appendLine("如果某个词实在塞不进这个主题而不别扭，宁可换一种说法把它用上，也不要为了它写出生硬的句子。")
             }
             if (request.knownVocabulary.isNotEmpty()) {
                 appendLine("学习者已掌握的词汇样本（正文难度以此为准，不要明显超纲）：${request.knownVocabulary.joinToString(", ")}。")
@@ -2160,7 +2201,7 @@ class OpenAiContentGenerator(
                 "gist 题可以留空字符串。")
             appendLine("输出 JSON schema：")
             appendLine(
-                """{"schemaVersion":1,"title":"...","body":"...","estimatedCefr":"A2",""" +
+                """{"schemaVersion":1,"title":"...","body":"...","readerPayoff":"...","estimatedCefr":"A2",""" +
                     """"targetVocabulary":[{"term":"...","meaningZh":"...","exampleFromText":"...","role":"review"}],""" +
                     """"targetGrammar":[{"name":"...","exampleFromText":"...","explanationZh":"..."}],""" +
                     """"comprehensionQuestions":[{"kind":"form","promptZh":"...","options":["..."],""" +

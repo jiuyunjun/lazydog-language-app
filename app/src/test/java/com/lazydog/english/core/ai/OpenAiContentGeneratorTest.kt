@@ -272,7 +272,8 @@ class OpenAiContentGeneratorTest {
     @Test
     fun `reading with missing review word is rejected`() = runBlocking {
         val readingJson =
-            """{"schemaVersion":1,"title":"T","body":"${"word ".repeat(60)}","estimatedCefr":"A2",
+            """{"schemaVersion":1,"title":"T","body":"${"word ".repeat(60)}",
+               "readerPayoff":"Small changes to waiting can matter more than speed.","estimatedCefr":"A2",
                "targetVocabulary":[],"targetGrammar":[],
                "comprehensionQuestions":[{"promptZh":"?","options":["A","B"],"answerIndex":0,"explanationZh":"e"}]}"""
         server.enqueue(MockResponse().setBody(chatBody(readingJson)))

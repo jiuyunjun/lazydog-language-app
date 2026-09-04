@@ -33,7 +33,16 @@ class ReadingValidationTest {
                 evidenceFromText = "It was a small change, but it worked well for them.",
             ),
         ),
-    ) = GeneratedReading(title, readingBody, "A2", targets, grammar, questions)
+    payoff: String = "Waiting feels shorter when there is something to look at.",
+    ) = GeneratedReading(
+        title = title,
+        body = readingBody,
+        readerPayoff = payoff,
+        estimatedCefr = "A2",
+        targetVocabulary = targets,
+        targetGrammar = grammar,
+        comprehensionQuestions = questions,
+    )
 
     private fun request(
         review: List<String> = listOf("curb", "linger"),
@@ -166,5 +175,45 @@ class ReadingValidationTest {
     fun `normalized substring tolerates whitespace differences`() {
         assertTrue(ReadingValidation.bodyContainsNormalized("He  made\na plan.", "He made a plan."))
         assertEquals(false, ReadingValidation.bodyContainsNormalized("Body text.", "Missing."))
+    }
+
+    @Test
+    fun `没有收获陈述就不算一篇文章`() {
+        val outcome = ReadingValidation.validate(reading(payoff = "  "), request())
+        assertEquals("没给 readerPayoff", outcome.failure)
+    }
+
+    @Test
+    fun `收获不能只是把标题重说一遍`() {
+        // §4：payoff 不是标题的复述，也不是"原因有很多"这种套话。
+        val restated = ReadingValidation.validate(
+            reading(payoff = "A Small Plan"),
+            request(),
+        )
+        assertEquals("readerPayoff 只是把标题重说了一遍", restated.failure)
+
+        val empty = ReadingValidation.validate(
+            reading(payoff = "There are many reasons why this happens."),
+            request(),
+        )
+        assertEquals("readerPayoff 是句套话，没说出具体收获", empty.failure)
+    }
+
+    @Test
+    fun `标题党直接拒绝`() {
+        val outcome = ReadingValidation.validate(
+            reading(title = "You Won't Believe What Happened Next"),
+            request(),
+        )
+        assertTrue(outcome.failure.orEmpty(), outcome.failure?.contains("标题党") == true)
+    }
+
+    @Test
+    fun `套路开头直接拒绝`() {
+        // 这些开头等于告诉读者"下面是一篇作文"（§3.1 点名不许用）。
+        val body = "In today's world, many people curb their habits and linger over small things. " +
+            "word ".repeat(60)
+        val outcome = ReadingValidation.validate(reading(readingBody = body), request())
+        assertTrue(outcome.failure.orEmpty(), outcome.failure?.contains("套路开头") == true)
     }
 }
