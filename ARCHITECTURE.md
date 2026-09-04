@@ -409,6 +409,24 @@ interface ReadingSource {
 - AI 与 Speech 各自通过 provider 接口封装，领域层不依赖具体 SDK。
 - 网络请求应设置超时、有限重试和可取消机制。
 
+### 播放状态归 PlaybackController
+
+- 播放状态的唯一事实来源是 `core/speech/PlaybackController`（挂在 `SpeechController` 上，
+  跟着它一起由 `LazyDogApplication` 持有）。界面、Azure 回调、音频线程都只往它的事件队列里
+  投事件，由单条协程串行过 reducer，不并发改状态。
+- 对界面只暴露 `IDLE / LOADING / PLAYING / ERROR` 四态加一个 `sourceId`。
+  播放按钮**不许自己存 `isPlaying`**，一律 `PlaybackState.statusOf(sourceId)` 去问，
+  所以任何时刻最多一个按钮显示在播。图标按钮统一用 `core/designsystem/SpeakButton`。
+- 交互约定：同一个按钮再点一次 = 停；点别的按钮 = 立刻顶掉当前这段换成新的（不排队）；
+  连点取最后一次。
+- 正确性靠 `generation` + `jobId` 校验，不靠 cancel：每次新的播放意图都递增 generation，
+  迟到的回调一律丢弃。cancel 只是省资源（`语音服务DESIGN.md` §16）。
+- 合成完成 ≠ 播放完成：`PLAYING` 在第一块语音真正写进 AudioTrack 时才置位，
+  `IDLE` 要等 `drain` 返回。
+- 录音（发音评估、听写）前先掐掉朗读，这一版是半双工，不做边放边收、不做回声消除。
+- 依赖方向仍然是 `feature → SpeechController → SpeechProvider → AzureSpeechProvider`，
+  控制器是加在这条线的**上面**，不是旁边另起一条（§0.3）。
+
 ### 朗读播放的不变量
 
 `core/speech/PcmAudioPlayer` 自己喂 AudioTrack，不用 SDK 的默认输出（理由见类注释）。

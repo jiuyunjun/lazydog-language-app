@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.TaskAlt
@@ -45,6 +44,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.VocabularyJson
@@ -466,7 +467,7 @@ private fun StudyCardView(
 
     // 卡片出现时自动朗读（设置里可关）。
     LaunchedEffect(card.term) {
-        if (app.userPreferences.autoReadWords.first()) speech.speakWord(card.term)
+        if (app.userPreferences.autoReadWords.first()) speech.play(PlaybackSource.word(card.term))
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -483,13 +484,7 @@ private fun StudyCardView(
                     text = card.term,
                     style = if (revealed) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayMedium,
                 )
-                IconButton(onClick = { scope.launch { speech.speakWord(card.term) } }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                        contentDescription = "再读一遍",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
+                SpeakButton(PlaybackSource.word(card.term), contentDescription = "再读一遍")
             }
             if (card.ipa.isNotBlank()) {
                 Text(
@@ -578,13 +573,10 @@ private fun StudyCardView(
                                     speakOnSingleTap = true,
                                     modifier = Modifier.weight(1f, fill = false),
                                 )
-                                IconButton(onClick = { scope.launch { speech.speak(card.exampleEn) } }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                                        contentDescription = "朗读例句",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
+                                SpeakButton(
+                                    source = PlaybackSource.sentence(card.exampleEn),
+                                    contentDescription = "朗读例句",
+                                )
                             }
                             if (card.exampleZh.isNotBlank()) {
                                 Text(

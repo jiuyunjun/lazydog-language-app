@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.data.ReadingRepository
 import com.lazydog.english.core.database.ListeningMaterialEntity
 import java.time.Instant
@@ -201,7 +202,7 @@ fun StudyScreen(
                                 is RecentStudyItem.Scenario -> onScenarioSessionClick(item.id)
                                 is RecentStudyItem.Listening -> scope.launch {
                                     runCatching { app.listeningMaterialRepository.recordReplay(item.material) }
-                                    app.speechController.speak(item.title)
+                                    app.speechController.play(PlaybackSource.sentence(item.title))
                                 }
                             }
                         },

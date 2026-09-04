@@ -25,7 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Casino
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -43,6 +42,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
@@ -69,6 +69,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.ScenarioReplyMode
 import com.lazydog.english.core.data.ScenarioSessionSnapshot
@@ -926,16 +928,13 @@ private fun MessageBubble(message: ScenarioMessage) {
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(
-                        onClick = { scope.launch { app.speechController.speak(message.textEn) } },
+                    SpeakButton(
+                        source = PlaybackSource.sentence(message.textEn),
+                        contentDescription = "朗读这句话",
                         modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.VolumeUp,
-                            contentDescription = "朗读这句话",
-                            modifier = Modifier.size(19.dp),
-                        )
-                    }
+                        iconSize = 19.dp,
+                        tint = LocalContentColor.current,
+                    )
                 }
                 if (!user && message.subtextZh.isNotBlank()) {
                     InteractiveEnglishText(message.subtextZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

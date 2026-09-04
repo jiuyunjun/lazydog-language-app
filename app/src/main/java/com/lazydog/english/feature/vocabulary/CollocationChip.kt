@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.designsystem.InteractiveEnglishBlock
 import com.lazydog.english.domain.generation.Collocation
 import com.lazydog.english.domain.generation.GenerationResult
@@ -45,7 +46,7 @@ fun CollocationChip(collocation: Collocation) {
     val translation = collocation.zh.ifBlank { fetched }
 
     fun tap() {
-        scope.launch { app.speechController.speak(phrase) }
+        app.speechController.onPlayClicked(PlaybackSource.sentence(phrase))
         if (translation.isNotBlank() || loading) return
         loading = true
         failed = ""

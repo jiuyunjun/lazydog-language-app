@@ -6,15 +6,19 @@ package com.lazydog.english.domain.speaking
 interface SpeechProvider {
 
     /**
-     * 朗读一段英文示范音频，播放完成后返回。
+     * 朗读一段英文示范音频，音频真正播完（缓冲放空）才返回——合成完成不算播放完成
+     * （`语音服务DESIGN.md` §9）。
      * 实现必须先打断正在播放的内容，而不是排队。
      * [voiceName] 为空用实现的默认音色。
+     * [onPlaybackStarted] 在音频真正开始出声时回调一次，用来把界面从"加载中"切到"正在播"；
+     * 被后一次朗读顶掉而没出过声时不回调。
      */
     suspend fun speak(
         text: String,
         rate: SpeechRate = SpeechRate.Normal,
         voiceName: String? = null,
         style: SpeechStyle = SpeechStyle.Sentence,
+        onPlaybackStarted: () -> Unit = {},
     ): SpeakResult
 
     /**

@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -46,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.displayPattern
@@ -766,7 +767,7 @@ private fun LessonView(
         label = "这样说",
         sentence = lesson.goodExampleEn,
         note = lesson.goodExampleZh,
-        onSpeak = { scope.launch { app.speechController.speak(lesson.goodExampleEn) } },
+        speakSource = PlaybackSource.sentence(lesson.goodExampleEn),
     )
     if (lesson.badExampleEn.isNotBlank()) {
         ExampleBlock(
@@ -775,7 +776,7 @@ private fun LessonView(
             label = "容易说错",
             sentence = lesson.badExampleEn,
             note = lesson.badExampleNoteZh,
-            onSpeak = null,
+            speakSource = null,
         )
     }
     if (lesson.tipZh.isNotBlank()) {
@@ -833,7 +834,7 @@ private fun ExampleBlock(
     label: String,
     sentence: String,
     note: String,
-    onSpeak: (() -> Unit)?,
+    speakSource: PlaybackSource?,
 ) {
     Surface(
         shape = MaterialTheme.shapes.medium,
@@ -856,22 +857,15 @@ private fun ExampleBlock(
                     color = tint,
                     modifier = Modifier.weight(1f),
                 )
-                if (onSpeak != null) {
-                    IconButton(onClick = onSpeak) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                            contentDescription = "朗读例句",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
+                if (speakSource != null) {
+                    SpeakButton(speakSource, contentDescription = "朗读例句", iconSize = 20.dp)
                 }
             }
             InteractiveEnglishText(
                 text = sentence,
                 style = MaterialTheme.typography.bodyLarge,
                 // 反面例句故意是错的，读出来只会把错的读法记进耳朵。
-                speakOnSingleTap = onSpeak != null,
+                speakOnSingleTap = speakSource != null,
             )
             if (note.isNotBlank()) {
                 Text(
@@ -880,7 +874,7 @@ private fun ExampleBlock(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            InteractiveTextHint(speakOnSingleTap = onSpeak != null)
+            InteractiveTextHint(speakOnSingleTap = speakSource != null)
         }
     }
 }

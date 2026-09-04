@@ -92,8 +92,12 @@ class AzureSpeechProvider(
         rate: SpeechRate,
         voiceName: String?,
         style: SpeechStyle,
+        onPlaybackStarted: () -> Unit,
     ): SpeakResult {
         if (closed) return SpeakResult.Failed("服务已释放")
+        // 退回音色重念时不能再报一次"开始播了"：界面只认第一次，多报会让状态白跳一下。
+        val started = AtomicBoolean(false)
+        val notifyStarted = { if (started.compareAndSet(false, true)) onPlaybackStarted() }
         val id = speakSeq.incrementAndGet()
         Log.d(TAG, "请求朗读 #$id：style=$style text=$text")
         val configured = voiceName ?: this.voiceName
@@ -103,7 +107,7 @@ class AzureSpeechProvider(
         // 不然它会攥着锁把整段音频读完，新的朗读得干等。
         player.stop(keepLink = true)
         val result = speakMutex.withLock {
-            speakExclusive(id, buildSpeechSsml(text, voice, rate, style), text, voice, "$style")
+            speakExclusive(id, buildSpeechSsml(text, voice, rate, style), text, voice, "$style", notifyStarted)
         }
         if (result !is SpeakResult.Failed || voice == configured) return result
 
@@ -113,7 +117,7 @@ class AzureSpeechProvider(
         Log.w(TAG, "#$retryId：$voice 合不出音频，退回 $configured 再念一遍 text=$text")
         player.stop(keepLink = true)
         return speakMutex.withLock {
-            speakExclusive(retryId, buildSpeechSsml(text, configured, rate, style), text, configured, "$style")
+            speakExclusive(retryId, buildSpeechSsml(text, configured, rate, style), text, configured, "$style", notifyStarted)
         }
     }
 
@@ -123,6 +127,7 @@ class AzureSpeechProvider(
         text: String,
         voice: String,
         style: String,
+        onPlaybackStarted: () -> Unit,
     ): SpeakResult = withContext(Dispatchers.IO) {
         if (closed) return@withContext SpeakResult.Failed("服务已释放")
         // 打断正在播放的内容——点了新的就读新的，不排队。先掐声音，再停合成。
@@ -162,6 +167,9 @@ class AzureSpeechProvider(
                 }
                 received += read
                 player.write(token, buffer, read)
+                // 第一块语音写进去的同时播放器才垫静音开声（D-039 第 1 条），所以这一刻
+                // 就是真正出声的时刻，界面从这里开始显示"正在播"（`语音服务DESIGN.md` §21）。
+                if (received == read.toLong()) onPlaybackStarted()
             }
             when (stream.status) {
                 StreamStatus.AllData, StreamStatus.PartialData -> {

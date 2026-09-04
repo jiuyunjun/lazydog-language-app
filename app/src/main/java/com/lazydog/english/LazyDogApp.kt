@@ -123,7 +123,7 @@ private fun StopSpeakingWhenNotVisible(speech: SpeechController) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, speech) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) speech.stopSpeaking()
+            if (event == Lifecycle.Event.ON_STOP) speech.stop()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -143,7 +143,7 @@ private fun AppNavHost(
 
     // 换页面就停朗读：内容都换了，还在念上一页的句子只会让人莫名其妙。
     DisposableEffect(navController, speech) {
-        val listener = NavController.OnDestinationChangedListener { _, _, _ -> speech.stopSpeaking() }
+        val listener = NavController.OnDestinationChangedListener { _, _, _ -> speech.stop() }
         navController.addOnDestinationChangedListener(listener)
         onDispose { navController.removeOnDestinationChangedListener(listener) }
     }

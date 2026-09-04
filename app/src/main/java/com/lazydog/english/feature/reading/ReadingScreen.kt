@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Casino
 import androidx.compose.material3.AssistChip
@@ -46,6 +45,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.ReadingJson
 import com.lazydog.english.core.data.ReadingRepository
@@ -480,13 +481,7 @@ private fun MaterialContent(
             Tag(if (material.source == ReadingRepository.SOURCE_AI) "AI 定制" else "粘贴导入")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IconButton(onClick = { scope.launch { app.speechController.speak(material.body) } }) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                    contentDescription = "朗读全文",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
+            SpeakButton(PlaybackSource.sentence(material.body), contentDescription = "朗读全文")
             InteractiveTextHint(modifier = Modifier.padding(top = 12.dp))
         }
         InteractiveEnglishText(
@@ -528,13 +523,10 @@ private fun MaterialContent(
                                 )
                             }
                         }
-                        IconButton(onClick = { scope.launch { app.speechController.speakWord(target.term) } }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                                contentDescription = "朗读 ${target.term}",
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
+                        SpeakButton(
+                            source = PlaybackSource.word(target.term),
+                            contentDescription = "朗读 ${target.term}",
+                        )
                     }
                 }
             }

@@ -46,6 +46,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +64,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.speech.PlaybackStatus
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.core.designsystem.InteractiveEnglishBlock
@@ -168,7 +171,11 @@ fun ListeningScreen(onExit: () -> Unit) {
     var items by rememberSaveable(stateSaver = listeningItemsSaver) { mutableStateOf(emptyList()) }
     var index by rememberSaveable { mutableStateOf(0) }
     var playCount by rememberSaveable { mutableStateOf(0) }
-    var playing by remember { mutableStateOf(false) }
+    // 「在不在播」问全局播放状态，这一页不自己记（`语音服务DESIGN.md` §23、§37.6）：
+    // 自己记的话，被别处的播放顶掉时按钮会一直停在「正在播」。
+    val playback by app.speechController.playback.collectAsState()
+    val playing = playback.sourceId?.startsWith(PLAY_SOURCE_PREFIX) == true &&
+        playback.status != PlaybackStatus.Idle
     var hintLevel by rememberSaveable(stateSaver = listeningHintSaver) {
         mutableStateOf(ListeningHintLevel.None)
     }
@@ -203,7 +210,6 @@ fun ListeningScreen(onExit: () -> Unit) {
         // 揭晓之后再听不算进评分：这一题的成绩在答题那一刻就定了。
         if (phase == ListeningPhase.Question) playCount += 1
         scope.launch {
-            playing = true
             // 句子以“用户真的点过播放”为入库边界；重复播放只累计次数，不新增材料。
             runCatching {
                 app.listeningMaterialRepository.recordHeard(
@@ -214,9 +220,15 @@ fun ListeningScreen(onExit: () -> Unit) {
                     schemaVersion = if (generationModel.isBlank()) 0 else 1,
                 )
             }
-            app.speechController.speak(text, rate)
-            playing = false
         }
+        // 正常速和慢速是两个按钮，所以是两个 source；播放中按钮本来就禁用，不会互相顶。
+        app.speechController.play(
+            PlaybackSource(
+                id = PLAY_SOURCE_PREFIX + if (rate == null) "normal" else "slow",
+                text = text,
+                rate = rate,
+            ),
+        )
     }
 
     fun resetQuestion() {
@@ -310,7 +322,7 @@ fun ListeningScreen(onExit: () -> Unit) {
 
     fun next() {
         // 人没走，下一句马上就要放——把揭晓页的重听掐掉，但别放掉已经热起来的蓝牙链路。
-        app.speechController.stopSpeaking(keepLink = true)
+        app.speechController.stop(keepLink = true)
         if (index + 1 >= items.size) {
             // 答得比写得快：等下一句，而不是把这一轮当成十句都做完了。
             phase = if (generating) ListeningPhase.Waiting else ListeningPhase.Summary
@@ -1362,3 +1374,6 @@ internal fun listeningAskContext(item: ListeningItem, revealed: Boolean): AskCon
         suggestions = listOf("这句为什么听起来不像写出来的样子？", "这个表达平时还能怎么用？"),
     )
 }
+
+/** 听力页的播放 source 前缀：正常速和慢速各一个，判断「在不在播」时按前缀认。 */
+private const val PLAY_SOURCE_PREFIX = "listening:"

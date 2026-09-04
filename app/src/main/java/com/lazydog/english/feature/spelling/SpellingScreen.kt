@@ -86,7 +86,7 @@ fun SpellingScreen(
     // 练完或没题时把没放完的音掐掉，但留着已经热起来的蓝牙链路。
     val stillAnswering = phase is SpellingPhase.Round
     LaunchedEffect(stillAnswering) {
-        if (!stillAnswering) app.speechController.stopSpeaking(keepLink = true)
+        if (!stillAnswering) app.speechController.stop(keepLink = true)
     }
 
     val round = phase as? SpellingPhase.Round

@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -29,7 +28,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -53,6 +51,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.displayPattern
 import com.lazydog.english.core.data.displaySummary
@@ -198,9 +198,8 @@ fun LibraryScreen(
     selectedGrammar?.let { record ->
         GrammarDetailSheet(
             record = record,
-            onSpeakExample = record.detail.exampleEn.takeIf { it.isNotBlank() }?.let { text ->
-                { scope.launch { speech.speak(text) } }
-            },
+            speakExample = record.detail.exampleEn.takeIf { it.isNotBlank() }
+                ?.let(PlaybackSource::sentence),
             onDismiss = { selectedGrammarId = null },
             onReview = { grade ->
                 scope.launch {
@@ -382,7 +381,7 @@ private fun LibraryRow(
 @Composable
 private fun GrammarDetailSheet(
     record: GrammarRecord,
-    onSpeakExample: (() -> Unit)?,
+    speakExample: PlaybackSource?,
     onDismiss: () -> Unit,
     onReview: (ReviewGrade) -> Unit,
     onDelete: () -> Unit,
@@ -425,10 +424,8 @@ private fun GrammarDetailSheet(
                         Text("例句", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             InteractiveEnglishText(detail.exampleEn, modifier = Modifier.weight(1f))
-                            if (onSpeakExample != null) {
-                                IconButton(onClick = onSpeakExample) {
-                                    Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = "朗读例句")
-                                }
+                            if (speakExample != null) {
+                                SpeakButton(speakExample, contentDescription = "朗读例句")
                             }
                         }
                         if (detail.exampleZh.isNotBlank()) {

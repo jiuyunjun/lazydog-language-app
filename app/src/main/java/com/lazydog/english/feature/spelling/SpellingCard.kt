@@ -15,12 +15,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -50,6 +48,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.SpellingQueueEntry
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
@@ -296,13 +296,13 @@ private fun QuestionView(
             when (card.questionType) {
                 SpellingQuestionType.Exposure -> ExposureBody(
                     card = card,
-                    onPlay = { scope.launch { app.speechController.speakWord(entry.term) } },
+                    play = PlaybackSource.word(entry.term),
                 )
                 SpellingQuestionType.Recognition -> RecognitionBody(
                     card = card,
                     answer = answer,
                     onSelectOption = onSelectOption,
-                    onPlay = { scope.launch { app.speechController.speakWord(entry.term) } },
+                    play = PlaybackSource.word(entry.term),
                 )
                 SpellingQuestionType.PartialCompletion -> PartialBody(card, answer)
                 SpellingQuestionType.ChunkRecall -> ChunkBody(card, answer)
@@ -310,12 +310,7 @@ private fun QuestionView(
                 SpellingQuestionType.FreeRecall, SpellingQuestionType.DelayedFreeRecall -> FreeRecallBody(
                     card = card,
                     answer = answer,
-                    onPlay = {
-                        scope.launch {
-                            val sentence = entry.exampleEn.ifBlank { entry.term }
-                            app.speechController.speak(sentence)
-                        }
-                    },
+                    play = PlaybackSource.sentence(entry.exampleEn.ifBlank { entry.term }),
                 )
             }
 
@@ -483,19 +478,13 @@ private fun inputLabel(type: SpellingQuestionType): String = "写出完整单词
  * 看完直接推到 S1，本轮末尾再以四选一的形式来一次——那时候考的才是记住没有。
  */
 @Composable
-private fun ExposureBody(card: SpellingCard, onPlay: () -> Unit) {
+private fun ExposureBody(card: SpellingCard, play: PlaybackSource) {
     val entry = card
     val extended = LazyDogTheme.extendedColors
     Badge(text = "第一次见这个词 · 先认个脸", attention = false)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         InteractiveEnglishText(text = entry.term, style = MaterialTheme.typography.displaySmall)
-        IconButton(onClick = onPlay) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                contentDescription = "读一遍",
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        }
+        SpeakButton(play, contentDescription = "读一遍")
     }
     if (entry.ipa.isNotBlank()) {
         Text(
@@ -585,18 +574,12 @@ private fun RecognitionBody(
     card: SpellingCard,
     answer: SpellingAnswer,
     onSelectOption: (Int) -> Unit,
-    onPlay: () -> Unit,
+    play: PlaybackSource,
 ) {
     val entry = card
     val options = remember(entry.term) { SpellingEngine.recognitionOptions(entry.term, entry.facts) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        IconButton(onClick = onPlay) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                contentDescription = "读一遍",
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        }
+        SpeakButton(play, contentDescription = "读一遍")
         Text(
             text = entry.ipa.ifBlank { entry.meaningZh },
             style = MaterialTheme.typography.bodyMedium,
@@ -825,7 +808,7 @@ private fun ClozeSentence(sentence: String, blankFor: String) {
 }
 
 @Composable
-private fun FreeRecallBody(card: SpellingCard, answer: SpellingAnswer, onPlay: () -> Unit) {
+private fun FreeRecallBody(card: SpellingCard, answer: SpellingAnswer, play: PlaybackSource) {
     val entry = card
     val intervalDays = entry.progress.longestSuccessfulIntervalDays
     Badge(
@@ -841,13 +824,7 @@ private fun FreeRecallBody(card: SpellingCard, answer: SpellingAnswer, onPlay: (
         // 语境默写：把词从例句里挖掉，剩下的句子照给，别把答案漏在句子里。
         ClozeSentence(sentence = sentence, blankFor = blankFor)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IconButton(onClick = onPlay) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                    contentDescription = "播放整句",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
+            SpeakButton(play, contentDescription = "播放整句")
             Text(
                 text = "播放整句",
                 style = MaterialTheme.typography.bodySmall,
@@ -857,13 +834,7 @@ private fun FreeRecallBody(card: SpellingCard, answer: SpellingAnswer, onPlay: (
     } else {
         InteractiveEnglishText(entry.meaningZh, style = MaterialTheme.typography.headlineSmall)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IconButton(onClick = onPlay) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                    contentDescription = "读一遍",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
+            SpeakButton(play, contentDescription = "读一遍")
             Text(
                 text = "听一遍再写",
                 style = MaterialTheme.typography.bodySmall,

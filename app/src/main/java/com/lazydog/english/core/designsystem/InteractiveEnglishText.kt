@@ -16,14 +16,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.LibraryAdd
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -57,6 +55,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.WordExplanation
 import kotlinx.coroutines.CoroutineScope
@@ -87,9 +86,9 @@ private class EnglishTapState(
     private var settleJob: Job? = null
 
     fun speak() {
-        scope.launch {
-            (context.applicationContext as LazyDogApplication).speechController.speak(text)
-        }
+        // 单击念的和旁边喇叭念的是同一个 source，所以喇叭会跟着显示成"正在播"。
+        (context.applicationContext as LazyDogApplication).speechController
+            .onPlayClicked(PlaybackSource.sentence(text))
     }
 
     /**
@@ -363,7 +362,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
 
     // 面板关掉就别再念了。
     DisposableEffect(Unit) {
-        onDispose { app.speechController.stopSpeaking() }
+        onDispose { app.speechController.stop() }
     }
 
     /**
@@ -442,9 +441,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                 shown?.ipa?.takeIf { it.isNotBlank() }?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(onClick = { scope.launch { app.speechController.speakWord(word) } }) {
-                    Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = "朗读这个词", tint = MaterialTheme.colorScheme.primary)
-                }
+                SpeakButton(PlaybackSource.word(word), contentDescription = "朗读这个词")
             }
             // 换了个词形就得说清楚，不然用户会以为自己点错了行、或者存进去的词丢了。
             if (shown?.inflected == true) {
@@ -577,7 +574,7 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
 
     // 面板关掉就别再念了。
     DisposableEffect(Unit) {
-        onDispose { app.speechController.stopSpeaking() }
+        onDispose { app.speechController.stop() }
     }
 
     LaunchedEffect(sentence) {
@@ -605,9 +602,7 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(sentence, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                IconButton(onClick = { scope.launch { app.speechController.speak(sentence) } }) {
-                    Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = "朗读这句话", tint = MaterialTheme.colorScheme.primary)
-                }
+                SpeakButton(PlaybackSource.sentence(sentence), contentDescription = "朗读这句话")
             }
             when {
                 explanation != null -> {

@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,6 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.VocabularyJson
 import com.lazydog.english.core.data.spellingFacts
@@ -85,7 +86,7 @@ fun WordDetailScreen(
     LaunchedEffect(record?.item?.id, isExpression) {
         val term = record?.detail?.term ?: return@LaunchedEffect
         if (!app.userPreferences.autoReadWords.first()) return@LaunchedEffect
-        if (isExpression) speech.speak(term) else speech.speakWord(term)
+        speech.play(if (isExpression) PlaybackSource.sentence(term) else PlaybackSource.word(term))
     }
 
     Scaffold(
@@ -146,19 +147,10 @@ fun WordDetailScreen(
                         style = MaterialTheme.typography.headlineLarge,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                if (isExpression) speech.speak(detail.term) else speech.speakWord(detail.term)
-                            }
-                        },
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                            contentDescription = if (isExpression) "朗读这条表达" else "再读一遍",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
+                    SpeakButton(
+                        source = if (isExpression) PlaybackSource.sentence(detail.term) else PlaybackSource.word(detail.term),
+                        contentDescription = if (isExpression) "朗读这条表达" else "再读一遍",
+                    )
                 }
                 if (detail.ipa.isNotBlank()) {
                     Text(
@@ -221,13 +213,10 @@ fun WordDetailScreen(
                                     speakOnSingleTap = true,
                                     modifier = Modifier.weight(1f, fill = false),
                                 )
-                                IconButton(onClick = { scope.launch { speech.speak(detail.exampleEn) } }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
-                                        contentDescription = "朗读例句",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
+                                SpeakButton(
+                                    source = PlaybackSource.sentence(detail.exampleEn),
+                                    contentDescription = "朗读例句",
+                                )
                             }
                             if (detail.exampleZh.isNotBlank()) {
                                 Text(

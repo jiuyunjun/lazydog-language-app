@@ -54,6 +54,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.speech.PlaybackStatus
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.designsystem.LazyDogTheme
@@ -66,7 +68,6 @@ import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.speaking.AssessmentResult
 import com.lazydog.english.domain.speaking.PronunciationFeedback
 import com.lazydog.english.domain.speaking.PronunciationTip
-import com.lazydog.english.domain.speaking.SpeakResult
 import com.lazydog.english.domain.speaking.SpeechRate
 import com.lazydog.english.domain.speaking.TipKind
 import com.lazydog.english.domain.speaking.localPronunciationTips
@@ -89,7 +90,6 @@ private val fallbackSentences = listOf(
  */
 private sealed interface SpeakingUiState {
     data object Idle : SpeakingUiState
-    data object Playing : SpeakingUiState
     data object Listening : SpeakingUiState
     data object GeneratingTips : SpeakingUiState
     data class Feedback(val feedback: PronunciationFeedback, val tips: List<PronunciationTip>) : SpeakingUiState
@@ -121,7 +121,13 @@ fun SpeakingScreen(
     var uiState by remember { mutableStateOf<SpeakingUiState>(SpeakingUiState.Idle) }
     var stage by remember { mutableStateOf<GenerationStage>(GenerationStage.Connecting) }
     var showPermissionRationale by rememberSaveable { mutableStateOf(false) }
-    val busy = uiState is SpeakingUiState.Playing ||
+    // 「在不在播标准音」不由这一页说了算：播放状态是全局的（`语音服务DESIGN.md` §23）。
+    val playback by speech.playback.collectAsState()
+    val sampleSource = remember(sentence.text) { PlaybackSource.sentence(sentence.text) }
+    val sampleStatus = playback.statusOf(sampleSource.id)
+
+    val busy = sampleStatus == PlaybackStatus.Loading ||
+        sampleStatus == PlaybackStatus.Playing ||
         uiState is SpeakingUiState.Listening ||
         uiState is SpeakingUiState.GeneratingTips
 
@@ -172,13 +178,7 @@ fun SpeakingScreen(
     }
 
     fun onPlaySample() {
-        uiState = SpeakingUiState.Playing
-        scope.launch {
-            uiState = when (val result = speech.speak(sentence.text)) {
-                SpeakResult.Done -> SpeakingUiState.Idle
-                is SpeakResult.Failed -> SpeakingUiState.Error(result.reason)
-            }
-        }
+        speech.onPlayClicked(sampleSource)
     }
 
     Scaffold(
@@ -263,24 +263,32 @@ fun SpeakingScreen(
                 }
             }
 
-            when (val state = uiState) {
-                SpeakingUiState.Idle -> Text(
-                    text = "按「我来读」，读完整句后停一下，会自动结束录音。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                SpeakingUiState.Playing -> BusyHint("正在播放标准音…")
-                SpeakingUiState.Listening -> BusyHint("在听你读…读完停一下就好")
-                SpeakingUiState.GeneratingTips -> BusyHint(
-                    text = "正在想怎么跟你说…",
-                    detail = stageDetail(stage, rememberWaitedSeconds()),
-                )
-                is SpeakingUiState.Error -> Text(
-                    text = state.message,
+            when {
+                sampleStatus == PlaybackStatus.Loading -> BusyHint("正在取标准音…")
+                sampleStatus == PlaybackStatus.Playing -> BusyHint("正在播放标准音…")
+                sampleStatus == PlaybackStatus.Error -> Text(
+                    text = playback.error?.message.orEmpty(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                 )
-                is SpeakingUiState.Feedback -> FeedbackSection(state.feedback, state.tips)
+                else -> when (val state = uiState) {
+                    SpeakingUiState.Idle -> Text(
+                        text = "按「我来读」，读完整句后停一下，会自动结束录音。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SpeakingUiState.Listening -> BusyHint("在听你读…读完停一下就好")
+                    SpeakingUiState.GeneratingTips -> BusyHint(
+                        text = "正在想怎么跟你说…",
+                        detail = stageDetail(stage, rememberWaitedSeconds()),
+                    )
+                    is SpeakingUiState.Error -> Text(
+                        text = state.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    is SpeakingUiState.Feedback -> FeedbackSection(state.feedback, state.tips)
+                }
             }
 
             TextButton(
