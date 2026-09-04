@@ -3,8 +3,6 @@ package com.lazydog.english.feature.vocabulary
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.designsystem.InteractiveEnglishBlock
 import com.lazydog.english.domain.generation.Collocation
@@ -45,8 +44,8 @@ fun CollocationChip(collocation: Collocation) {
     var loading by remember(phrase) { mutableStateOf(false) }
     val translation = collocation.zh.ifBlank { fetched }
 
+    // 点整块只负责把缺的翻译取回来；念不念由喇叭那个按钮说了算。
     fun tap() {
-        app.speechController.onPlayClicked(PlaybackSource.sentence(phrase))
         if (translation.isNotBlank() || loading) return
         loading = true
         failed = ""
@@ -63,8 +62,10 @@ fun CollocationChip(collocation: Collocation) {
         }
     }
 
-    // 整块都能点：这块小到只有两三个词，还要人去瞄准那行英文的字面，
-    // 点在喇叭上或者翻译那行上什么都不发生，看着就像坏了。
+    // 整块仍然可点（双击查词、三击讲整条搭配）：这块小到只有两三个词，
+    // 逼人去瞄准那行英文的字面，点偏一点就没反应，看着像坏了。
+    // 但**播放归喇叭管**——它和别处的朗读按钮是同一个组件，
+    // 有加载转圈和停止态；藏在整块手势里的话，这些状态就没地方显示了。
     InteractiveEnglishBlock(
         text = phrase,
         style = MaterialTheme.typography.labelMedium,
@@ -78,11 +79,11 @@ fun CollocationChip(collocation: Collocation) {
         // 单击不只是念：老词条没存翻译，这一下还要把翻译现取回来。
         onSingleTap = { tap() },
         trailing = {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+            SpeakButton(
+                source = PlaybackSource.sentence(phrase),
                 contentDescription = "读这个搭配",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier.size(32.dp),
+                iconSize = 18.dp,
             )
         },
         below = {

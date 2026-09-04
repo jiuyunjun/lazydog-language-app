@@ -140,13 +140,14 @@ fun MemoryHintPanel(
             }
 
             if (current != null) {
-                Text(
+                // 这几段里夹的英文（词根、易混词、搭配）正是最该能点开查的东西。
+                InteractiveEnglishText(
                     text = current.memoryHookZh,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 if (current.coreMeaningZh.isNotBlank()) {
-                    Text(
+                    InteractiveEnglishText(
                         text = current.coreMeaningZh,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -154,7 +155,7 @@ fun MemoryHintPanel(
                 }
                 AnimatedVisibility(visible = expanded) { MemoryHintDetails(current) }
             } else if (fallbackHintZh.isNotBlank()) {
-                Text(
+                InteractiveEnglishText(
                     text = fallbackHintZh,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -257,10 +258,10 @@ private fun MemoryHintDetails(hint: MemoryAssistance) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
         if (hint.morphologyZh.isNotBlank()) {
             DetailBlock("构词") {
-                Text(
+                // 构词几乎全是英文词根，点开查的需求最强。
+                InteractiveEnglishText(
                     text = hint.morphologyZh,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
@@ -297,7 +298,7 @@ private fun MemoryHintDetails(hint: MemoryAssistance) {
                     )
                 }
                 if (hint.pronunciation.noteZh.isNotBlank()) {
-                    Text(
+                    InteractiveEnglishText(
                         text = hint.pronunciation.noteZh,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,

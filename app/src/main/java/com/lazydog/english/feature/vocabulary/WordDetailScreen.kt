@@ -306,7 +306,8 @@ private fun MemoryHintText(hint: String) {
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
-            Text(
+            // 提示里的英文（词根、易混词）要能双击查、三击讲。
+            InteractiveEnglishText(
                 text = hint,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,

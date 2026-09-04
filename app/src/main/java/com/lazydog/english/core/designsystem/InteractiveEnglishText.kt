@@ -322,8 +322,24 @@ private fun highlightedText(text: String, highlights: Set<String>, highlightStyl
         append(text.substring(cursor))
     }
 
-internal fun wordAt(text: String, index: Int): String? =
-    Regex("[A-Za-z'\\-]+").findAll(text).firstOrNull { index in it.range }?.value
+/**
+ * [index] 处是哪个英文词。
+ *
+ * 两处边界必须兜住，否则短文本会出现"点了没反应"，而且时灵时不灵——
+ * `getOffsetForPosition` 返回的是最近的**字符边界**，点在最后一个字母的右半边，
+ * 拿到的 offset 是 `text.length`（点 "territory" 得到 9），落在任何词的范围之外。
+ * 长句子里这一下会落进下一个词，看不出问题；而阅读页的目标词、词组小块这种
+ * 整段就一个词的地方，那半个字母的宽度就是一片死区。
+ */
+internal fun wordAt(text: String, index: Int): String? {
+    if (text.isEmpty()) return null
+    val safeIndex = index.coerceIn(0, text.lastIndex)
+    val words = Regex("[A-Za-z'\\-]+").findAll(text).toList()
+    return words.firstOrNull { safeIndex in it.range }?.value
+        // 点在词后面的标点或空格上（"territory." 的句点）：算成刚点过的那个词，
+        // 而不是当作没点中。
+        ?: words.lastOrNull { it.range.last < safeIndex }?.value
+}
 
 internal fun sentenceAround(text: String, index: Int): String {
     if (text.isEmpty()) return ""
@@ -677,7 +693,12 @@ private fun MemoryHint(memoryHintZh: String) {
                 Icon(Icons.Outlined.Lightbulb, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
                 Text("怎么记", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
             }
-            Text(memoryHintZh, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            // 记忆提示里几乎一定夹着英文（词根、易混词、搭配），那些正是最该能点开查的。
+            InteractiveEnglishText(
+                text = memoryHintZh,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
         }
     }
 }

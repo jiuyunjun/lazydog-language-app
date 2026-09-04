@@ -550,7 +550,7 @@ private fun StudyCardView(
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 )
                             }
-                            Text(
+                            InteractiveEnglishText(
                                 text = card.memoryHintZh,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,

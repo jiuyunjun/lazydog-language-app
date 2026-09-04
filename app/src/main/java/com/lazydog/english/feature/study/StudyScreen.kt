@@ -114,7 +114,9 @@ fun StudyScreen(
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            // 底部要留白：最后一张「最近的材料」卡片本来直接贴着屏幕下沿，
+            // 看着像被切掉了一截。
+            .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
