@@ -42,6 +42,8 @@ import com.lazydog.english.domain.planning.DailyPlanner
 import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.progress.LearningActivity
 import com.lazydog.english.domain.progress.MINIMUM_RETRIEVALS
+import com.lazydog.english.domain.progress.Mood
+import com.lazydog.english.domain.progress.mood
 import com.lazydog.english.domain.progress.reachedDailyMinimum
 import java.time.LocalDate
 import kotlinx.coroutines.launch
@@ -81,8 +83,10 @@ fun TodayScreen(
     val activity by activityFlow.collectAsState(initial = LearningActivity.None)
     val wrappedUp by prefs.wrappedUpToday(today).collectAsState(initial = false)
 
-    val plan = remember(dailyMinutes, dueVocab, dueGrammar) {
-        DailyPlanner.plan(dailyMinutes, dueVocabCount = dueVocab, dueGrammarCount = dueGrammar)
+    // 中断回来、或者今天已经做累了，今天就只排一步（§26、§25）。
+    val mood = mood(daysAway = activity.daysAway, fatigue = report.fatigue)
+    val plan = remember(dailyMinutes, dueVocab, dueGrammar, mood) {
+        DailyPlanner.plan(dailyMinutes, dueVocabCount = dueVocab, dueGrammarCount = dueGrammar, mood = mood)
     }
     val allDone = plan.isNotEmpty() && plan.all { it.step.id in doneSteps }
     val nextStep = plan.firstOrNull { it.step.id !in doneSteps }
@@ -135,7 +139,12 @@ fun TodayScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = if (allDone) "今天的洋屁放完了" else "今天约 $dailyMinutes 分钟",
+                    text = when {
+                        allDone -> "今天的洋屁放完了"
+                        mood == Mood.Comeback -> "欢迎回来"
+                        mood == Mood.Tired -> "今天先到这个量"
+                        else -> "今天约 $dailyMinutes 分钟"
+                    },
                     style = MaterialTheme.typography.titleMedium,
                 )
                 // 最低目标写在最显眼的地方：今天再累也能过的那条线（§6）。
@@ -149,6 +158,12 @@ fun TodayScreen(
                 Text(
                     text = if (allDone) {
                         "复习计划已经更新，明天见。"
+                    } else if (mood == Mood.Comeback) {
+                        // §26 点名不要说"你已经落后 74 个复习"——那是在为回来这件事加一道门槛。
+                        // 也确实不用补：FSRS 里过期越久可提取性越低，本来就是连续的，不会堆成债。
+                        "不用补以前的，今天先热身几分钟就好。"
+                    } else if (mood == Mood.Tired) {
+                        "刚才连着错了几个。累了就是累了，明天的脑子比今天的耐心值钱。"
                     } else if (dueVocab + dueGrammar > 0) {
                         buildList {
                             if (dueVocab > 0) add("$dueVocab 个词")
@@ -300,7 +315,10 @@ private fun ActivityLine(activity: LearningActivity) {
     ) {
         ActivityStat("学习旅程", "${activity.journeyDays} 天")
         ActivityStat("最近 30 天", "${activity.activeDaysIn30} 天")
-        ActivityStat("连续", "${activity.currentStreak} 天")
+        ActivityStat(
+            label = if (activity.restDaysUsed > 0) "连续 · 休过 ${activity.restDaysUsed} 天" else "连续",
+            value = "${activity.currentStreak} 天",
+        )
     }
 }
 

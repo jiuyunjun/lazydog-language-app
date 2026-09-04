@@ -1,5 +1,7 @@
 package com.lazydog.english.domain.planning
 
+import com.lazydog.english.domain.progress.Mood
+
 /**
  * 今日计划：按每日时长预算和到期量排步骤（ARCHITECTURE.md §6 优先级：
  * 到期复习最优先，然后新知识，再阅读和朗读）。纯函数，便于单测。
@@ -21,7 +23,20 @@ data class PlannedStep(
 
 object DailyPlanner {
 
-    fun plan(dailyMinutes: Int, dueVocabCount: Int, dueGrammarCount: Int): List<PlannedStep> {
+    fun plan(
+        dailyMinutes: Int,
+        dueVocabCount: Int,
+        dueGrammarCount: Int,
+        mood: Mood = Mood.Normal,
+    ): List<PlannedStep> {
+        // 刚回来或者已经累了：今天只排一步。
+        // 中断几天回来看到五步待办，人只会再关掉一次（`持续学习DESIGN.md` §26、§25）。
+        // 注意这里**不提到期数量**——"你欠 74 个复习"正是这一节点名要避免的说法。
+        when (mood) {
+            Mood.Comeback -> return listOf(PlannedStep(DailyStep.Words, "先热几分钟身，别管积压的"))
+            Mood.Tired -> return listOf(PlannedStep(DailyStep.Words, "今天已经做了不少 · 短复习就够"))
+            Mood.Normal -> Unit
+        }
         val result = mutableListOf<PlannedStep>()
         var budget = dailyMinutes.coerceAtLeast(DailyStep.Words.minutes)
 

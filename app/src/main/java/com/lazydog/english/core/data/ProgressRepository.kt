@@ -5,11 +5,13 @@ import com.lazydog.english.core.database.LearningEventEntity
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.progress.DailyProgress
 import com.lazydog.english.domain.progress.DifficultyBias
+import com.lazydog.english.domain.progress.Fatigue
 import com.lazydog.english.domain.progress.LearningActivity
 import com.lazydog.english.domain.progress.ProgressActivity
 import com.lazydog.english.domain.progress.ProgressEvent
 import com.lazydog.english.domain.progress.dailyProgress
 import com.lazydog.english.domain.progress.difficultyBias
+import com.lazydog.english.domain.progress.fatigue
 import com.lazydog.english.domain.progress.learningActivity
 import com.lazydog.english.domain.progress.recentAccuracy
 import java.time.Instant
@@ -41,8 +43,14 @@ class ProgressRepository(
     fun observeToday(): Flow<TodayReport> {
         val since = Instant.now().minusSeconds(RECOVERY_LOOKBACK_DAYS * 86_400L)
         return dao.observeEventsSince(since.toEpochMilli()).map { rows ->
-            val progress = dailyProgress(rows.map { it.toProgressEvent() }, today(), zone())
-            TodayReport(progress = progress, recoveredNames = namesOf(progress.recovered))
+            val events = rows.map { it.toProgressEvent() }
+            val progress = dailyProgress(events, today(), zone())
+            val todayEvents = events.filter { it.at.atZone(zone()).toLocalDate() == today() }
+            TodayReport(
+                progress = progress,
+                recoveredNames = namesOf(progress.recovered),
+                fatigue = fatigue(todayEvents),
+            )
         }
     }
 
@@ -84,6 +92,8 @@ class ProgressRepository(
 data class TodayReport(
     val progress: DailyProgress,
     val recoveredNames: List<String>,
+    /** 今天看起来累不累（§25）。今天的事件本来就取到了，顺手算，不额外查一次。 */
+    val fatigue: Fatigue = Fatigue.Fine,
 ) {
     companion object {
         val Empty = TodayReport(DailyProgress.Empty, emptyList())
