@@ -174,6 +174,7 @@ class ReadingValidationTest {
     @Test
     fun `normalized substring tolerates whitespace differences`() {
         assertTrue(ReadingValidation.bodyContainsNormalized("He  made\na plan.", "He made a plan."))
+        assertTrue(ReadingValidation.bodyContainsNormalized("She said, “wait—it’s fine.”", "she said, \"wait-it's fine.\""))
         assertEquals(false, ReadingValidation.bodyContainsNormalized("Body text.", "Missing."))
     }
 

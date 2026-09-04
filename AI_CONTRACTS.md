@@ -238,6 +238,12 @@ interface LearningContentGenerator {
 - **readerPayoff**：一句话说清这篇留给读者的**那一个**收获。本地硬校验：不能为空、不能超长、不能是标题的复述、不能是"原因有很多"这类套话——读完页面上显示的「值得记住的一件事」就是它。
 - **标题**和**开头**有黑名单：`You Won't Believe` / `This Changes Everything` 这类标题党直接拒绝；正文以 `In today's world` / `Have you ever wondered` 开头同样拒绝。这两条是硬拒绝不是警告：骗到的点击会连着损伤对后面每一篇的信任。
 - **去重**：最近 12 篇的标题进提示词，明确要求标题、开头方式和结构都不要雷同。
+- **失败恢复**：初稿解析或本地校验失败时，把具体失败原因连同草稿交回 Writer 定点修一次；
+  第二稿仍不合格才向页面返回失败。逐字依据匹配容忍大小写、直/弯引号和横线形态差异，
+  但不会因此放松“依据必须来自正文”这条事实约束。
+- **Interest Critic**：本地校验通过后再独立评价 hook / curiosity / informationGain / pacing /
+  payoff / naturalness / overall；低于设计阈值最多重写一次。Critic 不可用或重写稿本地校验失败时，
+  必须回退到已经合格的原稿，辅助质量判断不能成为新的单点故障。
 
 ## 5. 阅读输出草案
 
@@ -245,7 +251,10 @@ interface LearningContentGenerator {
 {
   "schemaVersion": 1,
   "title": "A Small Change of Plan",
+  "teaser": "One harmless delay changes what happens next.",
+  "category": "Daily Life",
   "body": "...",
+  "readerPayoff": "...",
   "estimatedCefr": "A2",
   "targetVocabulary": [
     {
@@ -257,19 +266,19 @@ interface LearningContentGenerator {
   ],
   "targetGrammar": [
     {
-      "id": "past-perfect-basic",
+      "name": "过去完成时",
       "exampleFromText": "...",
       "explanationZh": "..."
     }
   ],
   "comprehensionQuestions": [
     {
-      "id": "q1",
-      "type": "single_choice",
+      "kind": "reference",
       "promptZh": "...",
       "options": ["...", "...", "...", "..."],
       "answerIndex": 1,
-      "explanationZh": "..."
+      "explanationZh": "...",
+      "evidenceFromText": "..."
     }
   ]
 }

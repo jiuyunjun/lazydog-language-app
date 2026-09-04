@@ -51,6 +51,8 @@ object ReadingValidation {
         if (reading.title.isBlank() || reading.title.length > 80) {
             return fail("标题缺失或过长")
         }
+        if (reading.teaser.isBlank()) warnings.add("没有 teaser，Feed 将使用正文首句")
+        if (reading.category.isBlank()) warnings.add("没有 category，Feed 将使用主题")
         // §9 的拒绝列表。这类标题骗到的点击会连着损伤对后面每一篇的信任，
         // 所以是硬拒绝而不是警告。
         CLICKBAIT_TITLE_PATTERNS.firstOrNull { reading.title.contains(it, ignoreCase = true) }
@@ -143,10 +145,21 @@ object ReadingValidation {
 
     /** 忽略连续空白差异后，正文是否包含该片段。 */
     fun bodyContainsNormalized(body: String, fragment: String): Boolean {
-        val normalizedBody = body.replace(Regex("\\s+"), " ").trim()
-        val normalizedFragment = fragment.replace(Regex("\\s+"), " ").trim()
-        return normalizedFragment.isNotEmpty() && normalizedBody.contains(normalizedFragment)
+        val normalizedBody = normalizeQuoteAndSpace(body)
+        val normalizedFragment = normalizeQuoteAndSpace(fragment)
+        return normalizedFragment.isNotEmpty() && normalizedBody.contains(normalizedFragment, ignoreCase = true)
     }
+
+    /** 模型常把正文的弯引号/长横线抄成 ASCII；内容相同不应因此误判为“不是正文”。 */
+    private fun normalizeQuoteAndSpace(value: String): String = value
+        .replace('‘', '\'')
+        .replace('’', '\'')
+        .replace('“', '"')
+        .replace('”', '"')
+        .replace('–', '-')
+        .replace('—', '-')
+        .replace(Regex("\\s+"), " ")
+        .trim()
 
     const val MIN_BODY_WORDS = 40
     const val MAX_QUESTIONS = 5

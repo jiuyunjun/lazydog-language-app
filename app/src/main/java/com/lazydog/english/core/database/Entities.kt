@@ -144,6 +144,13 @@ data class ReadingMaterialEntity(
     @ColumnInfo(defaultValue = "''") val readerPayoff: String = "",
     /** 用的哪种写法（§6 的 archetype wire）。旧材料为空，去重时当没用过。 */
     @ColumnInfo(defaultValue = "''") val archetype: String = "",
+    /** Feed 卡片元数据。旧材料为空时展示层从正文和 topic 兜底。 */
+    @ColumnInfo(defaultValue = "''") val teaser: String = "",
+    @ColumnInfo(defaultValue = "''") val category: String = "",
+    /** §18 首版只保存三个明确意图，不做滚动深度等伪精确埋点。 */
+    @ColumnInfo(defaultValue = "0") val completed: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val liked: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val saved: Boolean = false,
     val estimatedCefr: String,
     val targetWordsJson: String,
     val grammarJson: String,

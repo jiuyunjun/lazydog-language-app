@@ -358,7 +358,7 @@ class OpenAiContentGenerator(
         onStage: ((GenerationStage) -> Unit)?,
         onPartialText: ((String) -> Unit)?,
     ): GenerationResult<GeneratedReading> {
-        val outcome = complete(
+        val first = complete(
             systemPrompt = SYSTEM_PROMPT,
             userPrompt = buildReadingPrompt(request),
             task = AiTask.Reading,
@@ -367,26 +367,136 @@ class OpenAiContentGenerator(
             onTextProgress = preview(onPartialText) { JsonStream.firstNonEmpty(it, "body", "title") },
             op = "阅读",
         )
-        val content = when (outcome) {
-            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
-            is Completion.Content -> outcome
+        val firstContent = when (first) {
+            is Completion.Error -> return GenerationResult.Failure(first.reason)
+            is Completion.Content -> first
         }
-        val payload = decode<ReadingPayload>(content.text)
-            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+
+        var accepted = inspectReading(firstContent.text, request)
+        var acceptedContent = firstContent
+        val pipelineNotes = mutableListOf<String>()
+
+        // 阅读的约束彼此牵连：正文改一句，目标词引文和题目依据都可能跟着失效。
+        // 原来第一次校验没过就把整篇扔给用户，既浪费已经生成的内容，也违背架构文档
+        // “合格后保存，否则修复或重试”。把具体原因连同草稿交回同一个模型，定点修一次。
+        if (accepted.reading == null) {
+            val firstReason = accepted.failure ?: "未知校验问题"
+            AiLog.retry("阅读", firstReason, "带着失败原因修复草稿一次")
+            onPartialText?.invoke("")
+            val repaired = complete(
+                systemPrompt = SYSTEM_PROMPT,
+                userPrompt = buildReadingRevisionPrompt(request, firstContent.text, listOf(firstReason)),
+                task = AiTask.Reading,
+                onStage = onStage,
+                onTextProgress = preview(onPartialText) { JsonStream.firstNonEmpty(it, "body", "title") },
+                op = "阅读修复",
+            )
+            val repairedContent = when (repaired) {
+                is Completion.Error -> {
+                    return GenerationResult.Failure("短文没通过校验：$firstReason；自动修复也失败：${repaired.reason}")
+                }
+                is Completion.Content -> repaired
+            }
+            val repairedReading = inspectReading(repairedContent.text, request)
+            if (repairedReading.reading == null) {
+                return GenerationResult.Failure(
+                    "短文没通过校验：$firstReason；自动修复后仍未通过：${repairedReading.failure}",
+                )
+            }
+            accepted = repairedReading
+            acceptedContent = repairedContent
+            pipelineNotes.add("初稿未通过校验，已自动修复：$firstReason")
+        }
+
+        var reading = requireNotNull(accepted.reading)
+        var warnings = accepted.warnings
+
+        // Critic 是辅助质量门，不是新的单点故障。它自己坏了，或者按它的意见改坏了，
+        // 都回退到上面已经通过本地事实校验的版本。
+        val critic = complete(
+            systemPrompt = READING_CRITIC_SYSTEM_PROMPT,
+            userPrompt = buildReadingCriticPrompt(request, reading),
+            task = AiTask.Reading,
+            onStage = onStage,
+            maxTokens = 1024,
+            op = "阅读质检",
+        )
+        when (critic) {
+            is Completion.Error -> pipelineNotes.add("趣味质检失败，保留已校验文章：${critic.reason}")
+            is Completion.Content -> {
+                val critique = decode<ReadingCriticPayload>(critic.text)
+                if (critique == null || !critique.isValid()) {
+                    pipelineNotes.add("趣味质检返回无效，保留已校验文章")
+                } else {
+                    pipelineNotes.add("趣味质检 overall=${"%.2f".format(critique.scores.overall)}")
+                    if (critique.needsRewrite()) {
+                        AiLog.retry("阅读质检", "overall=${critique.scores.overall}", "按质检意见重写一次")
+                        onPartialText?.invoke("")
+                        val rewrite = complete(
+                            systemPrompt = SYSTEM_PROMPT,
+                            userPrompt = buildReadingRevisionPrompt(
+                                request = request,
+                                draft = acceptedContent.text,
+                                instructions = (
+                                    critique.rewriteInstructions +
+                                        critique.boringSections.map { "Fix this boring section: $it" }
+                                    ).ifEmpty {
+                                    listOf("Strengthen the weakest quality dimensions without changing the learning targets.")
+                                },
+                            ),
+                            task = AiTask.Reading,
+                            onStage = onStage,
+                            onTextProgress = preview(onPartialText) {
+                                JsonStream.firstNonEmpty(it, "body", "title")
+                            },
+                            op = "阅读重写",
+                        )
+                        when (rewrite) {
+                            is Completion.Error -> pipelineNotes.add("质检重写失败，保留原稿：${rewrite.reason}")
+                            is Completion.Content -> {
+                                val rewritten = inspectReading(rewrite.text, request)
+                                if (rewritten.reading == null) {
+                                    pipelineNotes.add("质检重写没通过本地校验，保留原稿：${rewritten.failure}")
+                                } else {
+                                    reading = rewritten.reading
+                                    warnings = rewritten.warnings
+                                    acceptedContent = rewrite
+                                    pipelineNotes.add("文章低于趣味阈值，已按质检意见重写一次")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return GenerationResult.Success(
+            data = reading,
+            model = acceptedContent.model,
+            promptVersion = READING_PROMPT_VERSION,
+            droppedNotes = warnings + pipelineNotes,
+        )
+    }
+
+    private data class InspectedReading(
+        val reading: GeneratedReading?,
+        val failure: String?,
+        val warnings: List<String> = emptyList(),
+    )
+
+    private fun inspectReading(raw: String, request: ReadingGenerationRequest): InspectedReading {
+        val payload = decode<ReadingPayload>(raw)
+            ?: return InspectedReading(null, "AI 返回的不是预期的 JSON 结构")
         if (payload.schemaVersion != SCHEMA_VERSION) {
-            return GenerationResult.Failure("schema 版本不对：${payload.schemaVersion}")
+            return InspectedReading(null, "schema 版本不对：${payload.schemaVersion}")
         }
         val reading = payload.toDomain()
         val validation = ReadingValidation.validate(reading, request)
-        if (validation.failure != null) {
-            return GenerationResult.Failure("短文没通过校验：${validation.failure}")
+        return if (validation.failure == null) {
+            InspectedReading(reading, null, validation.warnings)
+        } else {
+            InspectedReading(null, validation.failure)
         }
-        return GenerationResult.Success(
-            data = reading,
-            model = content.model,
-            promptVersion = PROMPT_VERSION,
-            droppedNotes = validation.warnings,
-        )
     }
 
     override suspend fun generateProofSentence(
@@ -1262,6 +1372,8 @@ class OpenAiContentGenerator(
     private data class ReadingPayload(
         val schemaVersion: Int = 0,
         val title: String = "",
+        val teaser: String = "",
+        val category: String = "",
         val body: String = "",
         val readerPayoff: String = "",
         val estimatedCefr: String = "",
@@ -1290,7 +1402,39 @@ class OpenAiContentGenerator(
                     evidenceFromText = it.evidenceFromText.trim(),
                 )
             },
+            teaser = teaser.trim(),
+            category = category.trim(),
         )
+    }
+
+    @Serializable
+    private data class ReadingCriticScoresPayload(
+        val hook: Double = -1.0,
+        val curiosity: Double = -1.0,
+        val informationGain: Double = -1.0,
+        val pacing: Double = -1.0,
+        val payoff: Double = -1.0,
+        val naturalness: Double = -1.0,
+        val overall: Double = -1.0,
+    ) {
+        fun all() = listOf(hook, curiosity, informationGain, pacing, payoff, naturalness, overall)
+    }
+
+    @Serializable
+    private data class ReadingCriticPayload(
+        val schemaVersion: Int = 0,
+        val scores: ReadingCriticScoresPayload = ReadingCriticScoresPayload(),
+        val boringSections: List<String> = emptyList(),
+        val rewriteInstructions: List<String> = emptyList(),
+    ) {
+        fun isValid(): Boolean = schemaVersion == SCHEMA_VERSION && scores.all().all { it in 0.0..1.0 }
+
+        fun needsRewrite(): Boolean =
+            scores.hook < 0.75 ||
+                scores.payoff < 0.80 ||
+                scores.naturalness < 0.85 ||
+                scores.informationGain < 0.75 ||
+                scores.overall < 0.82
     }
 
     @Serializable
@@ -1703,6 +1847,7 @@ class OpenAiContentGenerator(
     companion object {
         const val SCHEMA_VERSION = 1
         const val PROMPT_VERSION = 1
+        const val READING_PROMPT_VERSION = 2
         const val GRAMMAR_PROMPT_VERSION = 2
         const val GRAMMAR_DRILL_PROMPT_VERSION = 1
         const val TRANSLATION_PROMPT_VERSION = 1
@@ -1769,6 +1914,10 @@ class OpenAiContentGenerator(
         private const val SYSTEM_PROMPT =
             "你是给中文母语者出英语学习内容的助手。严格只输出一个 JSON 对象：" +
                 "不要 markdown 代码块，不要输出 JSON 以外的任何文字，不要添加 schema 之外的字段。"
+
+        private const val READING_CRITIC_SYSTEM_PROMPT =
+            "你是严格但务实的英文阅读编辑。只输出一个合法 JSON 对象，不要 markdown。" +
+                "评价真实读者是否愿意继续读，不评价教学目标覆盖率，也不要因为文章简单就扣分。"
 
         private const val LISTENING_SYSTEM_PROMPT =
             "你是给中文母语者出英语听力训练材料的母语者编剧。严格只输出一个 JSON 对象：" +
@@ -2167,6 +2316,8 @@ class OpenAiContentGenerator(
             appendLine()
             appendLine("标题：具体、可信、让人想点开。可以是问句、藏着解释、或者一个具体的意外。")
             appendLine("**禁止**标题党（You Won't Believe / This Changes Everything / 他们不想让你知道的秘密）。")
+            appendLine("teaser：用一句英文制造具体的信息缺口，不复述标题、不提前泄露答案，控制在 120 字符内。")
+            appendLine("category：只给一个简短英文类别，如 Technology、Psychology、Daily Life 或 History。")
             appendLine()
             appendLine("篇幅和节奏：正文约 ${request.targetLength} 个英文单词，分 5~9 段，每段 30~80 词，")
             appendLine("每段承担一个明确功能。不要写成四个巨长的段落。")
@@ -2199,14 +2350,63 @@ class OpenAiContentGenerator(
                 "这个学习者词汇量够、但习惯靠认词猜大意，只出大意题练不到他真正缺的解析能力。")
             appendLine("这两类题必须给 evidenceFromText：正文里逐字照抄的那一句依据，" +
                 "gist 题可以留空字符串。")
+            appendLine("输出前逐项自查：所有复习词确实在 body；所有 exampleFromText / evidenceFromText 都从最终 body 逐字复制；")
+            appendLine("readerPayoff 与标题不同；至少一道 form/reference 题。不要先写这些字段再回头改 body。")
             appendLine("输出 JSON schema：")
             appendLine(
-                """{"schemaVersion":1,"title":"...","body":"...","readerPayoff":"...","estimatedCefr":"A2",""" +
+                """{"schemaVersion":1,"title":"...","teaser":"...","category":"Technology","body":"...","readerPayoff":"...","estimatedCefr":"A2",""" +
                     """"targetVocabulary":[{"term":"...","meaningZh":"...","exampleFromText":"...","role":"review"}],""" +
                     """"targetGrammar":[{"name":"...","exampleFromText":"...","explanationZh":"..."}],""" +
                     """"comprehensionQuestions":[{"kind":"form","promptZh":"...","options":["..."],""" +
                     """"answerIndex":0,"explanationZh":"...","evidenceFromText":"..."}]}""",
             )
+        }
+
+        /** 用具体的本地校验或 Critic 意见修订一次，仍输出完整 ReadingPayload。 */
+        internal fun buildReadingRevisionPrompt(
+            request: ReadingGenerationRequest,
+            draft: String,
+            instructions: List<String>,
+        ): String = buildString {
+            appendLine("下面的阅读草稿需要修订。保留好的部分，只修指出的问题；输出完整、合法的最终 JSON。")
+            appendLine("必须继续满足原请求：水平 ${request.learnerLevel}，主题 ${request.topic}，约 ${request.targetLength} 词，")
+            appendLine("写法 ${request.archetype.labelZh}，最多 ${request.maxNewWords} 个新词。")
+            if (request.reviewVocabulary.isNotEmpty()) {
+                appendLine("必须自然出现的复习词：${request.reviewVocabulary.joinToString(", ")}。")
+            }
+            if (request.reviewGrammar.isNotEmpty()) {
+                appendLine("希望体现的复习语法：${request.reviewGrammar.joinToString("、")}。")
+            }
+            appendLine("修订要求：")
+            instructions.forEach { appendLine("- ${it.take(300)}") }
+            appendLine("所有 exampleFromText 和 evidenceFromText 必须从修订后的 body 逐字复制；至少一道 form/reference 题。")
+            appendLine("保留 schemaVersion=1，以及 title、teaser、category、body、readerPayoff、estimatedCefr、")
+            appendLine("targetVocabulary、targetGrammar、comprehensionQuestions 全部字段。")
+            appendLine("<draft>")
+            appendLine(draft.take(MAX_RESPONSE_CHARS))
+            appendLine("</draft>")
+        }
+
+        internal fun buildReadingCriticPrompt(
+            request: ReadingGenerationRequest,
+            reading: GeneratedReading,
+        ): String = buildString {
+            appendLine("从真实读者体验评价下面这篇 ${request.learnerLevel} 英文短文。")
+            appendLine("不要重写文章。每项 0.0~1.0；低分时给 1~3 条具体、可执行的英文 rewriteInstructions。")
+            appendLine("评分：hook、curiosity、informationGain、pacing、payoff、naturalness、overall。")
+            appendLine("阈值：hook 0.75，payoff 0.80，naturalness 0.85，informationGain 0.75，overall 0.82。")
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"schemaVersion":1,"scores":{"hook":0.0,"curiosity":0.0,"informationGain":0.0,""" +
+                    """"pacing":0.0,"payoff":0.0,"naturalness":0.0,"overall":0.0},""" +
+                    """"boringSections":["paragraph 3: reason"],"rewriteInstructions":["..."]}""",
+            )
+            appendLine("<article>")
+            appendLine("Title: ${reading.title}")
+            appendLine("Teaser: ${reading.teaser}")
+            appendLine(reading.body)
+            appendLine("Reader payoff: ${reading.readerPayoff}")
+            appendLine("</article>")
         }
 
         internal fun buildAssessmentPrompt(

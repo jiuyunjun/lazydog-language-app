@@ -89,6 +89,9 @@ private data class MaterialView(
     val source: String,
     val targetWords: List<ReadingTargetWord>,
     val questions: List<ReadingQuestion>,
+    val completed: Boolean,
+    val liked: Boolean,
+    val saved: Boolean,
 )
 
 private sealed interface ReadingPhase {
@@ -148,6 +151,9 @@ fun ReadingScreen(
                         source = entity.source,
                         targetWords = ReadingJson.decodeWords(entity.targetWordsJson),
                         questions = ReadingJson.decodeQuestions(entity.questionsJson),
+                        completed = entity.completed,
+                        liked = entity.liked,
+                        saved = entity.saved,
                     ),
                 )
             }
@@ -216,6 +222,9 @@ fun ReadingScreen(
                             source = ReadingRepository.SOURCE_AI,
                             targetWords = result.data.targetVocabulary,
                             questions = result.data.comprehensionQuestions,
+                            completed = false,
+                            liked = false,
+                            saved = false,
                         ),
                     )
                 }
@@ -240,6 +249,9 @@ fun ReadingScreen(
                     source = ReadingRepository.SOURCE_PASTED,
                     targetWords = emptyList(),
                     questions = emptyList(),
+                    completed = false,
+                    liked = false,
+                    saved = false,
                 ),
             )
         }
@@ -293,6 +305,7 @@ fun ReadingScreen(
                     },
                     onQuestionsCompleted = {
                         scope.launch {
+                            readingRepo.markCompleted(p.material.id)
                             // 读完并答完题：今日阅读步骤完成，复习词记一次“语境里遇见”。
                             app.userPreferences.markTodayStepDone(
                                 LocalDate.now().toString(),
@@ -483,9 +496,19 @@ private fun MaterialContent(
     onQuestionAnswered: (ReadingQuestion, Int) -> Unit,
     onQuestionsCompleted: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val app = remember { context.applicationContext as LazyDogApplication }
-    val scope = rememberCoroutineScope()
+    val firstQuestion = remember(material.id, material.questions) {
+        material.questions.firstOrNull { it.kind == ReadingQuestionKind.Gist }
+            ?: material.questions.firstOrNull()
+    }
+    val laterQuestions = remember(material.id, material.questions, firstQuestion) {
+        material.questions.filterNot { it === firstQuestion }
+    }
+    var firstCheckAnswered by rememberSaveable(material.id, "firstCheck") {
+        mutableStateOf(material.completed)
+    }
+    var exercisesCompleted by rememberSaveable(material.id, "exercisesCompleted") {
+        mutableStateOf(material.completed)
+    }
 
     Column(
         modifier = Modifier
@@ -505,63 +528,122 @@ private fun MaterialContent(
         }
         InteractiveEnglishText(
             text = material.body,
-            highlightWords = material.targetWords.map { it.term }.toSet(),
             style = MaterialTheme.typography.bodyLarge.copy(lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.3),
         )
 
-        if (material.targetWords.isNotEmpty()) {
-            Text("这篇的目标词 · 点开看讲解", style = MaterialTheme.typography.titleMedium)
-            material.targetWords.forEach { target ->
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                InteractiveEnglishText(text = target.term, style = MaterialTheme.typography.titleSmall)
-                                Tag(if (target.role == "new") "新词" else "复习")
-                            }
-                            InteractiveEnglishText(
-                                text = target.meaningZh,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (target.exampleFromText.isNotBlank()) {
-                                InteractiveEnglishText(
-                                    text = target.exampleFromText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline,
-                                )
-                            }
-                        }
-                        SpeakButton(
-                            source = PlaybackSource.word(target.term),
-                            contentDescription = "朗读 ${target.term}",
-                        )
-                    }
-                }
-            }
-        }
-
-        if (material.questions.isNotEmpty()) {
-            Text("读懂了吗", style = MaterialTheme.typography.titleMedium)
+        if (firstQuestion != null) {
+            Text("先确认一件事", style = MaterialTheme.typography.titleMedium)
             QuestionList(
-                questions = material.questions,
-                onAnswered = onQuestionAnswered,
-                onAllAnswered = onQuestionsCompleted,
+                questions = listOf(firstQuestion),
+                onAnswered = { question, selected ->
+                    onQuestionAnswered(question, selected)
+                    firstCheckAnswered = true
+                },
+                onAllAnswered = {
+                    if (laterQuestions.isEmpty()) {
+                        exercisesCompleted = true
+                        onQuestionsCompleted()
+                    }
+                },
             )
         }
 
-        if (material.readerPayoff.isNotBlank()) {
-            ReaderPayoffCard(material.readerPayoff)
+        if (firstCheckAnswered || firstQuestion == null) {
+            if (material.readerPayoff.isNotBlank()) {
+                ReaderPayoffCard(material.readerPayoff)
+            }
+            TargetWordList(material.targetWords)
+            if (laterQuestions.isNotEmpty()) {
+                Text("再看几处语言线索", style = MaterialTheme.typography.titleMedium)
+                QuestionList(
+                    questions = laterQuestions,
+                    onAnswered = onQuestionAnswered,
+                    onAllAnswered = {
+                        exercisesCompleted = true
+                        onQuestionsCompleted()
+                    },
+                )
+            }
+        }
+
+        if (material.source == ReadingRepository.SOURCE_AI && exercisesCompleted) {
+            ReadingFeedback(material)
+        }
+    }
+}
+
+@Composable
+private fun TargetWordList(targetWords: List<ReadingTargetWord>) {
+    if (targetWords.isEmpty()) return
+    Text("这篇的目标词 · 点开看讲解", style = MaterialTheme.typography.titleMedium)
+    targetWords.forEach { target ->
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        InteractiveEnglishText(text = target.term, style = MaterialTheme.typography.titleSmall)
+                        Tag(if (target.role == "new") "新词" else "复习")
+                    }
+                    InteractiveEnglishText(
+                        text = target.meaningZh,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (target.exampleFromText.isNotBlank()) {
+                        InteractiveEnglishText(
+                            text = target.exampleFromText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                }
+                SpeakButton(
+                    source = PlaybackSource.word(target.term),
+                    contentDescription = "朗读 ${target.term}",
+                )
+            }
+        }
+    }
+}
+
+/** 明确反馈比滚动深度更可信；按钮同时用文字表达状态，不只靠颜色。 */
+@Composable
+private fun ReadingFeedback(material: MaterialView) {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    val scope = rememberCoroutineScope()
+    var liked by rememberSaveable(material.id, "liked") { mutableStateOf(material.liked) }
+    var saved by rememberSaveable(material.id, "saved") { mutableStateOf(material.saved) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("这篇怎么样？", style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = liked,
+                onClick = {
+                    liked = !liked
+                    scope.launch { app.readingRepository.setLiked(material.id, liked) }
+                },
+                label = { Text(if (liked) "已喜欢" else "喜欢") },
+            )
+            FilterChip(
+                selected = saved,
+                onClick = {
+                    saved = !saved
+                    scope.launch { app.readingRepository.setSaved(material.id, saved) }
+                },
+                label = { Text(if (saved) "已保存" else "保存") },
+            )
         }
     }
 }

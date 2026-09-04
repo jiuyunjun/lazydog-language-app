@@ -36,6 +36,8 @@ class ReadingRepository(
             topic = topic,
             readerPayoff = reading.readerPayoff,
             archetype = archetype,
+            teaser = reading.teaser,
+            category = reading.category.ifBlank { topic },
             estimatedCefr = reading.estimatedCefr,
             targetWordsJson = ReadingJson.encodeWords(reading.targetVocabulary),
             grammarJson = ReadingJson.encodeGrammar(reading.targetGrammar),
@@ -83,6 +85,12 @@ class ReadingRepository(
     suspend fun get(id: Long): ReadingMaterialEntity? = dao.getById(id)
 
     suspend fun delete(id: Long) = dao.deleteById(id)
+
+    suspend fun markCompleted(id: Long) = dao.markCompleted(id)
+
+    suspend fun setLiked(id: Long, liked: Boolean) = dao.setLiked(id, liked)
+
+    suspend fun setSaved(id: Long, saved: Boolean) = dao.setSaved(id, saved)
 
     companion object {
         const val SOURCE_AI = "ai"

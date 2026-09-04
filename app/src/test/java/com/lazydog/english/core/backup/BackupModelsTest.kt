@@ -11,6 +11,7 @@ import com.lazydog.english.core.database.SpellingProgressEntity
 import com.lazydog.english.core.database.VocabularyDetailEntity
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -93,6 +94,11 @@ class BackupModelsTest {
             body = "B",
             source = "ai",
             topic = "科技",
+            teaser = "A small mystery.",
+            category = "Technology",
+            completed = true,
+            liked = true,
+            saved = true,
             estimatedCefr = "B1",
             targetWordsJson = "[]",
             grammarJson = "[]",
@@ -106,6 +112,11 @@ class BackupModelsTest {
         val restored = entity.toBackup().toEntity()
         assertEquals(0L, restored.id)
         assertEquals("T", restored.title)
+        assertEquals("A small mystery.", restored.teaser)
+        assertEquals("Technology", restored.category)
+        assertTrue(restored.completed)
+        assertTrue(restored.liked)
+        assertTrue(restored.saved)
     }
 
     @Test

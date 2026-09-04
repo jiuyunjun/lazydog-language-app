@@ -93,6 +93,10 @@ data class GeneratedReading(
     val targetVocabulary: List<ReadingTargetWord>,
     val targetGrammar: List<ReadingTargetGrammar>,
     val comprehensionQuestions: List<ReadingQuestion>,
+    /** Feed 卡片上的一句引子；空时由本地从正文首句兜底。 */
+    val teaser: String = "",
+    /** 给人看的宽泛类别，如 Technology / Psychology；不是推荐系统的隐藏标签。 */
+    val category: String = "",
 )
 
 /** 整句的翻译与讲解（点句操作用）。 */

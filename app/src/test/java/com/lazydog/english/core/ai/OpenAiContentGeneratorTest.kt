@@ -269,29 +269,82 @@ class OpenAiContentGeneratorTest {
         assertTrue(recorded.body.readUtf8().contains("\"stream\":true"))
     }
 
-    @Test
-    fun `reading with missing review word is rejected`() = runBlocking {
-        val readingJson =
-            """{"schemaVersion":1,"title":"T","body":"${"word ".repeat(60)}",
-               "readerPayoff":"Small changes to waiting can matter more than speed.","estimatedCefr":"A2",
-               "targetVocabulary":[],"targetGrammar":[],
-               "comprehensionQuestions":[{"promptZh":"?","options":["A","B"],"answerIndex":0,"explanationZh":"e"}]}"""
-        server.enqueue(MockResponse().setBody(chatBody(readingJson)))
+    private val invalidReadingJson =
+        """{"schemaVersion":1,"title":"T","body":"${"word ".repeat(60)}",
+           "readerPayoff":"Small changes to waiting can matter more than speed.","estimatedCefr":"A2",
+           "targetVocabulary":[],"targetGrammar":[],
+           "comprehensionQuestions":[{"promptZh":"?","options":["A","B"],"answerIndex":0,"explanationZh":"e"}]}"""
 
-        val result = generator().generateReading(
-            com.lazydog.english.domain.generation.ReadingGenerationRequest(
-                learnerLevel = "A2",
-                topic = "科技",
-                targetLength = 100,
-                reviewVocabulary = listOf("curb"),
-                knownVocabulary = emptyList(),
-                reviewGrammar = emptyList(),
-                maxNewWords = 4,
-            ),
+    private val repairedReadingJson =
+        """{"schemaVersion":1,"title":"T","teaser":"A small curb can change a larger system.","category":"Technology",
+           "body":"${"curb ".repeat(60)}","readerPayoff":"Small constraints can reshape a whole system.","estimatedCefr":"A2",
+           "targetVocabulary":[{"term":"curb","meaningZh":"控制","exampleFromText":"curb","role":"review"}],
+           "targetGrammar":[],"comprehensionQuestions":[{"kind":"reference","promptZh":"这里指什么？",
+           "options":["A","B"],"answerIndex":0,"explanationZh":"原文如此。","evidenceFromText":"curb"}]}"""
+
+    private val passingCriticJson =
+        """{"schemaVersion":1,"scores":{"hook":0.9,"curiosity":0.9,"informationGain":0.9,
+           "pacing":0.9,"payoff":0.9,"naturalness":0.9,"overall":0.9},
+           "boringSections":[],"rewriteInstructions":[]}"""
+
+    private fun readingRequest() =
+        com.lazydog.english.domain.generation.ReadingGenerationRequest(
+            learnerLevel = "A2",
+            topic = "科技",
+            targetLength = 100,
+            reviewVocabulary = listOf("curb"),
+            knownVocabulary = emptyList(),
+            reviewGrammar = emptyList(),
+            maxNewWords = 4,
         )
+
+    @Test
+    fun `reading validation failure is repaired once before reaching the user`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody(invalidReadingJson)))
+        server.enqueue(MockResponse().setBody(chatBody(repairedReadingJson)))
+        server.enqueue(MockResponse().setBody(chatBody(passingCriticJson)))
+
+        val result = generator().generateReading(readingRequest())
+
+        val success = result as GenerationResult.Success
+        assertTrue(success.data.body.contains("curb"))
+        assertTrue(success.droppedNotes.any { it.contains("自动修复") })
+        assertEquals(3, server.requestCount)
+        server.takeRequest()
+        val repairPrompt = server.takeRequest().body.readUtf8()
+        assertTrue(repairPrompt.contains("curb"))
+        assertTrue(repairPrompt.contains("没出现在正文"))
+    }
+
+    @Test
+    fun `reading is rejected only after the automatic repair also fails`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody(invalidReadingJson)))
+        server.enqueue(MockResponse().setBody(chatBody(invalidReadingJson)))
+
+        val result = generator().generateReading(readingRequest())
 
         val failure = result as GenerationResult.Failure
         assertTrue(failure.reason.contains("curb"))
+        assertTrue(failure.reason.contains("自动修复后仍未通过"))
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `critic rewrite cannot replace a draft with one that fails local validation`() = runBlocking {
+        val lowCritic =
+            """{"schemaVersion":1,"scores":{"hook":0.4,"curiosity":0.5,"informationGain":0.5,
+               "pacing":0.5,"payoff":0.6,"naturalness":0.7,"overall":0.5},
+               "boringSections":["paragraph 2"],"rewriteInstructions":["Add a concrete turn."]}"""
+        server.enqueue(MockResponse().setBody(chatBody(repairedReadingJson)))
+        server.enqueue(MockResponse().setBody(chatBody(lowCritic)))
+        server.enqueue(MockResponse().setBody(chatBody(invalidReadingJson)))
+
+        val result = generator().generateReading(readingRequest())
+
+        val success = result as GenerationResult.Success
+        assertEquals("A small curb can change a larger system.", success.data.teaser)
+        assertTrue(success.droppedNotes.any { it.contains("保留原稿") })
+        assertEquals(3, server.requestCount)
     }
 
     @Test

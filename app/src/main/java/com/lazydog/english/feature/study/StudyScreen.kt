@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.data.ReadingJson
 import com.lazydog.english.core.data.ReadingRepository
 import com.lazydog.english.core.database.ListeningMaterialEntity
 import java.time.Instant
@@ -55,7 +56,17 @@ private sealed interface RecentStudyItem {
     val title: String
     val timestamp: Long
 
-    data class Reading(val id: Long, override val title: String, override val timestamp: Long, val source: String) : RecentStudyItem
+    data class Reading(
+        val id: Long,
+        override val title: String,
+        override val timestamp: Long,
+        val source: String,
+        val teaser: String,
+        val category: String,
+        val cefr: String,
+        val readingMinutes: Int,
+        val newWordCount: Int,
+    ) : RecentStudyItem
     data class Scenario(val id: Long, override val title: String, override val timestamp: Long, val stage: String) : RecentStudyItem
     data class Listening(
         override val title: String,
@@ -91,7 +102,20 @@ fun StudyScreen(
     val recentListening by app.listeningMaterialRepository.recent.collectAsState(initial = emptyList())
     val recentItems = remember(recentMaterials, recentScenarios, recentListening) {
         (
-            recentMaterials.map { RecentStudyItem.Reading(it.id, it.title, it.createdAt, it.source) } +
+            recentMaterials.map {
+                val words = Regex("[A-Za-z'\\-]+").findAll(it.body).count()
+                RecentStudyItem.Reading(
+                    id = it.id,
+                    title = it.title,
+                    timestamp = it.createdAt,
+                    source = it.source,
+                    teaser = it.teaser.ifBlank { it.body.lineSequence().firstOrNull().orEmpty().take(140) },
+                    category = it.category.ifBlank { it.topic.ifBlank { "Reading" } },
+                    cefr = it.estimatedCefr,
+                    readingMinutes = ((words + 179) / 180).coerceAtLeast(1),
+                    newWordCount = ReadingJson.decodeWords(it.targetWordsJson).count { word -> word.role == "new" },
+                )
+            } +
                 recentScenarios.map { RecentStudyItem.Scenario(it.id, it.titleZh, it.updatedAt, it.stage) } +
                 recentListening.map {
                     RecentStudyItem.Listening(it.textEn, it.lastHeardAt, it.meaningZh, it.sceneZh, it.playCount, it)
@@ -230,20 +254,35 @@ fun StudyScreen(
                             )
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(item.title, style = MaterialTheme.typography.bodyLarge)
+                                if (item is RecentStudyItem.Reading && item.teaser.isNotBlank()) {
+                                    Text(
+                                        text = item.teaser,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                    )
+                                }
                                 Text(
                                     text = buildString {
-                                        append(formatDate(item.timestamp))
-                                        append(" · ")
-                                        append(
-                                            when (item) {
-                                                is RecentStudyItem.Reading ->
-                                                    if (item.source == ReadingRepository.SOURCE_AI) "AI 定制" else "粘贴导入"
-                                                is RecentStudyItem.Scenario ->
-                                                    if (item.stage == "Finished") "情景演练 · 已完成" else "情景演练 · 继续"
-                                                is RecentStudyItem.Listening ->
-                                                    "${item.sceneZh.ifBlank { "听力" }} · 播过 ${item.playCount} 次 · ${item.meaningZh}"
-                                            },
-                                        )
+                                        when (item) {
+                                            is RecentStudyItem.Reading -> {
+                                                append(item.category)
+                                                append(" · ${item.readingMinutes} min")
+                                                if (item.cefr.isNotBlank()) append(" · ${item.cefr}")
+                                                if (item.newWordCount > 0) append(" · ${item.newWordCount} 个新词")
+                                                if (item.source != ReadingRepository.SOURCE_AI) append(" · 粘贴导入")
+                                            }
+                                            is RecentStudyItem.Scenario -> {
+                                                append(formatDate(item.timestamp))
+                                                append(" · ")
+                                                append(if (item.stage == "Finished") "情景演练 · 已完成" else "情景演练 · 继续")
+                                            }
+                                            is RecentStudyItem.Listening -> {
+                                                append(formatDate(item.timestamp))
+                                                append(" · ${item.sceneZh.ifBlank { "听力" }}")
+                                                append(" · 播过 ${item.playCount} 次 · ${item.meaningZh}")
+                                            }
+                                        }
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
