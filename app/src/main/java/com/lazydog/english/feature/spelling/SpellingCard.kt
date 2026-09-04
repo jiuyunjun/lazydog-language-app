@@ -60,6 +60,8 @@ import androidx.compose.ui.unit.sp
 import com.lazydog.english.domain.spelling.HintStage
 import com.lazydog.english.domain.spelling.SpellingHint
 import com.lazydog.english.domain.spelling.spellingHint
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.text.style.TextOverflow
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.domain.progress.DifficultyBias
@@ -303,6 +305,15 @@ private fun QuestionView(
     val scope = rememberCoroutineScope()
     val entry = card
     val extended = LazyDogTheme.extendedColors
+    // 提示不另画一块，它就是题面上那排格子的显形程度（`拼写训练DESIGN.md` §7）。
+    val hint = spellingHint(
+        expected = entry.term,
+        level = answer.hintLevel,
+        facts = entry.facts,
+        ipa = entry.ipa,
+        weakSegments = entry.progress.weakSegments,
+        lastWrongAnswer = answer.lastResult?.takeIf { !it.correct }?.normalizedAnswer.orEmpty(),
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -332,29 +343,17 @@ private fun QuestionView(
                     onSelectOption = onSelectOption,
                     play = PlaybackSource.word(entry.term),
                 )
-                SpellingQuestionType.PartialCompletion -> PartialBody(card, answer)
-                SpellingQuestionType.ChunkRecall -> ChunkBody(card, answer)
-                SpellingQuestionType.GuidedRecall -> GuidedBody(card, answer)
+                SpellingQuestionType.PartialCompletion -> PartialBody(card, answer, hint)
+                SpellingQuestionType.ChunkRecall -> ChunkBody(card, answer, hint)
+                SpellingQuestionType.GuidedRecall -> GuidedBody(card, answer, hint)
                 SpellingQuestionType.FreeRecall, SpellingQuestionType.DelayedFreeRecall -> FreeRecallBody(
                     card = card,
                     answer = answer,
+                    hint = hint,
                     play = PlaybackSource.sentence(entry.exampleEn.ifBlank { entry.term }),
                 )
             }
 
-            if (card.questionType.hasHintLadder()) {
-                HintSkeleton(
-                    hint = spellingHint(
-                        expected = entry.term,
-                        level = answer.hintLevel,
-                        facts = entry.facts,
-                        ipa = entry.ipa,
-                        weakSegments = entry.progress.weakSegments,
-                        lastWrongAnswer = answer.lastResult
-                            ?.takeIf { r -> !r.correct }?.normalizedAnswer.orEmpty(),
-                    ),
-                )
-            }
             if (card.questionType.needsPlainTextField()) {
                 OutlinedTextField(
                     value = answer.typed,
@@ -440,7 +439,12 @@ private fun QuestionView(
                             modifier = Modifier.padding(end = 6.dp),
                         )
                         // 写明下一级换来什么：代价是掌握度，总得让人先知道买的是什么。
-                        Text("提示 · ${nextHint.labelZh}")
+                        // 单行不换行：两个按钮并排本来就窄，换行会把字挤没。
+                        Text(
+                            text = "提示 · ${nextHint.labelZh}",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
                 Button(
@@ -614,7 +618,7 @@ private fun RecognitionBody(
 }
 
 @Composable
-private fun PartialBody(card: SpellingCard, answer: SpellingAnswer) {
+private fun PartialBody(card: SpellingCard, answer: SpellingAnswer, hint: SpellingHint) {
     val entry = card
     val weakest = entry.progress.weakSegments.maxByOrNull { it.errorCount }
     if (weakest != null && weakest.errorCount > 1) {
@@ -622,10 +626,14 @@ private fun PartialBody(card: SpellingCard, answer: SpellingAnswer) {
     }
     InteractiveEnglishText(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     SlotRow(
-        masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = false, facts = entry.facts),
+        masked = hint.mask(
+            SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = false, facts = entry.facts),
+        ),
         typed = answer.typed,
         enabled = !answer.resolved,
+        chunkStarts = if (hint.groupsVisible) hint.chunkStarts else emptySet(),
     )
+    HintExtras(hint, entry.term)
     Text(
         text = "把整个词打出来，打到哪一格就亮到哪一格",
         style = MaterialTheme.typography.bodySmall,
@@ -634,14 +642,18 @@ private fun PartialBody(card: SpellingCard, answer: SpellingAnswer) {
 }
 
 @Composable
-private fun ChunkBody(card: SpellingCard, answer: SpellingAnswer) {
+private fun ChunkBody(card: SpellingCard, answer: SpellingAnswer, hint: SpellingHint) {
     val entry = card
     InteractiveEnglishText(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     SlotRow(
-        masked = SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = true, facts = entry.facts),
+        masked = hint.mask(
+            SpellingEngine.maskedWord(entry.term, entry.progress.weakSegments, chunk = true, facts = entry.facts),
+        ),
         typed = answer.typed,
         enabled = !answer.resolved,
+        chunkStarts = if (hint.groupsVisible) hint.chunkStarts else emptySet(),
     )
+    HintExtras(hint, entry.term)
     Text(
         text = "按词块想，不用一个字母一个字母地拼。",
         style = MaterialTheme.typography.bodySmall,
@@ -650,21 +662,23 @@ private fun ChunkBody(card: SpellingCard, answer: SpellingAnswer) {
 }
 
 @Composable
-private fun GuidedBody(card: SpellingCard, answer: SpellingAnswer) {
+private fun GuidedBody(card: SpellingCard, answer: SpellingAnswer, hint: SpellingHint) {
     val entry = card
     InteractiveEnglishText(entry.meaningZh, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     // S4 只给首字母和长度，剩下的自己填；长度本身就是这一阶段允许的提示。
     SlotRow(
-        masked = entry.term.take(1) + "_".repeat((entry.term.length - 1).coerceAtLeast(0)),
+        masked = hint.mask(entry.term.take(1) + "_".repeat((entry.term.length - 1).coerceAtLeast(0))),
         typed = answer.typed,
         enabled = !answer.resolved,
+        chunkStarts = if (hint.groupsVisible) hint.chunkStarts else emptySet(),
     )
     Text(
-        text = "${entry.term.length} 个字母" +
-            if (entry.ipa.isNotBlank()) " · ${entry.ipa}" else "",
+        text = "${entry.term.length} 个字母",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    // S4 本来就给音标，但读出来是要花一级提示的——所以喇叭跟着提示走，不跟着题型走。
+    HintExtras(hint, entry.term, ipaAlways = entry.ipa)
 }
 
 /**
@@ -687,7 +701,13 @@ private fun GuidedBody(card: SpellingCard, answer: SpellingAnswer) {
  * 挖空展示 + 一个独立输入框两件东西，我不该把它们并成一个。
  */
 @Composable
-private fun SlotRow(masked: String, typed: String, enabled: Boolean) {
+private fun SlotRow(
+    masked: String,
+    typed: String,
+    enabled: Boolean,
+    /** 词块起点。给过「结构」之后，块与块之间拉开一点，让人按块去想。 */
+    chunkStarts: Set<Int> = emptySet(),
+) {
     // 每一格和已给出的字母都按**基线**对齐，不是按底边。
     // 按底边的话，格子里的字母会被格高和内边距一起顶上去，
     // 和旁边的固定字母差半行，一眼就能看出来没坐在同一条线上。
@@ -699,6 +719,8 @@ private fun SlotRow(masked: String, typed: String, enabled: Boolean) {
         },
     ) {
         masked.forEachIndexed { index, char ->
+            // 块之间多留一段空白：这就是「结构」那一级给的东西，不另画一行字。
+            if (index > 0 && index in chunkStarts) Spacer(Modifier.width(10.dp))
             if (char != '_') {
                 Text(
                     text = char.toString(),
@@ -799,7 +821,12 @@ private fun ClozeSentence(sentence: String, blankFor: String) {
 }
 
 @Composable
-private fun FreeRecallBody(card: SpellingCard, answer: SpellingAnswer, play: PlaybackSource) {
+private fun FreeRecallBody(
+    card: SpellingCard,
+    answer: SpellingAnswer,
+    hint: SpellingHint,
+    play: PlaybackSource,
+) {
     val entry = card
     val intervalDays = entry.progress.longestSuccessfulIntervalDays
     Badge(
@@ -811,6 +838,8 @@ private fun FreeRecallBody(card: SpellingCard, answer: SpellingAnswer, play: Pla
     // 而词条是 go——按词条挖会挖不中，按子串挖会把 going 挖成 ___ing。
     val blankFor = listOf(entry.seenAs, entry.term)
         .firstOrNull { it.isNotBlank() && wordIndexOf(sentence, it) >= 0 }
+    // 完整默写本来就不该显形；只有他真的要了提示，格子才出现。
+    val showSlots = hint.stage != HintStage.Blank
     if (blankFor != null) {
         // 语境默写：把词从例句里挖掉，剩下的句子照给，别把答案漏在句子里。
         ClozeSentence(sentence = sentence, blankFor = blankFor)
@@ -832,6 +861,57 @@ private fun FreeRecallBody(card: SpellingCard, answer: SpellingAnswer, play: Pla
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+    if (showSlots) {
+        SlotRow(
+            masked = hint.mask("_".repeat(entry.term.length)),
+            typed = answer.typed,
+            enabled = !answer.resolved,
+            chunkStarts = if (hint.groupsVisible) hint.chunkStarts else emptySet(),
+        )
+    }
+    HintExtras(hint, entry.term)
+}
+
+/**
+ * 提示带出来的额外东西：音标和那一句话。
+ *
+ * 音标出现的同时给一个喇叭——读音这一级买的就是"这个词怎么念"，
+ * 只摆一串 IPA 符号，对读不出音标的人等于没给。
+ *
+ * [ipaAlways] 用于本来就摆着音标的题型（S4 引导回忆）：那一份音标不是提示买来的，
+ * 但喇叭仍然只在读音这一级之后才给。
+ */
+@Composable
+private fun HintExtras(hint: SpellingHint, term: String, ipaAlways: String = "") {
+    val ipa = hint.ipa.ifBlank { ipaAlways }
+    if (ipa.isNotBlank() && hint.stage >= HintStage.Sound) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = ipa,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SpeakButton(
+                source = PlaybackSource.word(term),
+                contentDescription = "读一遍这个词",
+                modifier = Modifier.size(32.dp),
+                iconSize = 18.dp,
+            )
+        }
+    } else if (ipa.isNotBlank()) {
+        Text(
+            text = ipa,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (hint.noteZh.isNotBlank()) {
+        Text(
+            text = hint.noteZh,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
     }
 }
 
@@ -952,41 +1032,3 @@ private fun CorrectBanner(term: String, hintLevel: Int, credit: Double) {
 /** 掌握度是 0~1 的小数，显示成一位小数就够，别摆一串 0.7999999。 */
 private fun formatCredit(credit: Double): String =
     if (credit >= 1.0) "1" else ((credit * 10).roundToInt() / 10.0).toString()
-
-/**
- * 题面上那行骨架（`拼写训练DESIGN.md` §12）。
- *
- * 它**一直在**，从第 0 级的一排下划线开始，每要一次提示就多显一点。
- * 旧版把提示做成弹窗里的一句旁白（"开头那块是 sep"），用户得自己在脑子里拼回去，
- * 还要点一次「知道了」把窗关掉。现在他看到的东西和要写的东西长得一模一样。
- */
-@Composable
-private fun HintSkeleton(hint: SpellingHint) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = hint.skeleton,
-            style = MaterialTheme.typography.headlineSmall,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 2.sp,
-            color = if (hint.stage == HintStage.Answer) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        )
-        if (hint.ipa.isNotBlank()) {
-            Text(
-                text = hint.ipa,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (hint.noteZh.isNotBlank()) {
-            Text(
-                text = hint.noteZh,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-    }
-}
