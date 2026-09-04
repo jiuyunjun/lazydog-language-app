@@ -55,6 +55,7 @@ class UserPreferences(private val context: Context) {
         val AssessmentStateJson = stringPreferencesKey("assessment_state_json")
         val TodayDate = stringPreferencesKey("today_date")
         val TodayDoneSteps = stringSetPreferencesKey("today_done_steps")
+        val WrappedUpDate = stringPreferencesKey("wrapped_up_date")
         val MaxNewWords = intPreferencesKey("max_new_words")
         val ReminderTime = stringPreferencesKey("reminder_time")
         val ThemeMode = stringPreferencesKey("theme_mode")
@@ -270,6 +271,14 @@ class UserPreferences(private val context: Context) {
         migrateVoice(it[Keys.TtsVoice]) ?: DEFAULT_TTS_VOICE
     }
 
+    /**
+     * 用户今天主动说了"到这里"（`持续学习DESIGN.md` §6）。
+     * 之后这一天就不再劝学——低门槛的前提是收工也算数，不是换个说法继续催。
+     */
+    fun wrappedUpToday(todayDate: String): Flow<Boolean> = context.dataStore.data.map {
+        it[Keys.WrappedUpDate] == todayDate
+    }
+
     /** 今日已完成的步骤 id；换天自动视为空集合。 */
     fun todayDoneSteps(todayDate: String): Flow<Set<String>> = context.dataStore.data.map {
         if (it[Keys.TodayDate] == todayDate) it[Keys.TodayDoneSteps] ?: emptySet() else emptySet()
@@ -408,6 +417,13 @@ class UserPreferences(private val context: Context) {
 
     suspend fun setTtsVoice(voice: String) {
         context.dataStore.edit { it[Keys.TtsVoice] = voice }
+    }
+
+    /** 今天到这里。再点「再学一会儿」会撤销，收工不是不可逆的决定。 */
+    suspend fun setWrappedUp(todayDate: String, wrapped: Boolean) {
+        context.dataStore.edit {
+            if (wrapped) it[Keys.WrappedUpDate] = todayDate else it.remove(Keys.WrappedUpDate)
+        }
     }
 
     /** 标记今日某步骤完成；日期变了先清空旧进度。 */

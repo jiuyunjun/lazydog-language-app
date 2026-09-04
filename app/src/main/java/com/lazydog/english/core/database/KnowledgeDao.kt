@@ -107,6 +107,32 @@ interface KnowledgeDao {
     @Query("DELETE FROM knowledge_items WHERE id = :id")
     suspend fun deleteItem(id: Long)
 
+    // ---- 进步证据（core/data/ProgressRepository）----
+
+    /** [since] 之后的学习事件，按时间升序。战报和"重新记住了"都从这一串推。 */
+    @Query("SELECT * FROM learning_events WHERE occurredAt >= :since ORDER BY occurredAt ASC")
+    fun observeEventsSince(since: Long): Flow<List<LearningEventEntity>>
+
+    /**
+     * 学过的日期，本地时区，升序去重。
+     *
+     * 日期在 SQL 里算：把几万条时间戳拉回内存只为了数有多少个不同的日子，不划算。
+     * `localtime` 用的是查询当时的设备时区——跨时区旅行时昨天的边界会跟着走，
+     * 这正是用户对"昨天"的理解。
+     */
+    @Query(
+        "SELECT DISTINCT date(occurredAt / 1000, 'unixepoch', 'localtime') " +
+            "FROM learning_events ORDER BY 1 ASC",
+    )
+    fun observeActiveDays(): Flow<List<String>>
+
+    /** 这些知识项显示成什么：词条给词，语法给名字。查不到的（已删掉）不返回。 */
+    @Query("SELECT term FROM vocabulary_details WHERE itemId IN (:itemIds)")
+    suspend fun vocabularyTerms(itemIds: List<Long>): List<String>
+
+    @Query("SELECT name FROM grammar_details WHERE itemId IN (:itemIds)")
+    suspend fun grammarNames(itemIds: List<Long>): List<String>
+
     // ---- 备份 / 恢复（core/backup/BackupRepository）----
 
     @Query("SELECT * FROM knowledge_items")

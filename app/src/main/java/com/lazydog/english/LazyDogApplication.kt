@@ -11,6 +11,7 @@ import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.ListeningMaterialRepository
 import com.lazydog.english.core.data.MemoryHintRepository
 import com.lazydog.english.core.data.MistakeRepository
+import com.lazydog.english.core.data.ProgressRepository
 import com.lazydog.english.core.data.ReadingRepository
 import com.lazydog.english.core.data.ScenarioSessionRepository
 import kotlinx.coroutines.flow.first
@@ -34,6 +35,9 @@ class LazyDogApplication : Application() {
     }
 
     val mistakeRepository: MistakeRepository by lazy { MistakeRepository(database) }
+
+    /** 进步证据：不存新数据，从既有学习事件里推（`持续学习DESIGN.md` §14）。 */
+    val progressRepository: ProgressRepository by lazy { ProgressRepository(database) }
 
     /** 记忆提示要现生成，所以这个仓储拿着生成器；contentGenerator 本身仍然是懒的。 */
     val memoryHintRepository: MemoryHintRepository by lazy {
