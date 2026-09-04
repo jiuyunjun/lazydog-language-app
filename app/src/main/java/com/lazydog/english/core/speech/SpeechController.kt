@@ -68,6 +68,12 @@ class SpeechController(context: Context, private val prefs: UserPreferences) {
     fun stop(keepLink: Boolean = false) = playbackController.stop(keepLink)
 
     /**
+     * 马上就要念了，先把音频通路热起来（听力盲听页进来时调）。
+     * 会顺带把 provider 建起来，所以第一次朗读连 SDK 初始化都省了。
+     */
+    suspend fun prepare() = provider().prepare()
+
+    /**
      * 录音前先把朗读掐掉（`语音服务DESIGN.md` §28 半双工）：这一版不做边放边收，
      * 扬声器还在响的时候开麦只会把示范音自己录进去。
      *

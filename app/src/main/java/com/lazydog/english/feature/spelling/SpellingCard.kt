@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.paddingFromBaseline
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -47,6 +48,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlin.math.roundToInt
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.domain.progress.DifficultyBias
@@ -368,11 +377,7 @@ private fun QuestionView(
                 }
             }
             if (result?.correct == true) {
-                Text(
-                    text = if (answer.hintLevel == 0) "写对了。" else "写对了，这次用了提示，算分打了折。",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = extended.correct,
-                )
+                CorrectBanner(term = entry.term, hintLevel = answer.hintLevel, credit = result.masteryCredit)
             }
             if (answer.hintLevel >= MAX_HINT_LEVEL && result?.correct != true) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -914,3 +919,68 @@ internal fun spellingAskContext(card: SpellingCard, answer: SpellingAnswer): Ask
         suggestions = listOf("这个词为什么这么拼？", "有哪些和它拼法容易混的词？"),
     )
 }
+
+/**
+ * 写对了的那一下。
+ *
+ * 原来只有一行绿字，写对和没写对的差别几乎看不出来——而"我刚才想起来了"正是这一整套
+ * 训练要给的那个瞬间，它值得一个明确的反馈。这里给三样东西：一个勾、**正确的拼写本身**
+ * （刚在脑子里拼过一遍，眼睛再确认一次才闭环），以及这次拿到多少掌握度。
+ *
+ * 仍然守着安静那条线（AGENTS.md §5）：没有彩带、没有音效，只有一次轻震和一个 160ms 的浮现。
+ */
+@Composable
+private fun CorrectBanner(term: String, hintLevel: Int, credit: Double) {
+    val extended = LazyDogTheme.extendedColors
+    val haptics = LocalHapticFeedback.current
+    val appear = remember { Animatable(0.94f) }
+
+    LaunchedEffect(term, hintLevel) {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        appear.animateTo(1f, tween(durationMillis = 160, easing = FastOutSlowInEasing))
+    }
+
+    Surface(
+        color = extended.correctContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = appear.value
+                scaleY = appear.value
+                alpha = appear.value
+            },
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.CheckCircle,
+                contentDescription = null,
+                tint = extended.correct,
+                modifier = Modifier.size(28.dp),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                InteractiveEnglishText(
+                    text = term,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = extended.onCorrectContainer,
+                )
+                Text(
+                    text = when {
+                        hintLevel == 0 -> "一次就写对 · 掌握度 +${formatCredit(credit)}"
+                        else -> "写对了 · 用了提示，掌握度 +${formatCredit(credit)}"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = extended.onCorrectContainer,
+                )
+            }
+        }
+    }
+}
+
+/** 掌握度是 0~1 的小数，显示成一位小数就够，别摆一串 0.7999999。 */
+private fun formatCredit(credit: Double): String =
+    if (credit >= 1.0) "1" else ((credit * 10).roundToInt() / 10.0).toString()

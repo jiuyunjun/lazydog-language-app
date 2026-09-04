@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SpellingDao {
@@ -31,6 +32,12 @@ interface SpellingDao {
             "ORDER BY occurredAt DESC LIMIT :limit",
     )
     suspend fun recentWrongAttempts(itemId: Long, limit: Int): List<SpellingAttemptEntity>
+
+    // ---- 提取统计（core/data/ProgressRepository）----
+
+    /** [since] 之后的全部作答。难度偏置和今日战报都要数它——拼写就是最直接的提取。 */
+    @Query("SELECT * FROM spelling_attempts WHERE occurredAt >= :since ORDER BY occurredAt ASC")
+    fun observeAttemptsSince(since: Long): Flow<List<SpellingAttemptEntity>>
 
     // ---- 长期证明（core/data/ProgressRepository，`持续学习DESIGN.md` §14.3）----
 

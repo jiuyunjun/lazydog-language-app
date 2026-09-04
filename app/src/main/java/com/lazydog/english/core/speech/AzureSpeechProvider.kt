@@ -215,6 +215,11 @@ class AzureSpeechProvider(
         }
     }
 
+    override fun prepare() {
+        if (closed) return
+        player.warmUp()
+    }
+
     override fun stopSpeaking(keepLink: Boolean) {
         if (closed) return
         // 先掐声音（立刻静），再停合成（要等 SDK 一个来回）。

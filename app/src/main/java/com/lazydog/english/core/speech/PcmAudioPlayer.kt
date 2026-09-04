@@ -130,6 +130,32 @@ internal class PcmAudioPlayer(
         current
     }
 
+    /**
+     * 还没到要念的时候，先把音频通路热起来（听力盲听页进来就调）。
+     *
+     * 蓝牙 A2DP 从空闲到出声要几百毫秒，第一句话的开头就折在这段里。这里先把 track 建好，
+     * 灌一块无声数据再开声，然后交给 [keepAliveLoop] 挂住——等用户真的点播放时，
+     * 通路已经醒着了。
+     *
+     * **顺序不能反**：先写再 `play()`。对着空缓冲开声会被 AudioFlinger 立刻判 underrun
+     * 并把 track 停掉（D-039 第 1 条），那样不但没热起来，反而把通路弄哑了。
+     *
+     * 只对蓝牙做。扬声器和有线本来就几乎不用唤醒，挂着纯属白耗电。
+     */
+    fun warmUp() {
+        synchronized(lock) {
+            if (released || playing) return
+            val track = trackLocked() ?: return
+            if (currentRoute() != AudioRoute.Bluetooth) return
+            if (keepAlive != null) return
+            runCatching { writeAllLocked(track, keepAliveDither(KEEP_ALIVE_CHUNK_MS * sampleRateHz / 1000)) }
+            runCatching { track.play() }
+            // 这块无声数据不是朗读，播放头位置和已写入计数都不该按朗读来算。
+            writtenFrames = 0
+            startKeepAliveLocked()
+        }
+    }
+
     /** 这个令牌还是当前朗读吗——false 说明已经被新的朗读顶掉，调用方可以直接收工。 */
     fun isCurrent(token: Int): Boolean = token == this.token
 

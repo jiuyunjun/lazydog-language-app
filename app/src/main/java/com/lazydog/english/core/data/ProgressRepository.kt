@@ -27,6 +27,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 /**
@@ -52,8 +53,7 @@ class ProgressRepository(
      */
     fun observeToday(): Flow<TodayReport> {
         val since = Instant.now().minusSeconds(RECOVERY_LOOKBACK_DAYS * 86_400L)
-        return dao.observeEventsSince(since.toEpochMilli()).map { rows ->
-            val events = rows.map { it.toProgressEvent() }
+        return retrievals(since).map { events ->
             val progress = dailyProgress(events, today(), zone())
             val todayEvents = events.filter { it.at.atZone(zone()).toLocalDate() == today() }
             TodayReport(
@@ -73,9 +73,26 @@ class ProgressRepository(
      */
     fun observeDifficulty(): Flow<DifficultyBias> {
         val since = Instant.now().minusSeconds(ACCURACY_LOOKBACK_DAYS * 86_400L)
-        return dao.observeEventsSince(since.toEpochMilli()).map { rows ->
-            difficultyBias(recentAccuracy(rows.map { it.toProgressEvent() }))
-        }
+        return retrievals(since).map { difficultyBias(recentAccuracy(it)) }
+    }
+
+    /**
+     * [since] 之后的全部**提取**，按时间升序。
+     *
+     * 两个来源合起来才是完整的：`learning_events` 里的复习，加上 `spelling_attempts`。
+     * 只看前者会严重少算——拼写只有在"答对或提示拉到底、并且这个词本身到期"时才写复习事件，
+     * 于是答错的、加练的全都不算数，正确率既没样本也偏高（难度偏置因此一直不触发）。
+     * 拼写作答本身就是一次提取，它才是这里最该数的东西。
+     *
+     * 去重靠事件的 `source`：拼写写过的那条复习事件跳过，免得同一次作答记两遍。
+     */
+    private fun retrievals(since: Instant): Flow<List<ProgressEvent>> = combine(
+        dao.observeEventsSince(since.toEpochMilli()),
+        spellingDao.observeAttemptsSince(since.toEpochMilli()),
+    ) { events, attempts ->
+        (events.filter { it.source != SPELLING_SOURCE }.map { it.toProgressEvent() } +
+            attempts.map { it.toProgressEvent() })
+            .sortedBy { it.at }
     }
 
     /** 学习旅程 / 最近 30 天 / 当前连续（§7.1）。 */
@@ -144,6 +161,9 @@ class ProgressRepository(
         const val RECOVERY_LOOKBACK_DAYS = 120L
         const val ACCURACY_LOOKBACK_DAYS = 21L
 
+        /** `KnowledgeRepository` 写拼写复习事件时用的来源标记，去重要认它。 */
+        const val SPELLING_SOURCE = "spelling"
+
         /** 长期证明只认最近几天刚写对的：太久以前的成功说明不了"现在会了"。 */
         const val PROOF_SUCCESS_WINDOW_DAYS = 7L
     }
@@ -162,6 +182,14 @@ data class TodayReport(
         val Empty = TodayReport(DailyProgress.Empty, emptyList())
     }
 }
+
+/** 一次拼写作答就是一次提取：写对了就是想起来了，用没用提示由掌握度分数去管。 */
+private fun SpellingAttemptEntity.toProgressEvent() = ProgressEvent(
+    itemId = itemId,
+    activity = ProgressActivity.Review,
+    remembered = correct,
+    at = Instant.ofEpochMilli(occurredAt),
+)
 
 private fun SpellingAttemptEntity.toSpellingMoment() = SpellingMoment(
     itemId = itemId,

@@ -22,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,7 +73,12 @@ fun SpellingScreen(
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
 
-    var phase by remember { mutableStateOf<SpellingPhase>(SpellingPhase.Loading) }
+    // 总结页只有四个数，存得下。去看「拼写弱点」再退回来时应该回到刚才那张总结，
+    // 而不是莫名其妙从头开一轮新的——练完的那一轮已经结算过了，重开等于白练一遍。
+    var savedSummary by rememberSaveable(stateSaver = spellingSummarySaver) {
+        mutableStateOf<SpellingPhase.Summary?>(null)
+    }
+    var phase by remember { mutableStateOf<SpellingPhase>(savedSummary ?: SpellingPhase.Loading) }
     var correctFirstTry by remember { mutableStateOf(0) }
     var hintUsed by remember { mutableStateOf(0) }
     var answered by remember { mutableStateOf(0) }
@@ -80,6 +87,8 @@ fun SpellingScreen(
     var answer by remember { mutableStateOf(SpellingAnswer()) }
 
     LaunchedEffect(Unit) {
+        // 从弱点页退回来时手上已经有总结了，别再开一轮。
+        if (phase !is SpellingPhase.Loading) return@LaunchedEffect
         // 难度偏置只在开局取一次：一轮做到一半忽然换题型，用户只会觉得莫名其妙（§11）。
         val difficulty = app.progressRepository.observeDifficulty().first()
         val queue = repository.spellingQueue().map { it.toSpellingCard(difficulty) }
@@ -173,6 +182,7 @@ fun SpellingScreen(
                                 p.copy(cards = cards, index = p.index + 1)
                             } else {
                                 SpellingPhase.Summary(answered, correctFirstTry, hintUsed, retested.size)
+                                    .also { savedSummary = it }
                             }
                         },
                     )
@@ -234,3 +244,13 @@ private fun CenterBox(content: @Composable () -> Unit) {
         content()
     }
 }
+
+/** 总结页的四个数存进 saveable state，去看弱点再回来时不用重开一轮。 */
+private val spellingSummarySaver = listSaver<SpellingPhase.Summary?, Int>(
+    save = { summary ->
+        summary?.let { listOf(it.answered, it.correctFirstTry, it.hintUsed, it.retested) }.orEmpty()
+    },
+    restore = { saved ->
+        saved.takeIf { it.size == 4 }?.let { SpellingPhase.Summary(it[0], it[1], it[2], it[3]) }
+    },
+)

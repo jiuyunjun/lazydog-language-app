@@ -337,6 +337,12 @@ fun ListeningScreen(onExit: () -> Unit, onOpenProfile: () -> Unit) {
     }
 
     // 等下一句期间生成还在跑：新句子一到就接着练，生成结束还没有就说明这一轮到此为止。
+    // 盲听页一进来就把音频通路热起来：蓝牙从空闲到出声要几百毫秒，
+    // 不提前唤醒的话，第一句话的开头就折在那段里。
+    LaunchedEffect(phase) {
+        if (phase == ListeningPhase.Question) runCatching { app.speechController.prepare() }
+    }
+
     LaunchedEffect(phase, items.size, generating) {
         if (phase != ListeningPhase.Waiting) return@LaunchedEffect
         when {
