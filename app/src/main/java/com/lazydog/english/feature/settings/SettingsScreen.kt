@@ -395,7 +395,9 @@ fun SettingsScreen(
         SettingsRow(
             Icons.Outlined.Speed,
             "朗读语速",
-            "${speechRate.label} · 点击切换",
+            // HD 音色不支持变速，非正常语速会换成同一个人的标准音色（D-044），这事得说在明处。
+            if (speechRate == SpeechRate.Normal) "${speechRate.label} · 点击切换"
+            else "${speechRate.label} · 变速时换用标准音色 · 点击切换",
             onClick = { scope.launch { prefs.saveSpeechRate(speechRate.next()) } },
         )
         SettingsRow(

@@ -101,8 +101,8 @@ class AzureSpeechProvider(
         val id = speakSeq.incrementAndGet()
         Log.d(TAG, "请求朗读 #$id：style=$style text=$text")
         val configured = voiceName ?: this.voiceName
-        // 单词用播音腔：换成同一个人的标准 Neural，理由见 [broadcastVoiceOf]。
-        val voice = if (style == SpeechStyle.Word) broadcastVoiceOf(configured) else configured
+        // 单词用播音腔、变速的句子也得换音色（HD 忽略 prosody），理由见 [voiceFor]。
+        val voice = voiceFor(configured, style, rate)
         // 抢锁之前先掐掉上一段：上一段的读循环看到令牌失效会立刻收工把锁让出来，
         // 不然它会攥着锁把整段音频读完，新的朗读得干等。
         player.stop(keepLink = true)

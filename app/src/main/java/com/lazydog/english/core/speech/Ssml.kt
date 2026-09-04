@@ -35,6 +35,20 @@ internal fun buildSpeechSsml(
 }
 
 /**
+ * 这一次朗读用哪个音色。
+ *
+ * 两种情况要换成同一个人的标准 Neural（[broadcastVoiceOf]）：
+ * - **单词**：要的是播音腔，理由见 [broadcastVoiceOf]。
+ * - **这次要变速**：Dragon HD 不支持 `<prosody>`，服务端直接忽略。不换的话用户点了"慢速"
+ *   却一点变化都没有——听力的慢速重放、设置里的语速都是这样白设的。宁可这一句不用 HD 的
+ *   自然度，也不能让一个明确的操作毫无反应。
+ *
+ * 正常语速的例句和短文仍然走用户设置的音色（默认 HD），日常听到的还是那把自然的声音。
+ */
+internal fun voiceFor(configured: String, style: SpeechStyle, rate: SpeechRate): String =
+    if (style == SpeechStyle.Word || rate != SpeechRate.Normal) broadcastVoiceOf(configured) else configured
+
+/**
  * Dragon HD 音色名 → 同一个人的标准 Neural 音色名，如
  * `en-US-Ava:DragonHDLatestNeural` → `en-US-AvaNeural`。
  * 不带 `:` 的名字（已经是标准音色，或用户自填）原样返回。
@@ -45,8 +59,8 @@ internal fun buildSpeechSsml(
  * 示范音，每次也一致。
  *
  * 附带好处：**Dragon HD 不支持 `<prosody>`**（官方 HD 音色 SSML 支持表里 prosody 和 bookmark
- * 都是 No），语速设置对它是无效的，服务端直接忽略。换成标准 Neural 之后单词的语速才真的生效；
- * 例句和短文仍然走 HD，语速对它们依然无效（记在 `ROADMAP.md` 的已知限制里）。
+ * 都是 No），语速设置对它是无效的，服务端直接忽略。换成标准 Neural 之后语速才真的生效——
+ * 所以变速的句子也走这里，见 [voiceFor]。
  */
 internal fun broadcastVoiceOf(voiceName: String): String {
     val speaker = voiceName.substringBefore(':', missingDelimiterValue = "")

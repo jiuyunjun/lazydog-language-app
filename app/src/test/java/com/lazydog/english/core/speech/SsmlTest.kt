@@ -64,4 +64,23 @@ class SsmlTest {
         assertEquals(SpeechRate.Normal, SpeechRate.fromName(null))
         assertEquals(SpeechRate.Slow, SpeechRate.fromName("Slow"))
     }
+
+    @Test
+    fun `变速的句子换成标准音色，正常语速留着 HD`() {
+        val hd = "en-US-Ava:DragonHDLatestNeural"
+        // HD 忽略 prosody，所以要慢就得换音色，否则用户点了"慢速"毫无变化。
+        assertEquals("en-US-AvaNeural", voiceFor(hd, SpeechStyle.Sentence, SpeechRate.Slow))
+        assertEquals("en-US-AvaNeural", voiceFor(hd, SpeechStyle.Sentence, SpeechRate.Fast))
+        // 正常语速不需要 prosody 生效，例句照旧用 HD 的自然度。
+        assertEquals(hd, voiceFor(hd, SpeechStyle.Sentence, SpeechRate.Normal))
+        // 单词任何语速都用播音腔。
+        assertEquals("en-US-AvaNeural", voiceFor(hd, SpeechStyle.Word, SpeechRate.Normal))
+    }
+
+    @Test
+    fun `用户自填的标准音色不会被改名`() {
+        val plain = "en-US-JennyNeural"
+        assertEquals(plain, voiceFor(plain, SpeechStyle.Sentence, SpeechRate.Slow))
+        assertEquals(plain, voiceFor(plain, SpeechStyle.Word, SpeechRate.Normal))
+    }
 }
