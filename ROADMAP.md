@@ -172,7 +172,8 @@
 规格见 `拼写训练DESIGN.md` 与设计稿 59～64 屏，核心离线闭环已实现。
 
 - [x] Seen → Recognition → Partial Recall → Chunk Recall → Guided Recall → Free Recall → Retained 状态机，允许遗忘降级
-- [x] 提示阶梯与 Mastery Credit：答错只增加一级提示，提示越多掌握分越低，且不能跳级看答案
+- [x] 提示阶梯与 Mastery Credit：答错只增加一级提示，提示越多掌握分越低，且不能跳级看答案。
+  2026-09-04 改版：提示从弹窗旁白改成**题面上的骨架逐级显形**（`拼写训练DESIGN.md` §7、D-053）
 - [x] 八类拼写错误分类、薄弱片段累计，以及局部/分块题优先挖薄弱位置
 - [x] 手滑与遗忘分开：编辑距离 1 且用时 < 2 秒不计连续错误、不降级
 - [x] 多维拼写掌握向量、跨日期完整回忆计数和至少七天的 Retained 门槛

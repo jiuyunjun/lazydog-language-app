@@ -381,7 +381,12 @@ fun ListeningScreen(onExit: () -> Unit, onOpenProfile: () -> Unit) {
     // 这一页的规矩是"英文永远最后出现"，提问入口不能成为绕过它的后门。
     ProvideAskContext(
         current?.let { item ->
-            listeningAskContext(item = item, revealed = phase != ListeningPhase.Question)
+            listeningAskContext(
+                item = item,
+                revealed = phase != ListeningPhase.Question,
+                // 选项露出来之后才给：还在裸听阶段时，四个中文选项本身就是不该看的东西。
+                optionsZh = if (phase == ListeningPhase.Question && optionsShown) options else emptyList(),
+            )
         },
     )
 
@@ -1357,22 +1362,58 @@ private fun SummaryRow(label: String, value: String) {
  * 一个免费的答案入口，这一页"英文永远最后出现"的规矩也就没了；揭晓之后反过来，
  * 用户最想问的恰恰是"这里为什么听成那样"，这时候原文、关键表达和听觉难点都得给全。
  */
-internal fun listeningAskContext(item: ListeningItem, revealed: Boolean): AskContext {
+/**
+ * [optionsZh] 是**用户此刻看得见的四个选项**，按屏幕上的顺序给。选项还没露出来时传空。
+ *
+ * 揭晓前给选项是安全的，因为**没有任何东西标出哪个是对的**：四条按展示顺序摆着，
+ * 正确答案混在里面，模型和用户一样只能从选项本身推。真正要守的是英文原文不能出现——
+ * 这一页的规矩是"英文永远最后出现"，提问入口不能变成绕过它的后门。
+ */
+internal fun listeningAskContext(
+    item: ListeningItem,
+    revealed: Boolean,
+    optionsZh: List<String> = emptyList(),
+): AskContext {
     if (!revealed) {
         return AskContext(
             kind = AskContextKind.Question,
             title = "正在听一句 ${item.sceneZh} 的对话",
-            details = listOf(
-                AskDetail("场景", "${item.sceneZh} · ${item.subSceneZh}"),
-                AskDetail("语气", item.toneZh),
-                AskDetail("难度", "CEFR ${item.cefr} · 听力 ${item.listeningDifficulty}/5"),
-                AskDetail(
-                    "状态",
-                    "学习者正在盲听这句话做四选一，绝对不能透露这句英文原文、任何英文单词" +
-                        "或它的中文意思，只能讲这个场景里的听力技巧、连读弱读一类的常见难点",
-                ),
-            ),
-            suggestions = listOf("这种场景里一般会说些什么？", "听不清连读的时候有什么办法？"),
+            details = buildList {
+                add(AskDetail("场景", "${item.sceneZh} · ${item.subSceneZh}"))
+                add(AskDetail("语气", item.toneZh))
+                add(AskDetail("难度", "CEFR ${item.cefr} · 听力 ${item.listeningDifficulty}/5"))
+                if (optionsZh.isNotEmpty()) {
+                    // 用户已经在盯着这四条了，不给的话模型只能瞎猜他在纠结什么。
+                    add(
+                        AskDetail(
+                            "他正在选的四个选项",
+                            optionsZh.mapIndexed { i, option -> "${i + 1}. $option" }
+                                .joinToString(separator = "\n"),
+                        ),
+                    )
+                }
+                add(
+                    AskDetail(
+                        "状态",
+                        buildString {
+                            append("学习者正在盲听这句话做四选一，绝对不能透露这句英文原文、任何英文单词或它的中文意思，")
+                            if (optionsZh.isNotEmpty()) {
+                                append("也绝对不能说出、暗示或用排除法指向哪个选项是正确答案——")
+                                append("你并不知道哪个是对的，别装作知道。")
+                                append("能做的是：讲这几个选项在听感上分别对应什么、")
+                                append("哪些地方要靠听清否定词、时态、连读才能分开，")
+                                append("以及再听一遍时该盯住哪里；")
+                            }
+                            append("只能讲这个场景里的听力技巧、连读弱读一类的常见难点")
+                        },
+                    ),
+                )
+            },
+            suggestions = if (optionsZh.isNotEmpty()) {
+                listOf("这几个选项要靠听清什么才能分开？", "再听一遍我该盯住哪里？")
+            } else {
+                listOf("这种场景里一般会说些什么？", "听不清连读的时候有什么办法？")
+            },
         )
     }
     return AskContext(

@@ -63,14 +63,6 @@ class SpellingEngineTest {
     }
 
     @Test
-    fun `asking for a hint without an answer gives stable structural help`() {
-        assertEquals(
-            "一共 11 个字母，可以分成 3 个词块。",
-            SpellingEngine.hintText("environment", "", 1, emptyList()),
-        )
-    }
-
-    @Test
     fun `recognition distractors are deterministic and unique`() {
         val options = SpellingEngine.recognitionOptions("environment")
         assertEquals(4, options.size)
@@ -90,45 +82,23 @@ class SpellingEngineTest {
     }
 
     @Test
-    fun `no hint below the last one spells the word out`() {
-        // 逐级要提示不能是"点四下看答案"：第 5 级之前，任何一级都不该
-        // 让完整拼写出现在提示里。
-        for (level in 0..4) {
-            val withAnswer = SpellingEngine.hintText("environment", "enviroment", level, emptyList())
-            val withoutAnswer = SpellingEngine.hintText("environment", "", level, emptyList())
-            assertTrue("level $level leaked: $withAnswer", !withAnswer.contains("environment"))
-            assertTrue("level $level leaked: $withoutAnswer", !withoutAnswer.contains("environment"))
-        }
-        assertTrue(SpellingEngine.hintText("environment", "enviroment", 5, emptyList()).contains("environment"))
-    }
-
-    @Test
-    fun `the error region hint blanks the region instead of showing it`() {
-        val hint = SpellingEngine.hintText("environment", "enviroment", 2, emptyList())
-        assertTrue(hint, hint.contains("_"))
-        assertTrue(hint, !hint.contains("viron"))
-    }
-
-    @Test
-    fun `the fragment hint is strictly narrower than the weak segment`() {
-        val weak = listOf(WeakSegment("viron", 2, 7, 4))
-        val hint = SpellingEngine.hintText("environment", "enviroment", 3, weak)
-        assertTrue(hint, !hint.contains("viron"))
-    }
-
-    @Test
-    fun `the chunk skeleton keeps the weak chunk blank`() {
-        val hint = SpellingEngine.hintText("environment", "enviroment", 4, emptyList())
-        assertTrue(hint, hint.contains("en") && hint.contains("ment"))
-        assertTrue(hint, !hint.contains("viron"))
-    }
-
-    @Test
-    fun `the first hint names the kind of mistake without locating it`() {
-        val doubling = SpellingEngine.hintText("necessary", "neccessary", 1, emptyList())
+    fun `答错之后只说错在哪一类，不给字母`() {
+        // 这句话不占提示等级：它是判定反馈，为它花一级提示等于拿掌握度买本来就该给的判定。
+        val doubling = SpellingEngine.mistakeNote("necessary", "neccessary")
         assertTrue(doubling, doubling.contains("双写"))
-        val order = SpellingEngine.hintText("receive", "recieve", 1, emptyList())
+        assertTrue(doubling, !doubling.contains("necessary"))
+        val order = SpellingEngine.mistakeNote("receive", "recieve")
         assertTrue(order, order.contains("元音"))
+        assertTrue(order, !order.contains("receive"))
+    }
+
+    @Test
+    fun `薄弱段优先按这次错在哪定位`() {
+        val stored = listOf(WeakSegment("ment", 7, 11, 9))
+        val thisTime = SpellingEngine.weakSpotOf("environment", "enviroment", stored)
+        assertEquals("viron", thisTime?.segment)
+        // 没有新错答案时才退回历史统计。
+        assertEquals("ment", SpellingEngine.weakSpotOf("environment", "", stored)?.segment)
     }
 
     @Test

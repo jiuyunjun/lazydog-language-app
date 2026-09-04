@@ -371,43 +371,32 @@ object SpellingEngine {
         return clean.replaceRange(start, end, blank)
     }
 
-    fun hintText(
+    /**
+     * 答错之后那一句"你错在哪一类"。
+     *
+     * 它**不占提示等级**：这是判定反馈，不是提示。知道"该双写"往往就够自己找出来了，
+     * 而为了这句话去花一级提示，等于逼人用掌握度买一个本来就该告诉他的判定结果。
+     */
+    fun mistakeNote(expected: String, submitted: String): String =
+        errorNature(normalize(expected), normalize(submitted))
+
+    /**
+     * 这个词此刻最该盯住的那一段。
+     *
+     * 刚交上来的错答案优先——按"这次错在哪"定位，比按历史统计准；没有就退回累计最多的那段。
+     */
+    fun weakSpotOf(
         expected: String,
-        answer: String,
-        level: Int,
+        lastWrongAnswer: String,
         weakSegments: List<WeakSegment>,
-        facts: SpellingFacts = SpellingFacts.None,
-    ): String {
+    ): WeakSegment? {
         val clean = normalize(expected)
-        val submitted = normalize(answer)
-        val chunks = chunkWord(clean, facts)
-        if (submitted.isBlank()) {
-            // 还没交过答案，只能按词的结构给，没有"你错在哪"可说。
-            return when (level.coerceIn(0, 5)) {
-                0 -> "先试着写一次；需要时再要提示。"
-                1 -> "一共 ${clean.length} 个字母，可以分成 ${chunks.size} 个词块。"
-                2 -> "开头那块是 ${chunks.first()}。"
-                3 -> if (chunks.size >= 2) "结尾那块是 ${chunks.last()}。" else "开头是 ${clean.take(2)}。"
-                4 -> "词块骨架：${chunkSkeleton(clean, null, facts)}"
-                else -> "答案：$clean"
-            }
-        }
-        val weak = findWeakSegment(clean, submitted) ?: weakSegments.maxByOrNull { it.errorCount }
-        return when (level.coerceIn(0, 5)) {
-            0 -> "拼写不正确，再试一次。"
-            // 只说错的性质，不说在哪。知道"该双写"往往就够自己找出来了。
-            1 -> errorNature(clean, submitted)
-            // 错误区域挖空。给的是挖过的词，不是原词。
-            2 -> if (weak == null) "有一小段顺序不对。" else maskRange(clean, weak.start, weak.endExclusive)
-            // 片段的内芯，掐头去尾，严格窄于片段本身。
-            3 -> innerFragment(weak) ?: "开头是 ${clean.take(2)}，结尾是 ${clean.takeLast(2)}。"
-            // 词块骨架，弱块仍然空着——这一级给的是结构，不是答案。
-            4 -> "词块骨架：${chunkSkeleton(clean, weak, facts)}"
-            else -> "答案：$clean"
-        }
+        val submitted = normalize(lastWrongAnswer)
+        return submitted.takeIf { it.isNotEmpty() && it != clean }
+            ?.let { findWeakSegment(clean, it) }
+            ?: weakSegments.maxByOrNull { it.errorCount }
     }
 
-    /** 第 1 级：把错误归到一类说出来，一个字母都不给。 */
     private fun errorNature(expected: String, submitted: String): String {
         val errors = classifyErrors(expected, submitted)
         val delta = expected.length - submitted.length
@@ -427,44 +416,6 @@ object SpellingEngine {
     }
 
     /** 把一段挖成下划线。给出的是挖过的词，不是原词。 */
-    private fun maskRange(word: String, start: Int, endExclusive: Int): String {
-        val from = start.coerceIn(0, word.length)
-        val to = endExclusive.coerceIn(from, word.length)
-        if (from == to) return word
-        return word.replaceRange(from, to, "_".repeat(to - from))
-    }
-
-    /**
-     * 薄弱片段的内芯：掐掉首尾各一个字母。
-     * 直接把整段给出去，对"错的就是这一段"的题来说等于给答案。
-     */
-    private fun innerFragment(weak: WeakSegment?): String? {
-        val segment = weak?.segment ?: return null
-        if (segment.length < 3) return null
-        return "中间这几个字母是：…${segment.substring(1, segment.length - 1)}…"
-    }
-
-    /** 词块骨架，命中薄弱片段的那一块留空；不知道哪块弱就留中间那块。 */
-    private fun chunkSkeleton(word: String, weak: WeakSegment?, facts: SpellingFacts): String {
-        val chunks = chunkWord(word, facts)
-        if (chunks.size < 2) return "_".repeat(word.length)
-        var cursor = 0
-        val ranges = chunks.map { chunk ->
-            val range = cursor until (cursor + chunk.length)
-            cursor += chunk.length
-            range
-        }
-        val blankIndex = if (weak == null) {
-            if (chunks.size >= 3) 1 else 0
-        } else {
-            ranges.indexOfFirst { it.first < weak.endExclusive && weak.start < it.last + 1 }
-                .takeIf { it >= 0 } ?: if (chunks.size >= 3) 1 else 0
-        }
-        return chunks.mapIndexed { index, chunk ->
-            if (index == blankIndex) "_".repeat(chunk.length) else chunk
-        }.joinToString(" + ")
-    }
-
     /**
      * 拆成前缀 / 词干 / 后缀三段，拆不出来才退回等长切分。
      * 设计稿 62 屏画的是 en + viron + ment：中间那块才是要练的，

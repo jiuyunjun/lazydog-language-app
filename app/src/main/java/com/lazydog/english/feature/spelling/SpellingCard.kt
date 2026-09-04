@@ -56,6 +56,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import kotlin.math.roundToInt
+import androidx.compose.ui.unit.sp
+import com.lazydog.english.domain.spelling.HintStage
+import com.lazydog.english.domain.spelling.SpellingHint
+import com.lazydog.english.domain.spelling.spellingHint
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.domain.progress.DifficultyBias
@@ -173,7 +177,6 @@ data class SpellingAnswer(
     val selectedOption: Int = -1,
     val lastResult: SpellingEvaluation? = null,
     val startedAtMillis: Long = System.currentTimeMillis(),
-    val showHintSheet: Boolean = false,
 ) {
     /** 这张卡已经翻篇了：要么写对了，要么提示已经拉到底、答案摆在脸上。 */
     val resolved: Boolean get() = lastResult?.correct == true || hintLevel >= MAX_HINT_LEVEL
@@ -245,9 +248,9 @@ fun SpellingCardView(
             record(answer.hintLevel) { evaluation -> answer = answer.copy(lastResult = evaluation) }
         },
         onRequestHint = {
-            // 要提示本身不是一次作答：不记 attempt、不动阶段，只是把提示往上抬一级。
+            // 要提示本身不是一次作答：不记 attempt、不动阶段，只是把题面上的骨架多显一点。
             val nextLevel = (answer.hintLevel + 1).coerceAtMost(MAX_HINT_LEVEL)
-            answer = answer.copy(hintLevel = nextLevel, showHintSheet = true)
+            answer = answer.copy(hintLevel = nextLevel)
             // 最后一级把答案直接摆出来了，这张卡就此翻篇。得记一次零分提交，
             // 否则"提示要到底然后翻页"会成为一条不留痕迹的绕路。
             if (nextLevel >= MAX_HINT_LEVEL) record(MAX_HINT_LEVEL) {}
@@ -263,7 +266,6 @@ fun SpellingCardView(
             )
         },
         onExposureDone = ::finishExposure,
-        onDismissHintSheet = { answer = answer.copy(showHintSheet = false) },
     )
 }
 
@@ -295,7 +297,6 @@ private fun QuestionView(
     onRequestHint: () -> Unit,
     onNext: () -> Unit,
     onExposureDone: () -> Unit,
-    onDismissHintSheet: () -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
@@ -341,6 +342,19 @@ private fun QuestionView(
                 )
             }
 
+            if (card.questionType.hasHintLadder()) {
+                HintSkeleton(
+                    hint = spellingHint(
+                        expected = entry.term,
+                        level = answer.hintLevel,
+                        facts = entry.facts,
+                        ipa = entry.ipa,
+                        weakSegments = entry.progress.weakSegments,
+                        lastWrongAnswer = answer.lastResult
+                            ?.takeIf { r -> !r.correct }?.normalizedAnswer.orEmpty(),
+                    ),
+                )
+            }
             if (card.questionType.needsPlainTextField()) {
                 OutlinedTextField(
                     value = answer.typed,
@@ -363,13 +377,8 @@ private fun QuestionView(
                         text = if (result.likelyTypo) {
                             "看着像手滑——这次不算退步，再打一次就好。"
                         } else {
-                            SpellingEngine.hintText(
-                                expected = entry.term,
-                                answer = result.normalizedAnswer,
-                                level = answer.hintLevel,
-                                weakSegments = entry.progress.weakSegments,
-                                facts = entry.facts,
-                            )
+                            // 只说错在哪一类，不给字母。要字母去点「给点提示」，那才是要花分的。
+                            SpellingEngine.mistakeNote(entry.term, result.normalizedAnswer)
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
@@ -415,7 +424,10 @@ private fun QuestionView(
                     Text("下一个")
                 }
             } else {
-                if (card.questionType.hasHintLadder()) {
+                val nextHint = HintStage.of(answer.hintLevel).let {
+                    if (it == HintStage.Answer) null else HintStage.of(it.level + 1)
+                }
+                if (card.questionType.hasHintLadder() && nextHint != null) {
                     OutlinedButton(
                         onClick = onRequestHint,
                         modifier = Modifier
@@ -427,7 +439,8 @@ private fun QuestionView(
                             contentDescription = null,
                             modifier = Modifier.padding(end = 6.dp),
                         )
-                        Text("再要一点提示")
+                        // 写明下一级换来什么：代价是掌握度，总得让人先知道买的是什么。
+                        Text("提示 · ${nextHint.labelZh}")
                     }
                 }
                 Button(
@@ -443,53 +456,8 @@ private fun QuestionView(
         }
     }
 
-    if (answer.showHintSheet) {
-        val sheetState = rememberModalBottomSheetState()
-        ModalBottomSheet(onDismissRequest = onDismissHintSheet, sheetState = sheetState) {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 24.dp, vertical = 8.dp)
-                    .navigationBarsPadding()
-                    .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Text(
-                    text = "提示 ${answer.hintLevel} 级 · ${hintLevelName(answer.hintLevel)}",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = SpellingEngine.hintText(
-                        expected = entry.term,
-                        answer = answer.lastResult?.normalizedAnswer.orEmpty(),
-                        level = answer.hintLevel,
-                        weakSegments = entry.progress.weakSegments,
-                        facts = entry.facts,
-                    ),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "每要一级提示，这道题的得分就降一档；提示只能一级一级往上要，不能直接跳到答案。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = onDismissHintSheet) {
-                    Text("知道了，再试一次")
-                }
-            }
-        }
-    }
 }
 
-private fun hintLevelName(level: Int): String = when (level) {
-    1 -> "错在哪一类"
-    2 -> "错误区域"
-    3 -> "部分结构"
-    4 -> "词块拆分"
-    5 -> "完整答案"
-    else -> "还没给提示"
-}
 
 private fun inputLabel(type: SpellingQuestionType): String = "写出完整单词"
 
@@ -984,3 +952,41 @@ private fun CorrectBanner(term: String, hintLevel: Int, credit: Double) {
 /** 掌握度是 0~1 的小数，显示成一位小数就够，别摆一串 0.7999999。 */
 private fun formatCredit(credit: Double): String =
     if (credit >= 1.0) "1" else ((credit * 10).roundToInt() / 10.0).toString()
+
+/**
+ * 题面上那行骨架（`拼写训练DESIGN.md` §12）。
+ *
+ * 它**一直在**，从第 0 级的一排下划线开始，每要一次提示就多显一点。
+ * 旧版把提示做成弹窗里的一句旁白（"开头那块是 sep"），用户得自己在脑子里拼回去，
+ * 还要点一次「知道了」把窗关掉。现在他看到的东西和要写的东西长得一模一样。
+ */
+@Composable
+private fun HintSkeleton(hint: SpellingHint) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = hint.skeleton,
+            style = MaterialTheme.typography.headlineSmall,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 2.sp,
+            color = if (hint.stage == HintStage.Answer) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+        if (hint.ipa.isNotBlank()) {
+            Text(
+                text = hint.ipa,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (hint.noteZh.isNotBlank()) {
+            Text(
+                text = hint.noteZh,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
+    }
+}
