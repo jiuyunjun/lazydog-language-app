@@ -127,6 +127,16 @@ interface LearningContentGenerator {
     ): GenerationResult<MemoryAssistance>
 
     /** 点词解释：结合所在句子解释一个词。 */
+    /**
+     * 把几个两到四周前学过的词组成一句自然的话，用于进步挑战
+     * （`持续学习DESIGN.md` §15）。返回前已校验每个词都真的在句子里。
+     */
+    suspend fun generateProofSentence(
+        terms: List<String>,
+        learnerLevel: String,
+        onStage: ((GenerationStage) -> Unit)? = null,
+    ): GenerationResult<ProofSentence>
+
     suspend fun explainWord(
         term: String,
         sentenceContext: String,
@@ -315,3 +325,9 @@ sealed interface GenerationResult<out T> {
 
     data class Failure(val reason: String) : GenerationResult<Nothing>
 }
+
+/** 进步挑战用的一句话（`持续学习DESIGN.md` §15）。 */
+data class ProofSentence(
+    val sentenceEn: String,
+    val sentenceZh: String,
+)

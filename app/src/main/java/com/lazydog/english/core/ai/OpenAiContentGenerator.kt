@@ -55,6 +55,7 @@ import com.lazydog.english.domain.generation.MemoryConfusion
 import com.lazydog.english.domain.generation.MemoryPronunciation
 import com.lazydog.english.domain.generation.MemoryType
 import com.lazydog.english.domain.generation.NewWordsRequest
+import com.lazydog.english.domain.generation.ProofSentence
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
 import com.lazydog.english.domain.generation.ReadingQuestionKind
@@ -76,6 +77,7 @@ import com.lazydog.english.domain.scenario.ScenarioImprovement
 import com.lazydog.english.domain.scenario.ScenarioJudgement
 import com.lazydog.english.domain.scenario.ScenarioKeepPhrase
 import com.lazydog.english.domain.scenario.ScenarioMessage
+import com.lazydog.english.domain.progress.validateProofSentence
 import com.lazydog.english.domain.scenario.ScenarioReplyOption
 import com.lazydog.english.domain.scenario.ScenarioSummary
 import com.lazydog.english.domain.scenario.ScenarioSummaryRequest
@@ -385,6 +387,32 @@ class OpenAiContentGenerator(
             promptVersion = PROMPT_VERSION,
             droppedNotes = validation.warnings,
         )
+    }
+
+    override suspend fun generateProofSentence(
+        terms: List<String>,
+        learnerLevel: String,
+        onStage: ((GenerationStage) -> Unit)?,
+    ): GenerationResult<ProofSentence> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildProofSentencePrompt(terms, learnerLevel),
+            // 复用单词那一档：都是"写一句自然的英文"，不值得为它在设置里多摆一个模型选项。
+            task = AiTask.Words,
+            onStage = onStage,
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<ProofSentencePayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val sentence = ProofSentence(payload.sentenceEn.trim(), payload.sentenceZh.trim())
+        // 少用了一个词，这一轮的结论"你听懂了四个旧表达"就是假的，所以不通过就整条失败。
+        validateProofSentence(sentence.sentenceEn, sentence.sentenceZh, terms)?.let {
+            return GenerationResult.Failure("挑战句没通过校验：$it")
+        }
+        return GenerationResult.Success(sentence, content.model, PROMPT_VERSION)
     }
 
     override suspend fun explainWord(
@@ -1617,6 +1645,12 @@ class OpenAiContentGenerator(
     }
 
     @Serializable
+    private data class ProofSentencePayload(
+        val sentenceEn: String = "",
+        val sentenceZh: String = "",
+    )
+
+    @Serializable
     private data class ScenarioKeepPhrasePayload(val en: String = "", val zh: String = "") {
         fun toDomain() = ScenarioKeepPhrase(en.trim(), zh.trim())
     }
@@ -2250,6 +2284,26 @@ class OpenAiContentGenerator(
             appendLine("绝对不要在 titleZh/bodyZh 里出现任何数字分数；重点讲发音、连读、重音这些具体现象，不要泛泛而谈。")
             appendLine("如果整体读得不错，可以只给 1 条 good；不需要凑够 3 条。")
             appendLine("""输出 JSON schema：{"tips":[{"kind":"good","titleZh":"...","bodyZh":"..."}]}""")
+        }
+
+        /**
+         * 进步挑战的出句提示词（`持续学习DESIGN.md` §15）。
+         *
+         * 关键约束是**四个词必须全用上、而且句子要自然**。这两条会互相拉扯，
+         * 所以宁可让它换个场景重写，也不要写成生硬的串词句——
+         * 听不懂的句子证明不了"你听懂了"。
+         */
+        internal fun buildProofSentencePrompt(terms: List<String>, level: String): String = buildString {
+            appendLine("把下面这几个词组成 1 句自然的英语，给水平 $level 的中文母语学习者听：")
+            appendLine(terms.joinToString("、"))
+            appendLine("每个词都必须真的用上（词形可以按语法自然变化）；一句话说完，不要分成两句。")
+            appendLine("这句话是用来**听**的：口语化、语流自然、像真人会说的一句话，" +
+                "不要写成把几个词硬串起来的造句练习。")
+            appendLine("长度控制在 25 个词以内；除这几个词以外不要用明显超过 $level 的词。")
+            appendLine("如果这几个词实在凑不到一个自然的场景里，宁可挑一个更宽松的场景把话说顺，" +
+                "也不要写出别扭的句子。")
+            appendLine("sentenceZh 是这句话的中文说法，说人话，不要逐字硬译。")
+            appendLine("""输出 JSON schema：{"sentenceEn":"...","sentenceZh":"..."}""")
         }
 
         internal fun buildExplainSentencePrompt(sentence: String, level: String): String = buildString {

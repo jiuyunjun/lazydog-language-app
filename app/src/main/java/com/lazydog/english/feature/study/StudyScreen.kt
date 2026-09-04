@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material.icons.outlined.Spellcheck
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -75,6 +76,7 @@ fun StudyScreen(
     onWordsClick: () -> Unit,
     onGrammarClick: () -> Unit,
     onProductionClick: () -> Unit,
+    onProofChallengeClick: () -> Unit,
     onReadingClick: () -> Unit,
     onPasteClick: () -> Unit,
     onScenarioClick: () -> Unit,
@@ -106,6 +108,7 @@ fun StudyScreen(
         StudyEntry(Icons.Outlined.Headphones, "听力", "先听声音，再猜意思", onClick = onListeningClick),
         StudyEntry(Icons.Outlined.Spellcheck, "拼写", "认得不算，写得出才算", onClick = onSpellingClick),
         StudyEntry(Icons.Outlined.RecordVoiceOver, "情景演练", "和难说话的人练一轮", onClick = onScenarioClick),
+        StudyEntry(Icons.Outlined.Verified, "还记得吗", "两周前学的词，听得出来吗", onClick = onProofChallengeClick),
     )
 
     Column(

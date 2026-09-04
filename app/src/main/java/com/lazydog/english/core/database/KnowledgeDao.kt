@@ -21,6 +21,9 @@ data class GrammarRecord(
     val detail: GrammarDetailEntity,
 )
 
+/** 一个词条和它入库的时间（进步挑战按"多久以前学的"挑词）。 */
+data class LearnedTerm(val itemId: Long, val term: String, val createdAt: Long)
+
 @Dao
 interface KnowledgeDao {
 
@@ -132,6 +135,23 @@ interface KnowledgeDao {
 
     @Query("SELECT name FROM grammar_details WHERE itemId IN (:itemIds)")
     suspend fun grammarNames(itemIds: List<Long>): List<String>
+
+    // ---- 进步挑战（`持续学习DESIGN.md` §15）----
+
+    /** 这段时间里学的词条，用来出"你还记得两周前那几个词吗"。 */
+    @Query(
+        "SELECT v.itemId AS itemId, v.term AS term, i.createdAt AS createdAt " +
+            "FROM vocabulary_details v JOIN knowledge_items i ON i.id = v.itemId " +
+            "WHERE i.createdAt BETWEEN :from AND :to ORDER BY i.createdAt ASC",
+    )
+    suspend fun itemsLearnedBetween(from: Long, to: Long): List<LearnedTerm>
+
+    /** 关键词识别的干扰项：随便挑几个不在这次句子里的词。 */
+    @Query(
+        "SELECT term FROM vocabulary_details WHERE itemId NOT IN (:excludedItemIds) " +
+            "ORDER BY RANDOM() LIMIT :limit",
+    )
+    suspend fun randomTermsExcept(excludedItemIds: List<Long>, limit: Int): List<String>
 
     // ---- 备份 / 恢复（core/backup/BackupRepository）----
 

@@ -33,6 +33,7 @@ import com.lazydog.english.feature.ask.AskHost
 import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.production.ProductionScreen
+import com.lazydog.english.feature.proof.ProofChallengeScreen
 import com.lazydog.english.feature.settings.ModelPickScreen
 import com.lazydog.english.feature.settings.ModelSettingsScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
@@ -62,6 +63,7 @@ object Routes {
     const val SpellingProfile = "study/spelling/profile"
     const val GrammarStudy = "study/grammar"
     const val Production = "study/production"
+    const val ProofChallenge = "study/proof"
     const val Assessment = "assessment"
     const val ModelSettings = "settings/models"
     const val ModelPick = "settings/models/{task}"
@@ -176,6 +178,7 @@ private fun AppNavHost(
                 onStartSpelling = { navController.navigate(Routes.Spelling) },
                 onStartGrammarStudy = { navController.navigate(Routes.GrammarStudy) },
                 onStartProduction = { navController.navigate(Routes.Production) },
+                onStartProofChallenge = { navController.navigate(Routes.ProofChallenge) },
                 onStartReading = { navController.navigate(Routes.ReadingGenerate) },
                 onStartReadingPaste = { navController.navigate(Routes.ReadingPaste) },
                 onStartScenario = { navController.navigate(Routes.Scenario) },
@@ -285,6 +288,10 @@ private fun AppNavHost(
                     onExit = { navController.popOnce() },
                 )
             }
+        }
+
+        composable(Routes.ProofChallenge) {
+            ProofChallengeScreen(onExit = { navController.popBackStack() })
         }
 
         composable(Routes.Production) {

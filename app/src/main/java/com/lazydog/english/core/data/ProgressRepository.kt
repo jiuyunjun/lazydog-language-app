@@ -10,6 +10,9 @@ import com.lazydog.english.domain.progress.Fatigue
 import com.lazydog.english.domain.progress.LearningActivity
 import com.lazydog.english.domain.progress.LongTermProof
 import com.lazydog.english.domain.progress.PROOF_MIN_GAP_DAYS
+import com.lazydog.english.domain.progress.PROOF_WINDOW_MAX_DAYS
+import com.lazydog.english.domain.progress.PROOF_WINDOW_MIN_DAYS
+import com.lazydog.english.domain.progress.ProofCandidate
 import com.lazydog.english.domain.progress.SpellingMoment
 import com.lazydog.english.domain.progress.ProgressActivity
 import com.lazydog.english.domain.progress.ProgressEvent
@@ -19,6 +22,7 @@ import com.lazydog.english.domain.progress.fatigue
 import com.lazydog.english.domain.progress.learningActivity
 import com.lazydog.english.domain.progress.longTermProof
 import com.lazydog.english.domain.progress.recentAccuracy
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -108,6 +112,30 @@ class ProgressRepository(
         if (itemIds.isEmpty()) return emptyList()
         return dao.vocabularyTerms(itemIds) + dao.grammarNames(itemIds)
     }
+
+    /**
+     * 进步挑战的候选词（§15）：两到四周前学的那些。
+     *
+     * 窗口在 SQL 里卡，"多久以前"在这里换算——领域层只认天数，不认时间戳。
+     */
+    suspend fun proofCandidates(): List<ProofCandidate> {
+        val now = Instant.now()
+        val rows = dao.itemsLearnedBetween(
+            from = now.minusSeconds(PROOF_WINDOW_MAX_DAYS * 86_400L).toEpochMilli(),
+            to = now.minusSeconds(PROOF_WINDOW_MIN_DAYS * 86_400L).toEpochMilli(),
+        )
+        return rows.map {
+            ProofCandidate(
+                itemId = it.itemId,
+                term = it.term,
+                learnedDaysAgo = Duration.between(Instant.ofEpochMilli(it.createdAt), now).toDays().toInt(),
+            )
+        }
+    }
+
+    /** 关键词识别的干扰项。凑不够就少给几个——干扰项不够只是题简单一点，不影响结论成立。 */
+    suspend fun decoyTerms(excludedItemIds: List<Long>, count: Int): List<String> =
+        dao.randomTermsExcept(excludedItemIds, count)
 
     /** SQLite 给的是 `yyyy-MM-dd`；万一是别的形状（时区异常）就丢掉这一天，不让它拖垮整列。 */
     private fun parseDay(raw: String): LocalDate? = runCatching { LocalDate.parse(raw) }.getOrNull()
