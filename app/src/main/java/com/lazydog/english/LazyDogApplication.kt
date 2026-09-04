@@ -19,7 +19,7 @@ import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.database.AppDatabase
 import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.domain.generation.LearningContentGenerator
-import com.lazydog.english.domain.scheduling.SimpleIntervalScheduler
+import com.lazydog.english.domain.scheduling.FsrsScheduler
 
 /**
  * 手工组装的应用级单例。依赖关系还很浅，先不上 Hilt（ARCHITECTURE.md §2）。
@@ -31,7 +31,7 @@ class LazyDogApplication : Application() {
     val userPreferences: UserPreferences by lazy { UserPreferences(this) }
 
     val knowledgeRepository: KnowledgeRepository by lazy {
-        KnowledgeRepository(database, SimpleIntervalScheduler())
+        KnowledgeRepository(database, FsrsScheduler())
     }
 
     val mistakeRepository: MistakeRepository by lazy { MistakeRepository(database) }
