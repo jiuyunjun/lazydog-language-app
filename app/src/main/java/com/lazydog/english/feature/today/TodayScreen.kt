@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.TodayReport
+import com.lazydog.english.core.designsystem.appCopy
 import com.lazydog.english.domain.planning.DailyPlanner
 import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.progress.LearningActivity
@@ -68,6 +69,7 @@ fun TodayScreen(
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
     val prefs = app.userPreferences
+    val copy = appCopy
     val today = remember { LocalDate.now().toString() }
 
     // 初值用占位符，避免 DataStore 首帧前横幅闪现。
@@ -141,37 +143,37 @@ fun TodayScreen(
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = when {
-                        allDone -> "今天的洋屁放完了"
-                        mood == Mood.Comeback -> "欢迎回来"
-                        mood == Mood.Tired -> "今天先到这个量"
-                        else -> "今天约 $dailyMinutes 分钟"
+                        allDone -> copy.todayFinishedTitle
+                        mood == Mood.Comeback -> copy.todayGreeting
+                        mood == Mood.Tired -> copy.todayMinimumReachedTitle
+                        else -> copy.todayPlannedMinutes(dailyMinutes)
                     },
                     style = MaterialTheme.typography.titleMedium,
                 )
                 // 最低目标写在最显眼的地方：今天再累也能过的那条线（§6）。
                 Text(
-                    text = if (minimumDone) "今天最低目标已经达成"
-                    else "今天最低目标：$MINIMUM_RETRIEVALS 次回忆 · 约 2 分钟",
+                    text = if (minimumDone) copy.todayMinimumDone
+                    else copy.todayMinimumGoal(MINIMUM_RETRIEVALS),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (minimumDone) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
                     text = if (allDone) {
-                        "复习计划已经更新，明天见。"
+                        copy.todayFinishedNote
                     } else if (mood == Mood.Comeback) {
                         // §26 点名不要说"你已经落后 74 个复习"——那是在为回来这件事加一道门槛。
                         // 也确实不用补：FSRS 里过期越久可提取性越低，本来就是连续的，不会堆成债。
-                        "不用补以前的，今天先热身几分钟就好。"
+                        copy.todayRecoveryNote
                     } else if (mood == Mood.Tired) {
-                        "刚才连着错了几个。累了就是累了，明天的脑子比今天的耐心值钱。"
+                        copy.todayFatigueNote
                     } else if (dueVocab + dueGrammar > 0) {
                         buildList {
                             if (dueVocab > 0) add("$dueVocab 个词")
                             if (dueGrammar > 0) add("$dueGrammar 个语法点")
-                        }.joinToString("、", postfix = "到期。先还债，再学新的。")
+                        }.joinToString("、", postfix = copy.todayDueSuffix)
                     } else {
-                        "没有到期的复习，轻松学点新的。"
+                        copy.todayNothingDue
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -184,7 +186,7 @@ fun TodayScreen(
         }
 
         Text(
-            text = "今天的顺序",
+            text = copy.todayPlanTitle,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 16.dp, bottom = 4.dp, start = 4.dp),
@@ -246,16 +248,16 @@ fun TodayScreen(
         report.proof?.let { LongTermProofCard(it, modifier = Modifier.padding(top = 12.dp)) }
 
         when {
-            allDone -> DoneNote("今天的步骤都走完了。想加练随时去「学习」页。")
+            allDone -> DoneNote(copy.todayAllStepsDone)
 
             // 收工是用户自己按的，那就真的收工——不再摆一个继续学习的大按钮（§6）。
             wrappedUp -> {
-                DoneNote("今天到这里。明天见。")
+                DoneNote(copy.todaySignOff)
                 TextButton(
                     onClick = { scope.launch { prefs.setWrappedUp(today, false) } },
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
                 ) {
-                    Text("还想再学一会儿")
+                    Text(copy.todayKeepGoing)
                 }
             }
 
@@ -283,7 +285,7 @@ fun TodayScreen(
                     onClick = { scope.launch { prefs.setWrappedUp(today, true) } },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("今天到这里")
+                    Text(copy.todayStopHere)
                 }
             }
 
@@ -296,7 +298,7 @@ fun TodayScreen(
             ) {
                 Icon(Icons.Outlined.PlayArrow, contentDescription = null)
                 Text(
-                    text = if (doneSteps.isEmpty()) "开始今天的学习" else "继续：${nextStep.step.title}",
+                    text = if (doneSteps.isEmpty()) copy.todayStart else "继续：${nextStep.step.title}",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 10.dp),
                 )
@@ -345,6 +347,7 @@ private fun ActivityStat(label: String, value: String) {
  */
 @Composable
 private fun ProgressEvidence(report: TodayReport, modifier: Modifier = Modifier) {
+    val copy = appCopy
     val progress = report.progress
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -352,24 +355,24 @@ private fun ProgressEvidence(report: TodayReport, modifier: Modifier = Modifier)
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("今天学到了什么", style = MaterialTheme.typography.titleSmall)
+            Text(copy.todayReportTitle, style = MaterialTheme.typography.titleSmall)
             if (progress.learned > 0) {
                 Text(
-                    text = "新学 ${progress.learned} 个",
+                    text = copy.todayLearned(progress.learned),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
             if (progress.reviewed > 0) {
                 val percent = progress.rememberedPercent
                 Text(
-                    text = "回忆 ${progress.reviewed} 次，想起来 ${progress.remembered} 次" +
+                    text = copy.todayRecalled(progress.reviewed, progress.remembered) +
                         if (percent != null) " · $percent%" else "",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
             if (report.recoveredNames.isNotEmpty()) {
                 Text(
-                    text = "上次没想起来、今天想起来了：" + report.recoveredNames.take(3).joinToString("、"),
+                    text = copy.todayComebackTitle + report.recoveredNames.take(3).joinToString("、"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -386,6 +389,7 @@ private fun ProgressEvidence(report: TodayReport, modifier: Modifier = Modifier)
  */
 @Composable
 private fun LongTermProofCard(proof: LongTermProof, modifier: Modifier = Modifier) {
+    val copy = appCopy
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
         shape = MaterialTheme.shapes.large,
@@ -393,17 +397,17 @@ private fun LongTermProofCard(proof: LongTermProof, modifier: Modifier = Modifie
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "${proof.daysAgo} 天前你还会在这里出错",
+                text = copy.proofDaysAgo(proof.daysAgo),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             Text(
-                text = "当时写的是 ${proof.pastAnswer}",
+                text = copy.proofPastAnswer(proof.pastAnswer),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             Text(
-                text = "现在：${proof.term} · 没用提示",
+                text = copy.proofNow(proof.term),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )

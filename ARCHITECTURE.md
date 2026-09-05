@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.1"
+version: "1.2"
 updated: "2026-09-06"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -311,6 +311,25 @@ app/
   生成退回"让模型自己按等级选词"。词频是让选词更准，不是学习流程的前置条件。
 - 对外只给"档"不给排名数字：第 2870 名和第 3050 名之间的差别对"这个词值不值得学"
   没有意义，报出去是假精确。
+
+### 文案语气（AppCopy）
+
+设置页可切换「正常 / 懒狗」两档语气（`UI_BRIEF.md` §2.1、`DECISIONS.md` D-060）。
+
+- 落点 `core/designsystem/AppCopy.kt`：`AppCopy` 基类装正常语气的原话，
+  `LazyDogCopy` 只覆盖需要变皮的条目。**漏改一条的后果是"这句没变皮"，
+  不是"这句变成了别的意思"**——风险压在无害那一侧。
+- 下发用 `staticCompositionLocalOf` + `ProvideAppCopy`，挂在 `MainActivity` 里
+  `LazyDogTheme` 的外面，和主题一样从偏好读一次、整棵树共用。这与
+  `Theme.kt` 的 `LocalExtendedColors` 完全同构，**不是新增的架构模式**，
+  也不是新增全局状态——状态在 DataStore，CompositionLocal 只是读取路径。
+- 偏好 `copy_tone` 存 wire 字符串（plain / lazydog），照 `themeMode` 的先例。
+  这样 `core/data` 不必反过来依赖 `core/designsystem`，`core/*` 之间保持单向无环（§0.2）。
+- **语气层只收氛围文案。** 错误、设置、隐私、语法术语、CEFR 等级和 AI 提示词
+  不进来，边界和理由写在 `AppCopy.kt` 的 KDoc 里——就在加文案的人眼皮底下，
+  而不是只写在文档里。
+- `AppCopyTest` 反射取出全部文案过违禁词表，守住"不羞辱、不催促、不制造焦虑"
+  和"收工按钮始终平等"。加新文案不用改测试，自动被覆盖。
 
 ## 6. 复习调度
 

@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.designsystem.appCopy
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.data.ReadingJson
 import com.lazydog.english.core.data.ReadingRepository
@@ -135,6 +136,8 @@ fun StudyScreen(
         StudyEntry(Icons.Outlined.Verified, "还记得吗", "两周前学的词，听得出来吗", onClick = onProofChallengeClick),
     )
 
+    val copy = appCopy
+
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
@@ -149,7 +152,7 @@ fun StudyScreen(
             modifier = Modifier.padding(top = 16.dp),
         )
         Text(
-            text = "想自己挑就在这儿挑。挑了什么也照样记进复习计划。",
+            text = copy.studyPickNote,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

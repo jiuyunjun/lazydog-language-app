@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Interests
+import androidx.compose.material.icons.outlined.Mood
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Shield
@@ -57,6 +58,7 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.ask.ShakeDetector
 import com.lazydog.english.core.backup.AutoBackupWorker
 import com.lazydog.english.core.data.UserPreferences
+import com.lazydog.english.core.designsystem.CopyTone
 import com.lazydog.english.core.designsystem.TagPicker
 import com.lazydog.english.core.model.LearningGoals
 import com.lazydog.english.core.model.SampleData
@@ -88,8 +90,8 @@ private val reminderOptions = listOf("关闭", "08:00", "12:30", "20:00", "21:30
 private val themeOptions = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
 
 private enum class OpenDialog {
-    None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, Voice, AskSensitivity, SkillLevels,
-    ConfirmRestore,
+    None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, CopyToneChoice, Voice,
+    AskSensitivity, SkillLevels, ConfirmRestore,
 }
 
 @Composable
@@ -115,6 +117,8 @@ fun SettingsScreen(
     val skillLevels by prefs.skillLevels.collectAsState(initial = SkillLevels())
     val reminderTime by prefs.reminderTime.collectAsState(initial = "")
     val themeMode by prefs.themeMode.collectAsState(initial = "system")
+    val toneWire by prefs.copyTone.collectAsState(initial = CopyTone.DEFAULT.wire)
+    val tone = CopyTone.fromWire(toneWire)
     val ttsVoice by prefs.ttsVoice.collectAsState(initial = UserPreferences.DEFAULT_TTS_VOICE)
     val askShakeEnabled by prefs.askShakeEnabled.collectAsState(initial = true)
     val askSensitivity by prefs.askShakeSensitivity.collectAsState(initial = 1)
@@ -387,6 +391,12 @@ fun SettingsScreen(
             onClick = { dialog = OpenDialog.Theme },
         )
         SettingsRow(
+            Icons.Outlined.Mood,
+            "文案语气",
+            "${tone.labelZh} · ${tone.summaryZh}",
+            onClick = { dialog = OpenDialog.CopyToneChoice },
+        )
+        SettingsRow(
             Icons.Outlined.RecordVoiceOver,
             "发音口音",
             voiceOptions.firstOrNull { it.voice == ttsVoice }?.label ?: ttsVoice,
@@ -474,6 +484,17 @@ fun SettingsScreen(
             selectedIndex = themeOptions.indexOfFirst { it.first == themeMode },
             onSelect = { index ->
                 scope.launch { prefs.setThemeMode(themeOptions[index].first) }
+                dialog = OpenDialog.None
+            },
+            onDismiss = { dialog = OpenDialog.None },
+        )
+        OpenDialog.CopyToneChoice -> ChoiceDialog(
+            // 只影响鼓励、收尾这类氛围文案；错误信息和设置项在哪种语气下都照直说。
+            title = "文案语气",
+            options = CopyTone.entries.map { "${it.labelZh} · ${it.summaryZh}" },
+            selectedIndex = CopyTone.entries.indexOf(tone),
+            onSelect = { index ->
+                scope.launch { prefs.setCopyTone(CopyTone.entries[index].wire) }
                 dialog = OpenDialog.None
             },
             onDismiss = { dialog = OpenDialog.None },

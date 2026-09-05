@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.designsystem.appCopy
 import com.lazydog.english.domain.progress.DifficultyBias
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.designsystem.SpeakButton
@@ -481,6 +482,7 @@ private fun StudyCardView(
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
+    val copy = appCopy
     val speech = app.speechController
 
     // 卡片出现时自动朗读（设置里可关）。
@@ -513,7 +515,7 @@ private fun StudyCardView(
             }
             if (card.isNew && !revealed) {
                 Text(
-                    text = "AI 给你的新词 · 先猜猜意思",
+                    text = copy.wordNewCardHint,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -659,6 +661,7 @@ private fun OfferNewView(
     onGenerate: () -> Unit,
     onDone: () -> Unit,
 ) {
+    val copy = appCopy
     CenterHint {
         if (reviewedCount > 0) {
             Icon(
@@ -666,42 +669,43 @@ private fun OfferNewView(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
             )
-            Text("到期的 $reviewedCount 个词复习完了", style = MaterialTheme.typography.titleMedium)
+            Text(copy.wordReviewDone(reviewedCount), style = MaterialTheme.typography.titleMedium)
         } else {
-            Text("现在没有到期要复习的词", style = MaterialTheme.typography.titleMedium)
+            Text(copy.wordNothingDue, style = MaterialTheme.typography.titleMedium)
         }
         Button(onClick = onGenerate) {
             Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
-            Text("让 AI 来 $newWordCount 个新词", modifier = Modifier.padding(start = 8.dp))
+            Text(copy.wordAskForNew(newWordCount), modifier = Modifier.padding(start = 8.dp))
         }
-        TextButton(onClick = onDone) { Text("今天到这") }
+        TextButton(onClick = onDone) { Text(copy.wordStopToday) }
     }
 }
 
 @Composable
 private fun SummaryView(reviewedCount: Int, newCount: Int, onExit: () -> Unit) {
+    val copy = appCopy
     CenterHint {
         Icon(
             imageVector = Icons.Outlined.TaskAlt,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )
-        Text("这轮搞定", style = MaterialTheme.typography.headlineSmall)
+        Text(copy.wordRoundDone, style = MaterialTheme.typography.headlineSmall)
         Text(
             text = buildString {
-                if (reviewedCount > 0) append("复习了 $reviewedCount 个词")
+                if (reviewedCount > 0) append(copy.wordReviewedCount(reviewedCount))
                 if (reviewedCount > 0 && newCount > 0) append(" · ")
-                if (newCount > 0) append("新学了 $newCount 个词")
-            }.ifBlank { "什么也没学，也挺好" },
+                if (newCount > 0) append(copy.wordLearnedCount(newCount))
+            }.ifBlank { copy.wordLearnedNothing },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = "都已经记进复习计划，到期会在记录页出现。",
+            text = copy.wordScheduledNote,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Button(onClick = onExit) { Text("收工") }
+        Button(onClick = onExit) { Text(copy.wordFinish) }
     }
 }
 

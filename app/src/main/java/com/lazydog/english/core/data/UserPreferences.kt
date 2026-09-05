@@ -60,6 +60,7 @@ class UserPreferences(private val context: Context) {
         val MaxNewWords = intPreferencesKey("max_new_words")
         val ReminderTime = stringPreferencesKey("reminder_time")
         val ThemeMode = stringPreferencesKey("theme_mode")
+        val CopyTone = stringPreferencesKey("copy_tone")
         val TtsVoice = stringPreferencesKey("tts_voice")
         val Topics = stringSetPreferencesKey("topics")
         val DailyMinutes = intPreferencesKey("daily_minutes")
@@ -280,6 +281,18 @@ class UserPreferences(private val context: Context) {
 
     /** system / light / dark */
     val themeMode: Flow<String> = context.dataStore.data.map { it[Keys.ThemeMode] ?: "system" }
+
+    /**
+     * 文案语气：plain / lazydog（`CopyTone.wire`）。
+     *
+     * 只影响氛围文案。错误、设置、隐私说明和语法术语在哪种语气下都照直说，
+     * 边界写在 `core/designsystem/AppCopy.kt` 的 KDoc 里。
+     */
+    val copyTone: Flow<String> = context.dataStore.data.map { it[Keys.CopyTone] ?: "plain" }
+
+    suspend fun setCopyTone(wire: String) {
+        context.dataStore.edit { it[Keys.CopyTone] = wire }
+    }
 
     val ttsVoice: Flow<String> = context.dataStore.data.map {
         migrateVoice(it[Keys.TtsVoice]) ?: DEFAULT_TTS_VOICE
