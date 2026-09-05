@@ -20,6 +20,11 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = "DOCS.md"
 
+# Windows 控制台默认是 cp1252/cp936，直接 print 中文文件名会抛 UnicodeEncodeError。
+# 报错信息里必然出现中文文档名，所以这里先把输出流切成 UTF-8。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 REQUIRED_FIELDS = ["doc", "tier", "status", "version", "updated", "authority", "index"]
 VALID_TIERS = [
     "L0 入口",
