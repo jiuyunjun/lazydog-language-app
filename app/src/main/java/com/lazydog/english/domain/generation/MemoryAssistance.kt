@@ -67,7 +67,7 @@ data class MemoryAssistance(
     val coreMeaningZh: String,
     val primaryType: MemoryType,
     val secondaryType: MemoryType? = null,
-    /** §9：5~20 字、只说一个记忆关系、看到就能指回目标词。首屏就显示它。 */
+    /** D-062：20~90 字，最多两句讲清一个记忆关系，首屏直接显示。 */
     val memoryHookZh: String,
     /** 构词拆解，如 "un + happy = 不 + 开心"。拆不出就留空——§3.1 明确禁止编造词根。 */
     val morphologyZh: String = "",
@@ -99,7 +99,7 @@ data class MemoryAssistance(
     val hasDetails: Boolean
         get() = morphologyZh.isNotBlank() || weakSegment.isNotBlank() || commonErrors.isNotEmpty() ||
             !pronunciation.isEmpty || visualAssociationZh.isNotBlank() || confusions.isNotEmpty() ||
-            collocations.isNotEmpty() || exampleEn.isNotBlank() || recallQuestionZh.isNotBlank()
+            collocations.isNotEmpty() || exampleEn.isNotBlank()
 }
 
 /**
@@ -158,12 +158,12 @@ data class MemoryWordLevel(
  * 设计里写死了"宁缺毋滥"——牵强的联想、凑数的易混词、指不到位置的易错段，
  * 留着比没有更糟；但它们不该连累那条真正有用的记忆钩子。
  *
- * 真正会让整条失败的只有三样：核心意思、记忆钩子、以及钩子长到没法在几秒内看完。
+ * 核心意思、记忆线索和检索问题必须可用；空话与重复钩子也不能过关（D-062）。
  */
 object MemoryAssistanceValidation {
 
-    /** §9 说好控制在 5~20 字。留一点余量，超过这个数才算"太长，重新生成"。 */
-    const val MAX_HOOK_LENGTH = 30
+    /** D-062：允许两句讲通线索，不再为了 20 字截掉联系。 */
+    const val MAX_HOOK_LENGTH = 90
     const val MIN_HOOK_LENGTH = 4
     const val MAX_CONFUSIONS = 3
     const val MAX_COLLOCATIONS = 3
@@ -250,13 +250,35 @@ object MemoryAssistanceValidation {
         )
     }
 
+    /** 只拦确定可检测的问题；有英文不等于有用，语义质量仍由提示词约束和用户换法兜底。 */
+    fun hookProblem(hook: String, term: String = "", meaningZh: String = "", avoidHookZh: String = ""): String? {
+        val text = hook.trim()
+        if (text.length < MIN_HOOK_LENGTH || text.length > MAX_HOOK_LENGTH) return "记忆线索缺失或长度不合适"
+        val generic = listOf("多读几遍", "多念几遍", "反复朗读", "反复记忆", "结合例句记", "结合例句多记", "多加练习", "记住这个单词")
+        if (generic.any { it in text }) return "记忆线索只有通用学习建议"
+        if (!Regex("[A-Za-z]{2,}").containsMatchIn(text)) return "记忆线索缺少能对照的英文抓手"
+        fun normalized(value: String) = value.trim()
+            .replace(Regex("^(构词|同源|词形|发音|对比|搭配|场景|联想|谐音联想)[：:]"), "")
+            .lowercase().filter { it.isLetterOrDigit() }
+        if (avoidHookZh.isNotBlank() && normalized(text) == normalized(avoidHookZh)) return "新提示与上一条相同，请换个记法"
+        if (term.isNotBlank() && normalized(text) == normalized(term)) return "记忆线索只是重复拼写"
+        val bare = normalized(text).let { if (term.isBlank()) it else it.replace(normalized(term), "") }
+            .replace(Regex("^(的意思是|意思是|表示|就是|是)"), "")
+        if (meaningZh.isNotBlank() && bare == normalized(meaningZh)) return "记忆线索只是重复词义"
+        return null
+    }
+
     /** 整条能不能用。@return 失败原因，null 表示通过。 */
-    fun validate(value: MemoryAssistance, expectedTerm: String): String? = when {
+    fun validate(value: MemoryAssistance, expectedTerm: String, avoidHookZh: String = ""): String? = when {
         !value.term.equals(expectedTerm.trim(), ignoreCase = true) -> "返回的不是请求的那个词"
         value.coreMeaningZh.isBlank() || value.coreMeaningZh.length > 60 -> "核心意思缺失或过长"
         value.memoryHookZh.isBlank() -> "没给记忆钩子"
         value.memoryHookZh.length < MIN_HOOK_LENGTH -> "记忆钩子太短，指不回这个词"
-        value.memoryHookZh.length > MAX_HOOK_LENGTH -> "记忆钩子超过 $MAX_HOOK_LENGTH 字，几秒内看不完"
+        value.memoryHookZh.length > MAX_HOOK_LENGTH -> "记忆线索超过 $MAX_HOOK_LENGTH 字"
+        hookProblem(value.memoryHookZh, value.term, value.coreMeaningZh, avoidHookZh) != null ->
+            hookProblem(value.memoryHookZh, value.term, value.coreMeaningZh, avoidHookZh)
+        value.recallQuestionZh.isBlank() -> "缺少可用来回想这个词的自测问题"
+        ContentValidation.exampleContainsTerm(value.recallQuestionZh, value.term) -> "自测问题直接泄露了目标词"
         else -> null
     }
 }

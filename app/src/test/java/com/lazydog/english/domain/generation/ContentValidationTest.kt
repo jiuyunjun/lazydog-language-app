@@ -107,13 +107,14 @@ class ContentValidationTest {
     }
 
     @Test
-    fun `drops words missing memory hint`() {
+    fun `missing or unusable memory hints do not discard usable word cards`() {
         val result = ContentValidation.validateNewWords(
             listOf(word(memoryHint = ""), word(term = "linger", example = "The smell lingered.", memoryHint = "记".repeat(161))),
             maxCount = 5,
             knownTerms = emptySet(),
         )
-        assertTrue(result.valid.isEmpty())
+        assertEquals(2, result.valid.size)
+        assertTrue(result.valid.all { it.memoryHintZh.isEmpty() })
         assertEquals(2, result.droppedNotes.size)
         assertTrue(result.droppedNotes.all { it.contains("记忆方法") })
     }

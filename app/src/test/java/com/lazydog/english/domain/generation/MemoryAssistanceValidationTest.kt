@@ -52,7 +52,7 @@ class MemoryAssistanceValidationTest {
     @Test
     fun `hook longer than the limit fails the whole hint`() {
         // §9/§10：钩子长到几秒内读不完就失去意义，这一条重新生成，不是删掉一个字段了事。
-        val long = hint(hook = "这个词表示买东西而且比一般的买更正式常见于合同和商务场合".repeat(2))
+        val long = hint(hook = "这个词表示买东西而且比一般的买更正式常见于合同和商务场合".repeat(4))
         val cleaned = MemoryAssistanceValidation.clean(long)
         assertNotNull(MemoryAssistanceValidation.validate(cleaned.value, "purchase"))
     }
@@ -147,4 +147,29 @@ class MemoryAssistanceValidationTest {
         assertNull(MemoryType.normalizeOrNull(""))
         assertNull(MemoryType.normalizeOrNull("SOMETHING_NEW"))
     }
+    @Test
+    fun `two sentence cue can explain a real connection without being truncated`() {
+        val value = hint(
+            term = "dessert", coreMeaning = "甜点",
+            hook = "dessert 甜点比 desert 沙漠多一个 s；甜点想多来一份，就多留一个 s。这是联想，不是词源。",
+            recall = "甜点和沙漠，哪个词中间多一个 s？",
+        )
+        assertNull(MemoryAssistanceValidation.validate(value, "dessert"))
+    }
+
+    @Test
+    fun `definition slogans generic advice and repeated cues are rejected`() {
+        for (hook in listOf("想象在商店里买东西的画面", "purchase 就是购买", "purchase 表示购买", "词形：purchase", "purchase 多读几遍就会了")) {
+            assertNotNull(hook, MemoryAssistanceValidation.validate(hint(hook = hook), "purchase"))
+        }
+        assertNotNull(MemoryAssistanceValidation.validate(hint(), "purchase", "对比：正式场合里的 BUY！"))
+    }
+
+    @Test
+    fun `recall question must exist and must not reveal the answer`() {
+        assertNotNull(MemoryAssistanceValidation.validate(hint(recall = ""), "purchase"))
+        assertNotNull(MemoryAssistanceValidation.validate(hint(recall = "purchase 是什么意思？"), "purchase"))
+        assertNull(MemoryAssistanceValidation.validate(hint(recall = "正式表达购买设备用哪个词？"), "purchase"))
+    }
+
 }

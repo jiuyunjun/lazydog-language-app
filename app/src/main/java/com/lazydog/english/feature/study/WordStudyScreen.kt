@@ -15,7 +15,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,6 +64,7 @@ import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.domain.generation.Collocation
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.GenerationStage
+import com.lazydog.english.domain.generation.MemoryAssistance
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.planning.DailyStep
@@ -97,6 +98,7 @@ private data class StudyCard(
     val collocations: List<Collocation> = emptyList(),
     val stage: String = KnowledgeStage.Learning.name,
     val memoryHintZh: String = "",
+    val memoryAssistance: GenerationResult.Success<MemoryAssistance>? = null,
     /** 例句里这个词实际出现的形态；空表示就是 term 本身。语境默写按它挖空。 */
     val seenAs: String = "",
     /** 不规则变形，随新词一起生成；入库后用于按词形查库。 */
@@ -287,6 +289,7 @@ fun WordStudyScreen(
                     pos = card.pos,
                     collocations = card.collocations,
                     memoryHintZh = card.memoryHintZh,
+                    memoryAssistance = card.memoryAssistance,
                     facts = card.facts,
                     forms = card.forms,
                 )
@@ -374,12 +377,24 @@ fun WordStudyScreen(
                             },
                         )
                     } else {
-                        StudyCardView(
-                            card = card,
-                            revealed = p.revealed,
-                            onReveal = { phase = p.copy(revealed = true) },
-                            onGrade = { grade -> onGrade(card, grade, p.cards, p.index) },
-                        )
+                        key(card.term, card.pos, card.meaningZh) {
+                            StudyCardView(
+                                card = card,
+                                revealed = p.revealed,
+                                onReveal = { phase = p.copy(revealed = true) },
+                                onGrade = { grade -> onGrade(card, grade, p.cards, p.index) },
+                                onMemoryHint = { hint ->
+                                    val current = phase as? WordStudyPhase.Cards
+                                    if (current != null && current.index == p.index &&
+                                        current.cards[current.index] == card
+                                    ) {
+                                        phase = current.copy(cards = current.cards.toMutableList().also {
+                                            it[current.index] = card.copy(memoryAssistance = hint)
+                                        })
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
                 is WordStudyPhase.OfferNew -> OfferNewView(
@@ -478,6 +493,7 @@ private fun StudyCardView(
     revealed: Boolean,
     onReveal: () -> Unit,
     onGrade: (ReviewGrade) -> Unit,
+    onMemoryHint: (GenerationResult.Success<MemoryAssistance>) -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
@@ -536,42 +552,17 @@ private fun StudyCardView(
                 // S0 接触（设计稿 62 屏）：新词第一次露面就把词块拆开摆着。
                 // 拼写练习后面所有阶段都按这套词块出题，第一眼见到的结构和后面练的是同一套。
                 if (card.isNew) SpellingChunks(card.term, card.facts)
-                // 已经入库的词才给记忆提示面板：那条提示要挂在 itemId 上存起来，
-                // 也要用到这个词的薄弱片段。新词卡还没有 id，先显示生成时带出来的那一句。
                 if (card.itemId != null) {
                     MemoryHintPanel(itemId = card.itemId, fallbackHintZh = card.memoryHintZh)
-                } else if (card.memoryHintZh.isNotBlank()) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = MaterialTheme.shapes.medium,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Lightbulb,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                )
-                                Text(
-                                    text = "怎么记",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                )
-                            }
-                            InteractiveEnglishText(
-                                text = card.memoryHintZh,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            )
-                        }
-                    }
+                } else {
+                    MemoryHintPanel(
+                        term = card.term,
+                        meaningZh = card.meaningZh,
+                        pos = card.pos,
+                        hint = card.memoryAssistance?.data,
+                        onGenerated = onMemoryHint,
+                        fallbackHintZh = card.memoryHintZh,
+                    )
                 }
                 if (card.exampleEn.isNotBlank()) {
                     Surface(

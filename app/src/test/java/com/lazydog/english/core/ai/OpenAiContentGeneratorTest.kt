@@ -1132,7 +1132,7 @@ class MemoryAssistanceGeneratorTest {
     fun `a hook that blows past the length limit fails instead of being shown`() = runBlocking {
         val tooLong = designExample.replace(
             "\"memory_hook\":\"正式场合里的 buy\"",
-            "\"memory_hook\":\"这个词的意思是购买而且比一般的买要正式得多常见于合同商务和书面场合\"",
+            "\"memory_hook\":\"${"purchase 的记忆线索太长了".repeat(10)}\"",
         )
         server.enqueue(MockResponse().setBody(chatBody(tooLong)))
 
@@ -1168,6 +1168,38 @@ class MemoryAssistanceGeneratorTest {
         assertTrue(body.contains("chase"))
         assertTrue(body.contains("purchace"))
     }
+    @Test
+    fun `same hook with new punctuation is rejected when changing method`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody(designExample)))
+        val result = generator().generateMemoryAssistance(request.copy(avoidHookZh = "正式场合里的 BUY！"))
+        assertTrue(result is GenerationResult.Failure)
+        assertTrue((result as GenerationResult.Failure).reason.contains("上一条相同"))
+    }
+
+    @Test
+    fun `generic advice is rejected even in a complete structured response`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody(designExample.replace("正式场合里的 buy", "purchase 多读几遍就能记住"))))
+        assertTrue(generator().generateMemoryAssistance(request) is GenerationResult.Failure)
+    }
+
+    @Test
+    fun `snake case hook is delivered while the response is streaming`() = runBlocking {
+        val partial = "{\"schemaVersion\":1,\"word\":\"purchase\",\"memory_hook\":\"正式场合里的 buy\","
+        val rest = designExample.substringAfter("{", "").replace("\"memory_hook\":\"正式场合里的 buy\",", "")
+        fun event(chunk: String): String {
+            val escaped = chunk.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+            return "data: {\"model\":\"gpt-test\",\"choices\":[{\"delta\":{\"content\":\"$escaped\"}}]}\n\n"
+        }
+        // 两段完整拼起来只有一份 schema 和 word，避免用重复键掩盖流式解析问题。
+        val suffix = rest.replace("\"schemaVersion\":1,", "").replace("\"word\":\"purchase\",", "")
+        server.enqueue(MockResponse().setBody(event(partial) + event(suffix) + "data: [DONE]\n\n"))
+        val hooks = mutableListOf<String>()
+        val result = generator().generateMemoryAssistance(request, onPartialHook = { hooks.add(it) })
+        assertTrue(result is GenerationResult.Success)
+        assertTrue(hooks.any { it == "正式场合里的 buy" })
+        assertEquals(2, (result as GenerationResult.Success).promptVersion)
+    }
+
 }
 
 class MemoryAssistancePromptTest {
@@ -1180,7 +1212,7 @@ class MemoryAssistancePromptTest {
 
         MemoryType.entries.forEach { assertTrue(prompt.contains(it.name)) }
         assertTrue(prompt.contains("只选最有效的 1~2 种"))
-        assertTrue(prompt.contains("不超过 20 个汉字"))
+        assertTrue(prompt.contains("20~90 字"))
         assertTrue(prompt.contains("宁缺毋滥"))
         assertTrue(prompt.contains("禁止编造词源"))
         // 输出结构要和文档 §6 一致，字段名对不上解析就全落空。

@@ -13,6 +13,8 @@ import com.lazydog.english.core.database.VocabularyRecord
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.KnowledgeType
 import com.lazydog.english.core.model.ReviewGrade
+import com.lazydog.english.domain.generation.GenerationResult
+import com.lazydog.english.domain.generation.MemoryAssistance
 import com.lazydog.english.domain.generation.Collocation
 import com.lazydog.english.domain.scheduling.MemoryState
 import com.lazydog.english.domain.scheduling.ReviewScheduler
@@ -93,6 +95,8 @@ class KnowledgeRepository(
          * 释义像不像和是不是同一个词义，是两回事。
          */
         asNewSense: Boolean = false,
+        /** 新词学习时选中的提示，与词卡在同一事务保存。 */
+        memoryAssistance: GenerationResult.Success<MemoryAssistance>? = null,
     ): Long? {
         // 存进来的必须已经是原型：双击查词那条路由 AI 结合句子还原（`WordExplanation.headword`），
         // 生成新词那条由提示词要求词典形式。本地不做词形还原——saw / left / found 这类
@@ -130,6 +134,9 @@ class KnowledgeRepository(
                     senseOrder = (siblings.maxOfOrNull { it.senseOrder } ?: -1) + 1,
                 ),
             )
+            memoryAssistance?.let { hint ->
+                database.memoryHintDao().saveHint(MemoryHintRepository.toEntity(hint, id, cleanTerm, now()))
+            }
             id
         }
     }

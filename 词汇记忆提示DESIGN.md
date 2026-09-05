@@ -2,8 +2,8 @@
 doc: "词汇记忆提示DESIGN.md"
 tier: "L4 专项设计"
 status: "部分落地"
-version: "1.0"
-updated: "2026-09-02"
+version: "2.0"
+updated: "2026-09-06"
 authority: "七类记忆策略、记忆提示的生成提示词、输出结构与质量过滤"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -271,7 +271,7 @@ G. 视觉联想
 - 如果需要，可输出 secondary_memory_type。
 
 3. 记忆钩子
-- 生成一句不超过 20 字的记忆提示。
+- 用 20～90 字、最多两句讲清一个记忆关系，包含可对照的英文抓手和与词义/易错点的联系（D-062）。
 - 必须能帮助用户在几秒内重新想起目标词。
 
 4. 构词/词形提示
@@ -366,6 +366,7 @@ G. 视觉联想
 核心意思
 记忆钩子
 最佳记忆方式
+遮住上文回想的问题（不计分）
 ```
 
 例如：
@@ -375,7 +376,9 @@ purchase
 购买
 
 💡 记忆：
-正式场合里的 buy
+把日常的 buy 换成购买凭证上的 purchase：purchase a ticket，买的是票，语气更正式。
+
+遮住上面试着回想：购买凭证上，买票的「买」常用哪个词？
 ```
 
 用户点击“更多记忆提示”后，再展开：
@@ -388,6 +391,10 @@ purchase
 - 搭配
 
 避免信息过载。
+
+首次学词揭晓后和详情页使用同一面板：有提示可「换个记法」，没有则「生成记忆提示」。
+批量旧提示同样进入避开内容，失败保留旧提示。新词尚未入库时只保留草稿，用户自评入库时
+与词卡一起保存，不为了拿到 itemId 提前记录学习（D-062）。
 
 ---
 
@@ -443,7 +450,8 @@ Hint 越多，本次 Recall Credit 越低
 
 ### 简短
 
-最好控制在 5–20 字。
+推荐 20～90 字、最多两句。短到只剩释义或口号不算简洁；应完整讲通一个联系。
+本地校验仍允许 4～19 字的有用短提示，字符数包含英文；不强迫凑长度（D-062）。
 
 ### 单一
 
@@ -475,8 +483,14 @@ Hint 越多，本次 Recall Credit 越低
 推荐规则：
 
 ```text
-if memory_hook too long:
-    regenerate
+if memory_hook missing or too long or generic advice or no English cue:
+    reject
+
+if memory_hook repeats meaning or normalized previous hook:
+    reject
+
+if recall_question missing or reveals target word:
+    reject
 
 if morphology is speculative:
     remove
@@ -501,6 +515,9 @@ if pronunciation mnemonic may cause wrong pronunciation:
 ```
 
 没有好的联想时，不生成，优于生成牵强内容。
+
+D-062 补充：批量短提示为空或不合格时只清掉提示，不丢掉其余合格词卡；独立生成则明确失败，
+留给用户重试，不覆盖旧提示。英文抓手与重复校验仅拦可检测问题，不代表已经验证真实记忆效果。
 
 ---
 
@@ -763,7 +780,7 @@ word_family                     → 不是记忆类型，是词条之间的关�
 
 ```text
 学习包    §44 决定装什么进来
-首屏      §7  决定先给用户看四行：词 / 核心意思 / 记忆钩子 / 最佳记忆方式
+首屏      §7  词 / 核心意思 / 完整记忆线索 / 策略 / 回想问题
 展开      构词、拼写、发音、场景、易混词、搭配
 ```
 

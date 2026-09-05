@@ -6,6 +6,7 @@ import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.generation.MemoryAssistance
+import com.lazydog.english.domain.generation.MemoryAssistanceValidation
 import com.lazydog.english.domain.generation.MemoryAssistanceRequest
 import com.lazydog.english.domain.generation.MemoryWordLevel
 import com.lazydog.english.domain.spelling.SpellingStage
@@ -65,6 +66,7 @@ class MemoryHintRepository(
         val result = generator.generateMemoryAssistance(
             request = buildRequest(
                 itemId, record.term, record.meaningZh, record.pos, learnerLevel, previous, shared,
+                fallbackHintZh = record.memoryHintZh,
             ),
             onStage = onStage,
             onPartialHook = onPartialHook,
@@ -72,26 +74,46 @@ class MemoryHintRepository(
         if (result is GenerationResult.Success) {
             // 词条级那三样以已有的为准：模型即使不听话又写了一遍，也不让两个词义各说一套。
             val merged = if (shared != null) result.data.withWordLevel(shared) else result.data
-            dao.saveHint(
-                VocabularyMemoryHintEntity(
-                    itemId = itemId,
-                    term = record.term,
-                    payloadJson = json.encodeToString(MemoryAssistance.serializer(), merged),
-                    model = result.model,
-                    promptVersion = result.promptVersion,
-                    schemaVersion = SCHEMA_VERSION,
-                    droppedNotes = result.droppedNotes.joinToString("；"),
-                    createdAt = now().toEpochMilli(),
-                ),
-            )
-            return GenerationResult.Success(
+            val success = GenerationResult.Success(
                 data = merged,
                 model = result.model,
                 promptVersion = result.promptVersion,
                 droppedNotes = result.droppedNotes,
             )
+            dao.saveHint(toEntity(success, itemId, record.term, now()))
+            return success
         }
         return result
+    }
+
+    /** 未入库的新词只生成草稿，不为刷新提前创建知识项或学习记录。 */
+    suspend fun generateDraft(
+        term: String,
+        meaningZh: String,
+        pos: String,
+        learnerLevel: String,
+        previous: MemoryAssistance? = null,
+        fallbackHintZh: String = "",
+        onStage: ((GenerationStage) -> Unit)? = null,
+        onPartialHook: ((String) -> Unit)? = null,
+    ): GenerationResult<MemoryAssistance> {
+        val shared = sharedWordLevel(term, pos, exceptItemId = -1)
+        val result = generator.generateMemoryAssistance(
+            MemoryAssistanceRequest(
+                term = term,
+                meaningZh = meaningZh,
+                pos = pos,
+                learnerLevel = learnerLevel,
+                avoidHookZh = previous?.memoryHookZh ?: fallbackHintZh,
+                avoidTypes = listOfNotNull(previous?.primaryType, previous?.secondaryType),
+                sharedWordLevel = shared,
+            ),
+            onStage = onStage,
+            onPartialHook = onPartialHook,
+        )
+        return if (result is GenerationResult.Success && shared != null) {
+            GenerationResult.Success(result.data.withWordLevel(shared), result.model, result.promptVersion, result.droppedNotes)
+        } else result
     }
 
     /**
@@ -127,6 +149,7 @@ class MemoryHintRepository(
         learnerLevel: String,
         previous: MemoryAssistance?,
         shared: MemoryWordLevel?,
+        fallbackHintZh: String,
     ): MemoryAssistanceRequest {
         val progress = spellingDao.getProgress(itemId)?.let { entity ->
             SpellingJson.decodeWeakSegments(entity.weakSegmentsJson) to entity.stage
@@ -150,7 +173,7 @@ class MemoryHintRepository(
             weakSegments = weakSegments,
             observedErrors = observedErrors,
             focusZh = focusFor(progress?.second, weakSegments.isNotEmpty()),
-            avoidHookZh = previous?.memoryHookZh.orEmpty(),
+            avoidHookZh = previous?.memoryHookZh ?: fallbackHintZh,
             avoidTypes = listOfNotNull(previous?.primaryType, previous?.secondaryType),
             sharedWordLevel = shared,
         )
@@ -180,5 +203,26 @@ class MemoryHintRepository(
         /** 存进 payloadJson 的结构版本；将来改了字段靠它区分老数据。 */
         const val SCHEMA_VERSION = 1
         private const val RECENT_ERROR_LIMIT = 6
+
+        /** 新词保存与已有词刷新共用编码及校验，元数据一起落库。 */
+        internal fun toEntity(
+            result: GenerationResult.Success<MemoryAssistance>,
+            itemId: Long,
+            term: String,
+            at: Instant,
+        ): VocabularyMemoryHintEntity {
+            require(MemoryAssistanceValidation.validate(result.data, term) == null) { "不能保存未通过校验的记忆提示" }
+            return VocabularyMemoryHintEntity(
+                itemId = itemId,
+                term = term,
+                payloadJson = Json.encodeToString(MemoryAssistance.serializer(), result.data),
+                model = result.model,
+                promptVersion = result.promptVersion,
+                schemaVersion = SCHEMA_VERSION,
+                droppedNotes = result.droppedNotes.joinToString("；"),
+                createdAt = at.toEpochMilli(),
+            )
+        }
+
     }
 }

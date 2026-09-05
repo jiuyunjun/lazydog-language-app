@@ -181,7 +181,7 @@ class OpenAiContentGenerator(
         return GenerationResult.Success(
             data = validated.valid,
             model = content.model,
-            promptVersion = PROMPT_VERSION,
+            promptVersion = WORDS_PROMPT_VERSION,
             droppedNotes = validated.droppedNotes,
         )
     }
@@ -198,7 +198,7 @@ class OpenAiContentGenerator(
             onStage = onStage,
             onTextProgress = onPartialHook?.let { callback ->
                 // 钩子先到就先铺钩子；它还没写出来时退回核心意思，总比只显示一个进度条强。
-                { raw -> callback(JsonStream.firstNonEmpty(raw, "memoryHookZh", "coreMeaningZh")) }
+                { raw -> callback(JsonStream.firstNonEmpty(raw, "memory_hook", "core_meaning")) }
             },
             op = "记忆提示",
         )
@@ -213,7 +213,7 @@ class OpenAiContentGenerator(
         }
         // 先按"宁缺毋滥"删掉站不住的项，再判断剩下的够不够用（§10）。
         val cleaned = MemoryAssistanceValidation.clean(payload.toDomain(request.term))
-        MemoryAssistanceValidation.validate(cleaned.value, request.term)?.let {
+        MemoryAssistanceValidation.validate(cleaned.value, request.term, request.avoidHookZh)?.let {
             return GenerationResult.Failure("记忆提示没通过校验：$it")
         }
         return GenerationResult.Success(
@@ -549,7 +549,7 @@ class OpenAiContentGenerator(
         if (explanation.meaningZh.isBlank() || explanation.meaningZh.length > 160) {
             return GenerationResult.Failure("解释缺失或过长")
         }
-        return GenerationResult.Success(explanation, content.model, PROMPT_VERSION)
+        return GenerationResult.Success(explanation, content.model, WORD_EXPLANATION_PROMPT_VERSION)
     }
 
     override suspend fun askAboutContext(
@@ -1847,6 +1847,8 @@ class OpenAiContentGenerator(
     companion object {
         const val SCHEMA_VERSION = 1
         const val PROMPT_VERSION = 1
+        const val WORDS_PROMPT_VERSION = 2
+        const val WORD_EXPLANATION_PROMPT_VERSION = 2
         const val READING_PROMPT_VERSION = 2
         const val GRAMMAR_PROMPT_VERSION = 2
         const val GRAMMAR_DRILL_PROMPT_VERSION = 1
@@ -1854,7 +1856,7 @@ class OpenAiContentGenerator(
         const val SCENARIO_PROMPT_VERSION = 1
         const val ASK_PROMPT_VERSION = 1
         const val LISTENING_PROMPT_VERSION = 2
-        const val MEMORY_PROMPT_VERSION = 1
+        const val MEMORY_PROMPT_VERSION = 2
 
         /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
         const val MIN_LISTENING_ITEMS = 5
@@ -2117,32 +2119,28 @@ class OpenAiContentGenerator(
 
         /** 记忆方法（memoryHintZh）的写法要求。新词生成和点词速查共用。 */
         internal fun memoryHintRules(): String = buildString {
-            // 词汇记忆提示DESIGN.md §2.1/§9/§10 的批量版：先判断这个词最值得记什么，只写那一个点。
-            // 这里反复堵的是同一个坑——把释义换个说法重说一遍，读着像联想，其实一条线索都没给。
-            appendLine("memoryHintZh 是这个词的记忆钩子，不是释义的另一种说法。" +
-                "写这一项时你是懂词源学和记忆术的词汇教练：先判断这个词最值得记的是哪一点，" +
-                "只写那一点，不要把几个平庸联想堆在一起。" +
-                "它要做的事是让学习者从中文重新想起这个英文词，而不是再解释一遍意思。")
-            appendLine("必须以下面之一开头，让学习者一眼分得清哪句有语言学依据、哪句是人为编的记忆术：" +
-                "「构词：」「同源：」「词形：」「发音：」「对比：」「搭配：」「场景：」「联想：」「谐音联想：」。" +
-                "全长 15~60 字。")
-            appendLine("按这个优先级挑：" +
-                "①构词/同源：拆出真实存在的前缀/词根/词干/后缀，写出每部分的意思和合出来的词义，" +
-                "并尽量带一个学习者八成认识的同根词搭桥" +
-                "（territory = terr- 土地〔同 terrain 地形〕+ -ory 地方 → 一块属于谁的地 = 领土）；" +
-                "只有有把握才拆，宁可不拆也不要编造词根或错误词源。" +
-                "②词形/发音/对比/搭配：这个词的难点如果在拼写结构、重音、和某个近义词的区别、" +
-                "或它基本只出现在某个固定搭配里，就直接讲这一点。" +
-                "③场景/联想：给一个短、具体、有动作、能瞬间成像的画面，" +
-                "且画面里必须有能直接对应回这个英文词形或词义的抓手。")
-            appendLine("谐音只在发音确实接近、且不会带偏正确读音时才用，写成「谐音联想：」，绝不能说成真实词源。")
-            appendLine("禁止把释义换个说法重说一遍。反例（territory）：" +
-                "「联想：游戏地图上每块不同颜色的地盘都有主人；那一整块可被控制的地盘，就是 territory。」" +
-                "——这句话只是把「领土」讲了两遍，没给出任何能让人回到 territory 这个词的线索，等于没写。")
-            appendLine("也禁止牵强、冗长、需要先记住另一堆陌生知识的联想，" +
-                "以及「多读几遍」「结合例句记」这类放到哪个词上都成立的空话。")
-            appendLine("写完自检一遍：把这条提示单独给一个还没见过这个词的人，" +
-                "他能不能顺着它想起或拼出这个词？不能就换一个角度重写。")
+            appendLine("memoryHintZh：用 20~90 字写一条可操作的记忆线索，可用两句讲清一个关系。没有可靠线索就填空字符串，不能凑数。")
+            appendLine("以「构词：」「词形：」「发音：」「对比：」「搭配：」「场景：」「联想：」之一开头；人工联想必须标明是联想，不冒充词源。")
+            append(memoryCueRules())
+        }
+
+        /** 批量短提示与单词独立生成共用同一质量口径。 */
+        private fun memoryCueRules(): String = buildString {
+            appendLine("目标是学过后能顺着线索回想英文，不是假设从未学过的人能凭空猜中。不要把释义换个说法当记忆术。")
+            appendLine("先选一个最省力的抓手，再写清『具体英文线索 → 与当前词义或易错点的联系』。" +
+                "首句必须自己讲通，不能只写策略名，再把解释藏到其他字段。英文线索可以是实际字母、熟词、固定搭配或有留空的短句。")
+            appendLine("有透明构词就拆熟悉的词干与词缀；没有就用熟词对比、具体拼写规律或日常短句。" +
+                "不要为短词硬拆词根，不用另一个冷僻词解释生词，不把任意字母块冒充词根。")
+            appendLine("好例子（构词）：unhappy：un- 表否定，happy 是开心；在 happy 前加 un-，开心就变成不开心。")
+            appendLine("好例子（词形）：dessert 甜点比 desert 沙漠多一个 s；甜点想多来一份，就多留一个 s。这是人为联想，不是词源。")
+            appendLine("好例子（搭配）：borrow 是借进来：borrow a book from a friend，书从朋友那儿到你手里；用 from 把方向记住。")
+            appendLine("好例子（短词场景）：need 用在缺了就办不成的事：出门发现没钥匙，I need my keys；把 need 接在 I 后面说出缺的东西。")
+            appendLine("坏例子：『territory 就是有主人的地盘』『想象一种奇怪的画面就是 bizarre』，只解释中文，没给回到英文的桥。" +
+                "『terr- 土地，如 terrain』也不够：用陌生词搭陌生词，还省掉了联系。")
+            appendLine("禁止『多读几遍』『结合例句记』『注意拼写』『记住这个单词』等换任何词都成立的建议；" +
+                "禁止把正确拼写抄一遍就算提示。对比要说清差在哪、怎么不混；场景要把关键英文嵌进动作，不在末尾贴个单词了事。")
+            appendLine("不要强行谐音或编造词源。幽默只在能加强词形与词义联系时使用，不能为玩梗牺牲准确性。" +
+                "写完自检：遮住目标词，这条提示留下了哪一个具体抓手？如果只有中文释义或学习建议，重写。")
         }
 
         /**
@@ -2216,17 +2214,11 @@ class OpenAiContentGenerator(
 
             appendLine("各字段要求：")
             appendLine("core_meaning：用最短的话说明最核心、最常用的那个意思，不罗列次要释义。")
-            appendLine("memory_hook：一条不超过 20 个汉字的记忆提示，是首屏唯一显示的那句话。" +
-                "只表达一个记忆关系，不要把词根、发音、故事和例句全塞进去；" +
-                "学习者看到它应该能在 3~5 秒内重新想起这个词。")
-            appendLine("memory_hook 不能是 core_meaning 换个说法重说一遍。" +
-                "反例（territory）：「那一整块可被控制的地盘，就是 territory」——" +
-                "它只是把释义讲了两遍，没给出任何能让人回到这个词的线索，等于没写；" +
-                "同一个词写成「terr- 土地，如 terrain」才是钩子。" +
-                "写完自检：把这句话单独给一个还没见过这个词的人，他能不能顺着它想起这个词？不能就换个角度重写。")
+            appendLine("memory_hook：20~90 字，最多两句，只讲一个主要记忆关系。首屏直接显示完整线索，不能压成口号。")
+            append(memoryCueRules())
             appendLine("morphology：只有存在**可靠的**前缀/词根/后缀或复合关系时才拆，" +
                 "写成 \"un + happy = 不 + 开心\" 这种能直接对照的形式，" +
-                "并尽量带一个学习者八成认识的同根词搭桥（terr- 土地，如 terrain）；" +
+                "只用学习者已熟悉的词搭桥，不用冷僻同根词增加负担；" +
                 "没有把握就填 null——编一个假词源比不拆更糟。")
             appendLine("spelling.weak_segment：这个词最容易拼错的一小段，必须是这个词里连续的一段原文；" +
                 "spelling.common_errors：真人常写错的形式（比如 receive → recieve），没有就给空数组。")
@@ -2238,7 +2230,7 @@ class OpenAiContentGenerator(
             appendLine("confusions：最多 3 个真正容易混的词，每个只说一个关键区别；不要为了凑数加无关词。")
             appendLine("collocations：这个词真实高频的固定搭配，最多 3 条。")
             appendLine("example：1 个自然、高频、简单的例句，必须包含这个词，体现最典型的用法。")
-            appendLine("recall_question：一个不直接暴露答案的问题，用于之后的回忆测试。")
+            appendLine("recall_question：必填，一个能回用刚才线索的短问题，不出现目标词本身或完整答案；不要只问『这个词是什么意思』。")
 
             appendLine("输出原则：简洁优先；每一条都必须服务于记忆；" +
                 "禁止百科式解释、禁止编造词源、禁止强行谐音、禁止牵强联想。" +

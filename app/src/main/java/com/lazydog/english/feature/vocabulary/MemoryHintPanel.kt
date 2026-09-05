@@ -24,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -39,6 +40,7 @@ import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.MemoryAssistance
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -52,7 +54,7 @@ private sealed interface HintPhase {
 /**
  * 一个词的记忆提示卡（词汇记忆提示DESIGN.md §7）。
  *
- * 首屏只显示核心意思、记忆钩子和这条提示用的是哪种记忆方式——展开的那些内容一次性铺出来，
+ * 首屏显示核心意思、完整线索、策略和一道回想问题（D-062）。展开的内容如果一次性铺出来，
  * 用户读到第三块就已经不在记这个词了。其余的收在「更多记忆提示」里。
  *
  * [fallbackHintZh] 是老的一句话记忆方法（vocabulary_details.memoryHintZh）。它先顶着，
@@ -67,32 +69,84 @@ fun MemoryHintPanel(
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
-    val scope = rememberCoroutineScope()
     val repository = app.memoryHintRepository
-
-    // 记住这条 Flow：每次重组都新建一个，就是每次重组都重订一次数据库查询。
-    val hintFlow = remember(itemId) { repository.observe(itemId) }
-    val hint by hintFlow.collectAsState(initial = null)
-    var phase by remember(itemId) { mutableStateOf<HintPhase>(HintPhase.Idle) }
-    var expanded by remember(itemId) { mutableStateOf(false) }
-
-    fun request(regenerate: Boolean) {
-        phase = HintPhase.Generating(GenerationStage.Connecting, "")
-        scope.launch {
-            val result = repository.generate(
+    key(itemId) {
+        val hintFlow = remember(itemId) { repository.observe(itemId) }
+        val hint by hintFlow.collectAsState(initial = null)
+        MemoryHintContent(hint, fallbackHintZh, modifier) { onStage, onPartial ->
+            repository.generate(
                 itemId = itemId,
                 learnerLevel = app.userPreferences.vocabLevelDescription.first(),
-                regenerate = regenerate,
-                onStage = { stage ->
-                    phase = (phase as? HintPhase.Generating)?.copy(stage = stage) ?: HintPhase.Generating(stage, "")
-                },
-                onPartialHook = { text ->
-                    phase = (phase as? HintPhase.Generating)?.copy(partialHook = text) ?: phase
-                },
+                regenerate = true,
+                onStage = onStage,
+                onPartialHook = onPartial,
             )
+        }
+    }
+}
+
+/** 与详情页共用展示、刷新与错误状态；草稿由学习卡持有，用户自评入库时一并保存。 */
+@Composable
+fun MemoryHintPanel(
+    term: String,
+    meaningZh: String,
+    pos: String,
+    hint: MemoryAssistance?,
+    onGenerated: (GenerationResult.Success<MemoryAssistance>) -> Unit,
+    modifier: Modifier = Modifier,
+    fallbackHintZh: String = "",
+) {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as LazyDogApplication }
+    key(term, pos, meaningZh) {
+        MemoryHintContent(hint, fallbackHintZh, modifier) { onStage, onPartial ->
+            val result = app.memoryHintRepository.generateDraft(
+                term = term,
+                meaningZh = meaningZh,
+                pos = pos,
+                learnerLevel = app.userPreferences.vocabLevelDescription.first(),
+                previous = hint,
+                fallbackHintZh = fallbackHintZh,
+                onStage = onStage,
+                onPartialHook = onPartial,
+            )
+            if (result is GenerationResult.Success) onGenerated(result)
+            result
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MemoryHintContent(
+    hint: MemoryAssistance?,
+    fallbackHintZh: String,
+    modifier: Modifier,
+    generate: suspend ((GenerationStage) -> Unit, (String) -> Unit) -> GenerationResult<MemoryAssistance>,
+) {
+    val scope = rememberCoroutineScope()
+    var phase by remember { mutableStateOf<HintPhase>(HintPhase.Idle) }
+    var expanded by remember { mutableStateOf(false) }
+
+    fun request() {
+        if (phase is HintPhase.Generating) return
+        phase = HintPhase.Generating(GenerationStage.Connecting, "")
+        scope.launch {
+            val result = try {
+                generate(
+                    { stage ->
+                        phase = (phase as? HintPhase.Generating)?.copy(stage = stage)
+                            ?: HintPhase.Generating(stage, "")
+                    },
+                    { text -> phase = (phase as? HintPhase.Generating)?.copy(partialHook = text) ?: phase },
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                GenerationResult.Failure("暂时无法生成，请稍后重试")
+            }
             phase = when (result) {
                 is GenerationResult.Success -> {
-                    // 新的一条来了就收起细节：先让人看见那句钩子。
                     expanded = false
                     HintPhase.Idle
                 }
@@ -153,6 +207,13 @@ fun MemoryHintPanel(
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                 }
+                if (current.recallQuestionZh.isNotBlank()) {
+                    Text(
+                        text = "遮住上面试着回想：${current.recallQuestionZh}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
                 AnimatedVisibility(visible = expanded) { MemoryHintDetails(current) }
             } else if (fallbackHintZh.isNotBlank()) {
                 InteractiveEnglishText(
@@ -169,7 +230,7 @@ fun MemoryHintPanel(
             }
 
             val busy = phase is HintPhase.Generating
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (current != null && current.hasDetails) {
                     TextButton(onClick = { expanded = !expanded }) {
                         Icon(
@@ -183,17 +244,17 @@ fun MemoryHintPanel(
                     }
                 }
                 if (!busy) {
-                    TextButton(onClick = { request(regenerate = current != null) }) {
+                    TextButton(onClick = { request() }) {
                         Icon(
-                            imageVector = if (current == null) Icons.Outlined.AutoAwesome else Icons.Outlined.Refresh,
+                            imageVector = if (current == null && fallbackHintZh.isBlank()) Icons.Outlined.AutoAwesome else Icons.Outlined.Refresh,
                             contentDescription = null,
                         )
                         Text(
                             // 已经有一条时是「换一条」而不是「再生成」：请求里会带上旧钩子，
                             // 明确要求换个角度，不然多半只是把同一句话重新措辞。
                             text = when {
-                                current != null -> "换一条"
                                 phase is HintPhase.Failed -> "再试一次"
+                                current != null || fallbackHintZh.isNotBlank() -> "换个记法"
                                 else -> "生成记忆提示"
                             },
                             modifier = Modifier.padding(start = 4.dp),
@@ -350,15 +411,6 @@ private fun MemoryHintDetails(hint: MemoryAssistance) {
             DetailBlock("典型用法") {
                 InteractiveEnglishText(
                     text = hint.exampleEn,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-        }
-        if (hint.recallQuestionZh.isNotBlank()) {
-            DetailBlock("回头自测") {
-                Text(
-                    text = hint.recallQuestionZh,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
