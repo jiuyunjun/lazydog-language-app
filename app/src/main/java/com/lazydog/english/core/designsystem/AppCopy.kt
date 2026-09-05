@@ -114,53 +114,53 @@ open class AppCopy {
  */
 object LazyDogCopy : AppCopy() {
 
-    override val todayFinishedTitle = "今日份洋屁，已排空"
+    override val todayFinishedTitle = "今日洋屁，圆满杀青"
 
     // 断更回来看到的是这句。写成"还知道回来"就成了阴阳怪气，那是明令禁止的。
-    override val todayGreeting = "回来了"
+    override val todayGreeting = "英语搭子，已就位"
 
-    override val todayMinimumReachedTitle = "今天就这些，不多给"
-    override fun todayPlannedMinutes(minutes: Int) = "今天约 $minutes 分钟，一眨眼的事"
-    override val todayMinimumDone = "保底目标达成，可以心安理得地躺了"
-    override fun todayMinimumGoal(retrievals: Int) = "今日保底：$retrievals 次回忆 · 两分钟摸完"
-    override val todayFinishedNote = "复习计划已经排好了，不用你操心。明天见。"
+    override val todayMinimumReachedTitle = "今天学到这，刚刚好"
+    override fun todayPlannedMinutes(minutes: Int) = "今日英语小份装 · 约 $minutes 分钟"
+    override val todayMinimumDone = "最低目标拿下，今日份学习已到账"
+    override fun todayMinimumGoal(retrievals: Int) = "今日小目标：$retrievals 次回忆 · 约 2 分钟"
+    override val todayFinishedNote = "复习计划已安排，脑子慢慢存档。明天见。"
 
-    override val todayRecoveryNote = "以前的就当没发生过，今天热个身得了。"
-    override val todayFatigueNote = "连着错了好几个，脑子该充电了。明天的你比今天的你聪明。"
+    override val todayRecoveryNote = "学习进度没跑路，不用补以前的。今天从热身接着来。"
+    override val todayFatigueNote = "脑子也有下班权。今天先歇，知识下次再唠。"
 
-    override val todayDueSuffix = "到期。先还债，再整新的。"
-    override val todayNothingDue = "没有欠债，可以轻装上阵整点新的。"
-    override val todayPlanTitle = "今天的流程"
-    override val todayAllStepsDone = "今天的活儿全干完了。还想卷就去「学习」页。"
-    override val todaySignOff = "收工。明天见。"
-    override val todayKeepGoing = "再来亿点点"
+    override val todayDueSuffix = "等你复习。老朋友返场，先混个脸熟。"
+    override val todayNothingDue = "今天没有到期复习，新知识可以上桌了。"
+    override val todayPlanTitle = "今日学习菜单"
+    override val todayAllStepsDone = "今日菜单已吃完。想加点知识小零食，去「学习」页逛逛。"
+    override val todaySignOff = "今日收工，躺得很有底气。明天见。"
+    override val todayKeepGoing = "再学一小口"
 
     // 依然是平等选项：轻松、干脆，不带一句"就这？"
-    override val todayStopHere = "溜了溜了"
+    override val todayStopHere = "收工，躺会儿"
 
-    override val todayStart = "开整"
-    override val todayReportTitle = "今天到底学到了啥"
-    override fun todayLearned(count: Int) = "新学 $count 个"
+    override val todayStart = "开整，学两招"
+    override val todayReportTitle = "今日份知识到账"
+    override fun todayLearned(count: Int) = "新学 $count 个，认识了"
     override fun todayRecalled(reviewed: Int, remembered: Int) =
-        "回忆 $reviewed 次，捞回来 $remembered 次"
-    override val todayComebackTitle = "上次卡壳、今天想起来了："
-    override fun proofDaysAgo(days: Int) = "$days 天前你还在这儿翻车"
+        "回忆 $reviewed 次，$remembered 次成功对上暗号"
+    override val todayComebackTitle = "上次卡住的，这次接上了："
+    override fun proofDaysAgo(days: Int) = "$days 天前，这里还没想起来"
     override fun proofPastAnswer(answer: String) = "当时写的是 $answer"
-    override fun proofNow(term: String) = "现在：$term · 全程自己来"
+    override fun proofNow(term: String) = "现在：$term · 没看提示，自己想起来的"
 
-    override val wordNewCardHint = "AI 新整的词 · 先猜猜"
-    override fun wordReviewDone(count: Int) = "到期的 $count 个词，清完了"
-    override val wordNothingDue = "没有到期的词，债清了"
-    override fun wordAskForNew(count: Int) = "让 AI 再整 $count 个新词"
-    override val wordStopToday = "溜了"
-    override val wordRoundDone = "这轮收工"
-    override fun wordReviewedCount(count: Int) = "捡回 $count 个词"
-    override fun wordLearnedCount(count: Int) = "新收 $count 个词"
-    override val wordLearnedNothing = "一个没学，也不寒碜"
-    override val wordScheduledNote = "都记进复习计划了，到点自己会来找你，记录页能看到。"
-    override val wordFinish = "撤"
+    override val wordNewCardHint = "AI 端来新词 · 先猜猜它啥意思"
+    override fun wordReviewDone(count: Int) = "到期的 $count 个词，返场复习完毕"
+    override val wordNothingDue = "暂无到期单词，复习区先歇会儿"
+    override fun wordAskForNew(count: Int) = "让 AI 上 $count 个新词"
+    override val wordStopToday = "今天先收工"
+    override val wordRoundDone = "这轮学完，漂亮收工"
+    override fun wordReviewedCount(count: Int) = "复习 $count 个词，打过照面了"
+    override fun wordLearnedCount(count: Int) = "新学 $count 个词，混个脸熟了"
+    override val wordLearnedNothing = "这轮先逛逛，下次再学也行"
+    override val wordScheduledNote = "复习计划已安排，熟词还会返场。到期去记录页找它们。"
+    override val wordFinish = "收工啦"
 
-    override val studyPickNote = "想自己挑就自己挑，挑啥都照样进复习计划。"
+    override val studyPickNote = "知识自助区，想学哪口挑哪口。学过的照样进复习计划。"
 }
 
 fun copyFor(tone: CopyTone): AppCopy = when (tone) {
