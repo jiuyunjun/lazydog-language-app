@@ -2,7 +2,7 @@
 doc: "ROADMAP.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "1.1"
+version: "1.2"
 updated: "2026-09-06"
 authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
 index: "DOCS.md"
@@ -397,6 +397,36 @@ Room v17 给 `reading_materials` 加了 `readerPayoff` 和 `archetype` 两列（
 - §18 的完整行为埋点（impression / scrollDepth / openDelayMs / abandonedParagraph）：
   单用户跑不出统计意义，只会变成没人看的数据。只记"完成/喜欢/保存"这三个明确的意图信号。
 - §25 的 KPI 体系：同上，不做后台指标；「值得记住的一件事」本身就是给用户看的反馈。
+
+## M16：高频词优先
+
+起因：外部综述把"高频词优先"排在最高优先级，而这是它列的要素里本仓库唯一完全没做的一项。
+选词只看 CEFR 等级和兴趣（`buildNewWordsPrompt`），没有任何词频数据。
+`单词记忆DESIGN.md` §10 当初判断"本地没有语料来源，唯一填法是让模型编一个数出来"——
+不让模型编词频这一条到今天仍然对，但"不编"和"完全不排优先级"是两回事：
+静态词表是几十 KB 的资源，不联网也不用问模型。
+
+- [x] `tools/build_word_frequency.py` 生成 12000 词的实词词频表进 assets（约 90 KB，
+      APK 里压缩后 49 KB）。词频取 OpenSubtitles2018，词元过滤取 WordNet 3.1
+- [x] `domain/vocabulary/WordFrequency.kt`：`WordFrequencyIndex` 接口、`FrequencyBand` 分档、
+      `VocabularyCandidates` 按能力值算取词窗口并挑候选（纯 Kotlin，15 条单测）
+- [x] `core/data/AssetWordFrequencyIndex` 读 assets 实现接口；读失败退化成空索引
+- [x] `NewWordsRequest.preferredCandidates`：本地挑好的候选进提示词，
+      模型只负责"这批里哪些适合他、例句怎么写"
+- [x] 顺手修掉一个真 bug：候选词过滤原来用的是截断到 200 条的已学词列表，
+      已学词超过 200 个之后会把学过的词再推一遍。现在本地按**全量**已学词过滤，
+      发给模型的仍然只截 200 条
+
+**本里程碑没做**：
+
+- 词频档位不上界面。要在词卡上显示「最常用 3000 词」不需要迁移（现算即可），
+  但要先想清楚这个标签对用户是帮助还是干扰，不顺手做。
+- 阅读和听力的选词不接词频。它们的目标词来自复习队列，不是新词挑选，是另一条路径。
+- 不按词频给已有词库回填档位、不做「你的词汇覆盖到第几档」统计。那要先有稳定的
+  用户词库规模，现在算出来只是噪声。
+
+仍需真机验收：连着几天点「学新词」，确认给的词确实从高频往低频走、不重复推已学过的词，
+以及模型确实在跳过候选里的人名地名而不是硬编进去。
 
 ## 已知限制
 

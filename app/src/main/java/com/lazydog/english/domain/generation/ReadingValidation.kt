@@ -1,7 +1,7 @@
 package com.lazydog.english.domain.generation
 
 /**
- * 阅读生成的本地校验（AI_CONTRACTS.md §5）：
+ * 阅读生成的本地校验（AI_CONTRACTS.md §7）：
  * 指定复习词必须真的出现在正文（允许词形变化），新词不超上限，
  * 语法例句必须是正文子串，题目结构完整。不合格直接拒绝，不入库。
  */

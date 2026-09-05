@@ -8,7 +8,7 @@ import android.util.Log
  * 出问题时要能一眼看出「哪个调用、打到哪、什么状态、服务端说了什么」。在这之前
  * 整个 App 一行日志都没有，界面上只剩一句「HTTP 400」，等于什么都没说。
  *
- * 按 AI_CONTRACTS.md §8 脱敏：不打 Authorization、不打密钥、不打提示词和用户长文本，
+ * 按 AI_CONTRACTS.md §9 脱敏：不打 Authorization、不打密钥、不打提示词和用户长文本，
  * 只打长度。服务端返回的错误正文会打，但先过 [redact] 并截断——那是定位问题的关键，
  * 不打就等于没日志。
  *

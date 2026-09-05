@@ -5,7 +5,7 @@ import com.lazydog.english.domain.grammar.grammarPatternKey
 import com.lazydog.english.domain.vocabulary.PartOfSpeech
 
 /**
- * AI 输出的本地业务校验（AI_CONTRACTS.md §5 精神）：
+ * AI 输出的本地业务校验（AI_CONTRACTS.md §7 精神）：
  * 字段完整、长度受控、例句真的包含目标词、避开已知词。
  * 纯函数，便于单测。
  */

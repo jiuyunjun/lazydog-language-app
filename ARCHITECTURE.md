@@ -2,8 +2,8 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.0"
-updated: "2026-09-04"
+version: "1.1"
+updated: "2026-09-06"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -291,6 +291,26 @@ app/
 - `normalizedText` 是忽略大小写、全半角、标点和多余空格后的唯一身份，用于数据库唯一约束和生成去重
 - 首次/最近播放时间与累计播放次数
 - 生成请求、模型、prompt/schema 版本；流式生成尚未结束时先入库，生成完成后补齐元数据
+
+### 词频表（WordFrequencyIndex）
+
+选新词时"高频优先"的数据来源。不进数据库、不随备份走：它是只读的静态资源，
+换一份语料重新生成就行，没有需要保留的用户状态。
+
+- 资源：`app/src/main/assets/word_frequency_en.txt`，12000 个实词，行号即排名，
+  `#` 开头是注释。由 `tools/build_word_frequency.py` 生成，**不要手改**。
+- 排名是**实词内部**的排名：生成时用 WordNet 3.1 的名词/动词/形容词/副词索引做过滤，
+  功能词、规则变形、人名和口语拼写基本都挡在外面了。所以"最常用 3000 词"指的是
+  "最常用的 3000 个可学实词"，不是原始语料的前 3000 名。
+- 分层落点：`domain/vocabulary/WordFrequency.kt` 定义 `WordFrequencyIndex` 接口、
+  `FrequencyBand` 分档和 `VocabularyCandidates` 挑词逻辑（纯 Kotlin，可单测）；
+  `core/data/AssetWordFrequencyIndex` 读 assets 实现它。和
+  `SpeechProvider → AzureSpeechProvider` 是同一条路子，不新增抽象。
+- 单例挂在 `LazyDogApplication.wordFrequencyIndex`，懒加载，只解析一次。
+- **读不出来不算错误**：退化成空索引，候选词为空，提示词里那一段整段省掉，
+  生成退回"让模型自己按等级选词"。词频是让选词更准，不是学习流程的前置条件。
+- 对外只给"档"不给排名数字：第 2870 名和第 3050 名之间的差别对"这个词值不值得学"
+  没有意义，报出去是假精确。
 
 ## 6. 复习调度
 

@@ -70,6 +70,7 @@ import com.lazydog.english.domain.spelling.SpellingEngine
 import com.lazydog.english.domain.spelling.SpellingFacts
 import com.lazydog.english.domain.spelling.SpellingProgress
 import com.lazydog.english.domain.spelling.SpellingStage
+import com.lazydog.english.domain.vocabulary.VocabularyCandidates
 import com.lazydog.english.domain.vocabulary.posLabelZh
 import com.lazydog.english.feature.spelling.SpellingCard
 import com.lazydog.english.feature.vocabulary.CollocationChip
@@ -225,13 +226,25 @@ fun WordStudyScreen(
 
     suspend fun requestNewWords(): GenerationResult<List<GeneratedWord>> {
         val prefs = app.userPreferences
-        val known = repository.vocabulary.first().map { it.detail.term }.take(200)
+        val level = prefs.vocabLevelDescription.first()
+        val count = prefs.maxNewWords.first()
+        // 全部已学词只在本地用：候选词过滤不花钱，漏过滤的代价是把他早会的词再推一遍。
+        // 发给模型的仍然只截前 200 条——那一段是"别重复这些"，不需要也不该是全量。
+        val allKnown = repository.vocabulary.first().map { it.detail.term }
+        val candidates = VocabularyCandidates.select(
+            index = app.wordFrequencyIndex,
+            cefrScore = prefs.vocabLevelScore.first(),
+            knownTerms = allKnown,
+            // 给足富余：模型会跳过功能词和它写不好例句的词，只给 count 个必然凑不满。
+            count = count * 6,
+        )
         return app.contentGenerator.generateNewWords(
             NewWordsRequest(
-                count = prefs.maxNewWords.first(),
-                learnerLevel = prefs.vocabLevelDescription.first(),
+                count = count,
+                learnerLevel = level,
                 topics = prefs.topics.first().toList(),
-                knownTerms = known,
+                knownTerms = allKnown.take(200),
+                preferredCandidates = candidates,
             ),
             onStage = { stage = it },
             // 词一个个冒出来的时候，等待就不再是干等——他已经在看今天要学的东西了。

@@ -204,7 +204,7 @@ interface LearningContentGenerator {
      * 能力测试里开放表达的评分（EXT_TEST_DESIGN.md §六：5 维度、每维 0~4 分、要求举证）。
      * [referenceCefrLevel] 为 null 时是"盲评"（不告诉 AI 参考等级），非空时是对照量表的第二轮评分。
      * 两轮都交给 AI，但升降级判断、是否需要复核的比较逻辑都在本地做
-     * （AI_CONTRACTS.md §6：AI 不直接决定结论）。
+     * （AI_CONTRACTS.md §7：AI 不直接决定结论）。
      */
     suspend fun evaluateExpressionRubric(
         taskZh: String,
@@ -234,6 +234,13 @@ data class NewWordsRequest(
     val topics: List<String>,
     /** 已在知识库里的词，生成时避开。调用方负责截断到合理数量。 */
     val knownTerms: List<String>,
+    /**
+     * 本地按词频挑好的候选词，从高频到低频排序（`VocabularyCandidates.select`）。
+     *
+     * 空表示这次不按词频挑（索引读不出来，或调用方没接）——提示词里那一段整段省掉，
+     * 行为退回原来的"让模型自己按等级选词"。
+     */
+    val preferredCandidates: List<String> = emptyList(),
 )
 
 /**

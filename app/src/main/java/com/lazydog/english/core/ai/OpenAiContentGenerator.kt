@@ -2263,6 +2263,19 @@ class OpenAiContentGenerator(
             if (request.knownTerms.isNotEmpty()) {
                 appendLine("这些词已经学过，不要出现：${request.knownTerms.joinToString(", ")}。")
             }
+            if (request.preferredCandidates.isNotEmpty()) {
+                // 词频表在本地，模型手里没有。所以"挑常用词"这件事不能交给模型判断——
+                // 它只会挑*它觉得*常用的词。这里把按真实词频算好的候选直接给它，
+                // 它负责的是"这批里哪些适合他、例句怎么写"。
+                appendLine("下面这批词是按**真实语料词频**排好的，越靠前越常用，并且都是他还没学过的。" +
+                    "**优先从这批里挑**，尽量挑靠前的：")
+                appendLine(request.preferredCandidates.joinToString("、"))
+                // 词表是从字幕语料来的，人名地名滤不干净（george / london / iran），
+                // 语气词也漏了一些（oh / yeah）。这两类交给模型跳，比在本地硬猜谁是名字可靠。
+                appendLine("规则：某个词如果是人名地名、语气词、明显不适合这个水平，" +
+                    "或者你写不出一个自然的例句，就跳过它换下一个，不要硬凑。" +
+                    "这批里挑不满 ${request.count} 个时，剩下的按下面的标准自己补。")
+            }
             appendLine("认真按${request.learnerLevel}这个具体水平选词，不要因为「求稳」就默认给更基础、" +
                 "更常见的词——这个水平的学习者应该已经掌握了入门词汇，选的应该是他们大概率还不认识、" +
                 "但达到这个水平该会用的词。大部分（八成左右）贴着这个水平走，可以有一两个稍高一级的" +

@@ -2,7 +2,7 @@ package com.lazydog.english.domain.generation
 
 import kotlinx.serialization.Serializable
 
-/** 阅读生成请求（AI_CONTRACTS.md §3 的首版落地）。 */
+/** 阅读生成请求（AI_CONTRACTS.md §4 的首版落地）。 */
 data class ReadingGenerationRequest(
     val learnerLevel: String,
     val topic: String,

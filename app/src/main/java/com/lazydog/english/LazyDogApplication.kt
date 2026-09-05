@@ -7,6 +7,7 @@ import com.lazydog.english.core.ai.ModelCatalog
 import com.lazydog.english.core.ai.OpenAiContentGenerator
 import com.lazydog.english.core.backup.BackupFileStore
 import com.lazydog.english.core.backup.BackupRepository
+import com.lazydog.english.core.data.AssetWordFrequencyIndex
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.ListeningMaterialRepository
 import com.lazydog.english.core.data.MemoryHintRepository
@@ -20,6 +21,7 @@ import com.lazydog.english.core.database.AppDatabase
 import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.scheduling.FsrsScheduler
+import com.lazydog.english.domain.vocabulary.WordFrequencyIndex
 
 /**
  * 手工组装的应用级单例。依赖关系还很浅，先不上 Hilt（ARCHITECTURE.md §2）。
@@ -35,6 +37,9 @@ class LazyDogApplication : Application() {
     }
 
     val mistakeRepository: MistakeRepository by lazy { MistakeRepository(database) }
+
+    /** 词频表：给"下一批学什么"排优先级，读 assets，失败退化成空索引。 */
+    val wordFrequencyIndex: WordFrequencyIndex by lazy { AssetWordFrequencyIndex(this) }
 
     /** 进步证据：不存新数据，从既有学习事件里推（`持续学习DESIGN.md` §14）。 */
     val progressRepository: ProgressRepository by lazy { ProgressRepository(database) }

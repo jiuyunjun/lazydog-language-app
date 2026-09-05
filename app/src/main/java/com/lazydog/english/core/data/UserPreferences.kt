@@ -16,6 +16,7 @@ import com.lazydog.english.core.config.LocalEnv
 import com.lazydog.english.domain.assessment.SkillKind
 import com.lazydog.english.domain.assessment.SkillLevels
 import com.lazydog.english.domain.assessment.labelForScore
+import com.lazydog.english.domain.assessment.scoreForLabel
 import com.lazydog.english.domain.speaking.SpeechRate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -234,6 +235,19 @@ class UserPreferences(private val context: Context) {
      * 词汇 B1 不代表语法也 B1。样本不足的项自动回退到总等级。
      */
     val vocabLevelDescription: Flow<String> = skillLevelDescription(Keys.SkillVocab)
+
+    /**
+     * 词汇能力值本身（0.0 Pre-A1 ～ 5.0 C1），不是给人看的标签。
+     *
+     * 按词频挑候选词要的是连续值：`vocabLevelDescription` 会给出
+     * "A2-B1（未测评，默认估计）"这种没法解析的串，把它再反解回分数是绕远路——
+     * 分数本来就存在这儿。没测过时取 2.5，正是那句默认描述里的 A2-B1。
+     */
+    val vocabLevelScore: Flow<Double> = context.dataStore.data.map { prefs ->
+        prefs[Keys.SkillVocab]
+            ?: prefs[Keys.LearnerLevel]?.takeIf { it.isNotBlank() }?.let(::scoreForLabel)
+            ?: UNTESTED_LEVEL_SCORE
+    }
     val grammarLevelDescription: Flow<String> = skillLevelDescription(Keys.SkillGrammar)
     val readingLevelDescription: Flow<String> = skillLevelDescription(Keys.SkillReading)
     val expressionLevelDescription: Flow<String> = skillLevelDescription(Keys.SkillExpression)
@@ -518,6 +532,9 @@ class UserPreferences(private val context: Context) {
     }
 
     companion object {
+        /** 没测评过时的词汇能力值，对应 `skillLevelDescription` 那句默认描述里的 A2-B1。 */
+        const val UNTESTED_LEVEL_SCORE = 2.5
+
         /** Azure HD（Dragon HD）音色，比上一代 neural 自然很多，且支持 prosody 语速。 */
         const val DEFAULT_TTS_VOICE = "en-US-Ava:DragonHDLatestNeural"
 
