@@ -1,3 +1,14 @@
+---
+doc: "PRODUCT.md"
+tier: "L2 产品定义"
+status: "生效"
+version: "1.0"
+updated: "2026-09-03"
+authority: "产品定位、用户流程、功能需求、MVP 范围与验收标准"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # 产品说明
 
 ## 1. 产品定位

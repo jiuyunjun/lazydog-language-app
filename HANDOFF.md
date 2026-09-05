@@ -1,3 +1,14 @@
+---
+doc: "HANDOFF.md"
+tier: "L1 工作规则"
+status: "生效"
+version: "1.1"
+updated: "2026-09-06"
+authority: "agent 与人之间的交接格式和阻塞处理方式"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # Agent 交接规范
 
 ## 1. 目的
@@ -9,10 +20,12 @@
 接手者必须：
 
 1. 阅读 `AGENTS.md`。
-2. 阅读任务相关专项文档。
+2. 阅读 `DOCS.md`，据它找出本次任务相关的专项文档——不要凭文件名猜，也不要一次全读。
 3. 检查 `git status --short --branch` 和最近提交。
 4. 区分已有未提交修改与本次任务范围。
 5. 明确验收条件和不做事项。
+
+注意：`DOCS.md` §4 有两条规则专门用来防止交接时传错事实——专项设计写了不等于已实现，判断现状要看 `ROADMAP.md` 的勾选状态和 `DECISIONS.md`。
 
 ## 3. 标准交接模板
 
@@ -42,6 +55,12 @@
 - 执行的命令
 - 结果
 - 未执行的验证及原因
+
+## 文档
+
+- 更新了哪几份、为什么（对照 `AGENTS.md` §8 的表）
+- 版本号和 `DOCS.md` 版本表是否已同步
+- `python tools/check_docs.py` 的结果
 
 ## Git
 

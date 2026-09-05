@@ -1,3 +1,14 @@
+---
+doc: "语音服务DESIGN.md"
+tier: "L4 专项设计"
+status: "部分落地"
+version: "1.0"
+updated: "2026-09-04"
+authority: "Azure Speech 的 TTS / STT 集成、播放状态机与并发不变量"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # Azure Speech SDK 音频架构设计
 
 ## 1. 目标
@@ -15,9 +26,9 @@
 
 ---
 
-# 2. 核心设计原则
+## 2. 核心设计原则
 
-## 2.1 Azure Speech SDK 负责语音能力，系统音频框架负责播放和录音
+### 2.1 Azure Speech SDK 负责语音能力，系统音频框架负责播放和录音
 
 推荐：
 
@@ -73,7 +84,7 @@ Azure SDK ← default microphone
 
 ---
 
-# 3. 推荐模块划分
+## 3. 推荐模块划分
 
 ```text
 speech/
@@ -132,11 +143,11 @@ new AudioRecord(...)
 
 ---
 
-# 4. Audio Contract
+## 4. Audio Contract
 
 所有模块必须使用明确的内部音频格式，禁止不同模块自行猜测采样率。
 
-## 4.1 TTS
+### 4.1 TTS
 
 推荐内部格式：
 
@@ -155,7 +166,7 @@ PCM_S16LE / 24 kHz / Mono
 
 适合语音播放，质量和数据量比较平衡。
 
-## 4.2 STT
+### 4.2 STT
 
 推荐送入 Azure 的格式：
 
@@ -194,9 +205,9 @@ Azure STT
 
 ---
 
-# 5. TTS 架构
+## 5. TTS 架构
 
-## 5.1 不直接使用 Azure 作为最终播放器
+### 5.1 不直接使用 Azure 作为最终播放器
 
 推荐：
 
@@ -234,7 +245,7 @@ AudioPlayer 的职责：
 
 ---
 
-# 6. 流式播放
+## 6. 流式播放
 
 禁止：
 
@@ -282,7 +293,7 @@ AudioTrack.write(...)
 
 ---
 
-# 7. Prebuffer
+## 7. Prebuffer
 
 TTS 流式播放不能收到第一个很小的 chunk 就立刻播放。
 
@@ -334,7 +345,7 @@ underrun
 
 ---
 
-# 8. SpeechSynthesizer 生命周期
+## 8. SpeechSynthesizer 生命周期
 
 不推荐：
 
@@ -378,7 +389,7 @@ disconnect
 
 ---
 
-# 9. TTS 与 Playback 生命周期必须分离
+## 9. TTS 与 Playback 生命周期必须分离
 
 必须明确：
 
@@ -425,7 +436,7 @@ UI 不直接消费这两套底层状态。
 
 ---
 
-# 10. PlaybackState
+## 10. PlaybackState
 
 对业务层暴露：
 
@@ -464,7 +475,7 @@ class PlaybackState {
 
 ---
 
-# 11. PlaybackJob
+## 11. PlaybackJob
 
 每一次播放请求必须产生新的 Job。
 
@@ -509,7 +520,7 @@ jobId    = 002
 
 ---
 
-# 12. 播放按钮交互规则
+## 12. 播放按钮交互规则
 
 应用默认采用：
 
@@ -520,7 +531,7 @@ different source → replace current
 
 即：
 
-## 12.1 当前没有播放
+### 12.1 当前没有播放
 
 ```text
 IDLE
@@ -532,7 +543,7 @@ LOADING(A)
 PLAYING(A)
 ```
 
-## 12.2 正在播放 A，再点击 A
+### 12.2 正在播放 A，再点击 A
 
 ```text
 PLAYING(A)
@@ -544,7 +555,7 @@ STOP A
 IDLE
 ```
 
-## 12.3 A 正在 Loading，再点击 A
+### 12.3 A 正在 Loading，再点击 A
 
 ```text
 LOADING(A)
@@ -556,7 +567,7 @@ CANCEL A
 IDLE
 ```
 
-## 12.4 正在播放 A，点击 B
+### 12.4 正在播放 A，点击 B
 
 ```text
 PLAYING(A)
@@ -572,7 +583,7 @@ LOADING(B)
 PLAYING(B)
 ```
 
-## 12.5 A 正在 Loading，点击 B
+### 12.5 A 正在 Loading，点击 B
 
 ```text
 LOADING(A)
@@ -616,7 +627,7 @@ REPLACE_CURRENT
 
 ---
 
-# 13. Play Button Controller
+## 13. Play Button Controller
 
 业务入口统一为：
 
@@ -643,7 +654,7 @@ UI 不负责 Azure cancel、AudioTrack stop 等具体操作。
 
 ---
 
-# 14. Replace 必须是一等操作
+## 14. Replace 必须是一等操作
 
 不要把 Replace 仅理解成：
 
@@ -713,7 +724,7 @@ A 的后台 cleanup 自行结束
 
 ---
 
-# 15. Generation ID
+## 15. Generation ID
 
 这是防止播放残留和异步竞态的核心机制。
 
@@ -740,7 +751,7 @@ if (generation != currentGeneration) {
 
 ---
 
-# 16. 为什么不能只依赖 cancel
+## 16. 为什么不能只依赖 cancel
 
 场景：
 
@@ -789,7 +800,7 @@ generation / jobId validation
 
 ---
 
-# 17. Stop
+## 17. Stop
 
 Stop 的完整语义：
 
@@ -840,7 +851,7 @@ if (job.generation != currentGeneration) {
 
 ---
 
-# 18. 快速连续点击
+## 18. 快速连续点击
 
 必须支持：
 
@@ -878,7 +889,7 @@ latest wins
 
 ---
 
-# 19. PlaybackController 并发模型
+## 19. PlaybackController 并发模型
 
 `PlaybackController` 必须是整个播放系统唯一的状态拥有者。
 
@@ -923,7 +934,7 @@ Audio Event ─────┘
 
 ---
 
-# 20. PlaybackEvent
+## 20. PlaybackEvent
 
 所有异步行为转化成事件：
 
@@ -947,7 +958,7 @@ PlaybackEvent
 
 ---
 
-# 21. PLAYING 状态的定义
+## 21. PLAYING 状态的定义
 
 不要在：
 
@@ -993,7 +1004,7 @@ PLAYING
 
 ---
 
-# 22. PlaybackCompleted
+## 22. PlaybackCompleted
 
 播放完成必须由：
 
@@ -1029,7 +1040,7 @@ IDLE
 
 ---
 
-# 23. UI State
+## 23. UI State
 
 播放列表或多个单词按钮不得各自持有独立：
 
@@ -1088,7 +1099,7 @@ terrace    ▶
 
 ---
 
-# 24. UI 映射
+## 24. UI 映射
 
 推荐：
 
@@ -1124,7 +1135,7 @@ PAUSED
 
 ---
 
-# 25. STT 架构
+## 25. STT 架构
 
 推荐：
 
@@ -1156,7 +1167,7 @@ PCM
 
 ---
 
-# 26. STT Session
+## 26. STT Session
 
 对于：
 
@@ -1196,7 +1207,7 @@ IDLE
 
 ---
 
-# 27. Recognizing / Recognized
+## 27. Recognizing / Recognized
 
 必须区分：
 
@@ -1237,7 +1248,7 @@ I want to go
 
 ---
 
-# 28. TTS + STT 互斥策略
+## 28. TTS + STT 互斥策略
 
 第一阶段推荐：
 
@@ -1300,7 +1311,7 @@ Acoustic Echo Cancellation
 
 ---
 
-# 29. Android Audio Focus
+## 29. Android Audio Focus
 
 Android 播放必须统一管理 Audio Focus。
 
@@ -1335,7 +1346,7 @@ PlaybackEvent
 
 ---
 
-# 30. Android AudioTrack
+## 30. Android AudioTrack
 
 推荐：
 
@@ -1371,7 +1382,7 @@ AudioPlayer
 
 ---
 
-# 31. Audio Underrun
+## 31. Audio Underrun
 
 必须监控：
 
@@ -1398,7 +1409,7 @@ queueDepth
 
 ---
 
-# 32. 错误处理
+## 32. 错误处理
 
 错误分层：
 
@@ -1440,7 +1451,7 @@ PlaybackError
 
 ---
 
-# 33. 日志与可观测性
+## 33. 日志与可观测性
 
 每次 TTS 至少记录：
 
@@ -1491,7 +1502,7 @@ UI 状态错误
 
 ---
 
-# 34. 推荐状态机
+## 34. 推荐状态机
 
 对 UI 暴露的最终状态机：
 
@@ -1548,7 +1559,7 @@ LOADING(B)
 
 ---
 
-# 35. 推荐 Reducer 逻辑
+## 35. 推荐 Reducer 逻辑
 
 概念伪代码：
 
@@ -1640,7 +1651,7 @@ boolean isCurrent(PlaybackJob job) {
 
 ---
 
-# 36. 推荐首版实现范围
+## 36. 推荐首版实现范围
 
 第一阶段只实现：
 
@@ -1700,11 +1711,11 @@ rapid clicks
 
 ---
 
-# 37. 不变量
+## 37. 不变量
 
 整个系统必须始终满足以下不变量。
 
-## 37.1 单一 Current Job
+### 37.1 单一 Current Job
 
 任意时刻：
 
@@ -1712,7 +1723,7 @@ rapid clicks
 currentJob <= 1
 ```
 
-## 37.2 单一音频输出 Owner
+### 37.2 单一音频输出 Owner
 
 任意时刻只能有一个模块拥有：
 
@@ -1722,7 +1733,7 @@ AudioPlayer
 
 播放权限。
 
-## 37.3 Latest Wins
+### 37.3 Latest Wins
 
 用户产生新的播放意图后：
 
@@ -1730,7 +1741,7 @@ AudioPlayer
 之前所有 Job 均不得重新影响播放
 ```
 
-## 37.4 Callback Validation
+### 37.4 Callback Validation
 
 任何异步 callback 在执行副作用之前必须验证：
 
@@ -1740,7 +1751,7 @@ jobId
 generation
 ```
 
-## 37.5 Synthesis 与 Playback 分离
+### 37.5 Synthesis 与 Playback 分离
 
 永远不得认为：
 
@@ -1748,7 +1759,7 @@ generation
 SynthesisCompleted == PlaybackCompleted
 ```
 
-## 37.6 UI 不拥有播放真相
+### 37.6 UI 不拥有播放真相
 
 播放状态唯一 Source of Truth：
 
@@ -1758,7 +1769,7 @@ PlaybackController
 
 ---
 
-# 38. 最终推荐架构
+## 38. 最终推荐架构
 
 ```text
                         UI
@@ -1806,7 +1817,7 @@ UI
 
 ---
 
-# 39. 最重要的实现原则
+## 39. 最重要的实现原则
 
 如果只能保留最关键的规则，则必须保证：
 
@@ -1842,11 +1853,11 @@ Azure 合成结束但 UI 提前恢复
 
 ---
 
-# 40. 本仓库的落点与取舍
+## 40. 本仓库的落点与取舍
 
 本节记录这份设计在代码里对应到哪里，以及哪些部分明确没做。
 
-## 40.1 模块对应
+### 40.1 模块对应
 
 | 设计 | 实现 |
 | --- | --- |
@@ -1860,7 +1871,7 @@ Azure 合成结束但 UI 提前恢复
 拆成三个包只是多几层目录，所以统一放在 `core/speech`，靠文件划分职责
 （`ARCHITECTURE.md` §0.3、§0.4：不为"以后可能需要"另起一套平行结构）。
 
-## 40.2 与设计有出入的地方
+### 40.2 与设计有出入的地方
 
 - **Prebuffer 的做法不同，而且不能按 §7 改**（§7）。这里不是攒够 80~150 ms PCM 再开声：
   `begin()` 期间**完全不出声**，第一块语音到手时才把前置静音垫进缓冲再 `play()`。
@@ -1878,7 +1889,7 @@ Azure 合成结束但 UI 提前恢复
   字数 / 起播耗时 / 总耗时 / 结果）。underrun 计数没有单独加读取——那个文件的规则是
   "靠日志改，不靠推理改"，现有日志已经能区分"合成慢"和"播放丢音"。
 
-## 40.3 这一版没做的
+### 40.3 这一版没做的
 
 - **STT 仍然由 Azure SDK 接管麦克风**（§25、§26、§36）。连续识别和 partial/final
   已经有了（`transcribeContinuously`），但走的是 `AudioConfig.fromDefaultMicrophoneInput()`，

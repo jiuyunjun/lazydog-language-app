@@ -1,3 +1,14 @@
+---
+doc: "AI_CONTRACTS.md"
+tier: "L3 技术契约"
+status: "生效"
+version: "1.1"
+updated: "2026-09-06"
+authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # AI 契约
 
 ## 1. 原则
@@ -346,7 +357,7 @@ interface LearningContentGenerator {
 - 按 §8 脱敏：不打 Authorization、密钥、提示词正文和用户长文本，只打长度；服务端正文里的 `sk-*` 和 `Bearer *` 会被替换，超长正文截断。
 - 另外两行是给"为什么等这么久"用的：`⏱ 响应头 200｜新建连接｜DNS 21ms｜建连 8140ms｜TLS 260ms｜发请求 8ms｜等响应头 950ms｜合计 9.4s`，以及 `⏱ 首个思考/首个正文｜请求发出后 N ms`。等待期间界面上那一段跨了 DNS、建连、TLS、上传和等响应头五件事，不拆开量就只能猜。
 
-## 10. 待实现时确定
+## 11. 待实现时确定
 
 - 实际 AI provider 与模型选择
 - 结构化输出能力和客户端库

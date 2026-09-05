@@ -1,3 +1,14 @@
+---
+doc: "CEFR_英语能力评测与个性化学习系统设计.md"
+tier: "L4 专项设计"
+status: "部分落地"
+version: "1.0"
+updated: "2026-08-05"
+authority: "CEFR 能力评测、分技能画像、由等级派生个性化词汇的口径"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # CEFR 英语能力评测与个性化学习系统设计
 
 > 用途：供本地 Agent 作为产品设计与实现规范使用。覆盖短题量自适应摸底、评分、个性化词汇派生、朗读发音纠错及 AI 使用边界。

@@ -1,3 +1,14 @@
+---
+doc: "引人入胜的阅读材料DESIGN.md"
+tier: "L4 专项设计"
+status: "部分落地"
+version: "1.0"
+updated: "2026-09-04"
+authority: "阅读材料的价值模型、Hook 到 Payoff 的结构、生成管线与质检"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # 英语学习 App 高吸引力阅读材料设计
 
 ## 1. 目标

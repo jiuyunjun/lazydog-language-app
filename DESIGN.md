@@ -1,3 +1,14 @@
+---
+doc: "DESIGN.md"
+tier: "L2 产品定义"
+status: "生效"
+version: "1.0"
+updated: "2026-09-04"
+authority: "交给设计 agent 的界面任务书：信息架构、必须设计的流程、交付物"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # Claude Design 任务书
 
 ## 1. 你的角色

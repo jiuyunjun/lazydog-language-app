@@ -1,3 +1,14 @@
+---
+doc: "词汇记忆提示DESIGN.md"
+tier: "L4 专项设计"
+status: "部分落地"
+version: "1.0"
+updated: "2026-09-02"
+authority: "七类记忆策略、记忆提示的生成提示词、输出结构与质量过滤"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # Vocabulary Memory Assistance Design
 
 ## 1. 目标

@@ -1,3 +1,14 @@
+---
+doc: "拼写训练DESIGN.md"
+tier: "L4 专项设计"
+status: "部分落地"
+version: "1.0"
+updated: "2026-09-04"
+authority: "S0～S6 拼写状态机、提示阶梯、错误分类、薄弱片段与延迟回忆"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # Spelling Learning System Design
 
 > 实现状态（2026-09-01）：核心离线闭环已落地，见 `ROADMAP.md` M12。状态机、提示阶梯、八类错误与薄弱片段、多维进度、延迟保持判定、Room 持久化、备份、独立拼写练习入口和拼写能力档案都已实现；§20 的 AI/FSRS/手写/语音扩展仍为后续范围。

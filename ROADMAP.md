@@ -1,3 +1,14 @@
+---
+doc: "ROADMAP.md"
+tier: "L5 过程记录"
+status: "生效"
+version: "1.0"
+updated: "2026-09-04"
+authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # 路线图
 
 路线图只描述推荐顺序，不承诺日期。每个里程碑应保持 App 可构建、可验证。

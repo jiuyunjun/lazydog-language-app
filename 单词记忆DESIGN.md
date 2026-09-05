@@ -1,3 +1,14 @@
+---
+doc: "单词记忆DESIGN.md"
+tier: "L4 专项设计"
+status: "部分落地"
+version: "1.0"
+updated: "2026-09-02"
+authority: "词汇数据模型的目标形态：Lexeme / 词形 / 词义 / 例句 / 搭配的分层"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # Vocabulary Data Model Design
 
 > **实现口径（2026-09-02）**
@@ -65,9 +76,9 @@ Lexeme
 
 ---
 
-# 2. Core Concepts
+## 2. Core Concepts
 
-## 2.1 Lemma
+### 2.1 Lemma
 
 `lemma` 表示词典原形。
 
@@ -99,7 +110,7 @@ run
 
 ---
 
-## 2.2 POS
+### 2.2 POS
 
 POS = Part of Speech，即词性。
 
@@ -147,7 +158,7 @@ record / VERB
 
 ---
 
-# 3. Lexeme
+## 3. Lexeme
 
 Lexeme 表示一个词汇单位。
 
@@ -182,7 +193,7 @@ run + en + NOUN
 
 ---
 
-# 4. Word Forms
+## 4. Word Forms
 
 Word Form 表示一个 Lexeme 的具体变形。
 
@@ -235,7 +246,7 @@ run / VERB
 ]
 ```
 
-## 4.1 Learning Rule
+### 4.1 Learning Rule
 
 默认情况下：
 
@@ -275,7 +286,7 @@ user_form_progress
 
 ---
 
-# 5. Sense
+## 5. Sense
 
 Sense 表示一个 Lexeme 下的一个具体词义。
 
@@ -351,7 +362,7 @@ run a company = 经营公司
 
 ---
 
-# 6. Examples
+## 6. Examples
 
 例句应该绑定 Sense，而不是直接只绑定 Lexeme。
 
@@ -393,7 +404,7 @@ Sense 3: 经营
 
 ---
 
-# 7. Collocations
+## 7. Collocations
 
 搭配应独立于普通例句保存。
 
@@ -423,7 +434,7 @@ Collocation 对主动输出能力尤其重要。
 
 ---
 
-# 8. Pronunciation
+## 8. Pronunciation
 
 Pronunciation 不建议只设计成：
 
@@ -473,7 +484,7 @@ source
 
 ---
 
-# 9. CEFR
+## 9. CEFR
 
 建议 CEFR 不只放在 Lexeme 层。
 
@@ -524,7 +535,7 @@ Lexeme.cefr
 
 ---
 
-# 10. Frequency
+## 10. Frequency
 
 建议至少支持：
 
@@ -569,7 +580,7 @@ gaming
 
 ---
 
-# 11. Recommended Database Tables
+## 11. Recommended Database Tables
 
 建议至少建立以下表：
 
@@ -593,7 +604,7 @@ user_form_progress
 
 ---
 
-# 12. lexemes
+## 12. lexemes
 
 ```sql
 lexemes
@@ -640,7 +651,7 @@ lexeme_id
 
 ---
 
-# 13. word_forms
+## 13. word_forms
 
 ```sql
 word_forms
@@ -671,7 +682,7 @@ form       = ran
 
 ---
 
-# 14. senses
+## 14. senses
 
 ```sql
 senses
@@ -714,7 +725,7 @@ finance
 
 ---
 
-# 15. examples
+## 15. examples
 
 ```sql
 examples
@@ -744,7 +755,7 @@ manual
 
 ---
 
-# 16. collocations
+## 16. collocations
 
 ```sql
 collocations
@@ -773,7 +784,7 @@ VERB + DET + NOUN
 
 ---
 
-# 17. User Progress
+## 17. User Progress
 
 词库本身的数据：
 
@@ -803,7 +814,7 @@ run
 
 ---
 
-# 18. user_lexeme_progress
+## 18. user_lexeme_progress
 
 ```sql
 user_lexeme_progress
@@ -841,7 +852,7 @@ mastered = true
 
 ---
 
-# 19. Learning Dimensions
+## 19. Learning Dimensions
 
 推荐至少追踪：
 
@@ -878,7 +889,7 @@ learned = true
 
 ---
 
-# 20. user_sense_progress
+## 20. user_sense_progress
 
 ```sql
 user_sense_progress
@@ -914,7 +925,7 @@ Sense 3 经营
 
 ---
 
-# 21. user_form_progress
+## 21. user_form_progress
 
 词形可以单独追踪。
 
@@ -959,7 +970,7 @@ next_review_at
 
 ---
 
-# 22. Recommended API Object
+## 22. Recommended API Object
 
 客户端获取一个词汇时，可以返回：
 
@@ -1042,7 +1053,7 @@ next_review_at
 
 ---
 
-# 23. MVP Design
+## 23. MVP Design
 
 第一版不建议一次做得过于复杂。
 
@@ -1085,9 +1096,9 @@ complex grammar features
 
 ---
 
-# 24. Critical Design Principles
+## 24. Critical Design Principles
 
-## Principle 1
+### Principle 1
 
 不要使用：
 
@@ -1102,7 +1113,7 @@ lexeme_id = vocabulary identity
 ```
 
 
-## Principle 2
+### Principle 2
 
 不要把所有变形都作为独立生词。
 
@@ -1119,7 +1130,7 @@ run / VERB
 ```
 
 
-## Principle 3
+### Principle 3
 
 不要把所有中文释义放进一个 translation 字符串。
 
@@ -1130,14 +1141,14 @@ Sense
 ```
 
 
-## Principle 4
+### Principle 4
 
 例句必须尽可能关联具体 Sense。
 
 否则例句无法准确解释对应词义。
 
 
-## Principle 5
+### Principle 5
 
 学习状态和词典事实必须分开。
 
@@ -1156,7 +1167,7 @@ user_*_progress
 ```
 
 
-## Principle 6
+### Principle 6
 
 “学会一个单词”不是 Boolean。
 
@@ -1174,7 +1185,7 @@ user_*_progress
 
 ---
 
-# 25. Recommended Entity Relationship
+## 25. Recommended Entity Relationship
 
 ```text
 Lexeme
@@ -1202,7 +1213,7 @@ User
 
 ---
 
-# 26. Final Recommended Model
+## 26. Final Recommended Model
 
 完整结构：
 
@@ -1269,7 +1280,7 @@ SRS
 
 ---
 
-# 27. Learning Material Layer
+## 27. Learning Material Layer
 
 除了词典事实数据与用户学习状态之外，系统应增加独立的：
 
@@ -1321,7 +1332,7 @@ User Learning Layer
 
 ---
 
-# 28. Phrase
+## 28. Phrase
 
 > 裁决：Principle 8（认识词条 ≠ 掌握固定表达）已经满足——表达在库里就是独立条目、独立复习进度。
 > 但 **`lexeme_id` 改为可选**：情景演练里存下来的"回头我发你"这类整句没有母词，
@@ -1449,11 +1460,11 @@ emergency
 
 ---
 
-# 29. Phrase vs Example vs Collocation
+## 29. Phrase vs Example vs Collocation
 
 三者必须区分。
 
-## Example
+### Example
 
 完整句子，用来解释词义和语法。
 
@@ -1468,7 +1479,7 @@ Sense
 ```
 
 
-## Collocation
+### Collocation
 
 词与词之间的高频搭配。
 
@@ -1482,7 +1493,7 @@ strong evidence
 通常是不完整句。
 
 
-## Phrase
+### Phrase
 
 具有独立交流价值、可以直接记忆和输出的表达。
 
@@ -1505,7 +1516,7 @@ Sense
 
 ---
 
-# 30. Idiom
+## 30. Idiom
 
 习语需要与普通 Phrase 区分。
 
@@ -1553,7 +1564,7 @@ primary_lexeme_id
 
 ---
 
-# 31. Phrasal Verb
+## 31. Phrasal Verb
 
 英语学习中建议将短语动词作为独立学习实体。
 
@@ -1628,7 +1639,7 @@ PhrasalVerb
 
 ---
 
-# 32. Word Family
+## 32. Word Family
 
 Word Family 用于建立词族关联。
 
@@ -1704,7 +1715,7 @@ related
 
 ---
 
-# 33. Contrast / Confusable Words
+## 33. Contrast / Confusable Words
 
 > 裁决：暂不建 `contrasts` / `lexeme_relations` 关系表（`词汇记忆提示DESIGN.md` §16.5）。
 > 易混词目前依附在记忆提示里。关系表的价值在于双向可查和易混词专项训练，
@@ -1779,7 +1790,7 @@ economic vs economical
 
 ---
 
-# 34. Memory Aid
+## 34. Memory Aid
 
 > 裁决：记忆材料的类型集合、生成规则和展示口径以 `词汇记忆提示DESIGN.md` 为准（该文 §16.1）。
 > 本节的 `lexeme_id` / `sense_id` 分层被采纳，落法见该文 §16.2：构词、词形、发音挂词条，
@@ -1839,7 +1850,7 @@ sense_id = null
 
 ---
 
-# 35. Memory Aid Types
+## 35. Memory Aid Types
 
 推荐支持：
 
@@ -1910,7 +1921,7 @@ sound_mnemonic
 
 ---
 
-# 36. Semantic Scene
+## 36. Semantic Scene
 
 Semantic Scene 是推荐优先使用的记忆材料。
 
@@ -1950,7 +1961,7 @@ territory
 
 ---
 
-# 37. Root / Prefix / Suffix Memory
+## 37. Root / Prefix / Suffix Memory
 
 对于词根关系明确的词，可以生成结构化词根记忆。
 
@@ -1991,7 +2002,7 @@ terr / terra = earth, land
 
 ---
 
-# 38. Etymology
+## 38. Etymology
 
 词源与“为了方便记忆而拆词”必须分开。
 
@@ -2031,7 +2042,7 @@ AI 生成内容时：
 
 ---
 
-# 39. Story Memory
+## 39. Story Memory
 
 Story 适合：
 
@@ -2070,7 +2081,7 @@ territory
 
 ---
 
-# 40. Visual Memory
+## 40. Visual Memory
 
 Visual Memory 可以保存：
 
@@ -2112,7 +2123,7 @@ quality_score
 
 ---
 
-# 41. Sound Mnemonic
+## 41. Sound Mnemonic
 
 Sound Mnemonic 为谐音辅助。
 
@@ -2147,7 +2158,7 @@ territory
 
 ---
 
-# 42. Spelling Memory
+## 42. Spelling Memory
 
 > 裁决：不另开 `spelling_aids` 表（`词汇记忆提示DESIGN.md` §16.3）——这份数据已经有两个准确的家：
 > 词固有的拼写事实在 `vocabulary_details`，这个人的错误历史在 `spelling_progress` / `spelling_attempts`。
@@ -2229,7 +2240,7 @@ itory
 
 ---
 
-# 43. Learning Package
+## 43. Learning Package
 
 前端学习一个词时，不应该临时从多个表随机拼数据。
 
@@ -2307,7 +2318,7 @@ Learning Package
 
 ---
 
-# 44. Learning Package Selection Rules
+## 44. Learning Package Selection Rules
 
 Learning Package 不应该无限堆内容。
 
@@ -2348,7 +2359,7 @@ Learning Package 不应该无限堆内容。
 
 ---
 
-# 45. Phrase Learning Progress
+## 45. Phrase Learning Progress
 
 短语和固定表达需要独立学习进度。
 
@@ -2390,7 +2401,7 @@ next_review_at
 
 ---
 
-# 46. Material Quality Metadata
+## 46. Material Quality Metadata
 
 > 裁决：`source_type` / `generator` / `generator_version` 采纳（换模型或改提示词后要能批量重刷）；
 > `quality_score` / `confidence` 不采纳——那两个数只能由生成它的模型自己打，等于把自评当事实存库。
@@ -2442,7 +2453,7 @@ rejected
 
 ---
 
-# 47. Material Personalization
+## 47. Material Personalization
 
 学习资料可以根据用户目标动态选择。
 
@@ -2501,7 +2512,7 @@ frequency
 
 ---
 
-# 48. Recommended Learning Sequence
+## 48. Recommended Learning Sequence
 
 推荐一个新词的首次学习顺序：
 
@@ -2557,7 +2568,7 @@ Memory Aid 不一定需要第一次全部展示。
 
 ---
 
-# 49. Adaptive Memory Strategy
+## 49. Adaptive Memory Strategy
 
 记忆策略应根据错误类型选择。
 
@@ -2592,7 +2603,7 @@ Memory Aid 不一定需要第一次全部展示。
 
 ---
 
-# 50. Final Extended Architecture
+## 50. Final Extended Architecture
 
 完整推荐架构：
 
@@ -2651,7 +2662,7 @@ User Learning Layer
 
 ---
 
-# 51. Extended MVP Recommendation
+## 51. Extended MVP Recommendation
 
 对于 MVP，不建议一次实现所有表。
 
@@ -2698,9 +2709,9 @@ spelling_pattern
 
 ---
 
-# 52. Extended Critical Principles
+## 52. Extended Critical Principles
 
-## Principle 7
+### Principle 7
 
 Example、Collocation、Phrase 是三个不同概念。
 
@@ -2711,14 +2722,14 @@ examples[]
 ```
 
 
-## Principle 8
+### Principle 8
 
 用户认识一个 Lexeme，不代表掌握它的固定表达。
 
 Phrase 应有独立学习进度。
 
 
-## Principle 9
+### Principle 9
 
 记忆材料必须根据词的特点生成。
 
@@ -2731,7 +2742,7 @@ Phrase 应有独立学习进度。
 ```
 
 
-## Principle 10
+### Principle 10
 
 未经确认的词源关系不得作为事实展示。
 
@@ -2748,7 +2759,7 @@ Phrase 应有独立学习进度。
 ```
 
 
-## Principle 11
+### Principle 11
 
 首次学习内容必须限制数量。
 
@@ -2765,7 +2776,7 @@ Learning Package 的目标是：
 ```
 
 
-## Principle 12
+### Principle 12
 
 记忆辅助应该是自适应的。
 
@@ -2778,7 +2789,7 @@ Learning Package 的目标是：
 
 ---
 
-# 53. Recommended Final Mental Model
+## 53. Recommended Final Mental Model
 
 最终不要把整个系统理解为：
 

@@ -1,3 +1,14 @@
+---
+doc: "ARCHITECTURE.md"
+tier: "L3 技术契约"
+status: "生效"
+version: "1.0"
+updated: "2026-09-04"
+authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # 技术架构
 
 ## 0. 架构约束（硬约束）

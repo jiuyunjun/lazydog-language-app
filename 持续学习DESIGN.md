@@ -1,3 +1,14 @@
+---
+doc: "持续学习DESIGN.md"
+tier: "L4 专项设计"
+status: "部分落地"
+version: "1.0"
+updated: "2026-09-04"
+authority: "持续学习的产品策略：进步证据、动态难度、间隔重复、中断宽容"
+index: "DOCS.md"
+maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
+---
+
 # 英语学习持续性专项设计（DESIGN.md）
 
 ## 1. 文档目的
