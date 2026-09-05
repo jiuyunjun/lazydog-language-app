@@ -216,7 +216,7 @@ interface LearningContentGenerator {
     ): GenerationResult<com.lazydog.english.domain.assessment.ExpressionRubric>
 
     /**
-     * 朗读反馈里的"少量可理解提示"（DESIGN.md 屏 19）：把 Azure 的客观分数/错误类型
+     * 朗读反馈里的"少量可理解提示"（UI_BRIEF.md 屏 19）：把 Azure 的客观分数/错误类型
      * 讲成 1～3 条人话。分数本身不经过 AI，只有措辞是 AI 生成的；调用失败时
      * 由 [com.lazydog.english.domain.speaking.localPronunciationTips] 本地兜底。
      */

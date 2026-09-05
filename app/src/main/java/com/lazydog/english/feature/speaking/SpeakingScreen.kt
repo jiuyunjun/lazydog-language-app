@@ -85,7 +85,7 @@ private val fallbackSentences = listOf(
 )
 
 /**
- * 朗读反馈只给少量可理解提示，不显示综合分数（DESIGN.md 屏 19、PRODUCT.md §6.5）。
+ * 朗读反馈只给少量可理解提示，不显示综合分数（UI_BRIEF.md 屏 19、PRODUCT.md §6.5）。
  * 有问题的词直接在原句里标出来，而不是另列一份带数字的清单。
  */
 private sealed interface SpeakingUiState {
@@ -327,7 +327,7 @@ fun SpeakingScreen(
     }
 }
 
-/** 有问题的词直接标底色，不另列数字分数（DESIGN.md 屏 19）。 */
+/** 有问题的词直接标底色，不另列数字分数（UI_BRIEF.md 屏 19）。 */
 @Composable
 private fun HighlightedSentence(text: String, problemWords: Set<String>) {
     val extended = LazyDogTheme.extendedColors

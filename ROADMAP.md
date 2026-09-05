@@ -2,8 +2,8 @@
 doc: "ROADMAP.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "1.0"
-updated: "2026-09-04"
+version: "1.1"
+updated: "2026-09-06"
 authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -71,7 +71,7 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 - 音频播放、录音权限和生命周期
 - 朗读识别或发音评估
 - 简洁、可理解的反馈
-- 能力测试补一道可选的朗读题（DESIGN.md 05 提到、这次对齐设计稿时特意跳过的一项），复用这里的录音与评估管线
+- 能力测试补一道可选的朗读题（UI_BRIEF.md 05 提到、这次对齐设计稿时特意跳过的一项），复用这里的录音与评估管线
 
 验收：真实 Android 设备上可以完成播放—录音—反馈流程。
 
@@ -94,7 +94,7 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 
 ## M8：情景演练
 
-设计稿见 `懒狗放洋屁 MVP.dc.html` 屏 37～44、PRODUCT.md §6.9、DESIGN.md §5.1。P2 优先级，不进今日必做流程。
+设计稿见 `懒狗放洋屁 MVP.dc.html` 屏 37～44、PRODUCT.md §6.9、UI_BRIEF.md §5.1。P2 优先级，不进今日必做流程。
 
 - [x] 场景生成：自定义输入 / 按学习目标推荐 / 随机
 - [x] 带性格与阻力的角色提示词 + 4～6 条可判定的目标清单

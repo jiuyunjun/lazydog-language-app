@@ -325,7 +325,7 @@ private fun AppNavHost(
             route = Routes.WordDetail,
             arguments = listOf(navArgument("itemId") { type = NavType.LongType }),
         ) { entry ->
-            // 不包 AskHost：DESIGN.md §5.4 说好了记录里的页面不响应摇一摇提问。
+            // 不包 AskHost：UI_BRIEF.md §5.4 说好了记录里的页面不响应摇一摇提问。
             WordDetailScreen(
                 itemId = entry.arguments?.getLong("itemId") ?: 0L,
                 repository = knowledgeRepository,

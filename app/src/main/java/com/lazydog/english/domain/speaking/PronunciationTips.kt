@@ -1,7 +1,7 @@
 package com.lazydog.english.domain.speaking
 
 /**
- * 朗读反馈的"少量可理解提示"（DESIGN.md 屏 19、PRODUCT.md §6.5：
+ * 朗读反馈的"少量可理解提示"（UI_BRIEF.md 屏 19、PRODUCT.md §6.5：
  * 避免伪精确的综合分数，只给 2～3 条听得懂的提示）。
  * 分数/错误类型来自 Azure（客观数据），AI 只负责把它们讲成人话——
  * 结论本身（good/attention）仍由本地规则决定，不是 AI 随便定的。

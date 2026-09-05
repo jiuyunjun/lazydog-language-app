@@ -2,7 +2,7 @@
 doc: "DOCS.md"
 tier: "L0 入口"
 status: "生效"
-version: "1.0"
+version: "1.1"
 updated: "2026-09-06"
 authority: "文档清单、层级、权威顺序与版本表；本仓库文档元信息的唯一事实来源"
 index: "DOCS.md"
@@ -24,7 +24,7 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 | 加功能、改范围 | `PRODUCT.md` → 对应的 L4 专项设计 |
 | 动 `app/` 的结构、加表、加依赖 | `ARCHITECTURE.md` §0（硬约束）→ §3～§5 |
 | 改提示词、改 AI 的入参出参 | `AI_CONTRACTS.md` → 对应的 L4 专项设计 |
-| 改界面 | `DESIGN.md` + 设计稿 `懒狗放洋屁 MVP.dc.html` |
+| 改界面 | `UI_BRIEF.md` + 设计稿 `懒狗放洋屁 MVP.dc.html` |
 | 交接给下一个人或下一个 agent | `HANDOFF.md` |
 | 做完了要写点什么 | 见 §5 文档维护规则 |
 
@@ -37,7 +37,7 @@ L0 入口        README.md · CLAUDE.md · DOCS.md
                  │
 L1 工作规则     AGENTS.md · HANDOFF.md          ← 约束 agent 怎么干活
                  │
-L2 产品定义     PRODUCT.md · DESIGN.md · 懒狗放洋屁 MVP.dc.html
+L2 产品定义     PRODUCT.md · UI_BRIEF.md · 懒狗放洋屁 MVP.dc.html
                  │                               ← 定义做什么、长什么样
 L3 技术契约     ARCHITECTURE.md · AI_CONTRACTS.md
                  │                               ← 定义怎么搭、怎么和 AI 说话
@@ -68,10 +68,10 @@ L5 过程记录     DECISIONS.md · ROADMAP.md       ← 记录实际决定和�
 | 文档 | 作用 | 什么时候读 |
 | --- | --- | --- |
 | [PRODUCT.md](PRODUCT.md) | 产品定位、目标用户、每日闭环、功能需求、MVP 范围与非目标、成功标准 | 加功能、判断某个需求算不算范围内 |
-| [DESIGN.md](DESIGN.md) | **界面任务书**，不是某个模块的设计文档。信息架构、必须设计的流程、交付物、气质与文案 | 做界面、做设计交接 |
+| [UI_BRIEF.md](UI_BRIEF.md) | **界面任务书**，不是某个模块的设计文档。信息架构、必须设计的流程、交付物、气质与文案 | 做界面、做设计交接 |
 | `懒狗放洋屁 MVP.dc.html` | 设计稿本体（64 屏）。界面细节的最终依据，见 §4 | 实现某一屏之前 |
 
-> **命名陷阱**：根目录的 `DESIGN.md` 是**给设计 agent 的任务书**，和 `拼写训练DESIGN.md` 这类 L4 专项设计不是一类东西。看到 "DESIGN.md" 三个字先确认是哪一份。
+> `UI_BRIEF.md` 原名 `DESIGN.md`，2026-09-06 改名（`DECISIONS.md` D-058）：它是**给设计 agent 的界面任务书**，和 `拼写训练DESIGN.md` 那七份 L4 专项设计根本不是一类东西，同名骗过不止一个 agent。**看到老文档或聊天记录里的 "DESIGN.md" 指的就是本文。**
 
 ### L3 · 技术契约
 
@@ -177,13 +177,13 @@ python tools/check_docs.py
 
 | 文档 | 层级 | 状态 | 版本 | 口径更新于 |
 | --- | --- | --- | --- | --- |
-| `README.md` | L0 入口 | 生效 | 1.1 | 2026-09-06 |
+| `README.md` | L0 入口 | 生效 | 1.2 | 2026-09-06 |
 | `CLAUDE.md` | L0 入口 | 生效 | 1.0 | 2026-09-06 |
-| `DOCS.md` | L0 入口 | 生效 | 1.0 | 2026-09-06 |
-| `AGENTS.md` | L1 工作规则 | 生效 | 1.1 | 2026-09-06 |
+| `DOCS.md` | L0 入口 | 生效 | 1.1 | 2026-09-06 |
+| `AGENTS.md` | L1 工作规则 | 生效 | 1.2 | 2026-09-06 |
 | `HANDOFF.md` | L1 工作规则 | 生效 | 1.1 | 2026-09-06 |
 | `PRODUCT.md` | L2 产品定义 | 生效 | 1.0 | 2026-09-03 |
-| `DESIGN.md` | L2 产品定义 | 生效 | 1.0 | 2026-09-04 |
+| `UI_BRIEF.md` | L2 产品定义 | 生效 | 1.1 | 2026-09-06 |
 | `ARCHITECTURE.md` | L3 技术契约 | 生效 | 1.0 | 2026-09-04 |
 | `AI_CONTRACTS.md` | L3 技术契约 | 生效 | 1.1 | 2026-09-06 |
 | `CEFR_英语能力评测与个性化学习系统设计.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-08-05 |
@@ -193,9 +193,9 @@ python tools/check_docs.py
 | `引人入胜的阅读材料DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-09-04 |
 | `英语听力训练模块DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-08-31 |
 | `语音服务DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-09-04 |
-| `持续学习DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-09-04 |
-| `DECISIONS.md` | L5 过程记录 | 生效 | 1.1 | 2026-09-06 |
-| `ROADMAP.md` | L5 过程记录 | 生效 | 1.0 | 2026-09-04 |
+| `持续学习DESIGN.md` | L4 专项设计 | 部分落地 | 1.1 | 2026-09-06 |
+| `DECISIONS.md` | L5 过程记录 | 生效 | 1.2 | 2026-09-06 |
+| `ROADMAP.md` | L5 过程记录 | 生效 | 1.1 | 2026-09-06 |
 
 设计稿 `懒狗放洋屁 MVP.dc.html` 不参与版本表：它是导出的设计产物，版本由导出时间决定。
 
@@ -215,3 +215,6 @@ python tools/check_docs.py
 - `README.md` 的「当前状态」从"M0～M6 完成、剩 M7"更新为实际进度（M8～M15.2 已完成，M7 部分完成）。
 - `HANDOFF.md` 的交接模板加「文档」一节，开工检查清单改为经 `DOCS.md` 找专项文档。
 - `DECISIONS.md` 追加 D-057，记录本次文档体系的决定，含"文件不移动、不改名"的取舍理由。
+- `DESIGN.md` 改名为 `UI_BRIEF.md`（D-058），全仓库 20 处引用同步更新，含 6 个 Kotlin 源文件里的注释。
+  章节号和屏号不变，只换文件名；老文档和聊天记录里的 "DESIGN.md" 指的就是它。
+- `持续学习DESIGN.md` 的一级标题去掉"（DESIGN.md）"，它不是那份界面任务书。

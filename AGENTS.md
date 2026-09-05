@@ -2,7 +2,7 @@
 doc: "AGENTS.md"
 tier: "L1 工作规则"
 status: "生效"
-version: "1.1"
+version: "1.2"
 updated: "2026-09-06"
 authority: "所有 agent 的强制工程规则、Git 方式、实现流程与完成定义"
 index: "DOCS.md"
@@ -23,7 +23,7 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 学新知识 → 在语境中再次遇见 → 朗读 → 测试 → 按遗忘规律复习
 ```
 
-产品范围和验收标准以 `PRODUCT.md` 为准；界面任务以 `DESIGN.md` 为准；技术实现以 `ARCHITECTURE.md` 和 `AI_CONTRACTS.md` 为准。完整的冲突裁决顺序见 `DOCS.md` §4。
+产品范围和验收标准以 `PRODUCT.md` 为准；界面任务以 `UI_BRIEF.md` 为准；技术实现以 `ARCHITECTURE.md` 和 `AI_CONTRACTS.md` 为准。完整的冲突裁决顺序见 `DOCS.md` §4。
 
 ## 2. 强制工程规则
 

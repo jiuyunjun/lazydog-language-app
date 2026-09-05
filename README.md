@@ -2,7 +2,7 @@
 doc: "README.md"
 tier: "L0 入口"
 status: "生效"
-version: "1.1"
+version: "1.2"
 updated: "2026-09-06"
 authority: "项目是什么、怎么构建运行、从哪儿开始读"
 index: "DOCS.md"
@@ -49,7 +49,7 @@ Push 和手动构建会从 GitHub Actions Repository Secrets 读取 `AI_BASE_URL
 | [DOCS.md](DOCS.md) | 文档地图与版本表。开工前和 `AGENTS.md` 一起读 |
 | [AGENTS.md](AGENTS.md) | 所有编码与设计 agent 必须遵守的仓库规则 |
 | [PRODUCT.md](PRODUCT.md) | 产品定位、用户流程与 MVP 范围 |
-| [DESIGN.md](DESIGN.md) | 提供给设计 agent 的 UI/UX 任务书 |
+| [UI_BRIEF.md](UI_BRIEF.md) | 提供给设计 agent 的 UI/UX 任务书 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Android 技术架构、架构硬约束和数据模型 |
 | [AI_CONTRACTS.md](AI_CONTRACTS.md) | AI 使用边界、提示词与结构化输出契约 |
 | [ROADMAP.md](ROADMAP.md) | 里程碑、开发顺序和逐条落地状态 |
