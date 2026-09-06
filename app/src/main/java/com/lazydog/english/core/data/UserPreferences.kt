@@ -41,6 +41,9 @@ class UserPreferences(private val context: Context) {
         val AiApiKey = stringPreferencesKey("ai_api_key")
         val AiModel = stringPreferencesKey("ai_model")
         val SpeechKey = stringPreferencesKey("speech_key")
+        val BraveApiKey = stringPreferencesKey("brave_api_key")
+        val NativeEnglishAmount = stringPreferencesKey("native_english_amount")
+        val NativeNewWordAmount = stringPreferencesKey("native_new_word_amount")
         val SpeechRegion = stringPreferencesKey("speech_region")
         val SpeechRateName = stringPreferencesKey("speech_rate")
         val AutoReadWords = booleanPreferencesKey("auto_read_words")
@@ -212,6 +215,23 @@ class UserPreferences(private val context: Context) {
         }
     }
 
+    /**
+     * Brave 搜索密钥（`母语阅读DESIGN.md` §6.2 的热点检索）。空表示这台设备没配，
+     * 界面据此把「先搜一下最新消息」整个藏掉——搜索是可选增强，不是阅读的前置条件。
+     */
+    val braveApiKey: Flow<String> =
+        context.dataStore.data.map { it[Keys.BraveApiKey].orDefault(LocalEnv.BRAVE_API_KEY) }
+
+    /**
+     * 母语阅读的两个旋钮（`母语阅读DESIGN.md` §31、§43 原则 4）。
+     * **英语量和生词量必须分开存**：想多看英语的人不该被迫同时多啃生词。
+     * 和 `themeMode` 一样存 wire 字符串，解析放在用的地方。
+     */
+    val nativeEnglishAmount: Flow<String> =
+        context.dataStore.data.map { it[Keys.NativeEnglishAmount].orEmpty() }
+    val nativeNewWordAmount: Flow<String> =
+        context.dataStore.data.map { it[Keys.NativeNewWordAmount].orEmpty() }
+
     val speechKey: Flow<String> =
         context.dataStore.data.map { it[Keys.SpeechKey].orDefault(LocalEnv.SPEECH_KEY) }
     val speechRegion: Flow<String> =
@@ -350,6 +370,18 @@ class UserPreferences(private val context: Context) {
             it[Keys.AiApiKey] = apiKey.trim()
             it[Keys.AiModel] = model.trim()
         }
+    }
+
+    suspend fun saveNativeEnglishAmount(wire: String) {
+        context.dataStore.edit { it[Keys.NativeEnglishAmount] = wire }
+    }
+
+    suspend fun saveNativeNewWordAmount(wire: String) {
+        context.dataStore.edit { it[Keys.NativeNewWordAmount] = wire }
+    }
+
+    suspend fun saveBraveApiKey(key: String) {
+        context.dataStore.edit { it[Keys.BraveApiKey] = key.trim() }
     }
 
     suspend fun saveSpeechRate(rate: SpeechRate) {

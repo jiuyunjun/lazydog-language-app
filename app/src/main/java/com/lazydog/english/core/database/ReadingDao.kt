@@ -23,6 +23,10 @@ interface ReadingDao {
     @Query("UPDATE reading_materials SET completed = 1 WHERE id = :id")
     suspend fun markCompleted(id: Long)
 
+    /** 换英语量档位时只重存替换方案，文章一个字不动（`母语阅读DESIGN.md` §38）。 */
+    @Query("UPDATE reading_materials SET nativeJson = :nativeJson WHERE id = :id")
+    suspend fun updateNative(id: Long, nativeJson: String)
+
     @Query("UPDATE reading_materials SET liked = :liked WHERE id = :id")
     suspend fun setLiked(id: Long, liked: Boolean)
 

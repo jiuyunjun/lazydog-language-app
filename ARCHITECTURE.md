@@ -2,8 +2,8 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.3"
-updated: "2026-09-06"
+version: "1.4"
+updated: "2026-09-07"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -467,6 +467,32 @@ interface ReadingSource {
 ```
 
 计划实现顺序：AI 生成、粘贴文本、URL 提取、Web 搜索。
+
+### 7.1 母语阅读（`母语阅读DESIGN.md`，D-070）
+
+同一张 `reading_materials` 表，多一列 `nativeJson`（Room v20，带默认值，自动迁移），
+整条存 `NativeReadingDocument`（中文母版分段 + `LearningSpan` + 理解题 + 实际英语比例）。
+`body` 存的是**纯中文母版**：列表预览、摇一摇提问的「阅读原文」和备份都不必认识 span 结构，
+英语部分出任何问题时退回中文都是可用结果。
+
+生成分两次调用，不合成一个 Prompt：
+
+```text
+（可选）Web 搜索 → Fact Pack
+  → generateNativeCanonical：写纯中文母版（不知道学习目标存在）
+  → NativeReadingValidation.validateCanonical
+  → planNativeReadingSpans：在母版上规划英语替换
+  → NativeReadingValidation.validatePlan（定位、重叠、语法上限、相邻陌生项、比例）
+  → 存库；换档位只重跑最后两步，articleId 与阅读进度不变
+```
+
+`NativeReadingValidation` 是纯 Kotlin：定不到位、挤在一起、超出比例的片段**只丢那一条**，
+不否决整篇。渲染也在这里（`render` 把段落切成中文段与可点英语段），UI 只负责画。
+
+联网检索走 `domain/generation/WebSearchProvider` → `core/network/BraveSearchClient`，
+与 `SpeechProvider → AzureSpeechProvider` 同构，不新增抽象层。它是**可选依赖**：
+没配密钥时 `isConfigured()` 为 false，界面藏掉开关；搜索失败退回不带事实的写法。
+密钥同样只存在 `LocalEnv.kt`（gitignore）或 DataStore 里，源码里是占位符。
 
 ## 8. 服务和密钥
 

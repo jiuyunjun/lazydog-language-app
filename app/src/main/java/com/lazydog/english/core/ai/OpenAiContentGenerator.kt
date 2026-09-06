@@ -58,7 +58,16 @@ import com.lazydog.english.domain.generation.MemoryAssistanceValidation
 import com.lazydog.english.domain.generation.MemoryConfusion
 import com.lazydog.english.domain.generation.MemoryPronunciation
 import com.lazydog.english.domain.generation.MemoryType
+import com.lazydog.english.domain.generation.CanonicalParagraph
+import com.lazydog.english.domain.generation.LearningSpan
+import com.lazydog.english.domain.generation.MasteryClass
+import com.lazydog.english.domain.generation.NativeCanonicalArticle
+import com.lazydog.english.domain.generation.NativeCanonicalRequest
+import com.lazydog.english.domain.generation.NativeComprehensionQuestion
+import com.lazydog.english.domain.generation.NativeReadingValidation
+import com.lazydog.english.domain.generation.NativeSpanPlanRequest
 import com.lazydog.english.domain.generation.NewWordsRequest
+import com.lazydog.english.domain.generation.SpanKind
 import com.lazydog.english.domain.generation.ProofSentence
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
@@ -482,6 +491,77 @@ class OpenAiContentGenerator(
             model = acceptedContent.model,
             promptVersion = READING_PROMPT_VERSION,
             droppedNotes = warnings + pipelineNotes,
+        )
+    }
+
+    override suspend fun generateNativeCanonical(
+        request: NativeCanonicalRequest,
+        onStage: ((GenerationStage) -> Unit)?,
+        onPartialText: ((String) -> Unit)?,
+    ): GenerationResult<NativeCanonicalArticle> {
+        val completion = complete(
+            systemPrompt = NATIVE_CANONICAL_SYSTEM_PROMPT,
+            userPrompt = buildNativeCanonicalPrompt(request),
+            task = AiTask.Reading,
+            onStage = onStage,
+            // 中文母版本身就是给他读的，写出来一句就铺一句。
+            onTextProgress = preview(onPartialText) { JsonStream.firstNonEmpty(it, "title", "teaser") },
+            op = "母语阅读正文",
+        )
+        val content = when (completion) {
+            is Completion.Error -> return GenerationResult.Failure(completion.reason)
+            is Completion.Content -> completion
+        }
+        val payload = decode<NativeCanonicalPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        if (payload.schemaVersion != SCHEMA_VERSION) {
+            return GenerationResult.Failure("schema 版本不对：${payload.schemaVersion}")
+        }
+        val article = payload.toDomain()
+        val outcome = NativeReadingValidation.validateCanonical(article)
+        outcome.failure?.let { return GenerationResult.Failure("中文母版没通过校验：$it") }
+        return GenerationResult.Success(
+            // 理解题不合格不该让整篇陪葬：丢掉它，文章照读。
+            data = article.copy(
+                comprehension = NativeReadingValidation.usableQuestion(article.comprehension),
+            ),
+            model = content.model,
+            promptVersion = NATIVE_READING_PROMPT_VERSION,
+            droppedNotes = outcome.warnings,
+        )
+    }
+
+    override suspend fun planNativeReadingSpans(
+        request: NativeSpanPlanRequest,
+        onStage: ((GenerationStage) -> Unit)?,
+    ): GenerationResult<List<LearningSpan>> {
+        val completion = complete(
+            systemPrompt = NATIVE_PLANNER_SYSTEM_PROMPT,
+            userPrompt = buildNativeSpanPlanPrompt(request),
+            task = AiTask.Reading,
+            onStage = onStage,
+            op = "母语阅读替换",
+        )
+        val content = when (completion) {
+            is Completion.Error -> return GenerationResult.Failure(completion.reason)
+            is Completion.Content -> completion
+        }
+        val payload = decode<NativeSpanPlanPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        if (payload.schemaVersion != SCHEMA_VERSION) {
+            return GenerationResult.Failure("schema 版本不对：${payload.schemaVersion}")
+        }
+        val outcome = NativeReadingValidation.validatePlan(
+            paragraphs = request.paragraphs,
+            spans = payload.toDomain(),
+            request = request,
+        )
+        outcome.failure?.let { return GenerationResult.Failure("英语替换没通过校验：$it") }
+        return GenerationResult.Success(
+            data = outcome.spans,
+            model = content.model,
+            promptVersion = NATIVE_READING_PROMPT_VERSION,
+            droppedNotes = outcome.warnings,
         )
     }
 
@@ -1446,6 +1526,85 @@ class OpenAiContentGenerator(
     }
 
     @Serializable
+    private data class NativeParagraphPayload(
+        val id: String = "",
+        val textZh: String = "",
+    )
+
+    @Serializable
+    private data class NativeQuestionPayload(
+        val promptZh: String = "",
+        val options: List<String> = emptyList(),
+        val answerIndex: Int = -1,
+        val explanationZh: String = "",
+    )
+
+    @Serializable
+    private data class NativeCanonicalPayload(
+        val schemaVersion: Int = 0,
+        val title: String = "",
+        val teaser: String = "",
+        val category: String = "",
+        val readerPayoff: String = "",
+        val paragraphs: List<NativeParagraphPayload> = emptyList(),
+        val comprehension: NativeQuestionPayload? = null,
+    ) {
+        fun toDomain() = NativeCanonicalArticle(
+            title = title.trim(),
+            teaser = teaser.trim(),
+            category = category.trim(),
+            readerPayoff = readerPayoff.trim(),
+            // 段落 id 一律本地重排：模型偶尔给重复的 id，而替换方案全靠它定位。
+            paragraphs = paragraphs
+                .filter { it.textZh.isNotBlank() }
+                .mapIndexed { index, it -> CanonicalParagraph(id = "p${index + 1}", textZh = it.textZh.trim()) },
+            comprehension = comprehension?.let {
+                NativeComprehensionQuestion(
+                    promptZh = it.promptZh.trim(),
+                    options = it.options.map(String::trim),
+                    answerIndex = it.answerIndex,
+                    explanationZh = it.explanationZh.trim(),
+                )
+            },
+        )
+    }
+
+    @Serializable
+    private data class NativeSpanPayload(
+        val paragraphId: String = "",
+        val sourceZh: String = "",
+        val renderedEn: String = "",
+        val kind: String = "",
+        val masteryClass: String = "",
+        val meaningZh: String = "",
+        val pronunciation: String = "",
+        val noteZh: String = "",
+        val patternEn: String = "",
+    )
+
+    @Serializable
+    private data class NativeSpanPlanPayload(
+        val schemaVersion: Int = 0,
+        val spans: List<NativeSpanPayload> = emptyList(),
+    ) {
+        fun toDomain(): List<LearningSpan> = spans.mapIndexed { index, it ->
+            LearningSpan(
+                // id 本地发，不用模型给的：它是点击定位的键，重了就点错。
+                id = "s${index + 1}",
+                paragraphId = it.paragraphId.trim(),
+                sourceZh = it.sourceZh.trim(),
+                renderedEn = it.renderedEn.trim(),
+                kind = SpanKind.normalize(it.kind),
+                masteryClass = MasteryClass.normalize(it.masteryClass),
+                meaningZh = it.meaningZh.trim(),
+                pronunciation = it.pronunciation.trim(),
+                noteZh = it.noteZh.trim(),
+                patternEn = it.patternEn.trim(),
+            )
+        }
+    }
+
+    @Serializable
     private data class ReadingCriticScoresPayload(
         val hook: Double = -1.0,
         val curiosity: Double = -1.0,
@@ -1902,6 +2061,7 @@ class OpenAiContentGenerator(
         const val WORDS_PROMPT_VERSION = 5
         const val WORD_EXPLANATION_PROMPT_VERSION = 4
         const val READING_PROMPT_VERSION = 2
+        const val NATIVE_READING_PROMPT_VERSION = 1
         const val GRAMMAR_PROMPT_VERSION = 2
         const val GRAMMAR_DRILL_PROMPT_VERSION = 1
         const val TRANSLATION_PROMPT_VERSION = 1
@@ -1969,6 +2129,21 @@ class OpenAiContentGenerator(
         private const val SYSTEM_PROMPT =
             "你是给中文母语者出英语学习内容的助手。严格只输出一个 JSON 对象：" +
                 "不要 markdown 代码块，不要输出 JSON 以外的任何文字，不要添加 schema 之外的字段。"
+
+        /**
+         * 母语阅读的中文写手（`母语阅读DESIGN.md` §37.1）。**这一步不知道学习目标存在**——
+         * 提示词里连"英语"两个字都尽量不提，否则模型会自作主张往中文里掺英文。
+         */
+        private const val NATIVE_CANONICAL_SYSTEM_PROMPT =
+            "你写的是给中文读者看的高价值中文文章。严格只输出一个 JSON 对象：" +
+                "不要 markdown 代码块，不要输出 JSON 以外的任何文字，不要添加 schema 之外的字段。" +
+                "正文必须是纯中文，不要插入英文，也不要考虑任何语言学习目标。"
+
+        /** 母语阅读的替换规划器（§37.3）。它不写文章，只决定哪几处换成英语。 */
+        private const val NATIVE_PLANNER_SYSTEM_PROMPT =
+            "你为一篇已经写好的中文文章挑选可以自然改用英语表达的语义片段。严格只输出一个 JSON 对象：" +
+                "不要 markdown 代码块，不要修改原文，不要输出 schema 之外的字段。" +
+                "首要目标是保持阅读顺畅；任何一处换成英语会显得别扭，就不要选它。"
 
         private const val READING_CRITIC_SYSTEM_PROMPT =
             "你是严格但务实的英文阅读编辑。只输出一个合法 JSON 对象，不要 markdown。" +
@@ -2370,6 +2545,122 @@ class OpenAiContentGenerator(
          * 不值得就不该发。所以写作要求排在词汇要求前面，词汇那段还专门写了
          * "会破坏自然度就换词"（§7）。
          */
+        /**
+         * 中文母版（`母语阅读DESIGN.md` §7、§37.1）。
+         *
+         * 判断这段提示词写得对不对，只有一条：**把英语学习整件事删掉之后，
+         * 生成的东西仍然应该是一篇有人愿意读完的中文文章。**
+         */
+        internal fun buildNativeCanonicalPrompt(request: NativeCanonicalRequest): String = buildString {
+            appendLine("写一篇中文文章。主题：${request.topic}。")
+            appendLine()
+            appendLine("要求它本身就值得读：读者是成年中文母语者，不是学生。不要写成科普作业，")
+            appendLine("不要写成新闻通稿，不要出现「本文将介绍」这类交代。")
+            appendLine()
+            appendLine("结构按 Hook → 好奇缺口 → 逐步揭示 → 兑现：")
+            appendLine("- 开头 1~2 句给出继续读下去的具体理由：一个反常的事实、一个小谜团或一个具体场景。")
+            appendLine("  禁止用「在当今社会」「随着……的发展」「你有没有想过」这类开头。")
+            appendLine("- 前面抛出的问题不要马上回答。")
+            appendLine("- 每一段都要有新东西：新事实、新线索、更深一层的解释或一个小反转。")
+            appendLine("- 结尾兑现开头制造的好奇，不要总结全文。")
+            appendLine()
+            appendLine("篇幅：正文 400~700 个汉字，分 5~8 段，每段 60~150 字，各承担一个明确功能。")
+            appendLine("paragraphs 按顺序给出，每段一个对象，id 用 p1、p2……，textZh 是这一段的纯中文正文。")
+            appendLine()
+            appendLine("title：纯中文，具体、可信、让人想点开，不超过 24 字，禁止标题党。")
+            appendLine("teaser：一句中文，制造具体的信息缺口，不复述标题也不提前给答案。")
+            appendLine("category：一个简短中文类别，如 日本社会、科技、心理、历史。")
+            appendLine("readerPayoff：一句中文，写出这篇要留给读者的**那一个**收获。")
+            appendLine("它必须被正文支撑，不能是标题的复述，也不能是「原因有很多」这种废话。")
+            appendLine()
+            appendLine("comprehension：一道中文单选理解题，问文章本身的关键推理（不是问细节记忆、")
+            appendLine("更不是问某个词的意思），3~4 个选项、互不重复，answerIndex 从 0 开始，")
+            appendLine("explanationZh 用一句话说清为什么是它。")
+            if (request.factPack.isNotEmpty()) {
+                appendLine()
+                appendLine("下面是检索到的事实。**只能用这里给出的事实**来写涉及时间、数字、人名、")
+                appendLine("机构和最新进展的内容；这些事实之外的时效性断言一律不要写。")
+                appendLine("如果这些事实不足以支撑一篇文章，就把重点放在机制和背景上，而不是编细节。")
+                request.factPack.take(8).forEach { appendLine("- ${it.take(400)}") }
+            }
+            if (request.recentTitles.isNotEmpty()) {
+                appendLine()
+                appendLine("他最近读过这几篇，标题、开头方式和结构都不要雷同：")
+                request.recentTitles.take(10).forEach { appendLine("- ${it.take(60)}") }
+            }
+            appendLine()
+            appendLine("正文必须是纯中文：不要插入英文单词，专有名词（GPS、AI 这类）除外。")
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"schemaVersion":1,"title":"...","teaser":"...","category":"...","readerPayoff":"...",""" +
+                    """"paragraphs":[{"id":"p1","textZh":"..."}],""" +
+                    """"comprehension":{"promptZh":"...","options":["...","...","..."],"answerIndex":0,"explanationZh":"..."}}""",
+            )
+        }
+
+        /**
+         * 英语替换方案（§9、§37.3）。
+         *
+         * 提示词里反复强调的三件事，正是本地校验事后也要再查一遍的三件事：
+         * sourceZh 必须逐字来自原文、优先整块短语而不是零散单词、比例达不到就少换几处。
+         * 提示词负责让模型往对的方向走，校验负责兜住它没走到的那部分。
+         */
+        internal fun buildNativeSpanPlanPrompt(request: NativeSpanPlanRequest): String = buildString {
+            val totalChars = request.paragraphs.sumOf { it.textZh.length }
+            val budget = Math.round(totalChars * request.englishAmount.surfaceRatio).toInt()
+            appendLine("下面这篇中文文章要做成「母语阅读」：中文保证读得懂，一部分语义片段改用英语表达。")
+            appendLine("学习者水平：${request.learnerLevel}。")
+            appendLine()
+            appendLine("挑出 6~14 个可以自然改用英语的语义片段，总长度约 $budget 个汉字")
+            appendLine("（全文 $totalChars 字，目标英语表层比例 ${request.englishAmount.percent}%）。")
+            appendLine("宁可少换几处，也不要为了凑比例换出别扭的句子。")
+            appendLine()
+            appendLine("挑选原则：")
+            appendLine("- **换的是语义片段，不是词典里的词**：优先完整短语、搭配、从句这种能独立成块的单位。")
+            appendLine("  「这个 system 通过 reduce 用户的 waiting time」是最差的结果——每个词都对，读起来全是碎片。")
+            appendLine("  「真正想降低的并不是 actual waiting time」才是对的：一整块切过去，中文句子结构不断。")
+            appendLine("- 同一句里最多换 1~2 处，两个陌生片段之间至少隔 8 个汉字以上。")
+            appendLine("- 关键事实（数字、时间、因果、结论）所在的部分要么不换，要么换成学习者一定读得懂的说法。")
+            appendLine("- 前两段少放新东西，让人先读进去。")
+            appendLine("- sourceZh 必须是所指段落里**逐字连续出现**的一段原文，一个字都不能改；")
+            appendLine("  renderedEn 是它在这句话里自然的英语说法，替换后整句读起来必须通顺。")
+            appendLine()
+            appendLine("每个片段标注 masteryClass：")
+            appendLine("- \"${MasteryClass.Mastered}\"：学习者肯定认识，纯粹是复习机会。")
+            appendLine("- \"${MasteryClass.Review}\"：来自下面的复习清单。")
+            appendLine("- \"${MasteryClass.Target}\"：这一篇要教的新表达，占英语部分的 ${(request.newWordAmount.shareWithinEnglish * 100).toInt()}% 左右，")
+            appendLine("  必须能从上下文猜出大意，不要挑只在这篇文章里出现一次的冷僻词。")
+            appendLine("- \"${MasteryClass.Incidental}\"：技术词、专名这类本来就说英文的。")
+            appendLine("kind 取 ${SpanKind.all.joinToString(" / ") { "\"$it\"" }}。")
+            if (request.allowGrammar) {
+                appendLine("最多 1 个 kind=\"${SpanKind.Grammar}\" 的片段：它必须是一个完整从句或句型，")
+                appendLine("patternEn 给出结构公式（如 as long as + 从句），不要把语法拆成几个单词各点各的。")
+            } else {
+                appendLine("这次不要语法片段。")
+            }
+            if (request.reviewVocabulary.isNotEmpty()) {
+                appendLine()
+                appendLine("到期该复习的词（能自然用上就用，用不上就算了，不要硬塞）：")
+                appendLine(request.reviewVocabulary.joinToString(", "))
+            }
+            if (request.knownVocabulary.isNotEmpty()) {
+                appendLine("他已经掌握的词（这些可以放心用）：${request.knownVocabulary.take(40).joinToString(", ")}")
+            }
+            appendLine()
+            appendLine("每个片段都要给 meaningZh：这个英语片段在这句话里是什么意思，一句中文说清。")
+            appendLine("单词和短语给 pronunciation（IPA）；noteZh 用一句话说明这里为什么这么说，可留空。")
+            appendLine()
+            appendLine("文章：")
+            request.paragraphs.forEach { appendLine("[${it.id}] ${it.textZh}") }
+            appendLine()
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"schemaVersion":1,"spans":[{"paragraphId":"p2","sourceZh":"给错误留下空间",""" +
+                    """"renderedEn":"leave room for error","kind":"phrase","masteryClass":"target",""" +
+                    """"meaningZh":"给出错留出余地","pronunciation":"/liːv ruːm fə ˈerə/","noteZh":"...","patternEn":""}]}""",
+            )
+        }
+
         internal fun buildReadingPrompt(request: ReadingGenerationRequest): String = buildString {
             appendLine("为中文母语的英语学习者写一篇英文短文。学习者水平：${request.learnerLevel}。主题：${request.topic}。")
             appendLine()

@@ -18,6 +18,8 @@ import com.lazydog.english.core.data.ScenarioSessionRepository
 import kotlinx.coroutines.flow.first
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.database.AppDatabase
+import com.lazydog.english.core.network.BraveSearchClient
+import com.lazydog.english.domain.generation.WebSearchProvider
 import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.scheduling.FsrsScheduler
@@ -52,6 +54,14 @@ class LazyDogApplication : Application() {
     val speechController: SpeechController by lazy { SpeechController(this, userPreferences) }
 
     val readingRepository: ReadingRepository by lazy { ReadingRepository(database) }
+
+    /**
+     * 联网检索。母语阅读写时效内容之前要先有可信事实（`母语阅读DESIGN.md` §36.7），
+     * 但它是可选增强：没配密钥就是"这次不搜"，不是错误，文章照常生成。
+     */
+    val webSearch: WebSearchProvider by lazy {
+        BraveSearchClient(apiKey = { userPreferences.braveApiKey.first() })
+    }
 
     val listeningMaterialRepository: ListeningMaterialRepository by lazy {
         ListeningMaterialRepository(database)

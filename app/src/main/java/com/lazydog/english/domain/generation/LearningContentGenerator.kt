@@ -117,6 +117,31 @@ interface LearningContentGenerator {
         onItem: ((com.lazydog.english.domain.listening.ListeningItem) -> Unit)? = null,
     ): GenerationResult<List<com.lazydog.english.domain.listening.ListeningItem>>
 
+    /**
+     * 母语阅读第一步：写一篇**纯中文**母版（`母语阅读DESIGN.md` §7、§37.1）。
+     *
+     * 这一步完全不知道学习目标的存在。合成一次调用的话，模型会一边编故事一边惦记
+     * "这个词得塞进去"，两件事都做不好——分开之后，中文母版的质量可以单独评价，
+     * 换英语量档位时也不必重写文章（§38）。
+     */
+    suspend fun generateNativeCanonical(
+        request: NativeCanonicalRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
+        /** 已经写出来的正文，用于等待期间铺内容而不是只显示一个字数（见 JsonStream）。 */
+        onPartialText: ((String) -> Unit)? = null,
+    ): GenerationResult<NativeCanonicalArticle>
+
+    /**
+     * 母语阅读第二步：在写好的中文母版上规划英语替换（§9、§37.3）。
+     *
+     * 返回前已过 [NativeReadingValidation]：定不了位、挤在一起、超出比例的片段都已退回中文。
+     * 用户切换英语量时只重跑这一步，文章一个字不动。
+     */
+    suspend fun planNativeReadingSpans(
+        request: NativeSpanPlanRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
+    ): GenerationResult<List<LearningSpan>>
+
     /** 生成渐进式阅读短文，返回前已通过 ReadingValidation。 */
     suspend fun generateReading(
         request: ReadingGenerationRequest,

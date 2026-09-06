@@ -10,6 +10,10 @@ object LocalEnv {
     const val AI_API_KEY = "sk-REPLACE_ME"
     const val AI_MODEL = "gpt-5.6-terra"
 
+    // ===== Brave Search API（母语阅读的热点检索，可选）=====
+    // 没有就留空字符串：搜索会被跳过，文章照常生成，只是不带时效事实。
+    const val BRAVE_API_KEY = ""
+
     // ===== Azure Speech SDK =====
     const val SPEECH_KEY = "REPLACE_ME"
     const val SPEECH_REGION = "eastasia"

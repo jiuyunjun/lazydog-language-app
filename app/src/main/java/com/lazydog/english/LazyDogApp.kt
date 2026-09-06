@@ -39,6 +39,8 @@ import com.lazydog.english.feature.settings.ModelSettingsScreen
 import com.lazydog.english.feature.onboarding.GoalsScreen
 import com.lazydog.english.feature.onboarding.WelcomeScreen
 import com.lazydog.english.feature.assessment.AssessmentScreen
+import com.lazydog.english.feature.reading.NativeReadingMode
+import com.lazydog.english.feature.reading.NativeReadingScreen
 import com.lazydog.english.feature.reading.ReadingMode
 import com.lazydog.english.feature.reading.ReadingScreen
 import com.lazydog.english.feature.speaking.SpeakingScreen
@@ -76,6 +78,8 @@ object Routes {
     const val ReadingGenerate = "reading/generate"
     const val ReadingPaste = "reading/paste"
     const val ReadingOpen = "reading/open/{materialId}"
+    const val NativeReading = "reading/native"
+    const val NativeReadingOpen = "reading/native/open/{materialId}"
     const val WordDetail = "library/word/{itemId}"
 
     /** [taskKey] 传 [DEFAULT_MODEL_KEY] 表示改的是默认模型。 */
@@ -84,6 +88,7 @@ object Routes {
     const val DEFAULT_MODEL_KEY = "default"
 
     fun readingOpen(materialId: Long) = "reading/open/$materialId"
+    fun nativeReadingOpen(materialId: Long) = "reading/native/open/$materialId"
     fun wordDetail(itemId: Long) = "library/word/$itemId"
     fun scenarioOpen(sessionId: Long) = "scenario/open/$sessionId"
 }
@@ -184,10 +189,15 @@ private fun AppNavHost(
                 onStartProduction = { navController.navigate(Routes.Production) },
                 onStartProofChallenge = { navController.navigate(Routes.ProofChallenge) },
                 onStartReading = { navController.navigate(Routes.ReadingGenerate) },
+                onStartNativeReading = { navController.navigate(Routes.NativeReading) },
                 onStartReadingPaste = { navController.navigate(Routes.ReadingPaste) },
                 onStartScenario = { navController.navigate(Routes.Scenario) },
                 onOpenScenario = { id -> navController.navigate(Routes.scenarioOpen(id)) },
-                onOpenMaterial = { id -> navController.navigate(Routes.readingOpen(id)) },
+                onOpenMaterial = { id, native ->
+                    navController.navigate(
+                        if (native) Routes.nativeReadingOpen(id) else Routes.readingOpen(id),
+                    )
+                },
                 onStartAssessment = { navController.navigate(Routes.Assessment) },
                 onOpenModelSettings = { navController.navigate(Routes.ModelSettings) },
                 onOpenWord = { id -> navController.navigate(Routes.wordDetail(id)) },
@@ -326,6 +336,25 @@ private fun AppNavHost(
         composable(Routes.ReadingGenerate) {
             AskHost {
                 ReadingScreen(mode = ReadingMode.Generate, onExit = { navController.popOnce() })
+            }
+        }
+
+        composable(Routes.NativeReading) {
+            AskHost {
+                NativeReadingScreen(mode = NativeReadingMode.New, onExit = { navController.popOnce() })
+            }
+        }
+
+        composable(
+            route = Routes.NativeReadingOpen,
+            arguments = listOf(navArgument("materialId") { type = NavType.LongType }),
+        ) { entry ->
+            val materialId = entry.arguments?.getLong("materialId") ?: 0L
+            AskHost {
+                NativeReadingScreen(
+                    mode = NativeReadingMode.Open(materialId),
+                    onExit = { navController.popOnce() },
+                )
             }
         }
 

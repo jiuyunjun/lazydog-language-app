@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "5.0"
+version: "5.1"
 updated: "2026-09-07"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -10,6 +10,38 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 ---
 
 # 决策记录
+
+## D-070：母语阅读复用阅读材料表，分两次调用；检索作为可选增强
+
+- 状态：已生效（2026-09-07）
+- 背景：`母语阅读DESIGN.md` 落地 MVP v1（§39）。要决定三件事：数据放哪儿、
+  生成分几步、热点检索怎么接。
+- 决定：
+  1. **复用 `reading_materials`**，Room v20 只多一列 `nativeJson`（带默认值，自动迁移），
+     整条存 `NativeReadingDocument`。`body` 存纯中文母版，列表预览、摇一摇提问的
+     「阅读原文」和备份都不必认识 span 结构。不新开表、不新开持久化机制。
+  2. **生成分两次调用**：`generateNativeCanonical` 写纯中文母版，
+     `planNativeReadingSpans` 在母版上规划英语替换。合成一次的话，模型会一边编故事
+     一边惦记"这个词得塞进去"，两件事都做不好；分开之后换英语量档位只重跑第二步，
+     文章一个字不动，`articleId` 与阅读进度都不变（§38、§42）。
+  3. **联网检索是可选增强**：`WebSearchProvider`（domain）+ `BraveSearchClient`（core/network），
+     和 `SpeechProvider → AzureSpeechProvider` 同一条路子。没配密钥就把「先搜一下最新消息」
+     整个藏掉；搜索失败退回不带事实的写法，不让用户因为搜不到而读不到文章。
+     密钥沿用 `LocalEnv.kt`（已 gitignore），源码里只有占位符（`AGENTS.md` §6）。
+- 被否决的方案：
+  - 新开 `native_reading_articles` 表：这一篇仍然是一份阅读材料，标题、payoff、
+    完成/喜欢/保存全是一个含义，另起一张表等于把同一件事拆成两处维护。
+  - 一次调用出母版加替换：见上。
+  - 把检索做成阅读的前置步骤：搜索是免费档、有限流，做成前置就等于给整个功能加了一个
+    随时会坏的依赖。
+- 有意偏离专项设计：
+  - §31 的独立设置页这一版没做，两个旋钮出现在生成页和阅读页顶部（改了立刻能看到效果），
+    设置页只留一行 Brave 状态。
+  - §14 的段内实时动态难度没做，只做了"读完反馈影响下一篇"和"本篇一键降档"。
+  - §21 的回忆只做自查，不写 FSRS：复习类 span 记一次语境曝光，新表达要用户明说
+    「加进复习」才入库（`AGENTS.md` §6：AI 和界面都不能替用户断言"已掌握"）。
+- 影响范围：`reading_materials`（v20，一列）、`LearningContentGenerator`（两个新方法）、
+  学习页多一个入口、设置页多一行；备份格式向后兼容（旧备份缺字段恢复成普通阅读材料）。
 
 ## D-069：中文邪修助记优先，拼写分组不冒充构词
 

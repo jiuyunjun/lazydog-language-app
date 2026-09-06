@@ -2,7 +2,7 @@
 doc: "DOCS.md"
 tier: "L0 入口"
 status: "生效"
-version: "1.12"
+version: "1.13"
 updated: "2026-09-07"
 authority: "文档清单、层级、权威顺序与版本表；本仓库文档元信息的唯一事实来源"
 index: "DOCS.md"
@@ -41,7 +41,7 @@ L2 产品定义     PRODUCT.md · UI_BRIEF.md · 懒狗放洋屁 MVP.dc.html
                  │                               ← 定义做什么、长什么样
 L3 技术契约     ARCHITECTURE.md · AI_CONTRACTS.md
                  │                               ← 定义怎么搭、怎么和 AI 说话
-L4 专项设计     8 份 *DESIGN.md / CEFR 评测设计
+L4 专项设计     9 份 *DESIGN.md / CEFR 评测设计
                  │                               ← 单个模块的目标形态
 L5 过程记录     DECISIONS.md · ROADMAP.md       ← 记录实际决定和实际进度
 ```
@@ -88,6 +88,7 @@ L5 过程记录     DECISIONS.md · ROADMAP.md       ← 记录实际决定和�
 | --- | --- | --- |
 | [持续学习DESIGN.md](持续学习DESIGN.md) | 产品策略层：进步证据、每日最低目标、动态难度、提示阶梯、Mastery 模型、中断宽容、疲劳检测 | M14 |
 | [引人入胜的阅读材料DESIGN.md](引人入胜的阅读材料DESIGN.md) | 阅读材料的价值模型、Hook→Gap→Discovery→Payoff 结构、题材引擎、生成管线、Interest Critic | M15 |
+| [母语阅读DESIGN.md](母语阅读DESIGN.md) | 中文母版 + 英语语义片段替换：比例与配比、Span 类型、替换规则、点击与救援、学习闭环、向全英阅读迁移 | M19 |
 | [英语听力训练模块DESIGN.md](英语听力训练模块DESIGN.md) | 听力的六维句子模型、裸听流程、四级提示、Listening Score、场景分类 | M11 |
 | [拼写训练DESIGN.md](拼写训练DESIGN.md) | S0～S6 状态机、升降级规则、提示梯度、八类拼写错误、薄弱片段、延迟回忆 | M12 |
 | [单词记忆DESIGN.md](单词记忆DESIGN.md) | 词汇数据模型：Lexeme / 词形 / 词义 / 例句 / 搭配的分层与建表建议 | M1、M3 |
@@ -179,23 +180,24 @@ python tools/check_docs.py
 | --- | --- | --- | --- | --- |
 | `README.md` | L0 入口 | 生效 | 1.2 | 2026-09-06 |
 | `CLAUDE.md` | L0 入口 | 生效 | 1.0 | 2026-09-06 |
-| `DOCS.md` | L0 入口 | 生效 | 1.12 | 2026-09-07 |
+| `DOCS.md` | L0 入口 | 生效 | 1.13 | 2026-09-07 |
 | `AGENTS.md` | L1 工作规则 | 生效 | 1.2 | 2026-09-06 |
 | `HANDOFF.md` | L1 工作规则 | 生效 | 1.1 | 2026-09-06 |
 | `PRODUCT.md` | L2 产品定义 | 生效 | 1.0 | 2026-09-03 |
 | `UI_BRIEF.md` | L2 产品定义 | 生效 | 6.0 | 2026-09-07 |
-| `ARCHITECTURE.md` | L3 技术契约 | 生效 | 1.3 | 2026-09-06 |
-| `AI_CONTRACTS.md` | L3 技术契约 | 生效 | 6.0 | 2026-09-07 |
+| `ARCHITECTURE.md` | L3 技术契约 | 生效 | 1.4 | 2026-09-07 |
+| `AI_CONTRACTS.md` | L3 技术契约 | 生效 | 7.0 | 2026-09-07 |
 | `CEFR_英语能力评测与个性化学习系统设计.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-08-05 |
 | `单词记忆DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-09-02 |
 | `词汇记忆提示DESIGN.md` | L4 专项设计 | 部分落地 | 4.0 | 2026-09-07 |
 | `拼写训练DESIGN.md` | L4 专项设计 | 部分落地 | 2.0 | 2026-09-07 |
 | `引人入胜的阅读材料DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-09-04 |
+| `母语阅读DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-09-07 |
 | `英语听力训练模块DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-08-31 |
 | `语音服务DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-09-04 |
 | `持续学习DESIGN.md` | L4 专项设计 | 部分落地 | 1.1 | 2026-09-06 |
-| `DECISIONS.md` | L5 过程记录 | 生效 | 5.0 | 2026-09-07 |
-| `ROADMAP.md` | L5 过程记录 | 生效 | 1.9 | 2026-09-07 |
+| `DECISIONS.md` | L5 过程记录 | 生效 | 5.1 | 2026-09-07 |
+| `ROADMAP.md` | L5 过程记录 | 生效 | 2.0 | 2026-09-07 |
 
 设计稿 `懒狗放洋屁 MVP.dc.html` 不参与版本表：它是导出的设计产物，版本由导出时间决定。
 
@@ -232,6 +234,13 @@ python tools/check_docs.py
 - D-065 替代 D-064 的弹窗和查词简版；UI_BRIEF 定义全屏共用学习内容及入库/不入库动作。
 - AI_CONTRACTS 4.0：新词请求增加可选 targetTerm / sentenceContext，指定词不匹配拒绝，
   新词提示版本升至 3；普通新词选词逻辑不变。ROADMAP 记录本次修正与未验收项。
+
+### 2026-09-07（母语阅读 MVP）
+
+- 新登记 L4 `母语阅读DESIGN.md`；D-070 记录复用阅读材料表、生成分两次调用、
+  检索作为可选增强，以及三处有意偏离（设置页、段内动态难度、回忆不写 FSRS）。
+- ARCHITECTURE 增 §7.1（v20 的 `nativeJson`、两步管线、`WebSearchProvider`）；
+  AI_CONTRACTS 增 §4.1（两次调用的字段与硬性约定）；ROADMAP 记 M19 的已做与没做。
 
 ### 2026-09-06（记录页生成学习卡）
 

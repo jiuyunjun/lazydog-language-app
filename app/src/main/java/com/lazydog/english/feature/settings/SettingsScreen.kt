@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Timer
@@ -162,6 +163,7 @@ fun SettingsScreen(
 
     var aiTestState by remember { mutableStateOf<String?>(null) }
     var speechTestState by remember { mutableStateOf<String?>(null) }
+    var searchTestState by remember { mutableStateOf<String?>(null) }
     var testing by remember { mutableStateOf(false) }
 
     val goalSummary = buildString {
@@ -173,6 +175,12 @@ fun SettingsScreen(
     }
     val aiSummary = aiTestState ?: "$aiModel · 内置本地配置，点击测试连接"
     val speechSummary = speechTestState ?: "内置本地配置 · $speechRegion · 点击测试连接"
+    val braveKey by prefs.braveApiKey.collectAsState(initial = "")
+    val searchSummary = searchTestState ?: if (braveKey.isBlank()) {
+        "没有配置密钥 · 母语阅读的「先搜一下最新消息」不可用"
+    } else {
+        "内置本地配置 · 点击测试连接"
+    }
 
     fun runAiConnectionTest() {
         if (testing) return
@@ -191,6 +199,24 @@ fun SettingsScreen(
                 is OpenAiCompatClient.ConnectionResult.Failure ->
                     "连接失败：${result.reason}"
             }
+            testing = false
+        }
+    }
+
+    /** 母语阅读写时事内容前先检索（`母语阅读DESIGN.md` §6.2）。没配密钥就是不可用，不是错误。 */
+    fun runSearchConnectionTest() {
+        if (testing) return
+        if (braveKey.isBlank()) {
+            searchTestState = "没有配置密钥：填进 LocalEnv.kt 的 BRAVE_API_KEY 再重装"
+            return
+        }
+        testing = true
+        searchTestState = "正在测试连接…"
+        scope.launch {
+            val app = context.applicationContext as LazyDogApplication
+            val result = app.webSearch.search("convenience store logistics", count = 1)
+            searchTestState = result.failure?.let { "连接失败：$it" }
+                ?: "连接正常，搜到了 ${result.hits.size} 条"
             testing = false
         }
     }
@@ -336,6 +362,12 @@ fun SettingsScreen(
             onClick = onOpenModelSettings,
         )
         SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", speechSummary, onClick = ::runSpeechConnectionTest)
+        SettingsRow(
+            Icons.Outlined.TravelExplore,
+            "网页搜索（Brave）",
+            searchSummary,
+            onClick = ::runSearchConnectionTest,
+        )
 
         SettingsGroupTitle("随时提问")
         SettingsRow(

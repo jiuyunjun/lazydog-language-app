@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material.icons.outlined.Spellcheck
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -67,6 +68,8 @@ private sealed interface RecentStudyItem {
         val cefr: String,
         val readingMinutes: Int,
         val newWordCount: Int,
+        /** 母语阅读的正文是中文，得用另一屏打开，不能按英文短文渲染。 */
+        val native: Boolean,
     ) : RecentStudyItem
     data class Scenario(val id: Long, override val title: String, override val timestamp: Long, val stage: String) : RecentStudyItem
     data class Listening(
@@ -90,10 +93,11 @@ fun StudyScreen(
     onProductionClick: () -> Unit,
     onProofChallengeClick: () -> Unit,
     onReadingClick: () -> Unit,
+    onNativeReadingClick: () -> Unit,
     onPasteClick: () -> Unit,
     onScenarioClick: () -> Unit,
     onScenarioSessionClick: (Long) -> Unit,
-    onMaterialClick: (Long) -> Unit,
+    onMaterialClick: (Long, Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
@@ -115,6 +119,7 @@ fun StudyScreen(
                     cefr = it.estimatedCefr,
                     readingMinutes = ((words + 179) / 180).coerceAtLeast(1),
                     newWordCount = ReadingJson.decodeWords(it.targetWordsJson).count { word -> word.role == "new" },
+                    native = it.source == ReadingRepository.SOURCE_NATIVE,
                 )
             } +
                 recentScenarios.map { RecentStudyItem.Scenario(it.id, it.titleZh, it.updatedAt, it.stage) } +
@@ -129,6 +134,7 @@ fun StudyScreen(
         StudyEntry(Icons.AutoMirrored.Outlined.Rule, "语法", "让 AI 讲一个", onClick = onGrammarClick),
         StudyEntry(Icons.Outlined.Edit, "自己写一句", "中译英，判完记进错题", onClick = onProductionClick),
         StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "生成一篇定制短文", onClick = onReadingClick),
+        StudyEntry(Icons.Outlined.Translate, "母语阅读", "中文里长出英语", onClick = onNativeReadingClick),
         StudyEntry(Icons.Outlined.Mic, "朗读", "读一句，拿反馈", onClick = onSpeakingClick),
         StudyEntry(Icons.Outlined.Headphones, "听力", "先听声音，再猜意思", onClick = onListeningClick),
         StudyEntry(Icons.Outlined.Spellcheck, "拼写", "认得不算，写得出才算", onClick = onSpellingClick),
@@ -230,7 +236,7 @@ fun StudyScreen(
                         shape = MaterialTheme.shapes.medium,
                         onClick = {
                             when (item) {
-                                is RecentStudyItem.Reading -> onMaterialClick(item.id)
+                                is RecentStudyItem.Reading -> onMaterialClick(item.id, item.native)
                                 is RecentStudyItem.Scenario -> onScenarioSessionClick(item.id)
                                 is RecentStudyItem.Listening -> scope.launch {
                                     runCatching { app.listeningMaterialRepository.recordReplay(item.material) }

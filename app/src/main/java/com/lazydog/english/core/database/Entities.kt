@@ -153,6 +153,15 @@ data class ReadingMaterialEntity(
     @ColumnInfo(defaultValue = "0") val completed: Boolean = false,
     @ColumnInfo(defaultValue = "0") val liked: Boolean = false,
     @ColumnInfo(defaultValue = "0") val saved: Boolean = false,
+    /**
+     * 母语阅读的中文母版 + 英语替换方案（`母语阅读DESIGN.md` §27、§28），
+     * 整条存 `NativeReadingDocument` 的 JSON。普通阅读材料和粘贴材料为空字符串。
+     *
+     * 不另开一张表：这一篇仍然是一份阅读材料，标题、teaser、payoff、完成/喜欢/保存
+     * 全都和现有材料一个含义，只是多一份分段与 span 数据。整条存 JSON 的理由和
+     * `questionsJson` 一样——它只随「重新规划替换」整条替换，拆成十几列没有好处。
+     */
+    @ColumnInfo(defaultValue = "''") val nativeJson: String = "",
     val estimatedCefr: String,
     val targetWordsJson: String,
     val grammarJson: String,

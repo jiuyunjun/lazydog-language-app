@@ -2,7 +2,7 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "6.0"
+version: "7.0"
 updated: "2026-09-07"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
@@ -251,6 +251,31 @@ interface LearningContentGenerator {
 - `languageOfExplanation`: `zh-CN`
 
 不要把整个知识库无上限塞入上下文。本地程序应先选择与本次任务有关的子集，并对“已掌握词汇”采用等级、频率边界或压缩摘要。
+
+### 4.1 母语阅读的两次调用（D-070）
+
+母语阅读不复用上面的阅读请求，而是拆成两次调用，**中间隔着本地校验**：
+
+1. `generateNativeCanonical`：入参 `topic` / `learnerLevel` / `factPack` / `recentTitles`，
+   输出 `schemaVersion` / `title` / `teaser` / `category` / `readerPayoff` /
+   `paragraphs[{id,textZh}]` / `comprehension`。**提示词里不出现任何学习目标**——
+   母版的质量要能单独评价，也免得模型自作主张往中文里掺英文。
+   `factPack` 非空时明确要求：涉及时间、数字、人名和最新进展只能用给定事实
+   （`母语阅读DESIGN.md` §36.7）。
+2. `planNativeReadingSpans`：入参是**上一步的段落原文**加上英语量、生词量、
+   是否允许语法、复习词与已掌握词；输出 `spans[{paragraphId,sourceZh,renderedEn,kind,
+   masteryClass,meaningZh,pronunciation,noteZh,patternEn}]`。
+
+契约里的硬性约定：
+
+- `sourceZh` 必须是该段落里**逐字连续出现**的原文。本地按它定位，定不到就丢这一条——
+  模型顺手改写中文是最常见的失败方式，留着会变成点不开的记录。
+- `id` 由本地发（`s1`、`s2`……），段落 `id` 也由本地重排：它们是点击定位的键，重了就点错。
+- 语法 span 每篇最多 1 个，且必须是完整从句或句型；超出的退回中文。
+- 两个 `masteryClass=target` 的片段之间至少隔 8 个汉字。
+- 英语比例超过目标 1.5 倍时，从 `incidental` / `mastered` 开始削——削掉的是"顺便"，
+  不是这一篇要教的东西。
+- **退回中文永远是合法结果**：以上任何一条不满足都只丢那一条，整篇仍然可读。
 
 ## 5. 语法输出契约
 
