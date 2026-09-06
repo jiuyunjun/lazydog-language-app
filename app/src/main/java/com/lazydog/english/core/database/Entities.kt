@@ -26,6 +26,8 @@ data class KnowledgeItemEntity(
     val nextReviewAt: Long?,
     val createdAt: Long,
     val updatedAt: Long,
+    /** 用户确认保存的 AI 学习卡生成信息；历史/手动知识项为空。 */
+    @ColumnInfo(defaultValue = "''") val generationMetadataJson: String = "",
 )
 
 @Entity(

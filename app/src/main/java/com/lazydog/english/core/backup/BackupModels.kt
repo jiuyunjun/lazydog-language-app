@@ -32,6 +32,7 @@ data class BackupKnowledgeItem(
     val nextReviewAt: Long?,
     val createdAt: Long,
     val updatedAt: Long,
+    val generationMetadataJson: String = "",
 )
 
 @Serializable
@@ -268,6 +269,7 @@ fun KnowledgeItemEntity.toBackup() = BackupKnowledgeItem(
     nextReviewAt = nextReviewAt,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    generationMetadataJson = generationMetadataJson,
 )
 
 /** 恢复用：id 固定为 0 让 Room 重新分配（autoGenerate）。 */
@@ -283,6 +285,7 @@ fun BackupKnowledgeItem.toEntity() = KnowledgeItemEntity(
     nextReviewAt = nextReviewAt,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    generationMetadataJson = generationMetadataJson,
 )
 
 fun VocabularyDetailEntity.toBackup() = BackupVocabularyDetail(

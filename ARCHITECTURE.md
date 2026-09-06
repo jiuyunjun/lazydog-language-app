@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.2"
+version: "1.3"
 updated: "2026-09-06"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -228,6 +228,10 @@ app/
 - 最近一次画像更新时间
 
 ### KnowledgeItem
+
+- Room v19 为既有 `knowledge_items` 增加 `generationMetadataJson`（默认空字符串），
+  自动迁移 18→19；旧知识项不伪造生成信息。记录页确认保存的卡片在创建事务内保存生成来源，
+  备份映射双向保留该可选字段，旧备份缺字段时为空。无新增表或持久化机制（D-064）。
 
 统一身份和调度字段：
 

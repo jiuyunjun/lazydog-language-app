@@ -97,6 +97,7 @@ class KnowledgeRepository(
         asNewSense: Boolean = false,
         /** 新词学习时选中的提示，与词卡在同一事务保存。 */
         memoryAssistance: GenerationResult.Success<MemoryAssistance>? = null,
+        generationMetadataJson: String = "",
     ): Long? {
         // 存进来的必须已经是原型：双击查词那条路由 AI 结合句子还原（`WordExplanation.headword`），
         // 生成新词那条由提示词要求词典形式。本地不做词形还原——saw / left / found 这类
@@ -110,7 +111,7 @@ class KnowledgeRepository(
         val duplicate = if (known) siblings.isNotEmpty() else dao.vocabularyTermExists(cleanTerm)
         if (duplicate && !(asNewSense && known)) return null
         return database.withTransaction {
-            val id = insertNewItem(KnowledgeType.Vocabulary)
+            val id = insertNewItem(KnowledgeType.Vocabulary, generationMetadataJson)
             dao.insertVocabularyDetail(
                 VocabularyDetailEntity(
                     itemId = id,
@@ -175,6 +176,7 @@ class KnowledgeRepository(
         badExampleEn: String = "",
         badExampleNoteZh: String = "",
         tipZh: String = "",
+        generationMetadataJson: String = "",
     ): Long? {
         val cleanPattern = patternEn.trim()
         if (cleanPattern.isBlank() || !cleanPattern.any { it in 'A'..'Z' || it in 'a'..'z' } ||
@@ -189,7 +191,7 @@ class KnowledgeRepository(
             if (dao.grammarKeyExists(key)) return null
         }
         return database.withTransaction {
-            val id = insertNewItem(KnowledgeType.Grammar)
+            val id = insertNewItem(KnowledgeType.Grammar, generationMetadataJson)
             dao.insertGrammarDetail(
                 GrammarDetailEntity(
                     itemId = id,
@@ -502,7 +504,7 @@ class KnowledgeRepository(
         )
     }
 
-    private suspend fun insertNewItem(type: KnowledgeType): Long {
+    private suspend fun insertNewItem(type: KnowledgeType, generationMetadataJson: String = ""): Long {
         val at = now()
         val state = MemoryState.initial(at)
         val id = dao.insertItem(
@@ -517,6 +519,7 @@ class KnowledgeRepository(
                 nextReviewAt = state.nextReviewAt?.toEpochMilli(),
                 createdAt = at.toEpochMilli(),
                 updatedAt = at.toEpochMilli(),
+                generationMetadataJson = generationMetadataJson,
             ),
         )
         dao.insertEvent(

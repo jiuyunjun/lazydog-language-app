@@ -22,6 +22,13 @@ import org.junit.Test
 class BackupModelsTest {
 
     @Test
+    fun `old knowledge backup defaults generation metadata to empty`() {
+        val old = """{"id":1,"type":"Vocabulary","stage":"Learning","stability":1.0,"difficulty":3.0,"reviewCount":0,"lapseCount":0,"lastReviewedAt":null,"nextReviewAt":1000,"createdAt":500,"updatedAt":500}"""
+        val item = Json.decodeFromString<BackupKnowledgeItem>(old)
+        assertEquals("", item.toEntity().generationMetadataJson)
+    }
+
+    @Test
     fun `knowledge item round trips through backup mapping`() {
         val entity = KnowledgeItemEntity(
             id = 42,
@@ -35,6 +42,7 @@ class BackupModelsTest {
             nextReviewAt = 2000L,
             createdAt = 500L,
             updatedAt = 1500L,
+            generationMetadataJson = """{"model":"test","validationStatus":"validated"}""",
         )
         val backup = entity.toBackup()
         assertEquals(42L, backup.id)

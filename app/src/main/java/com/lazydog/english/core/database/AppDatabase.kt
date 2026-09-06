@@ -23,7 +23,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ListeningMaterialEntity::class,
         ListeningAttemptEntity::class,
     ],
-    version = 18,
+    version = 19,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -48,6 +48,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 16, to = 17),
         // v18 给阅读 Feed 和明确反馈补字段，全部有默认值，旧材料无需回填。
         AutoMigration(from = 17, to = 18),
+        AutoMigration(from = 18, to = 19),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {

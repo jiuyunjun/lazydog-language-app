@@ -2,7 +2,7 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "3.0"
+version: "3.1"
 updated: "2026-09-06"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
@@ -21,6 +21,12 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 - 对失败提供降级：重试、跳过、使用缓存任务或稍后继续。
 
 ## 2. Provider 边界
+
+记录页学习卡复用现有 `explainWord` / `generateGrammarLesson`，不新增模型任务或提示词。
+单词携带输入、可选语境、等级与兴趣；语法指定 focus，knownGrammar 为空，避免模型为避重
+偏离用户指定的主题，最终重复检查由知识仓储负责。单词卡在查词校验外要求有效词性、
+词形、释义和双语例句。完整校验成功只生成内存草稿，用户确认后才入库（D-064）。
+输入、语境、等级、兴趣、返回模型、提示词/schema 版本、生成时间和校验状态随知识项保存。
 
 领域层使用项目自有接口，不直接暴露某一家服务的消息格式：
 

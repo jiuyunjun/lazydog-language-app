@@ -31,7 +31,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -65,7 +64,6 @@ import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.feature.grammar.GrammarPatternZhLine
 import com.lazydog.english.feature.grammar.GrammarTermsCard
 import com.lazydog.english.core.model.KnowledgeStage
-import com.lazydog.english.core.model.KnowledgeType
 import com.lazydog.english.core.model.ReviewGrade
 import java.time.LocalDate
 import java.time.ZoneId
@@ -95,6 +93,7 @@ fun LibraryScreen(
     /** 只剩语法还是半屏卡片：它没有词卡那套内容，一页专门讲一个语法点太空。 */
     var selectedGrammarId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showAddDialog by rememberSaveable { mutableStateOf(false) }
+    var addingVocabulary by rememberSaveable { mutableStateOf(true) }
 
     val now = System.currentTimeMillis()
     val endOfToday = remember {
@@ -158,7 +157,7 @@ fun LibraryScreen(
 
         if (tabIndex < 2) {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
+                onClick = { addingVocabulary = tabIndex == 0; showAddDialog = true },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
@@ -169,27 +168,11 @@ fun LibraryScreen(
     }
 
     if (showAddDialog) {
-        AddItemDialog(
-            type = if (tabIndex == 0) KnowledgeType.Vocabulary else KnowledgeType.Grammar,
+        AddLearningCardDialog(
+            isVocab = addingVocabulary,
+            app = app,
+            repository = repository,
             onDismiss = { showAddDialog = false },
-            onConfirm = { title, explanation, example ->
-                scope.launch {
-                    val id = when (tabIndex) {
-                        0 -> repository.addVocabulary(term = title, meaningZh = explanation, exampleEn = example)
-                        else -> repository.addGrammar(
-                            patternEn = title,
-                            summaryZh = explanation,
-                            explanationZh = explanation,
-                            exampleEn = example,
-                        )
-                    }
-                    if (id != null) showAddDialog = false
-                }
-            },
-            isDuplicate = { title ->
-                if (tabIndex == 0) vocab.any { it.detail.term.equals(title.trim(), ignoreCase = true) }
-                else grammar.any { it.detail.displayPattern().equals(title.trim(), ignoreCase = true) }
-            },
         )
     }
 
@@ -500,72 +483,6 @@ private fun DeleteRecordDialog(title: String, onDismiss: () -> Unit, onDelete: (
             TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("留着") } },
-    )
-}
-
-@Composable
-private fun AddItemDialog(
-    type: KnowledgeType,
-    onDismiss: () -> Unit,
-    onConfirm: (title: String, explanation: String, example: String) -> Unit,
-    isDuplicate: (String) -> Boolean,
-) {
-    var title by rememberSaveable { mutableStateOf("") }
-    var explanation by rememberSaveable { mutableStateOf("") }
-    var example by rememberSaveable { mutableStateOf("") }
-    val duplicate = title.isNotBlank() && isDuplicate(title)
-    val isVocab = type == KnowledgeType.Vocabulary
-    val invalidGrammarPattern = !isVocab && title.isNotBlank() &&
-        (!title.any { it in 'A'..'Z' || it in 'a'..'z' } || title.any { it.code in 0x4E00..0x9FFF })
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (isVocab) "记一个单词" else "记一个语法点") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text(if (isVocab) "单词" else "结构公式") },
-                    placeholder = if (!isVocab) {
-                        { Text("例如 be going to + base verb") }
-                    } else {
-                        null
-                    },
-                    isError = duplicate || invalidGrammarPattern,
-                    supportingText = when {
-                        duplicate -> ({ Text("已经记过它了") })
-                        invalidGrammarPattern -> ({ Text("这里只写英文结构公式，中文用途放下一栏") })
-                        else -> null
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = explanation,
-                    onValueChange = { explanation = it },
-                    label = { Text(if (isVocab) "中文意思" else "一句话用途（可不填）") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = example,
-                    onValueChange = { example = it },
-                    label = { Text("例句（可不填）") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(title, explanation, example) },
-                enabled = title.isNotBlank() && !duplicate && !invalidGrammarPattern && (!isVocab || explanation.isNotBlank()),
-            ) {
-                Text("记下")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("算了") }
-        },
     )
 }
 
