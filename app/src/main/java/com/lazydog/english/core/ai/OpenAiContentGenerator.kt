@@ -48,6 +48,10 @@ import com.lazydog.english.domain.production.TranslationTask
 import com.lazydog.english.domain.production.TranslationValidation
 import com.lazydog.english.domain.production.TranslationVerdict
 import com.lazydog.english.domain.generation.LearningContentGenerator
+import com.lazydog.english.domain.generation.LearningTargetRequest
+import com.lazydog.english.domain.generation.LearningTargetSuggestion
+import com.lazydog.english.domain.generation.MAX_LEARNING_TARGETS
+import com.lazydog.english.domain.generation.filterLearningTargets
 import com.lazydog.english.domain.generation.MemoryAssistance
 import com.lazydog.english.domain.generation.MemoryAssistanceRequest
 import com.lazydog.english.domain.generation.MemoryAssistanceValidation
@@ -526,6 +530,37 @@ class OpenAiContentGenerator(
             return GenerationResult.Failure("挑战句没通过校验：$it")
         }
         return GenerationResult.Success(sentence, content.model, PROMPT_VERSION)
+    }
+
+    override suspend fun suggestLearningTargets(
+        request: LearningTargetRequest,
+        onStage: ((GenerationStage) -> Unit)?,
+    ): GenerationResult<List<LearningTargetSuggestion>> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildSuggestTargetsPrompt(request),
+            // 挑候选要的是马上出字：用户还站在输入框前面，等三秒就会去按返回。
+            task = AiTask.Explain,
+            onStage = onStage,
+            op = "候选",
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<LearningTargetsPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val valid = filterLearningTargets(payload.targets.map { it.toDomain() }, request.isVocab)
+        if (valid.isEmpty()) {
+            return GenerationResult.Failure("没找到对得上的候选，换个说法再试试。")
+        }
+        val dropped = payload.targets.size - valid.size
+        return GenerationResult.Success(
+            valid,
+            content.model,
+            SUGGEST_PROMPT_VERSION,
+            if (dropped > 0) listOf("$dropped 条候选没通过校验") else emptyList(),
+        )
     }
 
     override suspend fun explainWord(
@@ -1794,6 +1829,20 @@ class OpenAiContentGenerator(
     }
 
     @Serializable
+    private data class LearningTargetsPayload(
+        val targets: List<LearningTargetPayload> = emptyList(),
+    )
+
+    @Serializable
+    private data class LearningTargetPayload(
+        val target: String = "",
+        val labelZh: String = "",
+        val noteZh: String = "",
+    ) {
+        fun toDomain() = LearningTargetSuggestion(target.trim(), labelZh.trim(), noteZh.trim())
+    }
+
+    @Serializable
     private data class ProofSentencePayload(
         val sentenceEn: String = "",
         val sentenceZh: String = "",
@@ -1860,6 +1909,7 @@ class OpenAiContentGenerator(
         const val ASK_PROMPT_VERSION = 1
         const val LISTENING_PROMPT_VERSION = 2
         const val MEMORY_PROMPT_VERSION = 2
+        const val SUGGEST_PROMPT_VERSION = 1
 
         /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
         const val MIN_LISTENING_ITEMS = 5
@@ -2562,6 +2612,34 @@ class OpenAiContentGenerator(
                 "也不要写出别扭的句子。")
             appendLine("sentenceZh 是这句话的中文说法，说人话，不要逐字硬译。")
             appendLine("""输出 JSON schema：{"sentenceEn":"...","sentenceZh":"..."}""")
+        }
+
+        internal fun buildSuggestTargetsPrompt(request: LearningTargetRequest): String = buildString {
+            val what = if (request.isVocab) "英语单词或短语" else "英语语法点"
+            appendLine("一位水平 ${request.learnerLevel} 的中文母语学习者说，他想学这个：")
+            appendLine(request.queryZh)
+            appendLine("给出最多 $MAX_LEARNING_TARGETS 个对得上的$what，让他挑一个来学。")
+            if (request.isVocab) {
+                appendLine("target 只写英文原形（动词原形、名词单数），不要写中文，不要带音标或词性缩写。")
+                appendLine("labelZh 写「词性 中文释义」，例如「形容词 深思熟虑的」。")
+                appendLine("他给的可能是一个中文词，也可能是一整句描述（「表示后悔的说法」）。" +
+                    "是描述就给几个真的能用在那个场合的说法，不要只给最字面的那一个直译。")
+                appendLine("宁可少给几个，也不要凑数：每一个都得是他这句话真的问到的意思。" +
+                    "同义词只在用法真的分得开时才分成两条，noteZh 说清差在哪。")
+            } else {
+                appendLine("target 写英文结构公式（have / has + 过去分词）或通用语法名称（现在完成时），" +
+                    "哪个更说得清就写哪个。labelZh 写这个语法点的中文名称。")
+                appendLine("他给的可能是语法名称，也可能是一句「已经做完了怎么说」这样的描述。")
+            }
+            appendLine("noteZh 用一句话说清它和他那句话的关系，或者它跟别的候选差在哪；不要复述 labelZh。")
+            appendLine("按最贴近他那句话的排在前面。")
+            appendLine("如果他那句话本身就已经是英文，照样按上面的规则给候选，不要原样退回来。")
+            if (request.topics.isNotEmpty()) {
+                appendLine("他关心的话题：${request.topics.joinToString("、")}；同样贴近时优先这些场景里用得上的。")
+            }
+            appendLine(
+                """输出 JSON schema：{"targets":[{"target":"...","labelZh":"...","noteZh":"..."}]}""",
+            )
         }
 
         internal fun buildExplainSentencePrompt(sentence: String, level: String): String = buildString {

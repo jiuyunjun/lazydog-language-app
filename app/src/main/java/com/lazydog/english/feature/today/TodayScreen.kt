@@ -111,7 +111,9 @@ fun TodayScreen(
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            // 底部这一下是给底部导航栏留的。外面那层 Scaffold 的 padding 加在滚动容器**外面**，
+            // 所以滚到底时最后一张卡是贴着导航栏收住的，中间一点空隙都没有。
+            .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
     ) {
         Column(
             modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),

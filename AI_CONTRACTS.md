@@ -2,7 +2,7 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "4.0"
+version: "4.1"
 updated: "2026-09-06"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
@@ -202,6 +202,25 @@ interface LearningContentGenerator {
 行为退回原来的"让模型自己按等级选词"。这是有意的降级路径，不是错误状态。
 
 词频表本身的口径见 `ARCHITECTURE.md` §5「词频表」，选它的理由见 `DECISIONS.md` D-059。
+
+### 用中文找学习目标（D-067）
+
+手动添加学习卡时输入的是中文，先单独调一次候选，再走上面那条生成路径。
+这一步**只挑目标，不生成学习内容**，也不写任何本地记录。
+
+请求字段（`LearningTargetRequest`）：`queryZh`（用户原样输入的中文，不改写）、
+`isVocab`、`learnerLevel`、`topics`。
+
+输出：`{"targets":[{"target":"...","labelZh":"...","noteZh":"..."}]}`，最多 6 条。
+`target` 是挑中后交给 `NewWordsRequest.targetTerm` 或 `GrammarLessonRequest` 的那个值：
+单词必须是英文原形，语法可以是英文结构公式或中文语法名称。
+
+本地校验（`filterLearningTargets`）：去掉空目标、无中文标签的条目和重复项；
+**单词候选必须由拉丁字母组成**——模型偶尔把用户那句中文原样退回来，
+挑中它只会拿中文去生成英文词卡，错得很安静。全部不合格时整次调用失败，不给半个列表。
+
+分成两次调用而不是一次到底，是因为两者的失败方式不一样：候选给歪了是"再说一遍就行"，
+学习卡写坏了是"这一张不要"。混在一次里用户只能整体重来。
 
 ## 4. 阅读生成请求
 

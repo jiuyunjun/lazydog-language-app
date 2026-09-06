@@ -37,6 +37,18 @@ interface LearningContentGenerator {
     ): GenerationResult<com.lazydog.english.domain.scenario.ScenarioSummary>
 
     /**
+     * 用中文说想学什么，换回几个可以学的目标（`UI_BRIEF.md` §4.3）。
+     *
+     * 只挑目标，不写学习卡：挑中之后仍然走 [generateNewWords] / [generateGrammarLesson]。
+     * 分成两次调用是因为这两件事的失败方式不一样——候选给歪了是"再说一遍就行"，
+     * 学习卡写坏了是"这一张不要"，混在一次里用户只能整体重来。
+     */
+    suspend fun suggestLearningTargets(
+        request: LearningTargetRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
+    ): GenerationResult<List<LearningTargetSuggestion>>
+
+    /**
      * [onStage] 报"现在卡在哪一步"（还没接通 / 模型在想 / 正在写），实现应流式请求。
      * 只报字符数的话，推理模型开口前的那段思考里界面完全静止，看着像卡死。
      */
