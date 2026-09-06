@@ -244,7 +244,8 @@ object MemoryAssistanceValidation {
                 confusions = confusions,
                 collocations = collocations,
                 exampleEn = example,
-                recallQuestionZh = raw.recallQuestionZh.trim().take(60),
+                // 不截断问题：截掉尾部答案会把泄题内容误判为合格，也可能留下半句话。
+                recallQuestionZh = raw.recallQuestionZh.trim(),
             ),
             droppedNotes = dropped,
         )
@@ -257,6 +258,7 @@ object MemoryAssistanceValidation {
         val generic = listOf("多读几遍", "多念几遍", "反复朗读", "反复记忆", "结合例句记", "结合例句多记", "多加练习", "记住这个单词")
         if (generic.any { it in text }) return "记忆线索只有通用学习建议"
         if (!Regex("[A-Za-z]{2,}").containsMatchIn(text)) return "记忆线索缺少能对照的英文抓手"
+        if (!containsChinese(text)) return "记忆线索缺少中文解释"
         fun normalized(value: String) = value.trim()
             .replace(Regex("^(构词|同源|词形|发音|对比|搭配|场景|联想|谐音联想)[：:]"), "")
             .lowercase().filter { it.isLetterOrDigit() }
@@ -268,6 +270,17 @@ object MemoryAssistanceValidation {
         return null
     }
 
+    private fun containsChinese(text: String): Boolean = text.any { it in '\u3400'..'\u9fff' }
+
+    /** 也用于旧提示的回想入口；旧数据仍可阅读，但泄题或残缺的问题不进入练习。 */
+    fun recallProblem(question: String, term: String): String? = when {
+        question.isBlank() -> "缺少可用来回想这个词的自测问题"
+        question.length > 60 -> "自测问题超过 60 字"
+        !containsChinese(question) -> "自测问题缺少中文引导"
+        ContentValidation.exampleContainsTerm(question, term) -> "自测问题直接泄露了目标词"
+        else -> null
+    }
+
     /** 整条能不能用。@return 失败原因，null 表示通过。 */
     fun validate(value: MemoryAssistance, expectedTerm: String, avoidHookZh: String = ""): String? = when {
         !value.term.equals(expectedTerm.trim(), ignoreCase = true) -> "返回的不是请求的那个词"
@@ -277,8 +290,7 @@ object MemoryAssistanceValidation {
         value.memoryHookZh.length > MAX_HOOK_LENGTH -> "记忆线索超过 $MAX_HOOK_LENGTH 字"
         hookProblem(value.memoryHookZh, value.term, value.coreMeaningZh, avoidHookZh) != null ->
             hookProblem(value.memoryHookZh, value.term, value.coreMeaningZh, avoidHookZh)
-        value.recallQuestionZh.isBlank() -> "缺少可用来回想这个词的自测问题"
-        ContentValidation.exampleContainsTerm(value.recallQuestionZh, value.term) -> "自测问题直接泄露了目标词"
+        recallProblem(value.recallQuestionZh, value.term) != null -> recallProblem(value.recallQuestionZh, value.term)
         else -> null
     }
 }

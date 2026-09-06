@@ -1899,8 +1899,8 @@ class OpenAiContentGenerator(
     companion object {
         const val SCHEMA_VERSION = 1
         const val PROMPT_VERSION = 1
-        const val WORDS_PROMPT_VERSION = 3
-        const val WORD_EXPLANATION_PROMPT_VERSION = 2
+        const val WORDS_PROMPT_VERSION = 4
+        const val WORD_EXPLANATION_PROMPT_VERSION = 3
         const val READING_PROMPT_VERSION = 2
         const val GRAMMAR_PROMPT_VERSION = 2
         const val GRAMMAR_DRILL_PROMPT_VERSION = 1
@@ -1908,7 +1908,7 @@ class OpenAiContentGenerator(
         const val SCENARIO_PROMPT_VERSION = 1
         const val ASK_PROMPT_VERSION = 1
         const val LISTENING_PROMPT_VERSION = 2
-        const val MEMORY_PROMPT_VERSION = 2
+        const val MEMORY_PROMPT_VERSION = 3
         const val SUGGEST_PROMPT_VERSION = 1
 
         /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
@@ -2179,21 +2179,28 @@ class OpenAiContentGenerator(
 
         /** 批量短提示与单词独立生成共用同一质量口径。 */
         private fun memoryCueRules(): String = buildString {
-            appendLine("目标是学过后能顺着线索回想英文，不是假设从未学过的人能凭空猜中。不要把释义换个说法当记忆术。")
-            appendLine("先选一个最省力的抓手，再写清『具体英文线索 → 与当前词义或易错点的联系』。" +
-                "首句必须自己讲通，不能只写策略名，再把解释藏到其他字段。英文线索可以是实际字母、熟词、固定搭配或有留空的短句。")
-            appendLine("有透明构词就拆熟悉的词干与词缀；没有就用熟词对比、具体拼写规律或日常短句。" +
-                "不要为短词硬拆词根，不用另一个冷僻词解释生词，不把任意字母块冒充词根。")
-            appendLine("好例子（构词）：unhappy：un- 表否定，happy 是开心；在 happy 前加 un-，开心就变成不开心。")
-            appendLine("好例子（词形）：dessert 甜点比 desert 沙漠多一个 s；甜点想多来一份，就多留一个 s。这是人为联想，不是词源。")
-            appendLine("好例子（搭配）：borrow 是借进来：borrow a book from a friend，书从朋友那儿到你手里；用 from 把方向记住。")
-            appendLine("好例子（短词场景）：need 用在缺了就办不成的事：出门发现没钥匙，I need my keys；把 need 接在 I 后面说出缺的东西。")
-            appendLine("坏例子：『territory 就是有主人的地盘』『想象一种奇怪的画面就是 bizarre』，只解释中文，没给回到英文的桥。" +
-                "『terr- 土地，如 terrain』也不够：用陌生词搭陌生词，还省掉了联系。")
+            appendLine("学习者是中文母语者。中文负责把联系讲通，英文是要记的对象；不能让他为了看懂提示再查一个词。" +
+                "目标是学过后能顺着线索回想英文，不是假设从未学过的人能凭空猜中。")
+            appendLine("只给一个中文能立即理解的锚点，把它与目标词的声音、字母或一个具体用法连起来。" +
+                "主线索必须包含目标词，并在本段讲完联系；不能把关键解释藏到展开字段。")
+            appendLine("出现辅助英文词、词缀或短语时，就地给中文含义；即使 buy、from 也不能默认已会。" +
+                "没有个人已知词证据，CEFR 等级不等于认识某个辅助词。短语限一个、尽量 2~5 词，给整段中文意思。")
+            appendLine("先看具体困难：有真实错拼就针对正确字母顺序；构词透明且能用中文讲清才拆；" +
+                "否则用中文日常情境引出一个可直接说的短表达，不强造故事。不要硬拆词根或堆近义词。")
+            appendLine("好例子（构词）：unhappy 不开心：happy 是开心，un- 表示不；给开心加一个「不」，就是 unhappy。")
+            appendLine("好例子（词形）：dessert 甜点中间有两个 s；把它们想成饭后还想吃的两份甜点，提醒自己别漏一个 s。（人为联想）")
+            appendLine("好例子（用法）：borrow a book（借一本书）：书从别人手里到你手里，之后要还；把 borrow 和「借进来再还」连起来。")
+            appendLine("好例子（短词）：need help（需要帮助）：一个人搬不动箱子，喊人搭把手；把 need 和「缺了帮手办不成」连起来。")
+            appendLine("普通用法短句只是回忆的起点，不宣称是神奇记忆术。没有可靠助记就给这样的双语用法，" +
+                "短提示连用法也写不好可以留空。声音关键词仅在自然贴近时使用，必须标「谐音联想，非读音」，" +
+                "并用有动作的中文画面把关键词和词义连起来；不能只贴一个谐音，不替代真实发音。")
+            appendLine("坏例子：『正式场合里的 buy』没有解释 buy，也没联系到目标词；『terr- 土地，如 terrain』又添生词；" +
+                "『想象一种奇怪的画面就是 bizarre』和『territory 就是有主人的地盘』只是重说释义。")
             appendLine("禁止『多读几遍』『结合例句记』『注意拼写』『记住这个单词』等换任何词都成立的建议；" +
                 "禁止把正确拼写抄一遍就算提示。对比要说清差在哪、怎么不混；场景要把关键英文嵌进动作，不在末尾贴个单词了事。")
             appendLine("不要强行谐音或编造词源。幽默只在能加强词形与词义联系时使用，不能为玩梗牺牲准确性。" +
-                "写完自检：遮住目标词，这条提示留下了哪一个具体抓手？如果只有中文释义或学习建议，重写。")
+                "写完自检：中文母语者不查词能看懂吗？需要额外背几个东西？能用哪个中文线索回想刚学的英文？" +
+                "若只是重说释义、贴单词或又引入陌生知识，重写。")
         }
 
         /**
@@ -2266,7 +2273,7 @@ class OpenAiContentGenerator(
                 "不要每种都写一点——每个词都生成全部类型只会产出一堆低价值信息。")
 
             appendLine("各字段要求：")
-            appendLine("core_meaning：用最短的话说明最核心、最常用的那个意思，不罗列次要释义。")
+            appendLine("core_meaning：用中文简述请求指定的当前词义；只有未指定词义时才选最常用义，不罗列次要释义。")
             appendLine("memory_hook：20~90 字，最多两句，只讲一个主要记忆关系。首屏直接显示完整线索，不能压成口号。")
             append(memoryCueRules())
             appendLine("morphology：只有存在**可靠的**前缀/词根/后缀或复合关系时才拆，" +
@@ -2283,7 +2290,9 @@ class OpenAiContentGenerator(
             appendLine("confusions：最多 3 个真正容易混的词，每个只说一个关键区别；不要为了凑数加无关词。")
             appendLine("collocations：这个词真实高频的固定搭配，最多 3 条。")
             appendLine("example：1 个自然、高频、简单的例句，必须包含这个词，体现最典型的用法。")
-            appendLine("recall_question：必填，一个能回用刚才线索的短问题，不出现目标词本身或完整答案；不要只问『这个词是什么意思』。")
+            appendLine("recall_question：必填，60 字内，用中文情境提示回想刚学的完整英文单词；不能只问某个字母、词缀或中文释义。" +
+                "不出现目标词、完整答案或把答案拆成字母；独立显示时也能理解，不说『上面那个词』。" +
+                "例如 borrow 对应『向朋友借一本书，之后要还；刚学的「借进来」怎么说？』。")
 
             appendLine("输出原则：简洁优先；每一条都必须服务于记忆；" +
                 "禁止百科式解释、禁止编造词源、禁止强行谐音、禁止牵强联想。" +

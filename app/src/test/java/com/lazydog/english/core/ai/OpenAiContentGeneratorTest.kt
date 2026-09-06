@@ -1118,11 +1118,11 @@ class MemoryAssistanceGeneratorTest {
         learnerLevel = "B1",
     )
 
-    /** 文档 §6 的示例原样：morphology 和 note 是 null，confusions 只有一条。 */
+    /** 文档 §6 的可空字段兼容样本：morphology 和 note 是 null，confusions 只有一条。 */
     private val designExample =
         """{"schemaVersion":1,"word":"purchase","core_meaning":"购买",
            "primary_memory_type":"CONTEXT","secondary_memory_type":"CONTRAST",
-           "memory_hook":"正式场合里的 buy","morphology":null,
+           "memory_hook":"purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。","morphology":null,
            "spelling":{"weak_segment":"pur","common_errors":[]},
            "pronunciation":{"syllables":["pur","chase"],"stress":1,"note":null},
            "visual_association":"在店里柜台付款，把商品正式买下来。",
@@ -1132,13 +1132,13 @@ class MemoryAssistanceGeneratorTest {
            "recall_question":"正式表达「购买设备」时可以用哪个词？"}"""
 
     @Test
-    fun `the design document's own example parses`() = runBlocking {
+    fun `bilingual cue and nullable detail fields parse`() = runBlocking {
         server.enqueue(MockResponse().setBody(chatBody(designExample)))
 
         val success = generator().generateMemoryAssistance(request) as GenerationResult.Success
 
         assertEquals("purchase", success.data.term)
-        assertEquals("正式场合里的 buy", success.data.memoryHookZh)
+        assertEquals("purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。", success.data.memoryHookZh)
         assertEquals(MemoryType.Context, success.data.primaryType)
         assertEquals(MemoryType.Contrast, success.data.secondaryType)
         // morphology 是 null 不是缺字段：这个词本来就没有可靠构词可拆。
@@ -1151,7 +1151,7 @@ class MemoryAssistanceGeneratorTest {
     @Test
     fun `a hook that blows past the length limit fails instead of being shown`() = runBlocking {
         val tooLong = designExample.replace(
-            "\"memory_hook\":\"正式场合里的 buy\"",
+            "\"memory_hook\":\"purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。\"",
             "\"memory_hook\":\"${"purchase 的记忆线索太长了".repeat(10)}\"",
         )
         server.enqueue(MockResponse().setBody(chatBody(tooLong)))
@@ -1174,7 +1174,7 @@ class MemoryAssistanceGeneratorTest {
 
         generator().generateMemoryAssistance(
             request.copy(
-                avoidHookZh = "正式场合里的 buy",
+                avoidHookZh = "purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。",
                 avoidTypes = listOf(MemoryType.Context),
                 weakSegments = listOf("chase"),
                 observedErrors = listOf("purchace"),
@@ -1191,21 +1191,21 @@ class MemoryAssistanceGeneratorTest {
     @Test
     fun `same hook with new punctuation is rejected when changing method`() = runBlocking {
         server.enqueue(MockResponse().setBody(chatBody(designExample)))
-        val result = generator().generateMemoryAssistance(request.copy(avoidHookZh = "正式场合里的 BUY！"))
+        val result = generator().generateMemoryAssistance(request.copy(avoidHookZh = "purchase a ticket（购买一张票）：订票页面让你付款买票，用 PURCHASE 表示这次购买！"))
         assertTrue(result is GenerationResult.Failure)
         assertTrue((result as GenerationResult.Failure).reason.contains("上一条相同"))
     }
 
     @Test
     fun `generic advice is rejected even in a complete structured response`() = runBlocking {
-        server.enqueue(MockResponse().setBody(chatBody(designExample.replace("正式场合里的 buy", "purchase 多读几遍就能记住"))))
+        server.enqueue(MockResponse().setBody(chatBody(designExample.replace("purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。", "purchase 多读几遍就能记住"))))
         assertTrue(generator().generateMemoryAssistance(request) is GenerationResult.Failure)
     }
 
     @Test
     fun `snake case hook is delivered while the response is streaming`() = runBlocking {
-        val partial = "{\"schemaVersion\":1,\"word\":\"purchase\",\"memory_hook\":\"正式场合里的 buy\","
-        val rest = designExample.substringAfter("{", "").replace("\"memory_hook\":\"正式场合里的 buy\",", "")
+        val partial = "{\"schemaVersion\":1,\"word\":\"purchase\",\"memory_hook\":\"purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。\","
+        val rest = designExample.substringAfter("{", "").replace("\"memory_hook\":\"purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。\",", "")
         fun event(chunk: String): String {
             val escaped = chunk.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
             return "data: {\"model\":\"gpt-test\",\"choices\":[{\"delta\":{\"content\":\"$escaped\"}}]}\n\n"
@@ -1216,13 +1216,28 @@ class MemoryAssistanceGeneratorTest {
         val hooks = mutableListOf<String>()
         val result = generator().generateMemoryAssistance(request, onPartialHook = { hooks.add(it) })
         assertTrue(result is GenerationResult.Success)
-        assertTrue(hooks.any { it == "正式场合里的 buy" })
-        assertEquals(2, (result as GenerationResult.Success).promptVersion)
+        assertTrue(hooks.any { it == "purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。" })
+        assertEquals(3, (result as GenerationResult.Success).promptVersion)
     }
 
 }
 
 class MemoryAssistancePromptTest {
+
+    @Test
+    fun `batch and independent hints share chinese first scaffolding`() {
+        val independent = OpenAiContentGenerator.buildMemoryAssistancePrompt(
+            MemoryAssistanceRequest(term = "borrow", meaningZh = "借入", learnerLevel = "A1"),
+        )
+        for (prompt in listOf(OpenAiContentGenerator.memoryHintRules(), independent)) {
+            assertTrue(prompt.contains("就地给中文含义"))
+            assertTrue(prompt.contains("CEFR 等级不等于认识某个辅助词"))
+            assertTrue(prompt.contains("borrow a book（借一本书）"))
+            assertTrue(prompt.contains("谐音联想，非读音"))
+        }
+        assertTrue(independent.contains("回想刚学的完整英文单词"))
+        assertTrue(independent.contains("只有未指定词义时才选最常用义"))
+    }
 
     @Test
     fun `prompt keeps the seven strategies and the no-invention rules`() {

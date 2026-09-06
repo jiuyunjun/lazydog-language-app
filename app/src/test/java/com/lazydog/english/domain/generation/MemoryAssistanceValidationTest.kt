@@ -172,4 +172,28 @@ class MemoryAssistanceValidationTest {
         assertNull(MemoryAssistanceValidation.validate(hint(recall = "正式表达购买设备用哪个词？"), "purchase"))
     }
 
+    @Test
+    fun `english only mnemonics and recall questions need chinese support`() {
+        assertNotNull(MemoryAssistanceValidation.validate(hint(hook = "Purchase is the formal version of buy"), "purchase"))
+        assertNotNull(MemoryAssistanceValidation.recallProblem("How do you say buying a ticket?", "purchase"))
+        assertNull(MemoryAssistanceValidation.validate(hint(
+            hook = "purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。",
+        ), "purchase"))
+    }
+
+    @Test
+    fun `cleaning cannot turn a long leaking question into a valid one`() {
+        val question = "购买设备时可以用哪个英文词？".repeat(5) + "purchase"
+        val cleaned = MemoryAssistanceValidation.clean(hint(recall = question))
+        assertEquals(question, cleaned.value.recallQuestionZh)
+        assertNotNull(MemoryAssistanceValidation.validate(cleaned.value, "purchase"))
+    }
+
+    @Test
+    fun `recall gate also rejects leaking legacy questions`() {
+        assertNotNull(MemoryAssistanceValidation.recallProblem("PURCHASE 是什么意思？", "purchase"))
+        assertNotNull(MemoryAssistanceValidation.recallProblem("", "purchase"))
+        assertNull(MemoryAssistanceValidation.recallProblem("订票页面上，刚学的「购买」怎么说？", "purchase"))
+    }
+
 }

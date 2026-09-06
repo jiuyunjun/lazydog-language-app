@@ -3,18 +3,23 @@ package com.lazydog.english.feature.vocabulary
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,12 +39,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.MemoryAssistance
+import com.lazydog.english.domain.generation.MemoryAssistanceValidation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -54,7 +62,7 @@ private sealed interface HintPhase {
 /**
  * 一个词的记忆提示卡（词汇记忆提示DESIGN.md §7）。
  *
- * 首屏显示核心意思、完整线索、策略和一道回想问题（D-062）。展开的内容如果一次性铺出来，
+ * 首屏显示完整中文线索，回想时用不透明全屏窗口遮住词卡（D-068）。展开的内容如果一次性铺出来，
  * 用户读到第三块就已经不在记这个词了。其余的收在「更多记忆提示」里。
  *
  * [fallbackHintZh] 是老的一句话记忆方法（vocabulary_details.memoryHintZh）。它先顶着，
@@ -127,6 +135,11 @@ private fun MemoryHintContent(
     val scope = rememberCoroutineScope()
     var phase by remember { mutableStateOf<HintPhase>(HintPhase.Idle) }
     var expanded by remember { mutableStateOf(false) }
+    var recalling by remember(hint) { mutableStateOf(false) }
+
+    if (recalling && hint != null) {
+        MemoryRecallDialog(hint = hint, onDismiss = { recalling = false })
+    }
 
     fun request() {
         if (phase is HintPhase.Generating) return
@@ -180,7 +193,6 @@ private fun MemoryHintContent(
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.weight(1f),
                 )
-                if (current != null) StrategyChips(current)
             }
 
             when (val p = phase) {
@@ -200,20 +212,6 @@ private fun MemoryHintContent(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
-                if (current.coreMeaningZh.isNotBlank()) {
-                    InteractiveEnglishText(
-                        text = current.coreMeaningZh,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                }
-                if (current.recallQuestionZh.isNotBlank()) {
-                    Text(
-                        text = "遮住上面试着回想：${current.recallQuestionZh}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                }
                 AnimatedVisibility(visible = expanded) { MemoryHintDetails(current) }
             } else if (fallbackHintZh.isNotBlank()) {
                 InteractiveEnglishText(
@@ -231,6 +229,11 @@ private fun MemoryHintContent(
 
             val busy = phase is HintPhase.Generating
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (current != null && !busy &&
+                    MemoryAssistanceValidation.recallProblem(current.recallQuestionZh, current.term) == null
+                ) {
+                    TextButton(onClick = { recalling = true }) { Text("遮住，回想一下") }
+                }
                 if (current != null && current.hasDetails) {
                     TextButton(onClick = { expanded = !expanded }) {
                         Icon(
@@ -266,6 +269,37 @@ private fun MemoryHintContent(
     }
 }
 
+/** 不透明全屏遮住标题、例句和提示；回想只是练习，不写入自评或复习进度。 */
+@Composable
+private fun MemoryRecallDialog(hint: MemoryAssistance, onDismiss: () -> Unit) {
+    var revealed by remember(hint) { mutableStateOf(false) }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier = Modifier.fillMaxSize().systemBarsPadding()
+                    .verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                Text("回想一下", style = MaterialTheme.typography.headlineSmall)
+                Text("试着说出刚学的英文，想不起来也可以看答案。", style = MaterialTheme.typography.bodyMedium)
+                Text(hint.recallQuestionZh, style = MaterialTheme.typography.titleLarge)
+                if (revealed) {
+                    Text(hint.term, style = MaterialTheme.typography.headlineMedium)
+                    Text(hint.coreMeaningZh, style = MaterialTheme.typography.bodyLarge)
+                    Text(hint.memoryHookZh, style = MaterialTheme.typography.bodyLarge)
+                    Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("回到词卡") }
+                } else {
+                    Button(onClick = { revealed = true }, modifier = Modifier.fillMaxWidth()) { Text("看答案") }
+                    TextButton(onClick = onDismiss) { Text("先回词卡") }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun GeneratingRow(phase: HintPhase.Generating) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -294,7 +328,7 @@ private fun GeneratingRow(phase: HintPhase.Generating) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StrategyChips(hint: MemoryAssistance) {
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         listOfNotNull(hint.primaryType, hint.secondaryType).forEach { type ->
             Surface(
                 color = MaterialTheme.colorScheme.secondary,
@@ -317,6 +351,7 @@ private fun StrategyChips(hint: MemoryAssistance) {
 private fun MemoryHintDetails(hint: MemoryAssistance) {
     val extended = LazyDogTheme.extendedColors
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+        StrategyChips(hint)
         if (hint.morphologyZh.isNotBlank()) {
             DetailBlock("构词") {
                 // 构词几乎全是英文词根，点开查的需求最强。
