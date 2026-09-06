@@ -188,6 +188,26 @@ class OpenAiContentGeneratorTest {
     private val wordsRequest = NewWordsRequest(5, "A2-B1", listOf("科技"), listOf("linger"))
 
     @Test
+    fun `manual card refuses a different word`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody(wordsJson)))
+        assertTrue(generator().generateNewWords(wordsRequest.copy(count = 1, targetTerm = "receive"))
+            is GenerationResult.Failure)
+    }
+
+    @Test
+    fun `manual card keeps full study fields and target context`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody(wordsJson)))
+        val result = generator().generateNewWords(wordsRequest.copy(
+            count = 1, targetTerm = "curb", sentenceContext = "Curb traffic.",
+        )) as GenerationResult.Success
+        assertEquals(listOf("cu", "rb"), result.data.single().chunks)
+        assertEquals("curb traffic", result.data.single().collocations.single().en)
+        val prompt = server.takeRequest().body.readUtf8()
+        assertTrue(prompt.contains("<target>curb</target>"))
+        assertTrue(prompt.contains("Curb traffic."))
+    }
+
+    @Test
     fun `valid words pass and invalid entries are dropped`() = runBlocking {
         server.enqueue(MockResponse().setBody(chatBody(wordsJson)))
 

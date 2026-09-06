@@ -2,7 +2,7 @@ package com.lazydog.english.core.data
 
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.domain.generation.GenerationResult
-import com.lazydog.english.domain.generation.WordExplanation
+import com.lazydog.english.domain.generation.GeneratedWord
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -22,13 +22,17 @@ data class LearningCardMetadata(
 )
 
 suspend fun KnowledgeRepository.saveWordCard(
-    result: GenerationResult.Success<WordExplanation>,
+    result: GenerationResult.Success<GeneratedWord>,
     metadata: LearningCardMetadata,
+    memoryAssistance: GenerationResult.Success<com.lazydog.english.domain.generation.MemoryAssistance>? = null,
 ): Long? = result.data.let { word ->
     addVocabulary(
-        term = word.headword, meaningZh = word.meaningZh, ipa = word.ipa,
+        term = word.term, meaningZh = word.meaningZh, ipa = word.ipa,
         exampleEn = word.exampleEn, exampleZh = word.exampleZh, pos = word.pos,
-        memoryHintZh = word.memoryHintZh, seenAs = word.term, forms = word.forms,
+        memoryHintZh = word.memoryHintZh, forms = word.forms,
+        collocations = word.collocations,
+        facts = com.lazydog.english.domain.spelling.SpellingFacts(word.chunks, word.trickyPart, word.misspellings),
+        memoryAssistance = memoryAssistance,
         generationMetadataJson = Json.encodeToString(metadata),
     )
 }

@@ -2,7 +2,7 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "3.1"
+version: "4.0"
 updated: "2026-09-06"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
@@ -22,10 +22,11 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 
 ## 2. Provider 边界
 
-记录页学习卡复用现有 `explainWord` / `generateGrammarLesson`，不新增模型任务或提示词。
-单词携带输入、可选语境、等级与兴趣；语法指定 focus，knownGrammar 为空，避免模型为避重
-偏离用户指定的主题，最终重复检查由知识仓储负责。单词卡在查词校验外要求有效词性、
-词形、释义和双语例句。完整校验成功只生成内存草稿，用户确认后才入库（D-064）。
+记录页完整学习卡复用 `generateNewWords` / `generateGrammarLesson`（D-065 替代 D-064）。
+单词请求 count=1，携带 targetTerm（英文原形）、sentenceContext、等级与兴趣；不走查词简版。
+模型必须生成指定词，返回词形不匹配即失败，搭配、词块、易错片段、记忆提示与正常新词统一。
+语法指定 focus，knownGrammar 为空，避免模型为避重偏离指定主题，重复检查由知识仓储负责。
+完整校验成功只生成内存草稿，在独立全屏学习卡页面选择入库后才创建知识项。
 输入、语境、等级、兴趣、返回模型、提示词/schema 版本、生成时间和校验状态随知识项保存。
 
 领域层使用项目自有接口，不直接暴露某一家服务的消息格式：
@@ -92,7 +93,7 @@ interface LearningContentGenerator {
   保留模型、提示词版本、schema、过滤备注和保存时间。只刷新或退出不创建知识项和复习记录。
 - 首次生成与详情页刷新复用面板，失败保留旧内容；切到另一个词取消旧面板任务，不能串词。
 - 流式预览读取实际 snake_case 字段 `memory_hook` / `core_meaning`，不等待整个 JSON 才显示。
-- 新词与点词提示版本分别为 `WORDS_PROMPT_VERSION=2`、`WORD_EXPLANATION_PROMPT_VERSION=2`，
+- 新词与点词提示版本分别为 `WORDS_PROMPT_VERSION=3`、`WORD_EXPLANATION_PROMPT_VERSION=2`，
   独立记忆提示为 `MEMORY_PROMPT_VERSION=2`；输出 schema 仍为 1，旧数据不自动重写。
 
 ### 听力训练调用边界
@@ -185,6 +186,8 @@ interface LearningContentGenerator {
 请求字段（`NewWordsRequest`）：
 
 - `count`、`learnerLevel`、`topics`、`knownTerms`（发给模型的只截前 200 条）
+- `targetTerm` / `sentenceContext`：手动添加的可选指定词与语境；指定词时只生成该原形的完整卡，
+  非指定词返回失败。普通学习不传这两项，仍由本地词频候选选词。
 - `preferredCandidates`：本地按词频挑好的候选词，高频在前。
   用能力值算出取词排名窗口，窗口内按排名升序、跳过**全部**已学词，
   取 `count × 6` 个——模型会跳掉一部分，只给 `count` 个必然凑不满。

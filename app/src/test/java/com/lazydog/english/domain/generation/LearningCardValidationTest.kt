@@ -5,9 +5,9 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class LearningCardValidationTest {
-    private val card = WordExplanation(
-        term = "received", lemma = "receive", ipa = "/rɪˈsiːv/", meaningZh = "收到",
-        usageNoteZh = "", exampleEn = "I received a letter.", exampleZh = "我收到了一封信。", pos = "VERB",
+    private val card = GeneratedWord(
+        term = "receive", ipa = "/rɪˈsiːv/", meaningZh = "收到",
+        exampleEn = "I received a letter.", exampleZh = "我收到了一封信。", pos = "VERB",
     )
 
     @Test fun completeInflectedCardCanBeSaved() { assertNull(validateWordCard(card)) }
@@ -17,7 +17,7 @@ class LearningCardValidationTest {
     }
     @Test fun invalidIdentityOrMeaningCannotBeSaved() {
         assertNotNull(validateWordCard(card.copy(pos = "unknown")))
-        assertNotNull(validateWordCard(card.copy(term = "", lemma = "")))
+        assertNotNull(validateWordCard(card.copy(term = "")))
         assertNotNull(validateWordCard(card.copy(meaningZh = "")))
     }
 }

@@ -241,6 +241,9 @@ data class NewWordsRequest(
      * 行为退回原来的"让模型自己按等级选词"。
      */
     val preferredCandidates: List<String> = emptyList(),
+    /** 手动添加时仅为指定词形生成完整卡，不自动挑选其他词。 */
+    val targetTerm: String? = null,
+    val sentenceContext: String = "",
 )
 
 /**

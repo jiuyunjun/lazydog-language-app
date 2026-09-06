@@ -59,6 +59,8 @@ object Routes {
     const val Main = "main"
     const val Speaking = "speaking"
     const val Listening = "listening"
+    const val AddWordCard = "library/add-word"
+    const val AddGrammarCard = "library/add-grammar"
     const val WordStudy = "study/words"
     const val Spelling = "study/spelling"
     const val SpellingProfile = "study/spelling/profile"
@@ -189,7 +191,19 @@ private fun AppNavHost(
                 onStartAssessment = { navController.navigate(Routes.Assessment) },
                 onOpenModelSettings = { navController.navigate(Routes.ModelSettings) },
                 onOpenWord = { id -> navController.navigate(Routes.wordDetail(id)) },
+                onAddCard = { isWord -> navController.navigate(if (isWord) Routes.AddWordCard else Routes.AddGrammarCard) },
             )
+        }
+
+        listOf(Routes.AddWordCard, Routes.AddGrammarCard).forEach { route ->
+            composable(route) {
+                com.lazydog.english.feature.library.AddLearningCardScreen(
+                    isVocab = route == Routes.AddWordCard,
+                    app = context.applicationContext as LazyDogApplication,
+                    repository = knowledgeRepository,
+                    onDismiss = { navController.popOnce() },
+                )
+            }
         }
 
         composable(Routes.ModelSettings) {

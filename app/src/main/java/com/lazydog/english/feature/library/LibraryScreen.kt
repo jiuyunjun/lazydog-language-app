@@ -78,6 +78,7 @@ fun LibraryScreen(
     repository: KnowledgeRepository,
     /** 单词和表达点开的是整页词卡（[com.lazydog.english.feature.vocabulary.WordDetailScreen]）。 */
     onOpenWord: (Long) -> Unit,
+    onAddCard: (Boolean) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -92,8 +93,6 @@ fun LibraryScreen(
     var dueTodayOnly by rememberSaveable { mutableStateOf(false) }
     /** 只剩语法还是半屏卡片：它没有词卡那套内容，一页专门讲一个语法点太空。 */
     var selectedGrammarId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var showAddDialog by rememberSaveable { mutableStateOf(false) }
-    var addingVocabulary by rememberSaveable { mutableStateOf(true) }
 
     val now = System.currentTimeMillis()
     val endOfToday = remember {
@@ -157,7 +156,7 @@ fun LibraryScreen(
 
         if (tabIndex < 2) {
             FloatingActionButton(
-                onClick = { addingVocabulary = tabIndex == 0; showAddDialog = true },
+                onClick = { onAddCard(tabIndex == 0) },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
@@ -165,15 +164,6 @@ fun LibraryScreen(
                 Icon(Icons.Outlined.Add, contentDescription = "添加${if (tabIndex == 0) "单词" else "语法点"}")
             }
         }
-    }
-
-    if (showAddDialog) {
-        AddLearningCardDialog(
-            isVocab = addingVocabulary,
-            app = app,
-            repository = repository,
-            onDismiss = { showAddDialog = false },
-        )
     }
 
     val selectedGrammar = grammar.firstOrNull { it.item.id == selectedGrammarId }

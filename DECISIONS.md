@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "2.2"
+version: "3.0"
 updated: "2026-09-06"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -11,7 +11,24 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 
 # 决策记录
 
+## D-065：添加记录打开与学习卡同内容的全屏页面
+
+- 状态：已确认（2026-09-06，用户澄清要求完整 activity，由用户决定入库不入库）。
+- 替代 D-064 的弹窗预览与查词简版生成。使用现有单 Activity 的 Navigation Compose
+  独立目的地承载全屏页面，不额外新增 Android Activity 或导航机制。
+- 单词改用 generateNewWords(count=1, targetTerm, sentenceContext)，保留正常词卡的搭配、
+  拼写事实和提示；返回非指定词拒绝。targetTerm 要求原形，不猜测词形还原。
+- 正常学习页和预览页共用 WordLearningContent / GrammarLearningContent；抽取内容组件，
+  不开放原有 private 页面实现。原学习页的自评/出题流程保持，预览底部只决定入库或不入库。
+- 未保存的记忆提示随草稿维护，确认后在现有创建事务一起保存；返回、不入库、生成本身不
+  创建本卡知识项或复习记录。生成来源沿用 v19，无额外表或架构变更。
+- 否决全屏放大原弹窗文字：内容仍不等同学习卡；否决复制整套词卡：会长期漂移。
+- 验证包括指定词校验、完整字段保留、既有学习测试、Lint、构建与文档校验；无连接设备，
+  尚未进行真实模型与设备交互验收。未保存卡仍不跨进程恢复。
+
 ## D-064：记录中添加知识先生成学习卡，确认后保存
+
+> 弹窗预览与 explainWord 简版生成已由 D-065 替代；确认才入库和来源信息事务保存继续有效。
 
 - 状态：已确认（2026-09-06，用户明确要求）。
 - 单词复用 explainWord，语法复用指定 focus 的 generateGrammarLesson；保持现有提示词和
