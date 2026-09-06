@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .seg { flex-grow: 1; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #49454F; }
+    .seg-on { background: #E8DEF8; color: #1D192B; }
+    .row { min-height: 56px; display: flex; align-items: center; gap: 16px; padding: 12px 0; }
+    .sec { font-size: 14px; font-weight: 500; color: #6750A4; letter-spacing: 0.1px; }
+    .hint { font-size: 13px; line-height: 18px; color: #49454F; }
+  </style>
+</helmet>
+
+<div style="width: 412px; height: 916px; background: #FEF7FF; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 64px; display: flex; align-items: center; gap: 4px; padding: 0 4px; flex-shrink: 0;">
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1B20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+    </div>
+    <span style="font-size: 22px; font-weight: 500; color: #1D1B20;">母语阅读</span>
+  </div>
+
+  <div style="flex-grow: 1; padding: 0 24px; overflow: hidden;">
+
+    <div class="sec">英语量</div>
+    <div style="display: flex; margin-top: 12px; height: 40px; border: 1px solid #79747E; border-radius: 20px; overflow: hidden;">
+      <div class="seg">少</div>
+      <div class="seg seg-on" style="border-left: 1px solid #79747E; border-right: 1px solid #79747E;">适中</div>
+      <div class="seg" style="border-right: 1px solid #79747E;">多</div>
+      <div class="seg">自动</div>
+    </div>
+    <div class="hint" style="margin-top: 10px;">适中 = 文章里大约 24% 的内容显示成英语。选“自动”会跟着你最近的阅读表现调。</div>
+
+    <div style="height: 1px; background: #CAC4D0; margin: 24px 0;"></div>
+
+    <div class="sec">生词量</div>
+    <div style="display: flex; margin-top: 12px; height: 40px; border: 1px solid #79747E; border-radius: 20px; overflow: hidden;">
+      <div class="seg">少</div>
+      <div class="seg seg-on" style="border-left: 1px solid #79747E; border-right: 1px solid #79747E;">适中</div>
+      <div class="seg">多</div>
+    </div>
+    <div class="hint" style="margin-top: 10px;">这一档只管英语里有多少是没学过的，和上面的英语量分开调。适中 ≈ 每篇 4～8 个新表达。</div>
+
+    <div style="height: 1px; background: #CAC4D0; margin: 24px 0;"></div>
+
+    <div class="row">
+      <div style="flex-grow: 1;">
+        <div style="font-size: 16px; line-height: 24px; color: #1D1B20;">给目标词加轻提示</div>
+        <div class="hint" style="margin-top: 2px;">正文里给该学的英语一条很淡的下划线</div>
+      </div>
+      <div style="width: 52px; height: 32px; border-radius: 16px; background: #6750A4; display: flex; align-items: center; justify-content: flex-end; padding: 0 4px; flex-shrink: 0;">
+        <div style="width: 24px; height: 24px; border-radius: 12px; background: #FFFFFF;"></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div style="flex-grow: 1;">
+        <div style="font-size: 16px; line-height: 24px; color: #1D1B20;">允许整句英语</div>
+        <div class="hint" style="margin-top: 2px;">读得顺的时候，偶尔整句切成英语</div>
+      </div>
+      <div style="width: 52px; height: 32px; border-radius: 16px; background: #E6E0E9; border: 2px solid #79747E; display: flex; align-items: center; padding: 0 5px; flex-shrink: 0; box-sizing: border-box;">
+        <div style="width: 16px; height: 16px; border-radius: 8px; background: #79747E;"></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div style="flex-grow: 1;">
+        <div style="font-size: 16px; line-height: 24px; color: #1D1B20;">技术词保留英文</div>
+        <div class="hint" style="margin-top: 2px;">cache、latency 这类词不翻成中文</div>
+      </div>
+      <div style="width: 52px; height: 32px; border-radius: 16px; background: #6750A4; display: flex; align-items: center; justify-content: flex-end; padding: 0 4px; flex-shrink: 0;">
+        <div style="width: 24px; height: 24px; border-radius: 12px; background: #FFFFFF;"></div>
+      </div>
+    </div>
+
+    <div style="height: 1px; background: #CAC4D0; margin: 12px 0 8px;"></div>
+
+    <div class="row">
+      <span style="flex-grow: 1; font-size: 16px; color: #1D1B20;">更多设置</span>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#49454F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+    </div>
+    <div class="hint">优先安排到期复习词 · 语法目标数量 · 美式 / 英式发音</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

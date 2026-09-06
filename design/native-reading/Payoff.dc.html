@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .zh { font-size: 17px; line-height: 30px; color: #1D1B20; }
+    .opt { border: 1px solid #79747E; border-radius: 12px; padding: 14px 16px; font-size: 15px; line-height: 24px; color: #1D1B20; }
+  </style>
+</helmet>
+
+<div style="width: 412px; height: 916px; background: #FEF7FF; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 64px; display: flex; align-items: center; padding: 0 4px; flex-shrink: 0;">
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1B20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; padding: 0 24px; overflow: hidden;">
+    <p class="zh" style="margin: 0;">这也是很多大型软件系统的设计逻辑：<span style="border-bottom: 1px dotted #CAC4D0;">reliability</span> 并不来自“永远不出错”，而来自“出错之后还能回得来”。</p>
+
+    <!-- 文章唯一的 payoff（§4 一篇只有一个） -->
+    <div style="margin-top: 28px; background: #E8DEF8; border-radius: 16px; padding: 20px;">
+      <div style="font-size: 12px; line-height: 16px; letter-spacing: 0.5px; color: #1D192B;">值得记住的一件事</div>
+      <div style="margin-top: 10px; font-size: 19px; line-height: 30px; color: #1D192B;">可靠的系统不一定更少犯错，可能只是更擅长从错误里恢复。</div>
+    </div>
+
+    <!-- §21.1 只有一道理解题，问文章本身，不问单词 -->
+    <div style="margin-top: 32px; font-size: 12px; line-height: 16px; letter-spacing: 0.5px; color: #49454F;">读完了，就一个问题</div>
+    <div style="margin-top: 10px; font-size: 19px; line-height: 28px; font-weight: 500; color: #1D1B20;">为什么文中的系统不需要做到“完美预测”？</div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
+      <div class="opt">因为需求其实很稳定，本来就好预测</div>
+      <div class="opt" style="border: 2px solid #2E6B4F; background: #DCEDE3; display: flex; gap: 10px; align-items: flex-start;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F2A1C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><path d="M20 6L9 17l-5-5"></path></svg>
+        <span style="color: #0F2A1C;">因为它把纠错周期切得够短，错了也能很快补回来</span>
+      </div>
+      <div class="opt">因为门店备货量远大于实际需求</div>
+    </div>
+
+    <div style="margin-top: 16px; background: #F3EDF7; border-radius: 12px; padding: 14px 16px; font-size: 15px; line-height: 24px; color: #49454F;">对了。文章的重点就在这儿：靠的不是预测准，是纠正快。</div>
+  </div>
+
+  <div style="height: 96px; flex-shrink: 0; padding: 0 24px 24px; display: flex; flex-direction: column; gap: 4px;">
+    <div style="height: 56px; border-radius: 16px; background: #6750A4; display: flex; align-items: center; justify-content: center;">
+      <span style="font-size: 16px; font-weight: 500; color: #FFFFFF;">再回忆 3 个表达</span>
+    </div>
+    <div style="height: 36px; display: flex; align-items: center; justify-content: center;">
+      <span style="font-size: 14px; font-weight: 500; color: #6750A4;">今天到这里</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

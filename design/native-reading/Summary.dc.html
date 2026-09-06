@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .fb { flex-grow: 1; height: 40px; border: 1px solid #79747E; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #49454F; }
+    .line { font-size: 15px; line-height: 24px; color: #1D1B20; }
+  </style>
+</helmet>
+
+<div style="width: 412px; height: 916px; background: #FEF7FF; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 64px; display: flex; align-items: center; padding: 0 4px; flex-shrink: 0;">
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1B20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; padding: 0 24px; overflow: hidden;">
+    <div style="font-size: 26px; line-height: 36px; font-weight: 600; color: #1D1B20;">这篇读完了</div>
+    <div style="margin-top: 8px; font-size: 15px; line-height: 24px; color: #49454F;">英语 24%，你点开了 2 次释义，其余都读过去了。</div>
+
+    <!-- §30.2 English-only 回顾：只播这篇里的英语 -->
+    <div style="margin-top: 24px; background: #F3EDF7; border-radius: 16px; padding: 20px;">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="width: 56px; height: 56px; border-radius: 16px; background: #6750A4; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="#FFFFFF"><path d="M8 5.5v13l11-6.5z"></path></svg>
+        </div>
+        <div>
+          <div style="font-size: 17px; line-height: 24px; font-weight: 500; color: #1D1B20;">本文英语回顾</div>
+          <div style="margin-top: 2px; font-size: 13px; line-height: 18px; color: #49454F;">只念英语的部分 · 约 50 秒</div>
+        </div>
+      </div>
+      <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+        <div class="line">predict demand</div>
+        <div class="line">leave room for error</div>
+        <div class="line">as long as the system can recover quickly</div>
+        <div style="font-size: 13px; line-height: 20px; color: #79747E;">还有 3 条</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 24px; font-size: 14px; font-weight: 500; color: #1D1B20;">这篇的难度怎么样？</div>
+    <div style="display: flex; gap: 8px; margin-top: 12px;">
+      <div class="fb">太简单</div>
+      <div class="fb" style="background: #E8DEF8; border-color: transparent; color: #1D192B;">正好</div>
+      <div class="fb">有点难</div>
+    </div>
+
+    <!-- §22 迁移提议：按真实行为提，不按 CEFR 强推；可以直接说不 -->
+    <div style="margin-top: 24px; border: 1px solid #CAC4D0; border-radius: 16px; padding: 20px;">
+      <div style="font-size: 17px; line-height: 26px; color: #1D1B20;">最近 8 篇你几乎没点过释义。要不要把默认英语量从 24% 提到 30%？</div>
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <div style="height: 40px; padding: 0 20px; border-radius: 20px; background: #6750A4; display: flex; align-items: center; font-size: 14px; font-weight: 500; color: #FFFFFF;">试试 30%</div>
+        <div style="height: 40px; padding: 0 20px; border-radius: 20px; display: flex; align-items: center; font-size: 14px; font-weight: 500; color: #6750A4;">先不改</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-shrink: 0; padding: 0 24px 28px; display: flex; flex-direction: column; gap: 4px;">
+    <div style="height: 56px; border-radius: 16px; background: #6750A4; display: flex; align-items: center; justify-content: center;">
+      <span style="font-size: 16px; font-weight: 500; color: #FFFFFF;">再来一篇</span>
+    </div>
+    <div style="height: 36px; display: flex; align-items: center; justify-content: center;">
+      <span style="font-size: 14px; font-weight: 500; color: #6750A4;">今天到这里</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

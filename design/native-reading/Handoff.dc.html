@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #FEF7FF; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .h1 { font-size: 28px; line-height: 36px; font-weight: 600; color: #1D1B20; }
+    .h2 { font-size: 12px; line-height: 16px; letter-spacing: 0.6px; color: #6750A4; font-weight: 500; }
+    .b { font-size: 14px; line-height: 22px; color: #49454F; }
+    .t { font-size: 14px; line-height: 22px; color: #1D1B20; }
+    .mono { font-family: "Roboto Mono", ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12.5px; line-height: 20px; color: #1D1B20; }
+    .cell { padding: 10px 14px; border-top: 1px solid #CAC4D0; }
+    .num { width: 24px; height: 24px; border-radius: 12px; background: #E8DEF8; color: #1D192B; font-size: 12px; font-weight: 500; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  </style>
+</helmet>
+
+<div style="width: 900px; min-height: 1220px; background: #FEF7FF; padding: 48px 56px; box-sizing: border-box;">
+
+  <div class="h1">母语阅读 · 交付说明</div>
+
+  <!-- 导航 -->
+  <div class="h2" style="margin-top: 36px;">1 · 页面与导航</div>
+  <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px;">
+    <div style="background: #F3EDF7; border-radius: 8px; padding: 10px 14px;" class="t">学习 Tab</div>
+    <span class="b">→</span>
+    <div style="background: #F3EDF7; border-radius: 8px; padding: 10px 14px;" class="t">母语阅读入口</div>
+    <span class="b">→</span>
+    <div style="background: #E8DEF8; border-radius: 8px; padding: 10px 14px;" class="t">阅读页</div>
+    <span class="b">→</span>
+    <div style="background: #F3EDF7; border-radius: 8px; padding: 10px 14px;" class="t">1 道理解题</div>
+    <span class="b">→</span>
+    <div style="background: #F3EDF7; border-radius: 8px; padding: 10px 14px;" class="t">2～3 个表达回忆</div>
+    <span class="b">→</span>
+    <div style="background: #F3EDF7; border-radius: 8px; padding: 10px 14px;" class="t">收尾</div>
+  </div>
+  <div class="b" style="margin-top: 12px;">阅读页的 Bottom Sheet 是覆盖层，不进返回栈的独立页；「看详情」复用已有的单词页 / 语法页。中途退出保留阅读位置与已答题目，回来接着读。</div>
+
+  <!-- 组件映射 -->
+  <div class="h2" style="margin-top: 40px;">2 · Material 3 组件映射</div>
+  <div style="margin-top: 16px; border: 1px solid #CAC4D0; border-radius: 12px; overflow: hidden;">
+    <div style="display: grid; grid-template-columns: 240px 1fr; background: #F3EDF7;">
+      <div style="padding: 10px 14px; font-size: 13px; font-weight: 500; color: #1D1B20;">界面元素</div>
+      <div style="padding: 10px 14px; font-size: 13px; font-weight: 500; color: #1D1B20;">用什么实现</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 240px 1fr;"><div class="cell t">英语量三档</div><div class="cell b"><span class="mono">SingleChoiceSegmentedButtonRow</span>，40dp 高，选中态 primaryContainer + 勾</div></div>
+    <div style="display: grid; grid-template-columns: 240px 1fr;"><div class="cell t">混合正文</div><div class="cell b"><span class="mono">Text(AnnotatedString)</span> + <span class="mono">ClickableText</span>，按 <span class="mono">RenderedParagraph.segments</span> 拼；不要拿 Markdown 做 range</div></div>
+    <div style="display: grid; grid-template-columns: 240px 1fr;"><div class="cell t">点击 span 面板</div><div class="cell b"><span class="mono">ModalBottomSheet</span>，顶角 28dp，<span class="mono">skipPartiallyExpanded = false</span></div></div>
+    <div style="display: grid; grid-template-columns: 240px 1fr;"><div class="cell t">段落救援 / 降档提示</div><div class="cell b">行内 <span class="mono">Card</span>（attentionContainer），不是 <span class="mono">AlertDialog</span></div></div>
+    <div style="display: grid; grid-template-columns: 240px 1fr;"><div class="cell t">降档结果确认</div><div class="cell b"><span class="mono">Snackbar</span> + 撤销</div></div>
+    <div style="display: grid; grid-template-columns: 240px 1fr;"><div class="cell t">文章卡</div><div class="cell b"><span class="mono">Card</span> 12dp 圆角，surfaceContainer；学习 metadata 用 <span class="mono">labelSmall</span> 压在第二层</div></div>
+    <div style="display: grid; grid-template-columns: 240px 1fr;"><div class="cell t">生成中</div><div class="cell b">复用现有 <span class="mono">AiWaiting</span>（阶段 + 已等秒数 + 正文预览）</div></div>
+    <div style="display: grid; grid-template-columns: 240px 1fr;"><div class="cell t">朗读</div><div class="cell b">复用 <span class="mono">SpeakButton</span>；混合朗读按 segment 切中英 voice</div></div>
+  </div>
+
+  <!-- 优先级 -->
+  <div class="h2" style="margin-top: 40px;">3 · 实现顺序（对应设计文档 §39 MVP v1、§40）</div>
+  <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+    <div style="display: flex; gap: 12px;"><div class="num">1</div><div class="t">后端返回 <span class="mono">canonicalParagraphs</span> + <span class="mono">learningSpans</span>，前端用 segment renderer 铺正文。纯中文模式必须能完整读完——这是所有 fallback 的底。</div></div>
+    <div style="display: flex; gap: 12px;"><div class="num">2</div><div class="t">span 单击 → Bottom Sheet；长按 → 原中文。这两个手势不做完，不要往下做。</div></div>
+    <div style="display: flex; gap: 12px;"><div class="num">3</div><div class="t">Sheet 的「看详情」按 <span class="mono">knowledgeId</span> 跳已有单词页 / 语法页；词库里没有的先做临时项。</div></div>
+    <div style="display: flex; gap: 12px;"><div class="num">4</div><div class="t">英语量三档。切档不换 <span class="mono">articleId</span>、不重写文章、不丢阅读进度——只重跑替换方案。</div></div>
+    <div style="display: flex; gap: 12px;"><div class="num">5</div><div class="t">埋点：completion / span click / reveal / like。</div></div>
+    <div style="display: flex; gap: 12px;"><div class="num">6</div><div class="t">读完的 1 题 + 2～3 个回忆。回忆写进 FSRS，「看到过」不算学会。</div></div>
+    <div style="display: flex; gap: 12px;"><div class="num">7</div><div class="t">v1.5 再做：整句 span、混合朗读、本文英语回顾、自动难度建议。段内实时动态难度留到 v2。</div></div>
+  </div>
+
+  <!-- 验收 -->
+  <div class="h2" style="margin-top: 40px;">4 · 验收要点</div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px;">
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 16px;" class="t">把英语量调到「少」，整篇仍然读得通；调到「多」，中文句子结构依然不断。</div>
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 16px;" class="t">任意 span 都能 reveal 出原中文；有 <span class="mono">knowledgeId</span> 的都能进详情。</div>
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 16px;" class="t">切换档位后 <span class="mono">articleId</span> 与阅读进度不变。</div>
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 16px;" class="t">标题永远纯中文；teaser 最多 1 个英语 span。</div>
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 16px;" class="t">前两段的生词密度不高于全文平均；payoff 句里没有必须查才懂的生词。</div>
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 16px;" class="t">没有两个未知 span 紧挨着；一行里语言切换不超过 2 次。</div>
+  </div>
+
+  <!-- 无障碍 -->
+  <div class="h2" style="margin-top: 40px;">5 · 无障碍</div>
+  <div class="b" style="margin-top: 12px; max-width: 760px;">span 是可点元素，触摸目标补到 48dp（视觉下划线不变）。TalkBack 上每个 span 读作「英语片段，leave room for error，中文：给出错留出余地，双击查看」，不能只读英文。字号放大到 200% 时正文照常回流，下划线跟着走。深色主题下 review 的点线换成 <span class="mono">outline #938F99</span>，保证 3:1。所有状态都有文字，不靠颜色单独表意。</div>
+
+  <!-- 假设 -->
+  <div class="h2" style="margin-top: 40px;">6 · 我做的假设 / 还需要你定的</div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 16px;">
+    <div>
+      <div class="t" style="font-weight: 500;">假设</div>
+      <div class="b" style="margin-top: 8px;">· 入口挂在「学习」Tab 下，和阅读并列，不占今日必做流程。<br>· 阅读页顶部直接给三档，不进设置也能改。<br>· 「加进复习」沿用记录页的「添加」口径，不说入库。<br>· 文案按「正常」语气写，懒狗档只覆盖收尾和空状态那几句。</div>
+    </div>
+    <div>
+      <div class="t" style="font-weight: 500;">还需要你定</div>
+      <div class="b" style="margin-top: 8px;">· 母语阅读和现有「渐进式阅读」是两个入口，还是同一个入口下的模式切换？<br>· 切档要不要预生成多套替换方案（响应快，但生成成本乘 3）？<br>· 读完的回忆结果是直接进 FSRS，还是先只记曝光、等 v1.5 再接？</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

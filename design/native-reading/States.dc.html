@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .step { display: flex; align-items: center; gap: 12px; font-size: 15px; line-height: 24px; }
+    .btn-out { height: 40px; padding: 0 20px; border-radius: 20px; border: 1px solid #79747E; display: flex; align-items: center; font-size: 14px; font-weight: 500; color: #6750A4; }
+  </style>
+</helmet>
+
+<div style="width: 412px; height: 916px; background: #FEF7FF; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 64px; display: flex; align-items: center; padding: 0 4px; flex-shrink: 0;">
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1B20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; padding: 0 24px; overflow: hidden;">
+
+    <!-- 生成中：说清卡在哪一步 + 已等多久 + 边写边铺（沿用 AiWaiting） -->
+    <div style="font-size: 12px; line-height: 16px; letter-spacing: 0.5px; color: #49454F;">状态 A · 生成中</div>
+    <div style="margin-top: 12px; background: #F3EDF7; border-radius: 16px; padding: 20px;">
+      <div style="font-size: 19px; line-height: 28px; font-weight: 500; color: #1D1B20;">正在写这篇：为什么日本便利店很少缺货</div>
+      <div style="margin-top: 4px; font-size: 13px; line-height: 20px; color: #49454F;">已经写了 386 个字符（已等 9 秒）</div>
+
+      <div style="height: 4px; border-radius: 2px; background: #CAC4D0; margin-top: 16px; overflow: hidden;">
+        <div style="width: 62%; height: 4px; background: #6750A4; border-radius: 2px;"></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+        <div class="step" style="color: #49454F;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2E6B4F" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+          先写一篇纯中文的
+        </div>
+        <div class="step" style="color: #1D1B20; font-weight: 500;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6750A4" stroke-width="2.5" stroke-linecap="round"><path d="M12 3a9 9 0 019 9"></path><path d="M12 21a9 9 0 01-9-9" opacity="0.35"></path></svg>
+          挑哪些地方换成英语
+        </div>
+        <div class="step" style="color: #79747E;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#CAC4D0" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle></svg>
+          检查读起来顺不顺
+        </div>
+      </div>
+
+      <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #CAC4D0; font-size: 15px; line-height: 26px; color: #49454F;">日本便利店最厉害的地方，也许不是“什么都有”，而是它们很少让你感觉某样东西真的缺了。直觉上，这似乎需要极其<span style="color: #CAC4D0;">▊</span></div>
+    </div>
+
+    <!-- 失败：说清原因，保留已经写好的中文母版 -->
+    <div style="margin-top: 32px; font-size: 12px; line-height: 16px; letter-spacing: 0.5px; color: #49454F;">状态 B · 英语替换失败</div>
+    <div style="margin-top: 12px; border: 1px solid #B3261E; border-radius: 16px; padding: 20px;">
+      <div style="display: flex; gap: 12px;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B3261E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6"></path><path d="M12 16.5v.01"></path></svg>
+        <div>
+          <div style="font-size: 16px; line-height: 24px; font-weight: 500; color: #1D1B20;">英语部分没生成成功</div>
+          <div style="margin-top: 4px; font-size: 15px; line-height: 22px; color: #49454F;">连接 AI 服务超时。文章本身已经写好了，可以先读中文版。</div>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-left: 36px;">
+        <div style="height: 40px; padding: 0 20px; border-radius: 20px; background: #6750A4; display: flex; align-items: center; font-size: 14px; font-weight: 500; color: #FFFFFF;">再试一次</div>
+        <div class="btn-out">先读中文版</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px; font-size: 13px; line-height: 20px; color: #49454F;">纯中文母版永远可读，这是这个功能的兜底：英语部分出任何问题，都退回中文，不拦着人读完。</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

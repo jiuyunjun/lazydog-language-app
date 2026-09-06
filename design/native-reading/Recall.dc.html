@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .dot { width: 8px; height: 8px; border-radius: 4px; background: #CAC4D0; }
+    .btn-out { height: 48px; border-radius: 24px; border: 1px solid #79747E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 500; color: #6750A4; flex-grow: 1; }
+  </style>
+</helmet>
+
+<div style="width: 412px; height: 916px; background: #FEF7FF; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 64px; display: flex; align-items: center; padding: 0 4px; flex-shrink: 0;">
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1B20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>
+    </div>
+    <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 8px;">
+      <div class="dot" style="background: #6750A4;"></div>
+      <div class="dot" style="background: #6750A4;"></div>
+      <div class="dot"></div>
+    </div>
+    <div style="width: 48px;"></div>
+  </div>
+
+  <div style="flex-grow: 1; padding: 0 24px; overflow: hidden;">
+    <div style="font-size: 12px; line-height: 16px; letter-spacing: 0.5px; color: #49454F;">刚才这句里的说法</div>
+
+    <!-- §21.2 先给中文，让用户回忆英语 -->
+    <div style="margin-top: 20px; font-size: 24px; line-height: 36px; color: #1D1B20;">给出错留出余地</div>
+
+    <div style="margin-top: 28px; background: #F3EDF7; border-radius: 16px; padding: 20px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 22px; line-height: 30px; font-weight: 500; color: #1D1B20;">leave room for error</span>
+        <div style="width: 40px; height: 40px; border-radius: 20px; display: flex; align-items: center; justify-content: center;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#49454F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M19.1 4.9a10 10 0 010 14.2"></path><path d="M15.5 8.5a5 5 0 010 7"></path></svg>
+        </div>
+      </div>
+      <div style="margin-top: 14px; height: 1px; background: #CAC4D0;"></div>
+      <div style="margin-top: 14px; font-size: 12px; line-height: 16px; letter-spacing: 0.4px; color: #49454F;">文章里的原句</div>
+      <div style="margin-top: 6px; font-size: 15px; line-height: 24px; color: #1D1B20;">真正有效的系统通常并不追求 perfect prediction，而是 <span style="border-bottom: 1.5px solid #B9A9DE;">leave room for error</span>。</div>
+    </div>
+
+    <div style="margin-top: 20px; font-size: 14px; line-height: 22px; color: #49454F;">想起来没有？说实话就行，答错了它只是会再来找你一次。</div>
+  </div>
+
+  <div style="flex-shrink: 0; padding: 0 24px 28px; display: flex; flex-direction: column; gap: 12px;">
+    <div style="display: flex; gap: 12px;">
+      <div class="btn-out">没想起来</div>
+      <div class="btn-out" style="border: none; background: #6750A4; color: #FFFFFF;">想起来了</div>
+    </div>
+    <div style="height: 36px; display: flex; align-items: center; justify-content: center;">
+      <span style="font-size: 14px; font-weight: 500; color: #6750A4;">跳过剩下的</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

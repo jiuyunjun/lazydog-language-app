@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #FEF7FF; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .h1 { font-size: 28px; line-height: 36px; font-weight: 600; color: #1D1B20; }
+    .h2 { font-size: 12px; line-height: 16px; letter-spacing: 0.6px; color: #6750A4; font-weight: 500; }
+    .b { font-size: 14px; line-height: 22px; color: #49454F; }
+    .mono { font-family: "Roboto Mono", ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12.5px; line-height: 20px; color: #1D1B20; }
+    .cell { padding: 12px 14px; border-top: 1px solid #CAC4D0; }
+    .zh { font-size: 17px; line-height: 30px; color: #1D1B20; }
+  </style>
+</helmet>
+
+<div style="width: 900px; min-height: 1160px; background: #FEF7FF; padding: 48px 56px; box-sizing: border-box;">
+
+  <div class="h1">母语阅读 · 视觉与交互规范</div>
+  <div class="b" style="margin-top: 8px; max-width: 620px;">供 Compose 实现直接照抄的部分。令牌全部取自 <span class="mono">core/designsystem/Color.kt</span>，没有为这个功能新增颜色。</div>
+
+  <!-- Span 视觉 -->
+  <div class="h2" style="margin-top: 40px;">1 · SPAN 视觉（设计文档 §20.1）</div>
+  <div style="margin-top: 16px; border: 1px solid #CAC4D0; border-radius: 12px; overflow: hidden;">
+    <div style="display: grid; grid-template-columns: 150px 1fr 300px; background: #F3EDF7;">
+      <div style="padding: 12px 14px; font-size: 13px; font-weight: 500; color: #1D1B20;">masteryClass</div>
+      <div style="padding: 12px 14px; font-size: 13px; font-weight: 500; color: #1D1B20;">正文里长这样</div>
+      <div style="padding: 12px 14px; font-size: 13px; font-weight: 500; color: #1D1B20;">规格</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 150px 1fr 300px;">
+      <div class="cell"><span class="mono">mastered</span></div>
+      <div class="cell"><span class="zh">不追求 perfect prediction</span></div>
+      <div class="cell b">不加任何标记。已经会的词就该像正文一样读过去。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 150px 1fr 300px;">
+      <div class="cell"><span class="mono">review</span></div>
+      <div class="cell"><span class="zh">准确地<span style="border-bottom: 1px dotted #CAC4D0;"> predict demand</span></span></div>
+      <div class="cell b">1dp 点线下划线，<span class="mono">outlineVariant #CAC4D0</span>。可点，但几乎不抢眼。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 150px 1fr 300px;">
+      <div class="cell"><span class="mono">target</span></div>
+      <div class="cell"><span class="zh">而是<span style="border-bottom: 1.5px solid #B9A9DE;"> leave room for error</span></span></div>
+      <div class="cell b">1.5dp 实线下划线，<span class="mono">primary 40% #B9A9DE</span>。第三次出现后按 mastery 撤掉（§10.6 scaffolding fade-out）。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 150px 1fr 300px;">
+      <div class="cell"><span class="mono">grammar</span></div>
+      <div class="cell"><span class="zh"><span style="background: #F3EDF7; border-bottom: 1.5px solid #B9A9DE; border-radius: 4px; padding: 1px 3px;">as long as the system can recover quickly</span></span></div>
+      <div class="cell b">整块一个可点区域，底色 <span class="mono">surfaceContainer #F3EDF7</span>，圆角 4dp。不许拆成几个词各点各的。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 150px 1fr 300px;">
+      <div class="cell"><span class="mono">incidental</span></div>
+      <div class="cell"><span class="zh">这类系统的 latency 很难压下去</span></div>
+      <div class="cell b">技术词 / 专名。不加标记，算进英语表层比例，不算学习目标。</div>
+    </div>
+  </div>
+  <div class="b" style="margin-top: 12px;">设置里「给目标词加轻提示」关掉后，review / target / grammar 全部退成无标记，点击行为不变。颜色不是唯一线索：所有 span 都可点、都能长按看原文，视障用户走的是语义标签而不是下划线。</div>
+
+  <!-- 语言岛 -->
+  <div class="h2" style="margin-top: 44px;">2 · 语言岛，不是词汇碎片（§5）</div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px;">
+    <div style="border: 1px solid #B3261E; border-radius: 12px; padding: 18px;">
+      <div style="font-size: 13px; font-weight: 500; color: #B3261E;">不要这样</div>
+      <div class="zh" style="margin-top: 10px;">这个 system 通过 reduce 用户的 waiting time 来 improve experience。</div>
+      <div class="b" style="margin-top: 10px;">每个词都对，读起来全是碎片。排版上会出现一行里 3 次以上语言切换。</div>
+    </div>
+    <div style="border: 1px solid #2E6B4F; border-radius: 12px; padding: 18px;">
+      <div style="font-size: 13px; font-weight: 500; color: #2E6B4F;">要这样</div>
+      <div class="zh" style="margin-top: 10px;">这个系统真正想降低的，并不是 actual waiting time，而是人对等待的不确定感。</div>
+      <div class="b" style="margin-top: 10px;">一个完整语义块切过去，中文句子结构不断。渲染约束：同一行最多 2 个 span，相邻 span 至少隔 8～20 个中文字符。</div>
+    </div>
+  </div>
+
+  <!-- 交互 -->
+  <div class="h2" style="margin-top: 44px;">3 · 手势（§12.1、§13）</div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px;">
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 18px;">
+      <div style="font-size: 15px; font-weight: 500; color: #1D1B20;">单击 span</div>
+      <div class="b" style="margin-top: 6px;">升起 Bottom Sheet，原页面留在上面可见。绝不整页跳转——那会把阅读打断。</div>
+    </div>
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 18px;">
+      <div style="font-size: 15px; font-weight: 500; color: #1D1B20;">长按 span / 整句</div>
+      <div class="b" style="margin-top: 6px;">就地显示原来的中文，不开面板。这是最低成本的 rescue，必须比查释义还快。</div>
+    </div>
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 18px;">
+      <div style="font-size: 15px; font-weight: 500; color: #1D1B20;">Sheet 里点「看详情」</div>
+      <div class="b" style="margin-top: 6px;">才进已有的单词页 / 语法页，走 <span class="mono">knowledgeId</span>。词库里还没有的表达先做临时项，点「加进复习」才落库。</div>
+    </div>
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 18px;">
+      <div style="font-size: 15px; font-weight: 500; color: #1D1B20;">短时间内连点多个 span</div>
+      <div class="b" style="margin-top: 6px;">正文里插一条行内卡片问要不要降档，只对这一篇生效，不动设置。用户说「不用」之后本篇不再问。</div>
+    </div>
+  </div>
+
+  <!-- 令牌 -->
+  <div class="h2" style="margin-top: 44px;">4 · 用到的令牌（浅 / 深）</div>
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 16px;">
+    <div style="border: 1px solid #CAC4D0; border-radius: 10px; overflow: hidden;">
+      <div style="height: 48px; background: #FEF7FF; border-bottom: 1px solid #CAC4D0;"></div>
+      <div style="padding: 10px 12px;"><div class="mono">surface</div><div class="b" style="font-size: 12px;">#FEF7FF / #141218</div></div>
+    </div>
+    <div style="border: 1px solid #CAC4D0; border-radius: 10px; overflow: hidden;">
+      <div style="height: 48px; background: #F3EDF7; border-bottom: 1px solid #CAC4D0;"></div>
+      <div style="padding: 10px 12px;"><div class="mono">surfaceContainer</div><div class="b" style="font-size: 12px;">#F3EDF7 / #211F26</div></div>
+    </div>
+    <div style="border: 1px solid #CAC4D0; border-radius: 10px; overflow: hidden;">
+      <div style="height: 48px; background: #6750A4; border-bottom: 1px solid #CAC4D0;"></div>
+      <div style="padding: 10px 12px;"><div class="mono">primary</div><div class="b" style="font-size: 12px;">#6750A4 / #D0BCFF</div></div>
+    </div>
+    <div style="border: 1px solid #CAC4D0; border-radius: 10px; overflow: hidden;">
+      <div style="height: 48px; background: #E8DEF8; border-bottom: 1px solid #CAC4D0;"></div>
+      <div style="padding: 10px 12px;"><div class="mono">primaryContainer</div><div class="b" style="font-size: 12px;">#E8DEF8 / #4F378B</div></div>
+    </div>
+    <div style="border: 1px solid #CAC4D0; border-radius: 10px; overflow: hidden;">
+      <div style="height: 48px; background: #CAC4D0; border-bottom: 1px solid #CAC4D0;"></div>
+      <div style="padding: 10px 12px;"><div class="mono">outlineVariant</div><div class="b" style="font-size: 12px;">#CAC4D0 / #49454F</div></div>
+    </div>
+    <div style="border: 1px solid #CAC4D0; border-radius: 10px; overflow: hidden;">
+      <div style="height: 48px; background: #FCEAC8; border-bottom: 1px solid #CAC4D0;"></div>
+      <div style="padding: 10px 12px;"><div class="mono">attentionContainer</div><div class="b" style="font-size: 12px;">#FCEAC8 / #4A3000</div></div>
+    </div>
+    <div style="border: 1px solid #CAC4D0; border-radius: 10px; overflow: hidden;">
+      <div style="height: 48px; background: #DCEDE3; border-bottom: 1px solid #CAC4D0;"></div>
+      <div style="padding: 10px 12px;"><div class="mono">correctContainer</div><div class="b" style="font-size: 12px;">#DCEDE3 / #1B4633</div></div>
+    </div>
+    <div style="border: 1px solid #CAC4D0; border-radius: 10px; overflow: hidden;">
+      <div style="height: 48px; background: #B9A9DE; border-bottom: 1px solid #CAC4D0;"></div>
+      <div style="padding: 10px 12px;"><div class="mono">span 下划线</div><div class="b" style="font-size: 12px;">primary @40% / #7A6AA8</div></div>
+    </div>
+  </div>
+  <div class="b" style="margin-top: 12px;">正文排版：17sp / 行高 30sp / 左右 24dp，中英同一字号，英文不放大也不加粗——加粗会让「英语更重要」这层意思跑出来。</div>
+</div>
+</x-dc>
+</body>
+</html>

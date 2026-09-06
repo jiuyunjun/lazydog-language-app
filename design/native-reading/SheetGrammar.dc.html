@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .zh { font-size: 17px; line-height: 30px; color: #1D1B20; }
+    .btn-out { height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid #79747E; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #6750A4; }
+  </style>
+</helmet>
+
+<div style="width: 412px; height: 916px; background: #FEF7FF; position: relative; overflow: hidden;">
+
+  <div style="padding: 64px 24px 0;">
+    <div style="font-size: 26px; line-height: 36px; font-weight: 600; color: #1D1B20;">便利店真正擅长的，<br>也许不是预测需求</div>
+    <p class="zh" style="margin: 28px 0 0 0;">门店会根据时间、销量和配送频率不断做出小幅 adjustments。</p>
+    <p class="zh" style="margin: 20px 0 0 0;">预测错一点并不可怕，<span style="background: #E8DEF8; border-radius: 4px; padding: 1px 3px; border-bottom: 1.5px solid #B9A9DE;">as long as the system can recover quickly</span>。</p>
+
+    <!-- §13.2 长按整句 → 就地显示中文母版，不跳转 -->
+    <div style="margin-top: 10px; background: #ECE6F0; border-radius: 12px; padding: 12px 14px; display: flex; gap: 10px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#49454F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
+      <div>
+        <div style="font-size: 12px; line-height: 16px; color: #49454F;">这句原本写的是</div>
+        <div style="margin-top: 4px; font-size: 15px; line-height: 24px; color: #1D1B20;">只要系统能很快纠正过来。</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.32);"></div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; background: #F3EDF7; border-radius: 28px 28px 0 0; padding: 12px 24px 28px;">
+    <div style="width: 32px; height: 4px; border-radius: 2px; background: #CAC4D0; margin: 0 auto 20px;"></div>
+
+    <div style="font-size: 20px; line-height: 30px; font-weight: 500; color: #1D1B20;">as long as the system can recover quickly</div>
+
+    <div style="margin-top: 16px; display: flex; align-items: center; gap: 8px;">
+      <span style="height: 22px; padding: 0 8px; border-radius: 6px; background: #E8DEF8; display: flex; align-items: center; font-size: 12px; font-weight: 500; color: #1D192B;">语法</span>
+      <span style="font-size: 13px; color: #49454F;">条件状语从句</span>
+    </div>
+
+    <!-- 结构公式在上、一句话用途在下（UI_BRIEF §6 语法信息层级） -->
+    <div style="margin-top: 12px; background: #ECE6F0; border-radius: 12px; padding: 16px;">
+      <div style="font-size: 18px; line-height: 26px; font-weight: 500; color: #1D1B20; font-family: Roboto, system-ui, sans-serif;">as long as + 从句</div>
+      <div style="margin-top: 6px; font-size: 15px; line-height: 24px; color: #49454F;">只要……就……：给后面的结论加一个条件。</div>
+    </div>
+
+    <div style="margin-top: 16px; font-size: 12px; line-height: 16px; color: #49454F; letter-spacing: 0.4px;">这里在说</div>
+    <div style="margin-top: 6px; font-size: 15px; line-height: 24px; color: #1D1B20;">“预测错了”本身不重要，重要的是纠正得够快——快，就是那个条件。</div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px;">
+      <div class="btn-out">再看一个例子</div>
+      <div class="btn-out">
+        看语法页
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6750A4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"></path></svg>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

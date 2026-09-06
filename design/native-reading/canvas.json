@@ -1,0 +1,25 @@
+{
+  "artboards": [
+    { "file": "Feed.dc.html", "x": 0, "y": 0, "w": 412, "h": 916, "title": "入口 · 挑主题" },
+    { "file": "Main.dc.html", "x": 492, "y": 0, "w": 412, "h": 916, "title": "阅读页" },
+    { "file": "SheetWord.dc.html", "x": 984, "y": 0, "w": 412, "h": 916, "title": "点词 · Bottom Sheet" },
+    { "file": "SheetGrammar.dc.html", "x": 1476, "y": 0, "w": 412, "h": 916, "title": "点语法 · 长按看原文" },
+    { "file": "Rescue.dc.html", "x": 1968, "y": 0, "w": 412, "h": 916, "title": "段落救援 · 本篇降档" },
+
+    { "file": "Payoff.dc.html", "x": 0, "y": 1036, "w": 412, "h": 916, "title": "结尾 · 1 道理解题" },
+    { "file": "Recall.dc.html", "x": 492, "y": 1036, "w": 412, "h": 916, "title": "表达回忆" },
+    { "file": "Summary.dc.html", "x": 984, "y": 1036, "w": 412, "h": 916, "title": "收尾 · 英语回顾" },
+    { "file": "Settings.dc.html", "x": 1476, "y": 1036, "w": 412, "h": 916, "title": "设置 · 两个旋钮" },
+    { "file": "States.dc.html", "x": 1968, "y": 1036, "w": 412, "h": 916, "title": "生成中 / 失败" },
+
+    { "file": "DarkReading.dc.html", "x": 0, "y": 2072, "w": 412, "h": 916, "title": "阅读页 · 深色" },
+    { "file": "Spec.dc.html", "x": 492, "y": 2072, "w": 900, "h": 1640, "print": "flow", "title": "视觉与交互规范" },
+    { "file": "Handoff.dc.html", "x": 1472, "y": 2072, "w": 900, "h": 1800, "print": "flow", "title": "交付说明" }
+  ],
+  "annotations": [
+    { "id": "row-flow", "x": 0, "y": -150, "w": 700, "text": "主线：挑主题 → 读 → 点开英语 → 读不动时退回中文\n手势是这套设计的骨架：单击开面板，长按看原中文，连点触发本篇降档。" },
+    { "id": "row-close", "x": 0, "y": 940, "w": 460, "text": "闭环：一道理解题问文章本身，再回忆 2～3 个表达。\n不做十道题——读完之后人是想继续读的，不是想考试的。" },
+    { "id": "row-spec", "x": 0, "y": 3020, "w": 420, "text": "规范页：span 的四种视觉、组件映射、实现顺序、\n无障碍，和我做的假设 / 还需要你定的三件事。" }
+  ],
+  "launch": { "view": "canvas" }
+}

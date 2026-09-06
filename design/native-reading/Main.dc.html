@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .zh { font-size: 17px; line-height: 30px; color: #1D1B20; letter-spacing: 0.1px; }
+    /* §20.1 span 视觉：mastered 不加任何标记 */
+    .sp { font-family: Roboto, system-ui, sans-serif; }
+    .sp-mastered { color: #1D1B20; }
+    .sp-review { color: #1D1B20; border-bottom: 1px dotted #CAC4D0; }
+    .sp-target { color: #1D1B20; border-bottom: 1.5px solid #B9A9DE; }
+    .sp-grammar { color: #1D1B20; background: #F3EDF7; border-bottom: 1.5px solid #B9A9DE; border-radius: 4px; padding: 1px 3px; }
+  </style>
+</helmet>
+
+<div style="width: 412px; height: 916px; background: #FEF7FF; display: flex; flex-direction: column; overflow: hidden;">
+
+  <!-- TopAppBar (M3 CenterAligned 收起态, 64dp) -->
+  <div style="height: 64px; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 4px; flex-shrink: 0;">
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1B20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#49454F" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7"></path><path d="M4 10V3"></path><path d="M12 21v-9"></path><path d="M12 8V3"></path><path d="M20 21v-5"></path><path d="M20 12V3"></path><path d="M1 14h6"></path><path d="M9 8h6"></path><path d="M17 16h6"></path></svg>
+    </div>
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="#49454F"><circle cx="12" cy="5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="19" r="1.8"></circle></svg>
+    </div>
+  </div>
+
+  <!-- 正文滚动区 -->
+  <div style="flex-grow: 1; overflow: hidden; padding: 0 24px;">
+
+    <div style="font-size: 26px; line-height: 36px; font-weight: 600; color: #1D1B20; letter-spacing: 0;">便利店真正擅长的，<br>也许不是预测需求</div>
+
+    <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; line-height: 18px; color: #49454F;">
+      <span>日本社会</span><span style="color: #CAC4D0;">·</span><span>约 4 分钟</span><span style="color: #CAC4D0;">·</span><span>英语约 24%</span>
+    </div>
+
+    <!-- 英语量三档：M3 SingleChoiceSegmentedButtonRow, 40dp -->
+    <div style="display: flex; margin-top: 16px; height: 40px; border: 1px solid #79747E; border-radius: 20px; overflow: hidden;">
+      <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #49454F;">轻松</div>
+      <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: #E8DEF8; border-left: 1px solid #79747E; border-right: 1px solid #79747E; font-size: 14px; font-weight: 500; color: #1D192B;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D192B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+        平衡
+      </div>
+      <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #49454F;">强化</div>
+    </div>
+
+    <!-- 段落。§10.3：开头两段生词密度低于全文平均 -->
+    <p class="zh" style="margin: 24px 0 0 0;">日本便利店最厉害的地方，也许不是“什么都有”，而是它们很少让你感觉某样东西真的缺了。直觉上，这似乎需要极其准确地<span class="sp sp-review"> predict demand</span>。</p>
+
+    <p class="zh" style="margin: 20px 0 0 0;">但现实里的需求永远会被天气、节假日、附近的一场活动，甚至一场突然的大雨打乱。</p>
+
+    <p class="zh" style="margin: 20px 0 0 0;">真正有效的系统通常并不追求<span class="sp sp-mastered"> perfect prediction</span>，而是<span class="sp sp-target"> leave room for error</span>。门店会根据时间、销量和配送频率不断做出小幅<span class="sp sp-target"> adjustments</span>。</p>
+
+    <p class="zh" style="margin: 20px 0 0 0;">预测错一点并不可怕，<span class="sp sp-grammar">as long as the system can recover quickly</span>。</p>
+
+    <p class="zh" style="margin: 20px 0 0 0;">这也是很多大型软件系统的设计逻辑：可靠性并不来自“永远不出</p>
+  </div>
+
+  <!-- 底部操作栏：M3 BottomAppBar, 80dp -->
+  <div style="height: 80px; flex-shrink: 0; background: #F3EDF7; display: flex; align-items: center; gap: 8px; padding: 0 16px;">
+    <div style="width: 48px; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#49454F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M19.1 4.9a10 10 0 010 14.2"></path><path d="M15.5 8.5a5 5 0 010 7"></path></svg>
+    </div>
+    <div style="width: 48px; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#49454F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7.5-4.7-9.5-9A5.2 5.2 0 0112 5.6 5.2 5.2 0 0121.5 12c-2 4.3-9.5 9-9.5 9z"></path></svg>
+    </div>
+    <div style="width: 48px; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#49454F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V4a1 1 0 011-1h12a1 1 0 011 1z"></path></svg>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <div style="height: 56px; padding: 0 20px; border-radius: 16px; background: #6750A4; display: flex; align-items: center; gap: 8px;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+      <span style="font-size: 14px; font-weight: 500; color: #FFFFFF; letter-spacing: 0.1px;">读完了</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

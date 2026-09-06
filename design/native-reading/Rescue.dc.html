@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .zh { font-size: 17px; line-height: 30px; color: #1D1B20; }
+    .sp-target { border-bottom: 1.5px solid #B9A9DE; }
+    .sp-review { border-bottom: 1px dotted #CAC4D0; }
+  </style>
+</helmet>
+
+<div style="width: 412px; height: 916px; background: #FEF7FF; position: relative; overflow: hidden; display: flex; flex-direction: column;">
+
+  <div style="height: 64px; display: flex; align-items: center; padding: 0 4px; flex-shrink: 0;">
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1B20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; padding: 0 24px; overflow: hidden;">
+    <p class="zh" style="margin: 0;">门店每天要处理的其实是一个不断变形的<span class="sp-review"> demand curve</span>：早高峰、午餐、放学、夜班，各自有各自的节奏。</p>
+    <p class="zh" style="margin: 20px 0 0 0;">系统的做法不是把这些节奏<span class="sp-target"> predicted perfectly</span>，而是把<span class="sp-target"> replenishment cycles</span> 切得足够短，让每一次<span class="sp-target"> misjudgment</span> 都能在几个小时内被<span class="sp-target"> corrected</span>。</p>
+    <p class="zh" style="margin: 20px 0 0 0;">这也解释了为什么便利店的配送车一天要来好几趟。</p>
+
+    <!-- §13.3 段落救援：inline 卡片，不是弹窗；只对本篇降档 -->
+    <div style="margin-top: 28px; background: #FCEAC8; border-radius: 12px; padding: 16px;">
+      <div style="display: flex; gap: 12px;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A4E00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5"></path><path d="M12 16.5v.01"></path></svg>
+        <div>
+          <div style="font-size: 16px; line-height: 24px; color: #7A4E00; font-weight: 500;">这一段英语有点密</div>
+          <div style="margin-top: 4px; font-size: 15px; line-height: 22px; color: #7A4E00;">这篇先切回轻松模式？只改这一篇，设置不动。</div>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-left: 36px;">
+        <div style="height: 40px; padding: 0 20px; border-radius: 20px; background: #7A4E00; display: flex; align-items: center; font-size: 14px; font-weight: 500; color: #FFFFFF;">这篇先轻松点</div>
+        <div style="height: 40px; padding: 0 20px; border-radius: 20px; display: flex; align-items: center; font-size: 14px; font-weight: 500; color: #7A4E00;">不用，继续读</div>
+      </div>
+    </div>
+
+    <p class="zh" style="margin: 24px 0 0 0; color: #79747E;">切换之后，这一段之后的英语会变少，读到哪儿还在哪儿。</p>
+  </div>
+
+  <!-- 降档后的确认：M3 Snackbar -->
+  <div style="position: absolute; left: 16px; right: 16px; bottom: 24px; min-height: 48px; background: #322F35; border-radius: 4px; display: flex; align-items: center; gap: 8px; padding: 12px 12px 12px 16px;">
+    <span style="flex-grow: 1; font-size: 14px; line-height: 20px; color: #F5EFF7;">这篇改成轻松模式了，英语约 12%</span>
+    <span style="font-size: 14px; font-weight: 500; color: #D0BCFF; padding: 0 8px;">撤销</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
