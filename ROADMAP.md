@@ -2,7 +2,7 @@
 doc: "ROADMAP.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "2.0"
+version: "2.1"
 updated: "2026-09-07"
 authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
 index: "DOCS.md"
@@ -531,16 +531,22 @@ Room v17 给 `reading_materials` 加了 `readerPayoff` 和 `archetype` 两列（
 - [x] 读完一道理解题 + 2～3 个表达回忆 + 难度反馈（反馈改的是下一篇的默认档位）。
 - [x] Brave 搜索接进来做可选 Fact Pack：没配密钥就藏掉开关，搜不到退回按常识写。
 - [x] Room v20 一列 `nativeJson`，备份双向兼容；学习页多一个入口，最近材料按类型开对的页。
-- [ ] 真实模型与真机验收：替换自然度、三档切换手感、长按翻回中文、深色与大字体。
+- [x] 首轮真机反馈的四处修正：Brave 不再自己发 `Accept-Encoding`（那会关掉 OkHttp 的
+      透明解压，body 拿到 gzip 二进制，表现成「返回的不是预期结构」）、时间窗只在
+      「先搜一下最新消息」时才收；长按翻回中文可以再长按翻回英语；面板与回忆卡里的
+      英文支持双击查词、三击讲句；学习页一行两张卡等高。
+- [ ] 真实模型与真机验收：替换自然度、三档切换手感、深色与大字体。
 
 本次没做（对应设计文档，不是遗漏）：§14 段内实时动态难度、§30 混合朗读与
 「本文英语回顾」整段播放、§31 独立设置页（两个旋钮先放在生成页和阅读页）、
 §21 把回忆结果写进 FSRS（只记复习词的语境曝光，新表达要用户明说才入库）、
 §6.2 热点的多轮聚类与角度生成（现在是一次检索直接进 Fact Pack）。
 
-验证：565 项 JVM 单测、lintDebug、assembleDebug 与 `tools/check_docs.py` 通过。
+验证：571 项 JVM 单测、lintDebug、assembleDebug 与 `tools/check_docs.py` 通过。
 `NativeReadingValidationTest` 覆盖定位失败、重叠、语法上限、相邻陌生项、
-比例削减、渲染切分与回忆挑选。真实模型样本与真机交互仍待验收。
+比例削减、渲染切分与回忆挑选；`BraveSearchClientTest` 用 MockWebServer 守住
+压缩返回解得开、freshness 只在要的时候发、限流与密钥无效分开报。
+Brave 接口本身已用真实密钥 curl 验证过返回结构。真实模型样本与真机交互仍待验收。
 
 ## 已知限制
 

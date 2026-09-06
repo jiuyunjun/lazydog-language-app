@@ -72,6 +72,7 @@ import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.NativeReadingJson
 import com.lazydog.english.core.data.ReadingRepository
 import com.lazydog.english.core.designsystem.AiWaiting
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.model.KnowledgeStage
 import com.lazydog.english.core.model.TopicCatalog
@@ -94,6 +95,7 @@ import com.lazydog.english.domain.generation.NativeSpanPlanRequest
 import com.lazydog.english.domain.generation.NewWordAmount
 import com.lazydog.english.domain.generation.ReadingSegment
 import com.lazydog.english.domain.generation.SpanKind
+import com.lazydog.english.domain.generation.WebSearchProvider
 import com.lazydog.english.domain.generation.factPackLines
 import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.feature.ask.AskTopBarAction
@@ -229,7 +231,12 @@ fun NativeReadingScreen(
             // 热点先检索再写（§36.7）。搜不到就照常写，只是不带时效事实——
             // 因为搜索失败读不到文章，对用户来说是纯粹的倒退。
             val facts = if (searchFirst) {
-                val result = app.webSearch.search(topic)
+                // 用户点的是「先搜一下最新消息」，那就真的收窗口到最近一个月；
+                // 不点这个开关的主题走的是常识路线，根本不检索。
+                val result = app.webSearch.search(
+                    query = topic,
+                    freshness = WebSearchProvider.FRESH_MONTH,
+                )
                 if (result.failure != null) notice = "没搜到最新消息，这篇按常识写：${result.failure}"
                 factPackLines(result.hits)
             } else {
@@ -378,8 +385,12 @@ fun NativeReadingScreen(
                         revealCount++
                     },
                     onSpanLongPress = { span ->
-                        if (!revealed.contains(span.id)) revealed.add(span.id)
-                        revealCount++
+                        if (revealed.contains(span.id)) {
+                            revealed.remove(span.id)
+                        } else {
+                            revealed.add(span.id)
+                            revealCount++
+                        }
                     },
                     onAmountChange = { replan(p.view, it) },
                     onRescueAccept = {
@@ -707,7 +718,7 @@ private fun NativeArticleView(
                 }
             }
             Text(
-                text = "长按文中的英语，可以直接看回原来的中文。",
+                text = "长按文中的英语看回原来的中文，再长按一下换回英语。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -844,7 +855,7 @@ private fun SpanSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
+                InteractiveEnglishText(
                     text = span.renderedEn,
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.weight(1f),
@@ -1040,7 +1051,7 @@ private fun RecallCard(span: LearningSpan, revealed: Boolean, onReveal: () -> Un
             Spacer(Modifier.height(8.dp))
             if (revealed) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
+                    InteractiveEnglishText(
                         text = span.renderedEn,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,

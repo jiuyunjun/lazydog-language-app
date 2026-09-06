@@ -29,7 +29,7 @@ class BraveSearchClient(
 
     override suspend fun isConfigured(): Boolean = apiKey().isNotBlank()
 
-    override suspend fun search(query: String, count: Int): WebSearchResult =
+    override suspend fun search(query: String, count: Int, freshness: String): WebSearchResult =
         withContext(Dispatchers.IO) {
             val key = apiKey().trim()
             if (key.isBlank()) return@withContext WebSearchResult(failure = "没有配置 Brave 搜索密钥")
@@ -39,8 +39,7 @@ class BraveSearchClient(
                 append(endpoint)
                 append("?q=").append(URLEncoder.encode(query.trim(), "UTF-8"))
                 append("&count=").append(count.coerceIn(1, 20))
-                // 新闻类查询要的是"最近的"，但不把窗口卡死：很多值得读的机制性内容不是当天发的。
-                append("&freshness=pm")
+                if (freshness.isNotBlank()) append("&freshness=").append(freshness)
                 append("&text_decorations=0")
                 append("&safesearch=moderate")
             }
@@ -48,7 +47,6 @@ class BraveSearchClient(
                 .url(url)
                 .header("X-Subscription-Token", key)
                 .header("Accept", "application/json")
-                .header("Accept-Encoding", "gzip")
                 .tag(CallHooks::class.java, CallHooks(op = "搜索"))
                 .get()
                 .build()
@@ -72,7 +70,11 @@ class BraveSearchClient(
     private fun parse(body: String): WebSearchResult {
         val payload = runCatching { json.decodeFromString(BravePayload.serializer(), body) }
             .getOrNull()
-            ?: return WebSearchResult(failure = "Brave 返回的不是预期结构")
+        // 解不出来时把开头几十个字符带上：是 gzip 二进制、HTML 错误页还是别的结构，
+        // 差别很大，只说一句"不是预期结构"下次还得再猜一遍。
+            ?: return WebSearchResult(
+                failure = "Brave 返回的不是预期结构：${body.take(60).replace(Regex("\\s+"), " ")}",
+            )
         val hits = payload.web?.results.orEmpty().mapNotNull { result ->
             val title = stripTags(result.title)
             if (title.isBlank()) {

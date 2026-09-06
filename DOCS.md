@@ -2,7 +2,7 @@
 doc: "DOCS.md"
 tier: "L0 入口"
 status: "生效"
-version: "1.13"
+version: "1.14"
 updated: "2026-09-07"
 authority: "文档清单、层级、权威顺序与版本表；本仓库文档元信息的唯一事实来源"
 index: "DOCS.md"
@@ -180,7 +180,7 @@ python tools/check_docs.py
 | --- | --- | --- | --- | --- |
 | `README.md` | L0 入口 | 生效 | 1.2 | 2026-09-06 |
 | `CLAUDE.md` | L0 入口 | 生效 | 1.0 | 2026-09-06 |
-| `DOCS.md` | L0 入口 | 生效 | 1.13 | 2026-09-07 |
+| `DOCS.md` | L0 入口 | 生效 | 1.14 | 2026-09-07 |
 | `AGENTS.md` | L1 工作规则 | 生效 | 1.2 | 2026-09-06 |
 | `HANDOFF.md` | L1 工作规则 | 生效 | 1.1 | 2026-09-06 |
 | `PRODUCT.md` | L2 产品定义 | 生效 | 1.0 | 2026-09-03 |
@@ -197,7 +197,7 @@ python tools/check_docs.py
 | `语音服务DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-09-04 |
 | `持续学习DESIGN.md` | L4 专项设计 | 部分落地 | 1.1 | 2026-09-06 |
 | `DECISIONS.md` | L5 过程记录 | 生效 | 5.1 | 2026-09-07 |
-| `ROADMAP.md` | L5 过程记录 | 生效 | 2.0 | 2026-09-07 |
+| `ROADMAP.md` | L5 过程记录 | 生效 | 2.1 | 2026-09-07 |
 
 设计稿 `懒狗放洋屁 MVP.dc.html` 不参与版本表：它是导出的设计产物，版本由导出时间决定。
 
@@ -241,6 +241,7 @@ python tools/check_docs.py
   检索作为可选增强，以及三处有意偏离（设置页、段内动态难度、回忆不写 FSRS）。
 - ARCHITECTURE 增 §7.1（v20 的 `nativeJson`、两步管线、`WebSearchProvider`）；
   AI_CONTRACTS 增 §4.1（两次调用的字段与硬性约定）；ROADMAP 记 M19 的已做与没做。
+- M19 补记首轮真机反馈的四处修正（Brave 压缩返回、长按可逆、面板内双击三击、卡片等高）。
 
 ### 2026-09-06（记录页生成学习卡）
 

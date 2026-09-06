@@ -15,10 +15,25 @@ interface WebSearchProvider {
     /** 没配密钥时为 false，界面据此隐藏"先搜一下"这个开关。 */
     suspend fun isConfigured(): Boolean
 
-    suspend fun search(query: String, count: Int = DEFAULT_COUNT): WebSearchResult
+    /**
+     * [freshness] 限定时间窗，取值见 [FRESH_MONTH] 等常量，空表示不限。
+     * 默认不限：写「为什么便利店很少缺货」这种主题时按一个月卡下去经常一条都搜不到，
+     * 那不是没有结果，是问错了问题。只有用户明说要「最新消息」时才该收窗口。
+     */
+    suspend fun search(
+        query: String,
+        count: Int = DEFAULT_COUNT,
+        freshness: String = "",
+    ): WebSearchResult
 
     companion object {
         const val DEFAULT_COUNT = 5
+
+        /** Brave 的时间窗取值：过去一天 / 一周 / 一个月 / 一年。 */
+        const val FRESH_DAY = "pd"
+        const val FRESH_WEEK = "pw"
+        const val FRESH_MONTH = "pm"
+        const val FRESH_YEAR = "py"
     }
 }
 
