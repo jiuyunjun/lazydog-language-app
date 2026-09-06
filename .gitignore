@@ -31,3 +31,7 @@ Thumbs.db
 
 # Local hardcoded credentials (see LocalEnv.kt.example)
 LocalEnv.kt
+
+# 设计画布的发布产物（约 2MB，由 design/*.dc.html + canvas.json 重新生成）
+design/lazydog-new-screens.html
+design/title.txt

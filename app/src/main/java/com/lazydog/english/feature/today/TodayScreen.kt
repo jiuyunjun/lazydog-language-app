@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,7 +21,9 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
@@ -34,8 +37,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.TodayReport
@@ -102,11 +113,15 @@ fun TodayScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
     ) {
-        Text(
-            text = "今天",
-            style = MaterialTheme.typography.headlineSmall,
+        Column(
             modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
-        )
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(text = "今天", style = MaterialTheme.typography.headlineSmall)
+            // 三个数原来在页面中段竖排成三组、占掉近一屏。收到标题下面一行，
+            // 三个仍然一起给（`持续学习DESIGN.md` §7.1）——少给一个就回到"断一次归零"那个问题。
+            if (activity.journeyDays > 0) ActivityLine(activity)
+        }
 
         if (learnerLevel.isBlank()) {
             OutlinedCard(
@@ -142,7 +157,8 @@ fun TodayScreen(
             shape = MaterialTheme.shapes.large,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = when {
                         wrappedUp -> copy.todaySignOff
@@ -152,14 +168,6 @@ fun TodayScreen(
                         else -> copy.todayPlannedMinutes(plan.sumOf { it.step.minutes })
                     },
                     style = MaterialTheme.typography.titleMedium,
-                )
-                // 最低目标写在最显眼的地方：今天再累也能过的那条线（§6）。
-                Text(
-                    text = if (minimumDone) copy.todayMinimumDone
-                    else "回忆 ${report.progress.reviewed}/$MINIMUM_RETRIEVALS 次，或完成任一步，即达成最低目标",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (minimumDone) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
                     text = if (allDone) {
@@ -178,9 +186,13 @@ fun TodayScreen(
                     } else {
                         copy.todayNothingDue
                     },
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                }
+                // 最低目标是今天再累也能过的那条线（§6）。原来它只是卡片里的一行灰字，
+                // 和上下两行分不出轻重；给它一条进度条，"还差几次"不用读句子也能看出来。
+                MinimumGoal(reviewed = report.progress.reviewed, done = minimumDone)
             }
         }
 
@@ -202,7 +214,7 @@ fun TodayScreen(
             // 已经过了最低目标：继续和收工是平等的两个选项，收工不做成灰色小字。
             minimumDone -> Column(
                 modifier = Modifier.padding(top = 16.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(
                     onClick = { scope.launch { prefs.setWrappedUp(today, true) } },
@@ -241,45 +253,55 @@ fun TodayScreen(
             }
         }
 
-        if (activity.journeyDays > 0) {
-            ActivityLine(activity)
-        }
-
         if (!wrappedUp) {
             Text(
                 text = copy.todayPlanTitle,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp, start = 4.dp),
+                modifier = Modifier.padding(top = 28.dp, bottom = 8.dp, start = 4.dp),
             )
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val dashColor = MaterialTheme.colorScheme.outlineVariant
                 plan.forEach { planned ->
                     val done = planned.step.id in doneSteps
                     val skipped = !done && planned.step.id in skippedSteps
                     Surface(
                         onClick = { if (!done && !skipped) onStartStep(planned.step) },
-                        color = MaterialTheme.colorScheme.surface,
+                        // 待办那几行原来用的是 `surface`，和页面背景一模一样，看上去不像能点。
+                        // 只有还要做的事给容器底色；做完和跳过的退成透明，让底色本身成为"轮到你了"的信号。
+                        color = if (done || skipped) Color.Transparent
+                        else MaterialTheme.colorScheme.surfaceContainer,
                         shape = MaterialTheme.shapes.medium,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (skipped) Modifier.dashedOutline(dashColor, 12.dp) else Modifier),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            modifier = Modifier
+                                .heightIn(min = 64.dp)
+                                .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             Icon(
                                 imageVector = if (done) Icons.Outlined.CheckCircle else planned.step.icon,
                                 contentDescription = null,
-                                tint = if (done) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = when {
+                                    done -> MaterialTheme.colorScheme.primary
+                                    skipped -> MaterialTheme.colorScheme.outline
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                                 modifier = Modifier.size(22.dp),
                             )
                             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(
                                     text = planned.step.title,
                                     style = MaterialTheme.typography.bodyLarge,
-                                    color = if (done) MaterialTheme.colorScheme.onSurfaceVariant
-                                    else MaterialTheme.colorScheme.onSurface,
+                                    color = when {
+                                        done -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        skipped -> MaterialTheme.colorScheme.outline
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    },
                                 )
                                 Text(
                                     text = if (done) "完成了" else if (skipped) "今天已跳过 · 不计入完成"
@@ -293,6 +315,12 @@ fun TodayScreen(
                                     onClick = {
                                         scope.launch { prefs.setTodayStepSkipped(today, planned.step.id, !skipped) }
                                     },
+                                    // 「跳过」是这一行里最不该被点的那个动作，收成灰色；
+                                    // 「恢复」相反，它是跳过之后唯一的出口，留主色。
+                                    colors = ButtonDefaults.textButtonColors(
+                                        contentColor = if (skipped) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.outline,
+                                    ),
                                 ) {
                                     Text(if (skipped) "恢复" else "跳过", style = MaterialTheme.typography.labelMedium)
                                 }
@@ -318,33 +346,79 @@ fun TodayScreen(
  * 活跃度三个数一起给（§7.1）。
  *
  * 只显示连续天数的问题是断一次就归零，而人恰恰在断掉那天最需要一个回来的理由。
- * 旅程和最近三十天断不掉，它们是这个理由。
+ * 旅程和最近三十天断不掉，它们是这个理由——所以三个数必须一起出现，少给一个就等于没写。
+ *
+ * 排版上收成标题下的一行：它是背景信息，不该在页面中段占掉三组两行的位置，
+ * 把真正要做的事挤到屏幕外面去。
  */
 @Composable
 private fun ActivityLine(activity: LearningActivity) {
-    Column(
-        modifier = Modifier.padding(top = 10.dp, start = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        ActivityStat("学习旅程", "${activity.journeyDays} 天")
-        ActivityStat("最近 30 天", "${activity.activeDaysIn30} 天")
-        ActivityStat(
-            label = if (activity.restDaysUsed > 0) "连续 · 休过 ${activity.restDaysUsed} 天" else "连续",
-            value = "${activity.currentStreak} 天",
+    val streakLabel = if (activity.restDaysUsed > 0) {
+        "连续 ${activity.currentStreak} 天 · 休过 ${activity.restDaysUsed} 天"
+    } else {
+        "连续 ${activity.currentStreak} 天"
+    }
+    Text(
+        text = "旅程 ${activity.journeyDays} 天 · 近 30 天 ${activity.activeDaysIn30} 天 · $streakLabel",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.outline,
+    )
+}
+
+/**
+ * 最低目标那条线（§6）：回忆满 [MINIMUM_RETRIEVALS] 次，或者完成任一步。
+ *
+ * 进度条只画得出回忆那一半——"完成任一步"是另一条路，条到不了满格也可能已经达成，
+ * 所以达成之后直接把条填满，不让它继续显示一个已经不作数的比例。
+ */
+@Composable
+private fun MinimumGoal(reviewed: Int, done: Boolean) {
+    val copy = appCopy
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "今天的最低目标",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = if (done) copy.todayMinimumDone else "回忆 $reviewed / $MINIMUM_RETRIEVALS 次",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        LinearProgressIndicator(
+            progress = {
+                if (done) 1f else (reviewed.toFloat() / MINIMUM_RETRIEVALS).coerceIn(0f, 1f)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp),
         )
+        if (!done) {
+            Text(
+                text = "回忆满 $MINIMUM_RETRIEVALS 次，或完成任一步，今天就算数了",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
     }
 }
 
-@Composable
-private fun ActivityStat(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline,
-        )
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
-    }
+/** 跳过态的虚线边框。M3 没有虚线描边，就地画一条，不为这一处新造组件。 */
+private fun Modifier.dashedOutline(color: Color, radius: Dp) = drawBehind {
+    val stroke = 1.dp.toPx()
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(stroke / 2f, stroke / 2f),
+        size = Size(size.width - stroke, size.height - stroke),
+        cornerRadius = CornerRadius(radius.toPx()),
+        style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))),
+    )
 }
 
 /**

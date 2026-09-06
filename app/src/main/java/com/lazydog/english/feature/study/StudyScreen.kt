@@ -209,7 +209,7 @@ fun StudyScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("粘贴一段英文", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        text = "双击查词、三击讲句，生词顺手入库",
+                        text = "双击查词、三击讲句，生词顺手添加",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
