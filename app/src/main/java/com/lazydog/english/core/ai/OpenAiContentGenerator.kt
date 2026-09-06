@@ -97,7 +97,11 @@ import com.lazydog.english.domain.scenario.ScenarioSummaryRequest
 import com.lazydog.english.domain.scenario.ScenarioTurn
 import com.lazydog.english.domain.scenario.ScenarioTurnRequest
 import com.lazydog.english.domain.scenario.ScenarioValidation
+import com.lazydog.english.domain.vocabulary.ImageStrategy
 import com.lazydog.english.domain.vocabulary.PartOfSpeech
+import com.lazydog.english.domain.vocabulary.VisualQueryValidation
+import com.lazydog.english.domain.vocabulary.VisualSearchPlan
+import com.lazydog.english.domain.vocabulary.VisualSearchRequest
 import com.lazydog.english.domain.vocabulary.normalizePos
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -238,6 +242,38 @@ class OpenAiContentGenerator(
             promptVersion = MEMORY_PROMPT_VERSION,
             droppedNotes = cleaned.droppedNotes,
         )
+    }
+
+    override suspend fun generateVisualSearchPlan(
+        request: VisualSearchRequest,
+        onStage: ((GenerationStage) -> Unit)?,
+    ): GenerationResult<VisualSearchPlan> {
+        val outcome = complete(
+            systemPrompt = VISUAL_QUERY_SYSTEM_PROMPT,
+            userPrompt = buildVisualQueryPrompt(request),
+            task = AiTask.Words,
+            onStage = onStage,
+            op = "配图检索词",
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<VisualQueryPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val plan = payload.toDomain()
+        // 「这个词义画不出来」是合法结论，不走校验：设计文档 §5.5 明确要求主动放弃。
+        if (!plan.visualizable) {
+            return GenerationResult.Success(
+                data = plan.copy(strategy = ImageStrategy.None),
+                model = content.model,
+                promptVersion = VISUAL_QUERY_PROMPT_VERSION,
+            )
+        }
+        VisualQueryValidation.problem(plan, request.term)?.let {
+            return GenerationResult.Failure("检索词没通过校验：$it")
+        }
+        return GenerationResult.Success(plan, content.model, VISUAL_QUERY_PROMPT_VERSION)
     }
 
     override suspend fun generateGrammarLesson(
@@ -1455,6 +1491,36 @@ class OpenAiContentGenerator(
         )
     }
 
+    /**
+     * 字段名照 `单词视觉记忆图片DESIGN.md` §26 的 JSON 原样来，理由和记忆提示那份一样：
+     * 提示词里贴的就是这份结构，两边不一致时模型照着文档写，解析这边就落空。
+     */
+    @Serializable
+    private data class VisualQueryPayload(
+        val visualizable: Boolean = false,
+        val visualizability: Double = 0.0,
+        val reason: String = "",
+        val strategy: String = "",
+        @SerialName("primary_query") val primaryQuery: String = "",
+        @SerialName("fallback_queries") val fallbackQueries: List<String> = emptyList(),
+        @SerialName("visual_target") val visualTarget: String = "",
+        @SerialName("must_show") val mustShow: List<String> = emptyList(),
+        val avoid: List<String> = emptyList(),
+    ) {
+        fun toDomain() = VisualSearchPlan(
+            visualizable = visualizable,
+            visualizability = visualizability.coerceIn(0.0, 1.0),
+            strategy = ImageStrategy.normalize(strategy),
+            primaryQuery = primaryQuery.trim(),
+            // 设计文档 §14：1 主 + 2 备，再多没有意义——最多也只会搜三次。
+            fallbackQueries = fallbackQueries.map { it.trim() }.filter { it.isNotEmpty() }.take(2),
+            visualTarget = visualTarget.trim(),
+            mustShow = mustShow.map { it.trim() }.filter { it.isNotEmpty() }.take(4),
+            avoid = avoid.map { it.trim() }.filter { it.isNotEmpty() }.take(4),
+            reasonZh = reason.trim(),
+        )
+    }
+
     @Serializable
     private data class NewWordsPayload(
         val schemaVersion: Int = 0,
@@ -2069,6 +2135,7 @@ class OpenAiContentGenerator(
         const val ASK_PROMPT_VERSION = 1
         const val LISTENING_PROMPT_VERSION = 2
         const val MEMORY_PROMPT_VERSION = 4
+        const val VISUAL_QUERY_PROMPT_VERSION = 1
         const val SUGGEST_PROMPT_VERSION = 1
 
         /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
@@ -2129,6 +2196,20 @@ class OpenAiContentGenerator(
         private const val SYSTEM_PROMPT =
             "你是给中文母语者出英语学习内容的助手。严格只输出一个 JSON 对象：" +
                 "不要 markdown 代码块，不要输出 JSON 以外的任何文字，不要添加 schema 之外的字段。"
+
+        /**
+         * 配图检索词生成器（`单词视觉记忆图片DESIGN.md` §25）。
+         *
+         * 这条系统提示词和别处不一样的地方：它要的**不是一句给人读的描述，而是给搜索引擎的查询**。
+         * 模型默认会写"a beautiful photo of..."这种 image prompt，那种句子在搜索引擎里
+         * 什么也搜不到。
+         */
+        private const val VISUAL_QUERY_SYSTEM_PROMPT =
+            "You generate image-search queries for English vocabulary learning. " +
+                "Your task is NOT to describe a beautiful image. Your task is to create a short " +
+                "search query that is likely to retrieve an image which makes the specified word " +
+                "sense visually obvious. Always reason from the supplied SENSE, not from the lemma alone. " +
+                "Output exactly one JSON object, no markdown, no extra fields."
 
         /**
          * 母语阅读的中文写手（`母语阅读DESIGN.md` §37.1）。**这一步不知道学习目标存在**——
@@ -2387,6 +2468,43 @@ class OpenAiContentGenerator(
          * 十几个词一次写完，只能给一句；这里是**为一个词单独发一次调用**，
          * 先判断该记什么再只写那一两种，还带上这个人自己写错过的地方。
          */
+        /**
+         * 配图检索词的用户提示（设计文档 §25、§13）。
+         *
+         * 三件事必须说死：从词义出发而不是从词形出发（§1）、查询是 4~10 个英文词的
+         * 搜索引擎查询而不是 AI 画图提示（§14），以及"画不出来就说画不出来"是允许的（§5.5）。
+         */
+        internal fun buildVisualQueryPrompt(request: VisualSearchRequest): String = buildString {
+            appendLine("WORD: ${request.term}")
+            if (request.pos.isNotBlank()) appendLine("PART OF SPEECH: ${request.pos}")
+            appendLine("SENSE (Chinese, this is the only sense that matters): ${request.meaningZh}")
+            if (request.exampleEn.isNotBlank()) appendLine("EXAMPLE: ${request.exampleEn}")
+            appendLine()
+            appendLine("Prefer: concrete objects, visible actions, visible states, clear spatial")
+            appendLine("relationships, simple scenes.")
+            appendLine("Avoid: vague concepts, stock-photo language, text posters, logos, brand names")
+            appendLine("unless the sense itself is a brand, metaphor unless the concept cannot be")
+            appendLine("represented literally.")
+            appendLine("A query is a SEARCH ENGINE query, not an AI image prompt. Normally 4-10 words.")
+            appendLine("Never return the lemma alone as a query.")
+            appendLine(
+                "If this word sense is not meaningfully visualizable (function words, logical " +
+                    "connectives, abstract relations), return visualizable=false — that is a correct " +
+                    "answer, not a failure. Do not force an image.",
+            )
+            appendLine()
+            appendLine("strategy is one of: " + ImageStrategy.entries.joinToString(", ") { it.name })
+            appendLine("Return this JSON object:")
+            appendLine(
+                """{"visualizable":true,"visualizability":0.94,"reason":"一句中文说明为什么","""" +
+                    """strategy":"ActionScene","primary_query":"hand gripping a metal handle close up",""" +
+                    """"fallback_queries":["person tightly gripping a handle","fingers firmly grasping metal bar"],""" +
+                    """"visual_target":"a hand visibly holding an object tightly",""" +
+                    """"must_show":["hand","gripped object"],"avoid":["product advertisement","text poster"]}""",
+            )
+            appendLine("visual_target 用中文写，它会被念给看不见图的用户听。其余字段用英文。")
+        }
+
         internal fun buildMemoryAssistancePrompt(request: MemoryAssistanceRequest): String = buildString {
             appendLine("你是一个语言学习记忆辅助生成器。")
             appendLine("你的任务不是解释单词本身，而是为学习者生成「容易记住、容易回忆、容易区分」的记忆线索。")

@@ -81,7 +81,9 @@ import com.lazydog.english.domain.spelling.SpellingEvaluation
 import com.lazydog.english.domain.spelling.SpellingFacts
 import com.lazydog.english.domain.spelling.SpellingProgress
 import com.lazydog.english.domain.spelling.SpellingQuestionType
+import com.lazydog.english.domain.vocabulary.SenseKey
 import com.lazydog.english.domain.vocabulary.posLabelZh
+import com.lazydog.english.feature.vocabulary.CachedSenseImage
 import kotlinx.coroutines.launch
 
 internal const val MAX_HINT_LEVEL = SpellingEngine.MAX_HINT_LEVEL
@@ -284,6 +286,17 @@ private fun SpellingQuestionType.needsPlainTextField(): Boolean =
 private fun SpellingQuestionType.hasHintLadder(): Boolean =
     this != SpellingQuestionType.Recognition && this != SpellingQuestionType.Exposure
 
+/**
+ * 答完之后给不给图（`单词视觉记忆图片DESIGN.md` §46 的第二档）。
+ *
+ * 只给早期三种题型。到了提示拼写、完整拼写这几档，人已经能自己想起这个词了，
+ * 再给图只会让他记住那张图；接触卡走的是第一档，图在正面，不在这儿。
+ */
+private fun SpellingQuestionType.showsImageOnAnswer(): Boolean =
+    this == SpellingQuestionType.Recognition ||
+        this == SpellingQuestionType.PartialCompletion ||
+        this == SpellingQuestionType.ChunkRecall
+
 /** 题面靠声音给的题型，命中「音形对应」这一维。 */
 private fun SpellingQuestionType.isAudioPrompted(): Boolean =
     this == SpellingQuestionType.Recognition ||
@@ -388,6 +401,12 @@ private fun QuestionView(
             }
             if (result?.correct == true) {
                 CorrectBanner(term = entry.term, hintLevel = answer.hintLevel, credit = result.masteryCredit)
+            }
+            // 图是脚手架，一次比一次少（`单词视觉记忆图片DESIGN.md` §46、§47）：
+            // 接触卡正面就给图，早期题型答完之后给图当确认，到提示拼写以后完全不出现。
+            // 最后要记住的是这个英语词，不是那张图。
+            if (answer.resolved && card.questionType.showsImageOnAnswer()) {
+                CachedSenseImage(SenseKey.of(card.itemId))
             }
             if (answer.hintLevel >= MAX_HINT_LEVEL && result?.correct != true) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -495,6 +514,8 @@ private fun ExposureBody(card: SpellingCard, play: PlaybackSource) {
             .joinToString(" · "),
         style = MaterialTheme.typography.titleMedium,
     )
+    // 第一档：第一次见这个词，图在正面，图片承担理解成本（§46 Stage 1）。
+    CachedSenseImage(SenseKey.of(entry.itemId))
     ExposureChunks(term = entry.term, facts = entry.facts, extendedAttention = extended.attention)
     if (entry.exampleEn.isNotBlank()) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

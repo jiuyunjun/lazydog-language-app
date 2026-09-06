@@ -18,7 +18,10 @@ import com.lazydog.english.core.data.ScenarioSessionRepository
 import kotlinx.coroutines.flow.first
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.database.AppDatabase
+import com.lazydog.english.core.data.VocabularyImageRepository
+import com.lazydog.english.core.network.BraveImageSearchClient
 import com.lazydog.english.core.network.BraveSearchClient
+import com.lazydog.english.core.network.ImageSearchProvider
 import com.lazydog.english.domain.generation.WebSearchProvider
 import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.domain.generation.LearningContentGenerator
@@ -61,6 +64,19 @@ class LazyDogApplication : Application() {
      */
     val webSearch: WebSearchProvider by lazy {
         BraveSearchClient(apiKey = { userPreferences.braveApiKey.first() })
+    }
+
+    /**
+     * 图片检索用的是和联网检索同一个 Brave 密钥（`单词视觉记忆图片DESIGN.md` §16，D-071）。
+     * 没配就是"这次不配图"，词卡照常。
+     */
+    val imageSearch: ImageSearchProvider by lazy {
+        BraveImageSearchClient(apiKey = { userPreferences.braveApiKey.first() })
+    }
+
+    /** 单词视觉记忆图片：查缓存、找图、换图都在这里，页面不碰 Brave 也不碰模型。 */
+    val vocabularyImageRepository: VocabularyImageRepository by lazy {
+        VocabularyImageRepository(database, contentGenerator, imageSearch)
     }
 
     val listeningMaterialRepository: ListeningMaterialRepository by lazy {

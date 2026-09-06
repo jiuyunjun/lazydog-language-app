@@ -39,3 +39,7 @@ design/title.txt
 # 母语阅读设计画布的发布产物（约 2MB，由 design/native-reading/*.dc.html 重新生成）
 design/native-reading/native-bridge-reading.html
 design/native-reading/.title.txt
+
+# 单词视觉记忆图片设计画布的发布产物（同上，由 design/visual-memory/*.dc.html 重新生成）
+design/visual-memory/vocabulary-visual-memory.html
+design/visual-memory/.title.tmp

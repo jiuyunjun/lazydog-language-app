@@ -177,7 +177,7 @@ fun SettingsScreen(
     val speechSummary = speechTestState ?: "内置本地配置 · $speechRegion · 点击测试连接"
     val braveKey by prefs.braveApiKey.collectAsState(initial = "")
     val searchSummary = searchTestState ?: if (braveKey.isBlank()) {
-        "没有配置密钥 · 母语阅读的「先搜一下最新消息」不可用"
+        "没有配置密钥 · 母语阅读的「先搜一下最新消息」和单词配图都不可用"
     } else {
         "内置本地配置 · 点击测试连接"
     }
@@ -364,7 +364,8 @@ fun SettingsScreen(
         SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", speechSummary, onClick = ::runSpeechConnectionTest)
         SettingsRow(
             Icons.Outlined.TravelExplore,
-            "网页搜索（Brave）",
+            // 同一个密钥两个用途：母语阅读的联网检索，和单词卡的配图（D-071）。
+            "网页与图片搜索（Brave）",
             searchSummary,
             onClick = ::runSearchConnectionTest,
         )

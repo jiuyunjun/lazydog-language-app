@@ -47,6 +47,7 @@ import com.lazydog.english.core.data.stageOrDefault
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.InteractiveTextHint
 import com.lazydog.english.core.model.ReviewGrade
+import com.lazydog.english.domain.vocabulary.SenseKey
 import com.lazydog.english.domain.vocabulary.posLabelZh
 import com.lazydog.english.feature.library.dueLabel
 import kotlinx.coroutines.flow.first
@@ -167,6 +168,17 @@ fun WordDetailScreen(
                             detail.meaningZh
                         },
                         style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                // 详情页永远显示图：这是查阅，不是复习，不受"复习时逐渐撤图"影响
+                // （`单词视觉记忆图片DESIGN.md` §46）。整句表达不配图，它没有单一词义可言。
+                if (!isExpression) {
+                    WordImagePanel(
+                        senseKey = SenseKey.of(record.item.id),
+                        term = detail.term,
+                        meaningZh = detail.meaningZh,
+                        pos = detail.pos,
+                        exampleEn = detail.exampleEn,
                     )
                 }
                 if (collocations.isNotEmpty()) {

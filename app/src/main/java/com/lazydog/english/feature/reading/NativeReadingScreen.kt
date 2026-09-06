@@ -71,6 +71,9 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.NativeReadingJson
 import com.lazydog.english.core.data.ReadingRepository
+import com.lazydog.english.core.data.VocabularyImageRepository
+import com.lazydog.english.domain.vocabulary.SenseKey
+import com.lazydog.english.feature.vocabulary.CachedSenseImage
 import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.SpeakButton
@@ -336,6 +339,25 @@ fun NativeReadingScreen(
 
     val current = (phase as? NativePhase.Reading)?.view ?: (phase as? NativePhase.WrapUp)?.view
     ProvideAskContext(current?.toAskContext())
+
+    // 文章有了就把本篇目标词的图预取掉（`单词视觉记忆图片DESIGN.md` §49）。
+    // 只处理这一篇的新目标词：给文章里所有熟词都预取一遍，是拿配额换没人会看的图。
+    // 点开 span 那一刻不该再发请求，那时候只读缓存。
+    LaunchedEffect(current?.id) {
+        val view = current ?: return@LaunchedEffect
+        app.vocabularyImageRepository.prefetch(
+            view.document.spans
+                .filter { it.isTarget && !it.isGrammar && it.meaningZh.isNotBlank() }
+                .distinctBy { it.renderedEn.lowercase() }
+                .map { span ->
+                    VocabularyImageRepository.PrefetchTarget(
+                        senseKey = SenseKey.ofDraft(span.renderedEn, "", span.meaningZh),
+                        term = span.renderedEn,
+                        meaningZh = span.meaningZh,
+                    )
+                },
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -877,6 +899,11 @@ private fun SpanSheet(
                 )
             }
             Text(span.meaningZh, style = MaterialTheme.typography.titleMedium)
+            // 只读缓存，这里绝不现搜（`单词视觉记忆图片DESIGN.md` §48）：
+            // 点开等三秒会把阅读节奏毁掉。图是文章生成完那次预取顺手找好的。
+            if (!span.isGrammar) {
+                CachedSenseImage(SenseKey.ofDraft(span.renderedEn, "", span.meaningZh))
+            }
             if (span.patternEn.isNotBlank()) {
                 Text(
                     text = span.patternEn,

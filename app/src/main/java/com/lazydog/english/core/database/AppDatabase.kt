@@ -22,8 +22,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         VocabularyMemoryHintEntity::class,
         ListeningMaterialEntity::class,
         ListeningAttemptEntity::class,
+        VocabularySenseImageEntity::class,
     ],
-    version = 20,
+    version = 21,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -51,6 +52,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 18, to = 19),
         // v20 给 reading_materials 多一列 nativeJson（带默认值），旧材料不需要回填。
         AutoMigration(from = 19, to = 20),
+        // v21 只新增 vocabulary_sense_images，老表一列没动。
+        AutoMigration(from = 20, to = 21),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -68,6 +71,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun memoryHintDao(): MemoryHintDao
 
     abstract fun listeningMaterialDao(): ListeningMaterialDao
+
+    abstract fun vocabularyImageDao(): VocabularyImageDao
 
     companion object {
         fun create(context: Context): AppDatabase =

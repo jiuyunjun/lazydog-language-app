@@ -10,6 +10,7 @@ import com.lazydog.english.core.designsystem.*
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.domain.generation.*
 import com.lazydog.english.domain.spelling.SpellingFacts
+import com.lazydog.english.domain.vocabulary.SenseKey
 import com.lazydog.english.domain.vocabulary.posLabelZh
 
 /** Shared content for study and unsaved learning-card previews. */
@@ -50,6 +51,17 @@ fun WordLearningContent(
         Text(
             text = if (card.pos.isNotBlank()) "${posLabelZh(card.pos)} ${card.meaningZh}" else card.meaningZh,
             style = MaterialTheme.typography.titleMedium,
+        )
+        // 视觉记忆图片放在释义之后而不是词头之上：它可能没有、也可能加载失败，
+        // 放最上面时收起图片区会让词头每次开卡都跳位（`单词视觉记忆图片DESIGN.md` §45/§63）。
+        // 草稿卡也有稳定的 senseKey，所以预览时找到的图，按下「添加」之后不用重搜。
+        WordImagePanel(
+            senseKey = itemId?.let { SenseKey.of(it) }
+                ?: SenseKey.ofDraft(card.term, card.pos, card.meaningZh),
+            term = card.term,
+            meaningZh = card.meaningZh,
+            pos = card.pos,
+            exampleEn = card.exampleEn,
         )
         if (card.collocations.isNotEmpty()) {
             FlowRow(

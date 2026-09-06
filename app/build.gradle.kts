@@ -72,6 +72,9 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.azure.speech)
+    // 单词视觉记忆图片：外链缩略图要有内存/磁盘缓存和取消，自己写一遍不会更省
+    // （D-071 批准的依赖新增）。
+    implementation(libs.coil.compose)
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.documentfile)
 

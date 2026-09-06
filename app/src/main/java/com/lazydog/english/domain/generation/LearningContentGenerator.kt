@@ -163,6 +163,19 @@ interface LearningContentGenerator {
         onPartialHook: ((String) -> Unit)? = null,
     ): GenerationResult<MemoryAssistance>
 
+    /**
+     * 判断一个词义能不能用图片说清楚，能的话生成检索词
+     * （`单词视觉记忆图片DESIGN.md` §13、§25）。
+     *
+     * 单独一次调用，不并进新词生成：这一步的输出是**给搜索引擎用的英文查询**，
+     * 和词卡里那些给人看的中文内容是两种东西；而且它要能对着某一个词义重来一次
+     * （用户点「三张都不行」），不该连着例句和音标一起重新生成。
+     */
+    suspend fun generateVisualSearchPlan(
+        request: com.lazydog.english.domain.vocabulary.VisualSearchRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
+    ): GenerationResult<com.lazydog.english.domain.vocabulary.VisualSearchPlan>
+
     /** 点词解释：结合所在句子解释一个词。 */
     /**
      * 把几个两到四周前学过的词组成一句自然的话，用于进步挑战

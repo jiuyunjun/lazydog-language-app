@@ -389,3 +389,41 @@ data class VocabularyMemoryHintEntity(
     val droppedNotes: String,
     val createdAt: Long,
 )
+
+/**
+ * 一个**词义**的视觉记忆图片（`单词视觉记忆图片DESIGN.md` §24、§62）。
+ *
+ * 主键是 [senseKey] 不是 itemId，也不是词形，这是这张表存在的全部理由：
+ * `charge` 的"充电"和"指控"必须各有各的检索词、各有各的候选、各有各的选中结果，
+ * 按词形缓存会让两个意思共用一张图。草稿卡（还没添加到记录）也有 senseKey，
+ * 所以预览时找到的图在按下「添加」之后不用重搜；同样因为草稿没有 itemId，这里没有外键。
+ *
+ * [assetsJson] 存的是**引用**——缩略图地址、原页面地址、来源站名——不是图本身。
+ * Brave 负责发现，不等于拿到第三方图片的版权（§33、§35），所以不把原图下载下来长期持有。
+ * 代价是外链会失效，靠留三张候选和 [selectedIndex] 依次顶上兜（§37）。
+ */
+@Entity(tableName = "vocabulary_sense_images")
+data class VocabularySenseImageEntity(
+    @PrimaryKey val senseKey: String,
+    val term: String,
+    val meaningZh: String,
+    val strategy: String,
+    /** 实际搜出这批候选的那条查询。排查"为什么配了张奇怪的图"时第一个要看的就是它。 */
+    val query: String,
+    /** 这张图上应该看得见什么。也是 TalkBack 念的那句话。 */
+    val visualTarget: String,
+    /** List<VocabularyImageAsset> 的 JSON，最多三条。解不出来按"没有图"处理，不炸页面。 */
+    val assetsJson: String,
+    val selectedIndex: Int,
+    /** [com.lazydog.english.domain.vocabulary.ImageFailureReason] 的名字；空表示没失败。 */
+    val failureReason: String,
+    /** 用户说过「这个词不用配图」。按词义记，不影响同一个词的别的意思。 */
+    val hiddenByUser: Boolean,
+    /** 用户点过「不相关 / 太抽象 / 看不懂 / 质量差」里的哪一条，空表示没反馈过。 */
+    val feedbackReason: String,
+    /** 用户手动换过图。这比模型自评分更能说明默认那张不好用（§40、§43）。 */
+    val replacedByUser: Boolean,
+    val model: String,
+    val promptVersion: Int,
+    val updatedAt: Long,
+)

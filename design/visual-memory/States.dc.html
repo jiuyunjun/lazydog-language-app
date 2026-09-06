@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&family=Roboto+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Roboto, system-ui, sans-serif; background: #FEF7FF; color: #1D1B20; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 390px; min-height: 1210px; background: #FEF7FF; display: flex; flex-direction: column; gap: 24px; padding: 24px 16px 32px 16px">
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <div style="font: 400 22px/28px Roboto, sans-serif; color: #1D1B20">图片区的每一种状态</div>
+    <div style="font: 400 14px/20px Roboto, sans-serif; letter-spacing: 0.25px; color: #49454F">下面是词卡里那一块的完整取值。任何一种都不阻塞词卡的其余部分。</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <div style="background: #625B71; border-radius: 4px; padding: 2px 6px; font: 500 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #FFFFFF">loading</div>
+      <div style="font: 400 12px/16px Roboto, sans-serif; letter-spacing: 0.4px; color: #49454F">只在缓存没命中时出现，最多 2 次搜索</div>
+    </div>
+    <div style="width: 358px; height: 202px; border-radius: 12px; background: #ECE6F0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="#CAC4D0" stroke-width="2.4"/><path d="M21 12a9 9 0 0 0-9-9" stroke="#6750A4" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <div style="font: 400 12px/16px Roboto, sans-serif; letter-spacing: 0.4px; color: #49454F">正在给「紧握」这个意思找图</div>
+    </div>
+    <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">词、音标、释义、例句已经可读，不等图。</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <div style="background: #625B71; border-radius: 4px; padding: 2px 6px; font: 500 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #FFFFFF">unavailable</div>
+      <div style="font: 400 12px/16px Roboto, sans-serif; letter-spacing: 0.4px; color: #49454F">搜到了，但没有一张真的说清这个词义</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 4px 0px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0" aria-hidden="true"><rect x="3.2" y="5.2" width="17.6" height="13.6" rx="2.4" stroke="#79747E" stroke-width="1.8"/><path d="M3.5 5.5 20.5 18.5" stroke="#79747E" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <div style="font: 400 12px/16px Roboto, sans-serif; letter-spacing: 0.4px; color: #79747E; flex-grow: 1">这次没找到能说清这个意思的图</div>
+      <div style="font: 500 14px/20px Roboto, sans-serif; letter-spacing: 0.1px; color: #6750A4">再找一次</div>
+    </div>
+    <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">收成一行，不留 200dp 的空框。宁可没有，不硬配。</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <div style="background: #625B71; border-radius: 4px; padding: 2px 6px; font: 500 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #FFFFFF">not_visualizable</div>
+      <div style="font: 400 12px/16px Roboto, sans-serif; letter-spacing: 0.4px; color: #49454F">although / therefore / whether 这类词</div>
+    </div>
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+      <div style="font: 400 32px/40px Roboto, sans-serif; color: #1D1B20">despite</div>
+      <div style="font: 500 16px/24px Roboto, sans-serif; letter-spacing: 0.15px; color: #1D1B20">介词　尽管；不顾</div>
+      <div style="height: 1px; background: #CAC4D0; margin: 6px 0px"></div>
+      <div style="font: 400 14px/20px Roboto, sans-serif; letter-spacing: 0.25px; color: #49454F">Despite the rain, he kept running.</div>
+    </div>
+    <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">整块图片区连同标题一起不渲染，词卡里看不出这里曾经有东西。要图的话在 ⋯ 里手动找。</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <div style="background: #625B71; border-radius: 4px; padding: 2px 6px; font: 500 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #FFFFFF">failed</div>
+      <div style="font: 400 12px/16px Roboto, sans-serif; letter-spacing: 0.4px; color: #49454F">原图 404 / 站点拒绝加载，自动换备用</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; background: #FCEAC8; border-radius: 8px; padding: 10px 12px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="#7A4E00" stroke-width="1.8"/><path d="M12 7.5v5.5M12 16.2v.6" stroke="#7A4E00" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <div style="font: 400 12px/16px Roboto, sans-serif; letter-spacing: 0.4px; color: #7A4E00">原来那张图挂了，换成了备用的一张</div>
+    </div>
+    <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">Top 3 依次顶上；三张都挂就落到 unavailable。提示条 4 秒后自动收起。</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <div style="background: #7A4E00; border-radius: 4px; padding: 2px 6px; font: 500 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #FFFFFF">graphic</div>
+      <div style="font: 400 12px/16px Roboto, sans-serif; letter-spacing: 0.4px; color: #49454F">wound / bleed / corpse 这类词</div>
+    </div>
+    <div style="width: 358px; height: 160px; border-radius: 12px; background: #ECE6F0; display: flex; align-items: center; justify-content: center">
+      <svg width="200" height="120" viewBox="0 0 200 120" fill="none" aria-label="示意图：手臂上贴着一块创可贴">
+        <rect x="24" y="44" width="152" height="34" rx="17" fill="#E8BE95"/>
+        <rect x="82" y="38" width="40" height="46" rx="10" fill="#F6EDE3" stroke="#B9AFA4" stroke-width="2"/>
+        <rect x="94" y="50" width="16" height="22" rx="4" fill="#DFD4C7"/>
+      </svg>
+    </div>
+    <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">这类词义不走图片搜索，改用统一风格的中性示意图；没有示意图就直接不给图。</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

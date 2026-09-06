@@ -2,7 +2,7 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "7.0"
+version: "7.1"
 updated: "2026-09-07"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
@@ -47,6 +47,38 @@ interface LearningContentGenerator {
 2. `generateScenarioTurn`：只扮演对手并给下一轮四个选项，不纠错、不评分。
 3. `judgeScenarioTurn`：独立判断本轮命中的目标和是否发生沟通失败，不生成对话。
 4. `summarizeScenario`：结束后固定生成三条表达改进和 1～4 条待复习表达；这些内容保存为“表达”，不得混入单词列表。
+
+### 配图检索词调用边界
+
+`generateVisualSearchPlan` 是单独一次调用，不并进 `generateNewWords`
+（`单词视觉记忆图片DESIGN.md` §13、§25，D-071）。理由和记忆提示一样：它的输出是
+**给搜索引擎用的英文查询**，和词卡里那些给人看的中文内容是两种东西；而且它要能对着
+某一个词义单独重来（用户点「都不合适，换一批检索词」），不该连着例句和音标一起重新生成。
+
+输入必须带词义，只发词形的话模型对 `charge` 只能瞎猜是充电还是指控：
+
+```json
+{"term":"grip","meaningZh":"紧握；牢牢抓住","pos":"verb","exampleEn":"She gripped the handle tightly."}
+```
+
+输出：
+
+```json
+{"visualizable":true,"visualizability":0.94,"reason":"手和被抓的东西关系明显",
+ "strategy":"ActionScene","primary_query":"hand gripping a metal handle close up",
+ "fallback_queries":["person tightly gripping a handle","fingers firmly grasping metal bar"],
+ "visual_target":"一只手紧紧握住金属把手","must_show":["hand","gripped object"],
+ "avoid":["product advertisement","text poster"]}
+```
+
+- **`visualizable=false` 是合法结论，不是失败**（§5.5）：功能词、逻辑连接词、抽象关系
+  就该主动放弃。这条返回不走检索词校验，并且会落库——否则每次打开 `although`
+  都会再问一次模型。
+- 查询是搜索引擎查询，不是 AI 画图提示：正常 4~10 个英文词。本地校验
+  （`VisualQueryValidation`）拦四种：只有一个词、把单词本身当查询、超长、
+  含 concept/abstract/poster 这类必然招来商业图库的词。低于阈值整条失败，不硬发出去。
+- `visual_target` 用中文，因为它会被念给看不见图的用户听；其余字段用英文。
+- 一个词义最多发三次搜索请求（主 + 两个备用）就认了（§29），不许无限扩大搜索。
 
 ### 摇一摇提问调用边界
 

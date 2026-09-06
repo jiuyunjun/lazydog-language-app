@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #FEF7FF; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    .h1 { font-size: 28px; line-height: 36px; font-weight: 600; color: #1D1B20; }
+    .h2 { font-size: 12px; line-height: 16px; letter-spacing: 0.6px; color: #6750A4; font-weight: 500; }
+    .b { font-size: 14px; line-height: 22px; color: #49454F; }
+    .mono { font-family: "Roboto Mono", ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12.5px; line-height: 20px; color: #1D1B20; }
+    .cell { padding: 12px 14px; border-top: 1px solid #CAC4D0; }
+    .hd { padding: 12px 14px; font-size: 13px; font-weight: 500; color: #1D1B20; }
+  </style>
+</helmet>
+
+<div style="width: 900px; min-height: 2280px; background: #FEF7FF; padding: 48px 56px; box-sizing: border-box;">
+
+  <div class="h1">单词视觉记忆图片 · 视觉与交互规范</div>
+  <div class="b" style="margin-top: 8px; max-width: 640px;">对应 <span class="mono">单词视觉记忆图片DESIGN.md</span> 的 MVP v1（§58）。令牌全部取自 <span class="mono">core/designsystem/Color.kt</span>，没有为这个功能新增颜色，也没有新增层。</div>
+
+  <div class="h2" style="margin-top: 40px;">1 · 图片区在词卡里的位置</div>
+  <div class="b" style="margin-top: 12px; max-width: 640px;">设计文档 §45 的示意图把图放在最上面，这里没有照抄，理由是同一份文档的 §63：图片可能不存在，也可能加载失败。图在最上面时，收起图片区会让整张卡向上跳一屏，词头位置每次打开都不一样。所以顺序是<b>词 → 音标 → 词性释义 → 图 → 例句 → 怎么记</b>：词头位置永远固定，图片区出现与否只影响它自己下面的内容。</div>
+  <div style="margin-top: 16px; border: 1px solid #CAC4D0; border-radius: 12px; overflow: hidden;">
+    <div style="display: grid; grid-template-columns: 200px 1fr; background: #F3EDF7;">
+      <div class="hd">规格</div>
+      <div class="hd">取值</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr;">
+      <div class="cell b">图片尺寸</div>
+      <div class="cell b">宽度撑满内容区（屏宽 − 32dp），固定 <span class="mono">16:9</span>，<span class="mono">ContentScale.Crop</span>。不按原图比例变高，否则每张卡高度都不一样。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr;">
+      <div class="cell b">圆角 / 背景</div>
+      <div class="cell b"><span class="mono">12dp</span>；加载前后底色 <span class="mono">surfaceContainerHigh #ECE6F0</span>，避免白闪。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr;">
+      <div class="cell b">上方标签</div>
+      <div class="cell b">「这个词义看起来是这样」，<span class="mono">labelMedium / onSurfaceVariant</span>，带 16dp 图片图标。这句话是在提醒用户图跟的是<b>当前词义</b>，不是这个单词。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr;">
+      <div class="cell b">来源行</div>
+      <div class="cell b">两行 <span class="mono">bodySmall / outline #79747E</span>：「来自网络搜索 · {publisher}」「图片版权归原站所有 · 点开看出处」。整行可点，打开 <span class="mono">sourcePageUrl</span>。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr;">
+      <div class="cell b">换一张</div>
+      <div class="cell b"><span class="mono">OutlinedButton</span>，40dp 高，和来源行同一行右侧。这是次操作，不能做成 filled。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr;">
+      <div class="cell b">⋯</div>
+      <div class="cell b">36dp <span class="mono">IconButton</span>（触摸区 48dp）。里面放：图片不相关 / 太抽象 / 看不懂 / 质量差 / 不想看到这张，对应 <span class="mono">ImageFeedbackReason</span>。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr;">
+      <div class="cell b">字不画在图上</div>
+      <div class="cell b">单词、释义一律在图外（设计文档 §68）。这样图片线索、词形线索、词义线索可以分别撤掉，SRS 的撤图才有意义。</div>
+    </div>
+  </div>
+
+  <div class="h2" style="margin-top: 40px;">2 · 状态机</div>
+  <div style="margin-top: 16px; border: 1px solid #CAC4D0; border-radius: 12px; overflow: hidden;">
+    <div style="display: grid; grid-template-columns: 190px 1fr 260px; background: #F3EDF7;">
+      <div class="hd">状态</div>
+      <div class="hd">界面</div>
+      <div class="hd">怎么进来的</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 190px 1fr 260px;">
+      <div class="cell"><span class="mono">Loading</span></div>
+      <div class="cell b">16:9 的 <span class="mono">#ECE6F0</span> 块 + 24dp 进度圈 + 一句「正在给「{词义}」这个意思找图」。</div>
+      <div class="cell b">缓存没命中，且这个词义判定为可视觉化。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 190px 1fr 260px;">
+      <div class="cell"><span class="mono">Ready</span></div>
+      <div class="cell b">图 + 来源行 + 换一张 + ⋯。</div>
+      <div class="cell b">Top 1 的 <span class="mono">overall ≥ 0.70</span>。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 190px 1fr 260px;">
+      <div class="cell"><span class="mono">Unavailable</span></div>
+      <div class="cell b">收成一行 16dp 图标 + 「这次没找到能说清这个意思的图」+ 文本按钮「再找一次」。<b>不留空框。</b></div>
+      <div class="cell b">搜完 primary + 2 个 fallback 仍无合格候选，或全部候选被硬过滤掉。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 190px 1fr 260px;">
+      <div class="cell"><span class="mono">NotVisualizable</span></div>
+      <div class="cell b">整块（含上方标签）不渲染。用户在 ⋯ 里仍可主动「找张图试试」。</div>
+      <div class="cell b"><span class="mono">visualizability &lt; 0.40</span>，或路由判定为 <span class="mono">none</span>。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 190px 1fr 260px;">
+      <div class="cell"><span class="mono">Failed</span></div>
+      <div class="cell b">静默换成 Top 2 / Top 3，并在图下方给一条 <span class="mono">#FCEAC8</span> 提示条，4 秒后自动收起。三张都挂 → 落到 Unavailable。</div>
+      <div class="cell b">外链图 404、域名拒绝、URL 过期。</div>
+    </div>
+  </div>
+  <div class="b" style="margin-top: 12px; max-width: 640px;">五种状态都不阻塞词卡：词、音标、释义、例句、怎么记先渲染，图片区自己异步填。加载失败不弹 toast、不打断自评。</div>
+
+  <div class="h2" style="margin-top: 40px;">3 · 哪儿出现图、哪儿不出现</div>
+  <div style="margin-top: 16px; border: 1px solid #CAC4D0; border-radius: 12px; overflow: hidden;">
+    <div style="display: grid; grid-template-columns: 260px 1fr; background: #F3EDF7;">
+      <div class="hd">场景</div>
+      <div class="hd">图片</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 260px 1fr;">
+      <div class="cell b">第一次学这个词</div>
+      <div class="cell b">正面就给图，图在词上方（Fade 画板第一档）。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 260px 1fr;">
+      <div class="cell b">前两次到期复习</div>
+      <div class="cell b">同上。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 260px 1fr;">
+      <div class="cell b">再往后的复习</div>
+      <div class="cell b">正面只给词形，图退到答案面当确认。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 260px 1fr;">
+      <div class="cell b">已经熟了（中译英打字档）</div>
+      <div class="cell b">完全不出现，也不留入口。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 260px 1fr;">
+      <div class="cell b">记录 → 单词详情</div>
+      <div class="cell b">永远显示。这是查阅，不是复习，不受撤图影响。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 260px 1fr;">
+      <div class="cell b">母语阅读点词 Bottom Sheet</div>
+      <div class="cell b">只显示<b>已缓存</b>的图。缓存没有就不显示，也不在这里现搜——点开等三秒会毁掉阅读节奏。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 260px 1fr;">
+      <div class="cell b">拼写训练、听力、情景演练</div>
+      <div class="cell b">不出现。这些环节考的是形和音，给图等于泄题。</div>
+    </div>
+  </div>
+
+  <div class="h2" style="margin-top: 40px;">4 · 什么时候去搜</div>
+  <div class="b" style="margin-top: 12px; max-width: 640px;">打开词卡的那一刻不该触发 <span class="mono">LLM → Brave</span>。三个触发点：<b>添加单词时</b>（生成学习卡的同一次后台任务里顺手做）、<b>文章生成完成后</b>（只给本篇新目标词和重点复习词预取，熟词不预取）、<b>用户点「换一张」或「再找一次」</b>。冷启动没赶上的，才在词卡里现搜，并走 Loading 态。</div>
+  <div class="b" style="margin-top: 8px; max-width: 640px;">Brave API Key 只在后端。客户端拿到的是已经排好序的 Top 3 及其缩略图地址，不自己拼搜索请求。</div>
+
+  <div class="h2" style="margin-top: 40px;">5 · 无障碍</div>
+  <div style="margin-top: 12px; border: 1px solid #CAC4D0; border-radius: 12px; overflow: hidden;">
+    <div style="display: grid; grid-template-columns: 220px 1fr; background: #F3EDF7;">
+      <div class="hd">项</div>
+      <div class="hd">要求</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 220px 1fr;">
+      <div class="cell b">contentDescription</div>
+      <div class="cell b">用后端返回的 <span class="mono">visualTarget</span> 译成中文，例如「一只手紧紧握住金属把手」。不要用「图片」「单词配图」这种没信息的描述，也不要直接念 <span class="mono">title</span>（那是网页标题，经常是广告文案）。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 220px 1fr;">
+      <div class="cell b">图不是唯一线索</div>
+      <div class="cell b">图能表达的东西，释义和例句里必须也有。看不见图的用户不会少拿到任何信息。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 220px 1fr;">
+      <div class="cell b">触摸区</div>
+      <div class="cell b">换一张 40dp 高、⋯ 48dp 触摸区；候选列表每项 ≥ 104dp 高，缩略图和文字整块可点。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 220px 1fr;">
+      <div class="cell b">大字体</div>
+      <div class="cell b">来源行两行在 200% 字号下换行，不截断；图片高度不随字号变。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 220px 1fr;">
+      <div class="cell b">深色主题</div>
+      <div class="cell b">图上不叠任何半透明遮罩——压暗一张照片只会让它更难认。图片区底色换成 <span class="mono">surfaceContainerHigh</span> 的深色值即可。</div>
+    </div>
+  </div>
+
+  <div class="h2" style="margin-top: 40px;">6 · Material 3 组件映射</div>
+  <div class="b" style="margin-top: 12px; max-width: 640px;">
+    图片区 = <span class="mono">Box(Modifier.aspectRatio(16/9f).clip(RoundedCornerShape(12.dp)))</span> + Coil <span class="mono">AsyncImage</span>（<span class="mono">placeholder</span>/<span class="mono">error</span> 都走上面的状态机）。<br>
+    换一张抽屉 = <span class="mono">ModalBottomSheet</span>，候选项 = 带 2dp <span class="mono">primary</span> 描边的 <span class="mono">Card</span>（选中）/ 1dp <span class="mono">outline</span> 描边（未选）。<br>
+    ⋯ 菜单 = <span class="mono">DropdownMenu</span>。失败提示条 = 行内 <span class="mono">Surface</span>，不是 <span class="mono">Snackbar</span>（Snackbar 会挡住底部自评）。
+  </div>
+
+  <div class="h2" style="margin-top: 40px;">7 · 实现顺序</div>
+  <div class="b" style="margin-top: 12px; max-width: 640px;">
+    1. 词卡里的图片区五态 + 来源行（后端先返回假数据也能做）。<br>
+    2. 后端 <span class="mono">POST /vocabulary/:senseId/image/search</span>：可视觉化判定 → 生成 1 主 2 备搜索词 → Brave <span class="mono">count=20, safesearch=strict</span> → 基础过滤 → 存 Top 3。<br>
+    3. 添加单词时预取 + 缓存按 <span class="mono">senseId</span> 存。<br>
+    4. 换一张抽屉 + 记录换图行为。<br>
+    5. SRS 撤图三档。<br>
+    6. 阅读 Bottom Sheet 读缓存。<br>
+    7. ⋯ 反馈原因。<br>
+    先不做 Vision 重排、生成图 fallback、OCR、多义辨析题——那些等换图率的数据出来再说。
+  </div>
+
+  <div class="h2" style="margin-top: 40px;">8 · 我做的假设 · 还需要你定的</div>
+  <div class="b" style="margin-top: 12px; max-width: 640px;">
+    <b>假设：</b>图片只显示 Brave 的缩略图（约 500px 宽，走它的图片代理），不下载原图、不进自己的 CDN——这是设计文档 §33/§35 的版权口径的直接后果，也意味着离线时看不到图，离线走 Unavailable 态。<br>
+    <b>假设：</b>「这个词不用配图」是<b>按词义</b>记的用户偏好，不影响别人，也不改全局 registry。<br>
+    <b>假设：</b>多义辨析题（Senses 画板下半部分）只在一个词同时在学两个词义时出现，属于 v1.5，先画出来占位。<br>
+    <b>需要你定 1：</b>词卡里默认展开图片，还是默认收起、点一下「看图」再展开？现在按默认展开画的——图的价值在第一眼，收起等于没有。但这会让每张卡多约 220dp。<br>
+    <b>需要你定 2：</b>没有后端的时候（这个仓库目前是纯客户端 + 用户自己的密钥），Brave Key 放哪儿。设计文档说绝不能放客户端，但当前架构里没有「你的后端」这一层。要么用户自己填 Brave Key 并接受风险，要么这个功能等有服务端再上。<br>
+    <b>需要你定 3：</b>示例图现在是矢量占位，不是真实搜索结果。真图接进来之后，需要复看一遍构图裁切（16:9 居中裁会不会把手裁掉）。
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
