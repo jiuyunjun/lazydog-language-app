@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -76,6 +77,7 @@ fun TodayScreen(
     val learnerLevel by prefs.learnerLevel.collectAsState(initial = "…")
     val dailyMinutes by prefs.dailyMinutes.collectAsState(initial = 12)
     val doneSteps by prefs.todayDoneSteps(today).collectAsState(initial = emptySet())
+    val skippedSteps by prefs.todaySkippedSteps(today).collectAsState(initial = emptySet())
     val dueVocab by app.knowledgeRepository.observeDueVocabularyCount().collectAsState(initial = 0)
     val dueGrammar by app.knowledgeRepository.observeDueGrammarCount().collectAsState(initial = 0)
 
@@ -92,7 +94,7 @@ fun TodayScreen(
         DailyPlanner.plan(dailyMinutes, dueVocabCount = dueVocab, dueGrammarCount = dueGrammar, mood = mood)
     }
     val allDone = plan.isNotEmpty() && plan.all { it.step.id in doneSteps }
-    val nextStep = plan.firstOrNull { it.step.id !in doneSteps }
+    val nextStep = DailyPlanner.nextStep(plan, doneSteps, skippedSteps)
     val minimumDone = reachedDailyMinimum(report.progress, doneSteps.size)
 
     Column(
@@ -143,17 +145,18 @@ fun TodayScreen(
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = when {
+                        wrappedUp -> copy.todaySignOff
                         allDone -> copy.todayFinishedTitle
                         mood == Mood.Comeback -> copy.todayGreeting
                         mood == Mood.Tired -> copy.todayMinimumReachedTitle
-                        else -> copy.todayPlannedMinutes(dailyMinutes)
+                        else -> copy.todayPlannedMinutes(plan.sumOf { it.step.minutes })
                     },
                     style = MaterialTheme.typography.titleMedium,
                 )
                 // 最低目标写在最显眼的地方：今天再累也能过的那条线（§6）。
                 Text(
                     text = if (minimumDone) copy.todayMinimumDone
-                    else copy.todayMinimumGoal(MINIMUM_RETRIEVALS),
+                    else "回忆 ${report.progress.reviewed}/$MINIMUM_RETRIEVALS 次，或完成任一步，即达成最低目标",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (minimumDone) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -181,78 +184,9 @@ fun TodayScreen(
             }
         }
 
-        if (activity.journeyDays > 0) {
-            ActivityLine(activity)
-        }
-
-        Text(
-            text = copy.todayPlanTitle,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp, start = 4.dp),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            plan.forEach { planned ->
-                val done = planned.step.id in doneSteps
-                Surface(
-                    onClick = { if (!done) onStartStep(planned.step) },
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Icon(
-                            imageVector = if (done) Icons.Outlined.CheckCircle else planned.step.icon,
-                            contentDescription = null,
-                            tint = if (done) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(22.dp),
-                        )
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(
-                                text = planned.step.title,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (done) MaterialTheme.colorScheme.onSurfaceVariant
-                                else MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = if (done) "完成了" else "${planned.note} · 约 ${planned.step.minutes} 分钟",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
-                        }
-                        if (!done) {
-                            TextButton(
-                                onClick = {
-                                    scope.launch { prefs.markTodayStepDone(today, planned.step.id) }
-                                },
-                            ) {
-                                Text("跳过", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 进步证据：今天真的学到了什么，而不是加了多少分（§14.1、§22、§31）。
-        if (report.progress.hasAnything) {
-            ProgressEvidence(report, modifier = Modifier.padding(top = 16.dp))
-        }
-
-        // 长期证明单独一张：它讲的不是今天，是几个月的跨度（§14.3）。
-        report.proof?.let { LongTermProofCard(it, modifier = Modifier.padding(top = 12.dp)) }
-
         when {
-            allDone -> DoneNote(copy.todayAllStepsDone)
-
             // 收工是用户自己按的，那就真的收工——不再摆一个继续学习的大按钮（§6）。
             wrappedUp -> {
-                DoneNote(copy.todaySignOff)
                 TextButton(
                     onClick = { scope.launch { prefs.setWrappedUp(today, false) } },
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
@@ -261,7 +195,9 @@ fun TodayScreen(
                 }
             }
 
-            nextStep == null -> Unit
+            allDone -> DoneNote(copy.todayAllStepsDone)
+
+            nextStep == null -> DoneNote("今天的安排已跳过，想学时可在下方恢复。跳过不计入学习成果。")
 
             // 已经过了最低目标：继续和收工是平等的两个选项，收工不做成灰色小字。
             minimumDone -> Column(
@@ -269,10 +205,16 @@ fun TodayScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Button(
+                    onClick = { scope.launch { prefs.setWrappedUp(today, true) } },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                ) {
+                    Text(copy.todayStopHere, style = MaterialTheme.typography.titleMedium)
+                }
+                OutlinedButton(
                     onClick = { onStartStep(nextStep.step) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
+                        .heightIn(min = 56.dp),
                 ) {
                     Icon(Icons.Outlined.PlayArrow, contentDescription = null)
                     Text(
@@ -281,12 +223,6 @@ fun TodayScreen(
                         modifier = Modifier.padding(start = 10.dp),
                     )
                 }
-                TextButton(
-                    onClick = { scope.launch { prefs.setWrappedUp(today, true) } },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(copy.todayStopHere)
-                }
             }
 
             else -> Button(
@@ -294,7 +230,7 @@ fun TodayScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp, bottom = 16.dp)
-                    .height(56.dp),
+                    .heightIn(min = 56.dp),
             ) {
                 Icon(Icons.Outlined.PlayArrow, contentDescription = null)
                 Text(
@@ -304,6 +240,77 @@ fun TodayScreen(
                 )
             }
         }
+
+        if (activity.journeyDays > 0) {
+            ActivityLine(activity)
+        }
+
+        if (!wrappedUp) {
+            Text(
+                text = copy.todayPlanTitle,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp, start = 4.dp),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                plan.forEach { planned ->
+                    val done = planned.step.id in doneSteps
+                    val skipped = !done && planned.step.id in skippedSteps
+                    Surface(
+                        onClick = { if (!done && !skipped) onStartStep(planned.step) },
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (done) Icons.Outlined.CheckCircle else planned.step.icon,
+                                contentDescription = null,
+                                tint = if (done) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp),
+                            )
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = planned.step.title,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (done) MaterialTheme.colorScheme.onSurfaceVariant
+                                    else MaterialTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    text = if (done) "完成了" else if (skipped) "今天已跳过 · 不计入完成"
+                                    else "${planned.note} · 约 ${planned.step.minutes} 分钟",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            }
+                            if (!done) {
+                                TextButton(
+                                    onClick = {
+                                        scope.launch { prefs.setTodayStepSkipped(today, planned.step.id, !skipped) }
+                                    },
+                                ) {
+                                    Text(if (skipped) "恢复" else "跳过", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+        }
+
+        // 进步证据：今天真的学到了什么，而不是加了多少分（§14.1、§22、§31）。
+        if (report.progress.hasAnything) {
+            ProgressEvidence(report, modifier = Modifier.padding(top = 16.dp))
+        }
+
+        // 长期证明单独一张：它讲的不是今天，是几个月的跨度（§14.3）。
+        report.proof?.let { LongTermProofCard(it, modifier = Modifier.padding(top = 12.dp)) }
     }
 }
 
@@ -315,9 +322,9 @@ fun TodayScreen(
  */
 @Composable
 private fun ActivityLine(activity: LearningActivity) {
-    Row(
+    Column(
         modifier = Modifier.padding(top = 10.dp, start = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         ActivityStat("学习旅程", "${activity.journeyDays} 天")
         ActivityStat("最近 30 天", "${activity.activeDaysIn30} 天")

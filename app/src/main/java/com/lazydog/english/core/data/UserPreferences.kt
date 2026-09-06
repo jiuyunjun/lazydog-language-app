@@ -56,6 +56,8 @@ class UserPreferences(private val context: Context) {
         val AssessmentStateJson = stringPreferencesKey("assessment_state_json")
         val TodayDate = stringPreferencesKey("today_date")
         val TodayDoneSteps = stringSetPreferencesKey("today_done_steps")
+        val TodaySkippedDate = stringPreferencesKey("today_skipped_date")
+        val TodaySkippedSteps = stringSetPreferencesKey("today_skipped_steps")
         val WrappedUpDate = stringPreferencesKey("wrapped_up_date")
         val MaxNewWords = intPreferencesKey("max_new_words")
         val ReminderTime = stringPreferencesKey("reminder_time")
@@ -309,6 +311,20 @@ class UserPreferences(private val context: Context) {
     /** 今日已完成的步骤 id；换天自动视为空集合。 */
     fun todayDoneSteps(todayDate: String): Flow<Set<String>> = context.dataStore.data.map {
         if (it[Keys.TodayDate] == todayDate) it[Keys.TodayDoneSteps] ?: emptySet() else emptySet()
+    }
+    fun todaySkippedSteps(todayDate: String): Flow<Set<String>> = context.dataStore.data.map {
+        if (it[Keys.TodaySkippedDate] == todayDate) it[Keys.TodaySkippedSteps] ?: emptySet() else emptySet()
+    }
+
+    /** 跳过只是调整今天的安排，不产生完成或学习证据；可随时恢复。 */
+    suspend fun setTodayStepSkipped(todayDate: String, stepId: String, skipped: Boolean) {
+        context.dataStore.edit {
+            val current = if (it[Keys.TodaySkippedDate] == todayDate) {
+                it[Keys.TodaySkippedSteps] ?: emptySet()
+            } else emptySet()
+            it[Keys.TodaySkippedDate] = todayDate
+            it[Keys.TodaySkippedSteps] = if (skipped) current + stepId else current - stepId
+        }
     }
     val topics: Flow<Set<String>> = context.dataStore.data.map { it[Keys.Topics] ?: emptySet() }
     val dailyMinutes: Flow<Int> = context.dataStore.data.map { it[Keys.DailyMinutes] ?: 12 }

@@ -23,6 +23,9 @@ data class PlannedStep(
 
 object DailyPlanner {
 
+    fun nextStep(plan: List<PlannedStep>, done: Set<String>, skipped: Set<String>): PlannedStep? =
+        plan.firstOrNull { it.step.id !in done && it.step.id !in skipped }
+
     fun plan(
         dailyMinutes: Int,
         dueVocabCount: Int,
@@ -33,7 +36,7 @@ object DailyPlanner {
         // 中断几天回来看到五步待办，人只会再关掉一次（`持续学习DESIGN.md` §26、§25）。
         // 注意这里**不提到期数量**——"你欠 74 个复习"正是这一节点名要避免的说法。
         when (mood) {
-            Mood.Comeback -> return listOf(PlannedStep(DailyStep.Words, "先热几分钟身，别管积压的"))
+            Mood.Comeback -> return listOf(PlannedStep(DailyStep.Words, "先复习几个熟悉的词"))
             Mood.Tired -> return listOf(PlannedStep(DailyStep.Words, "今天已经做了不少 · 短复习就够"))
             Mood.Normal -> Unit
         }
@@ -44,7 +47,7 @@ object DailyPlanner {
         result.add(
             PlannedStep(
                 DailyStep.Words,
-                if (dueVocabCount > 0) "$dueVocabCount 个词到期 · 还完可上新" else "没有到期 · 直接学新词",
+                if (dueVocabCount > 0) "$dueVocabCount 个词可复习 · 按自己的节奏来" else "没有到期 · 直接学新词",
             ),
         )
         budget -= DailyStep.Words.minutes
