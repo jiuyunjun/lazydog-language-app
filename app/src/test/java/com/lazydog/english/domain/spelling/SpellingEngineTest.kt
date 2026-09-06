@@ -160,8 +160,13 @@ class SpellingEngineTest {
     }
 
     @Test
-    fun `chunking splits prefix stem and suffix`() {
-        assertEquals(listOf("en", "viron", "ment"), SpellingEngine.chunkWord("environment"))
+    fun `missing chunks do not invent morphology or equal length groups`() {
+        for (word in listOf("environment", "clever", "crab", "appear")) {
+            assertEquals(listOf(word), SpellingEngine.chunkWord(word))
+        }
+        assertEquals(listOf("clev", "er"), SpellingEngine.chunkWord("clever", SpellingFacts(chunks = listOf("clev", "er"))))
+        assertEquals(listOf("clever"), SpellingEngine.chunkWord("clever", SpellingFacts(chunks = listOf("clever"))))
+        assertEquals(listOf("clever"), SpellingEngine.chunkWord("clever", SpellingFacts(chunks = listOf("clev", "", "er"))))
     }
 
     @Test

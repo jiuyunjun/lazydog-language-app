@@ -1118,6 +1118,33 @@ class MemoryAssistanceGeneratorTest {
         learnerLevel = "B1",
     )
 
+    @Test
+    fun `sound mnemonic with nullable details passes the full generation pipeline`() = runBlocking {
+        val payload = """{"schemaVersion":1,"word":"ambition","core_meaning":"雄心",
+            "primary_memory_type":"VISUAL_ASSOCIATION","secondary_memory_type":null,
+            "memory_hook":"谐音联想：俺必胜——握拳喊着俺必胜，这股一定要赢的雄心。（助记，非读音）",
+            "morphology":null,"spelling":null,"pronunciation":null,
+            "visual_association":null,"confusions":[],"collocations":[],"example":"His ambition is to win.",
+            "recall_question":"握拳喊着一定要赢，这股雄心用刚学的英文怎么说？"}"""
+        server.enqueue(MockResponse().setBody(chatBody(payload)))
+        val result = generator().generateMemoryAssistance(request.copy(term = "ambition", meaningZh = "雄心"))
+        assertTrue(result is GenerationResult.Success)
+        val success = result as GenerationResult.Success
+        assertTrue(success.data.memoryHookZh.contains("俺必胜"))
+        assertEquals(MemoryType.VisualAssociation, success.data.primaryType)
+        assertEquals(4, success.promptVersion)
+    }
+
+    @Test
+    fun `empty independent mnemonic is a recoverable failure`() = runBlocking {
+        val payload = """{"schemaVersion":1,"word":"appear","core_meaning":"出现",
+            "primary_memory_type":"VISUAL_ASSOCIATION","memory_hook":"","recall_question":"出现怎么说？"}"""
+        server.enqueue(MockResponse().setBody(chatBody(payload)))
+        val result = generator().generateMemoryAssistance(request.copy(term = "appear", meaningZh = "出现"))
+        assertTrue(result is GenerationResult.Failure)
+        assertTrue((result as GenerationResult.Failure).reason.contains("暂时没找到合适的助记"))
+    }
+
     /** 文档 §6 的可空字段兼容样本：morphology 和 note 是 null，confusions 只有一条。 */
     private val designExample =
         """{"schemaVersion":1,"word":"purchase","core_meaning":"购买",
@@ -1217,7 +1244,7 @@ class MemoryAssistanceGeneratorTest {
         val result = generator().generateMemoryAssistance(request, onPartialHook = { hooks.add(it) })
         assertTrue(result is GenerationResult.Success)
         assertTrue(hooks.any { it == "purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。" })
-        assertEquals(3, (result as GenerationResult.Success).promptVersion)
+        assertEquals(4, (result as GenerationResult.Success).promptVersion)
     }
 
 }
@@ -1233,7 +1260,10 @@ class MemoryAssistancePromptTest {
             assertTrue(prompt.contains("就地给中文含义"))
             assertTrue(prompt.contains("CEFR 等级不等于认识某个辅助词"))
             assertTrue(prompt.contains("borrow a book（借一本书）"))
-            assertTrue(prompt.contains("谐音联想，非读音"))
+            assertTrue(prompt.contains("ambition → 俺必胜"))
+            assertTrue(prompt.contains("crab → 快来剥"))
+            assertTrue(prompt.contains("助记，非读音"))
+            assertTrue(prompt.contains("禁止用普通场景或双语搭配兜底"))
         }
         assertTrue(independent.contains("回想刚学的完整英文单词"))
         assertTrue(independent.contains("只有未指定词义时才选最常用义"))

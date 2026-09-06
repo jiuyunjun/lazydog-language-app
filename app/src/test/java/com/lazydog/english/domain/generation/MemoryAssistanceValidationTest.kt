@@ -8,6 +8,18 @@ import org.junit.Test
 
 class MemoryAssistanceValidationTest {
 
+    @Test
+    fun `user sound association chains pass but appear scene filler does not`() {
+        for (hook in listOf(
+            "谐音联想：ambition → 俺必胜 → 握拳喊俺必胜，这股一定要赢的雄心。（助记，非读音）",
+            "谐音联想：俺必胜——握拳喊着俺必胜的雄心。（助记，非读音）",
+            "谐音联想：crab → 快来剥 → 端上一盘螃蟹喊快来剥。（助记，非读音）",
+        )) assertNull(MemoryAssistanceValidation.hookProblem(hook))
+        assertNotNull(MemoryAssistanceValidation.hookProblem("场景：看电影或玩游戏时，一个人突然出现在画面里，就是appear。", "appear", "出现"))
+        assertNotNull(MemoryAssistanceValidation.hookProblem("看电影或玩游戏时，一个人突然出现在画面里，就是appear。", "appear", "出现"))
+        assertNotNull(MemoryAssistanceValidation.hookProblem("搭配：borrow a book（借一本书），书借来后要还。", "borrow", "借入"))
+    }
+
     private fun hint(
         term: String = "purchase",
         coreMeaning: String = "购买",

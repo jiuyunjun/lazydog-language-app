@@ -119,7 +119,7 @@ fun spellingHint(
         chunkStarts = starts,
         ipa = if (stage >= HintStage.Sound) ipa.trim() else "",
         noteZh = when (stage) {
-            HintStage.Chunks -> "先按这几块想，别一个字母一个字母地凑。"
+            HintStage.Chunks -> if (chunks.size > 1) "按分组回想字母，分组不代表词根词缀。" else "这个词保留完整拼写，先试着回想。"
             HintStage.WeakSpot -> "这一段是你最常写错的地方。"
             else -> ""
         },

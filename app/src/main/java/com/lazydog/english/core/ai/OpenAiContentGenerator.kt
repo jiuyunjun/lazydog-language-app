@@ -1899,8 +1899,8 @@ class OpenAiContentGenerator(
     companion object {
         const val SCHEMA_VERSION = 1
         const val PROMPT_VERSION = 1
-        const val WORDS_PROMPT_VERSION = 4
-        const val WORD_EXPLANATION_PROMPT_VERSION = 3
+        const val WORDS_PROMPT_VERSION = 5
+        const val WORD_EXPLANATION_PROMPT_VERSION = 4
         const val READING_PROMPT_VERSION = 2
         const val GRAMMAR_PROMPT_VERSION = 2
         const val GRAMMAR_DRILL_PROMPT_VERSION = 1
@@ -1908,7 +1908,7 @@ class OpenAiContentGenerator(
         const val SCENARIO_PROMPT_VERSION = 1
         const val ASK_PROMPT_VERSION = 1
         const val LISTENING_PROMPT_VERSION = 2
-        const val MEMORY_PROMPT_VERSION = 3
+        const val MEMORY_PROMPT_VERSION = 4
         const val SUGGEST_PROMPT_VERSION = 1
 
         /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
@@ -2145,9 +2145,11 @@ class OpenAiContentGenerator(
          */
         private fun spellingFactRules(): String = buildString {
             appendLine("每个词还要给三项拼写训练用的信息：")
-            appendLine("chunks：把这个词按发音音节或词根词缀拆成 2~4 块，按顺序原样拼起来必须完全等于这个词" +
-                "（不能多字母、少字母或改大小写）。优先按有意义的构词拆，比如 environment 拆成" +
-                "[\"en\",\"viron\",\"ment\"]；拆不出词根就按音节拆。")
+            appendLine("chunks：供拼写训练逐段回忆的书写分组，给 1~4 块，每块非空，原样拼回目标词。" +
+                "有可靠透明构词才按构词分，否则可按常见书写音节分界；分不清就给 [目标词]，绝不为凑两块硬切。")
+            appendLine("例如 unhappy 可以 [\"un\",\"happy\"]；clever 可以 [\"clev\",\"er\"]，" +
+                "这是书写分段，不表示 clev 是词根或 er 是后缀，也不是两个独立发音；" +
+                "crab 给 [\"crab\"]。不能按固定字母数切块，不要把谐音汉字或音标放进 chunks。")
             appendLine("trickyPart：这个词最容易拼错的那一小段，必须是这个词里连续的一段原文" +
                 "（比如 necessary 是 \"cess\"，因为单 c 双 s 最容易写反；separate 是 \"par\"，" +
                 "因为中间那个 a 常被写成 e）。不要给整个词。")
@@ -2173,34 +2175,34 @@ class OpenAiContentGenerator(
         /** 记忆方法（memoryHintZh）的写法要求。新词生成和点词速查共用。 */
         internal fun memoryHintRules(): String = buildString {
             appendLine("memoryHintZh：用 20~90 字写一条可操作的记忆线索，可用两句讲清一个关系。没有可靠线索就填空字符串，不能凑数。")
-            appendLine("以「构词：」「词形：」「发音：」「对比：」「搭配：」「场景：」「联想：」之一开头；人工联想必须标明是联想，不冒充词源。")
+            appendLine("以「谐音联想：」「字形联想：」「构词：」「词形：」「对比：」之一开头；人工联想必须标明是联想，不冒充词源。")
             append(memoryCueRules())
         }
 
         /** 批量短提示与单词独立生成共用同一质量口径。 */
         private fun memoryCueRules(): String = buildString {
-            appendLine("学习者是中文母语者。中文负责把联系讲通，英文是要记的对象；不能让他为了看懂提示再查一个词。" +
-                "目标是学过后能顺着线索回想英文，不是假设从未学过的人能凭空猜中。")
-            appendLine("只给一个中文能立即理解的锚点，把它与目标词的声音、字母或一个具体用法连起来。" +
-                "主线索必须包含目标词，并在本段讲完联系；不能把关键解释藏到展开字段。")
-            appendLine("出现辅助英文词、词缀或短语时，就地给中文含义；即使 buy、from 也不能默认已会。" +
-                "没有个人已知词证据，CEFR 等级不等于认识某个辅助词。短语限一个、尽量 2~5 词，给整段中文意思。")
-            appendLine("先看具体困难：有真实错拼就针对正确字母顺序；构词透明且能用中文讲清才拆；" +
-                "否则用中文日常情境引出一个可直接说的短表达，不强造故事。不要硬拆词根或堆近义词。")
-            appendLine("好例子（构词）：unhappy 不开心：happy 是开心，un- 表示不；给开心加一个「不」，就是 unhappy。")
-            appendLine("好例子（词形）：dessert 甜点中间有两个 s；把它们想成饭后还想吃的两份甜点，提醒自己别漏一个 s。（人为联想）")
-            appendLine("好例子（用法）：borrow a book（借一本书）：书从别人手里到你手里，之后要还；把 borrow 和「借进来再还」连起来。")
-            appendLine("好例子（短词）：need help（需要帮助）：一个人搬不动箱子，喊人搭把手；把 need 和「缺了帮手办不成」连起来。")
-            appendLine("普通用法短句只是回忆的起点，不宣称是神奇记忆术。没有可靠助记就给这样的双语用法，" +
-                "短提示连用法也写不好可以留空。声音关键词仅在自然贴近时使用，必须标「谐音联想，非读音」，" +
-                "并用有动作的中文画面把关键词和词义连起来；不能只贴一个谐音，不替代真实发音。")
-            appendLine("坏例子：『正式场合里的 buy』没有解释 buy，也没联系到目标词；『terr- 土地，如 terrain』又添生词；" +
-                "『想象一种奇怪的画面就是 bizarre』和『territory 就是有主人的地盘』只是重说释义。")
-            appendLine("禁止『多读几遍』『结合例句记』『注意拼写』『记住这个单词』等换任何词都成立的建议；" +
-                "禁止把正确拼写抄一遍就算提示。对比要说清差在哪、怎么不混；场景要把关键英文嵌进动作，不在末尾贴个单词了事。")
-            appendLine("不要强行谐音或编造词源。幽默只在能加强词形与词义联系时使用，不能为玩梗牺牲准确性。" +
-                "写完自检：中文母语者不查词能看懂吗？需要额外背几个东西？能用哪个中文线索回想刚学的英文？" +
-                "若只是重说释义、贴单词或又引入陌生知识，重写。")
+            appendLine("学习者是中文母语者，偏好中文邪修联想/谐音助记。优先主动尝试中文声音关键词，" +
+                "可以荒诞、土、好笑；关键是读完能从中文关键词回到这个英文，而不是多背一句释义。")
+            appendLine("主线索写成『目标英文 → 中文谐音/形状抓手 → 带目标词义的动作或画面』。" +
+                "只用一个短而熟悉的中文关键词，明确讲完它和当前词义的联系，不藏到展开字段。")
+            appendLine("用户认可的谐音联想：ambition → 俺必胜 → 握拳喊「俺必胜」，这股一定要赢的雄心。")
+            appendLine("用户认可的谐音联想：crab → 快来剥 → 端上一盘螃蟹，招呼大家「快来剥」螃蟹。")
+            appendLine("这两例是宽松的声音助记，不是准确音译；允许近似，不要求逐音节完全相等，" +
+                "但不能毫无声音联系。标「谐音联想」，结尾短注「助记，非读音」；不能声称单词就读成这几个汉字。")
+            appendLine("谐音不好时再选中文字形联想、能解释清楚的真实构词或针对错拼的口诀。" +
+                "例如 dessert → 中间两个 s 像两份甜点，提醒自己别少写一个 s（字形联想）。" +
+                "例如 unhappy：un- 表示不，happy 是开心；给开心加个「不」就变成不开心（真实构词）。")
+            appendLine("出现辅助英文时就地给中文含义；CEFR 等级不等于认识某个辅助词。" +
+                "谐音联想归 VISUAL_ASSOCIATION，pronunciation 字段仍只给真实音节和发音提示。")
+            appendLine("禁止用普通场景或双语搭配兜底。这些留给词卡的例句/搭配区，不能占据「怎么记」。" +
+                "坏例子：appear：看电影或玩游戏时，一个人突然出现在画面里，就是 appear。" +
+                "这里没有声音或字形抓手，只把「出现」演了一遍，必须重写或留空。")
+            appendLine("同样不合格：borrow a book（借一本书）再解释借进来；「正式场合里的 buy」；" +
+                "想象奇怪画面就是 bizarre；用 terrain 等陌生词解释 territory。")
+            appendLine("写完自检：具体借了哪段声音/字形？中文关键词怎样连到词义？" +
+                "把目标英文拿掉，剩下的是否仍是一条有辨识度的助记链，而不是任意词都能套的场景？")
+            appendLine("没有合适助记就把 memoryHintZh / memory_hook 填空字符串；不要为了交作业凑普通例句。" +
+                "宁缺毋滥；禁止编造词源，不把人为拆分说成词根，禁止『多读几遍』『记住这个单词』等通用建议。")
         }
 
         /**
@@ -2284,7 +2286,7 @@ class OpenAiContentGenerator(
                 "spelling.common_errors：真人常写错的形式（比如 receive → recieve），没有就给空数组。")
             appendLine("pronunciation.syllables：音节，按顺序拼起来必须完全等于这个词；" +
                 "stress：重音落在第几个音节，从 1 数；note：只写真正值得注意的发音点，没有就 null。" +
-                "不要默认用中文谐音——谐音只有在发音确实接近、且不会带偏正确读音时才用。")
+                "谐音助记只放 memory_hook，不要混进真实发音说明。")
             appendLine("visual_association：只有确实有帮助时才给，1~2 句，具体、夸张、有动作、能瞬间成像；" +
                 "抽象的、要额外记一堆东西的、和词义联系弱的，一律填 null。")
             appendLine("confusions：最多 3 个真正容易混的词，每个只说一个关键区别；不要为了凑数加无关词。")
@@ -2292,10 +2294,10 @@ class OpenAiContentGenerator(
             appendLine("example：1 个自然、高频、简单的例句，必须包含这个词，体现最典型的用法。")
             appendLine("recall_question：必填，60 字内，用中文情境提示回想刚学的完整英文单词；不能只问某个字母、词缀或中文释义。" +
                 "不出现目标词、完整答案或把答案拆成字母；独立显示时也能理解，不说『上面那个词』。" +
-                "例如 borrow 对应『向朋友借一本书，之后要还；刚学的「借进来」怎么说？』。")
+                "例如 ambition 对应『握拳喊着一定要赢，这股「雄心」用刚学的英文怎么说？』；不要在问题里直接重复谐音关键词。")
 
             appendLine("输出原则：简洁优先；每一条都必须服务于记忆；" +
-                "禁止百科式解释、禁止编造词源、禁止强行谐音、禁止牵强联想。" +
+                "禁止百科式解释、禁止编造词源、禁止无声音联系的硬凑谐音。" +
                 "宁缺毋滥——没有好的联想时留空，比写一条牵强的强。")
             appendLine("输出 JSON schema（用不上的字段填 null 或空数组，不要省略）：")
             appendLine(

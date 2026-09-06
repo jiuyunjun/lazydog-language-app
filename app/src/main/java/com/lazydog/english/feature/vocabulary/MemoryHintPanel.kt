@@ -177,7 +177,9 @@ private fun MemoryHintContent(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val current = hint
+            val current = hint?.takeIf {
+                MemoryAssistanceValidation.hookProblem(it.memoryHookZh, it.term, it.coreMeaningZh) == null
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -213,7 +215,7 @@ private fun MemoryHintContent(
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 AnimatedVisibility(visible = expanded) { MemoryHintDetails(current) }
-            } else if (fallbackHintZh.isNotBlank()) {
+            } else if (fallbackHintZh.isNotBlank() && MemoryAssistanceValidation.hookProblem(fallbackHintZh) == null) {
                 InteractiveEnglishText(
                     text = fallbackHintZh,
                     style = MaterialTheme.typography.bodyMedium,
@@ -221,7 +223,7 @@ private fun MemoryHintContent(
                 )
             } else if (phase == HintPhase.Idle) {
                 Text(
-                    text = "还没给这个词找过记忆的角度。",
+                    text = "还没有合适的助记，试试中文谐音或字形联想。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )

@@ -2,7 +2,8 @@ package com.lazydog.english.feature.vocabulary
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -17,30 +18,30 @@ import com.lazydog.english.domain.spelling.SpellingEngine
 import com.lazydog.english.domain.spelling.SpellingFacts
 
 /**
- * 词块拆分（S0 接触）。中间那块单独标出来：前后缀是规则，词干才是每次拼错的地方，
- * 后面 S2 挖空也优先挖它。拆不出两块的短词不显示——两个字母的"块"没有意义。
+ * 拼写分组（S0 接触），只高亮已标记的易错片段；分组本身不证明构词或发音边界。
  *
  * 学习页和记录详情页共用一份：同一个词在两个地方该长得一样，
  * 从记录里点开却少了半屏内容，用户会以为这条记录存坏了。
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun SpellingChunks(term: String, facts: SpellingFacts) {
     val chunks = remember(term, facts) { SpellingEngine.chunkWord(term, facts) }
     if (chunks.size < 2) return
     val extended = LazyDogTheme.extendedColors
-    // 生成时标好的易错段落在哪一块就高亮哪一块；没标的话退回"中间那块"，
-    // 但那只是个猜测，所以下面那句断言也跟着不说。
+    // 只高亮生成时标好的易错段；没有依据就不猜哪一块更难。
     val trickyIndex = remember(term, facts, chunks) { chunks.indexOfTricky(facts) }
-    val stemIndex = if (trickyIndex >= 0) trickyIndex else if (chunks.size >= 3) 1 else 0
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = "词块拆分",
+            text = "拼写分组",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("分段记字母，不代表词根词缀；读音听整词。", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             chunks.forEachIndexed { index, chunk ->
-                val highlight = index == stemIndex
+                val highlight = index == trickyIndex
                 Surface(
                     color = if (highlight) extended.attentionContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                     shape = MaterialTheme.shapes.small,

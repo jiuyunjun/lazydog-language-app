@@ -2,8 +2,8 @@
 doc: "ROADMAP.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "1.8"
-updated: "2026-09-06"
+version: "1.9"
+updated: "2026-09-07"
 authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -507,6 +507,16 @@ Room v17 给 `reading_materials` 加了 `readerPayoff` 和 `archetype` 两列（
 真实模型 borrow 草稿的短提示与独立换法均通过；深色模式下确认全屏遮挡、看答案、
 返回、重新进入隐藏答案以及不添加退出。未保存测试词卡。
 长期记忆收益尚未验证，其余词类样本、大字体/TalkBack 仍需人工验收。
+
+### M18 修正：中文谐音链与拼写分组（D-069）
+
+- [x] 以 ambition/俺必胜、crab/快来剥指导中文联想，普通场景不兜底，appear 反例加入校验回归。
+- [x] 合格助记缺失可留空；共用面板隐藏可识别的旧凑数内容，换法不自动改写历史。
+- [x] chunks 接受整词，取消本地前后缀猜测/等长切；展示「拼写分组」并解释用途，无依据不高亮。
+
+未做：自动重写旧提示/分组、构词词典、谐音准确度自动评分、长期学习效果实验。
+验证：555 项 JVM 单测、lintDebug、assembleDebug、文档版本校验及架构依赖检查通过。
+当前 adb 无连接设备，未安装本轮 APK；新提示的真实模型样本、真机换行和交互仍待验收。
 
 ## 已知限制
 

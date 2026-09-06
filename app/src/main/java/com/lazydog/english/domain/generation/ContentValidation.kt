@@ -48,7 +48,7 @@ object ContentValidation {
                 word.collocations.any { it.en.isBlank() || it.en.length > 60 || it.zh.length > 60 } ->
                     "搭配缺失或过长"
                 // 词块必须能原样拼回这个词，否则挖空题会挖出一个不存在的位置。
-                word.chunks.size < 2 -> "词块至少要拆成 2 块"
+                word.chunks.size !in 1..4 || word.chunks.any { it.isBlank() } -> "拼写分组应为 1~4 个非空片段"
                 word.chunks.joinToString("").lowercase() != term.lowercase() -> "词块拼起来和原词对不上"
                 // 易错段要能在词里定位，不然"这里最容易错"指不到地方。
                 word.trickyPart.isBlank() -> "缺少易错部分"

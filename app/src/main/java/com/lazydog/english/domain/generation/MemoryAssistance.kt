@@ -257,10 +257,17 @@ object MemoryAssistanceValidation {
         if (text.length < MIN_HOOK_LENGTH || text.length > MAX_HOOK_LENGTH) return "记忆线索缺失或长度不合适"
         val generic = listOf("多读几遍", "多念几遍", "反复朗读", "反复记忆", "结合例句记", "结合例句多记", "多加练习", "记住这个单词")
         if (generic.any { it in text }) return "记忆线索只有通用学习建议"
-        if (!Regex("[A-Za-z]{2,}").containsMatchIn(text)) return "记忆线索缺少能对照的英文抓手"
+        if (Regex("^(场景|搭配)[：:]").containsMatchIn(text)) return "普通场景或搭配不能代替助记线索"
+        if (term.isNotBlank() && Regex("画面|电影|游戏|场景").containsMatchIn(text) &&
+            Regex("(就是|这就是)\\s*${Regex.escape(term)}[。.!！]?$", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        ) {
+            return "场景末尾贴目标词不能代替助记线索"
+        }
+        // 中文声音关键词本身可以是抓手，不要求用户认可的谐音链再塞一个英文词。
+        if (!Regex("[A-Za-z]{2,}").containsMatchIn(text) && !text.startsWith("谐音联想：")) return "记忆线索缺少声音或字形抓手"
         if (!containsChinese(text)) return "记忆线索缺少中文解释"
         fun normalized(value: String) = value.trim()
-            .replace(Regex("^(构词|同源|词形|发音|对比|搭配|场景|联想|谐音联想)[：:]"), "")
+            .replace(Regex("^(构词|同源|词形|发音|对比|搭配|场景|联想|谐音联想|字形联想)[：:]"), "")
             .lowercase().filter { it.isLetterOrDigit() }
         if (avoidHookZh.isNotBlank() && normalized(text) == normalized(avoidHookZh)) return "新提示与上一条相同，请换个记法"
         if (term.isNotBlank() && normalized(text) == normalized(term)) return "记忆线索只是重复拼写"
@@ -285,7 +292,7 @@ object MemoryAssistanceValidation {
     fun validate(value: MemoryAssistance, expectedTerm: String, avoidHookZh: String = ""): String? = when {
         !value.term.equals(expectedTerm.trim(), ignoreCase = true) -> "返回的不是请求的那个词"
         value.coreMeaningZh.isBlank() || value.coreMeaningZh.length > 60 -> "核心意思缺失或过长"
-        value.memoryHookZh.isBlank() -> "没给记忆钩子"
+        value.memoryHookZh.isBlank() -> "暂时没找到合适的助记，可以稍后换个记法"
         value.memoryHookZh.length < MIN_HOOK_LENGTH -> "记忆钩子太短，指不回这个词"
         value.memoryHookZh.length > MAX_HOOK_LENGTH -> "记忆线索超过 $MAX_HOOK_LENGTH 字"
         hookProblem(value.memoryHookZh, value.term, value.coreMeaningZh, avoidHookZh) != null ->

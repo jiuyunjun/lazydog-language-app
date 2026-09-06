@@ -156,6 +156,14 @@ class ContentValidationTest {
     }
 
     @Test
+    fun `whole word is a valid spelling group but empty chunks are not`() {
+        assertEquals(1, ContentValidation.validateNewWords(listOf(word(chunks = listOf("curb"))), 1, emptySet()).valid.size)
+        for (chunks in listOf(emptyList(), listOf("cu", "", "rb"), listOf("c", "u", "r", "b", ""))) {
+            assertTrue(ContentValidation.validateNewWords(listOf(word(chunks = chunks)), 1, emptySet()).valid.isEmpty())
+        }
+    }
+
+    @Test
     fun `drops a tricky part that is not inside the word`() {
         val result = ContentValidation.validateNewWords(
             listOf(word(trickyPart = "zz")),

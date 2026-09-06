@@ -3,6 +3,8 @@ package com.lazydog.english.feature.spelling
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -515,6 +517,7 @@ private fun ExposureBody(card: SpellingCard, play: PlaybackSource) {
 
 /** 词块拆分，易错的那一块单独标出来。拆不出两块的短词不显示。 */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun ExposureChunks(term: String, facts: SpellingFacts, extendedAttention: Color) {
     val chunks = remember(term, facts) { SpellingEngine.chunkWord(term, facts) }
     if (chunks.size < 2) return
@@ -528,11 +531,13 @@ private fun ExposureChunks(term: String, facts: SpellingFacts, extendedAttention
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = "词块拆分",
+            text = "拼写分组",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("分段记字母，不代表词根词缀；读音听整词。", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             chunks.forEachIndexed { index, chunk ->
                 val highlight = index == trickyIndex
                 Surface(

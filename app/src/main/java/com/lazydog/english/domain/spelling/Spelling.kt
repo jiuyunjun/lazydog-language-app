@@ -415,36 +415,13 @@ object SpellingEngine {
         }
     }
 
-    /** 把一段挖成下划线。给出的是挖过的词，不是原词。 */
-    /**
-     * 拆成前缀 / 词干 / 后缀三段，拆不出来才退回等长切分。
-     * 设计稿 62 屏画的是 en + viron + ment：中间那块才是要练的，
-     * 所以前后缀都剥掉之后剩下的词干必须自成一块，不能被并进旁边。
-     */
+    /** 使用生成时保存的拼写分组；缺失或损坏时保留整词，不凭字母外观猜构词。 */
     fun chunkWord(word: String, facts: SpellingFacts = SpellingFacts.None): List<String> {
         val clean = normalize(word)
-        // 存下来的词块拼回去必须等于原词，对不上就是坏数据，不如用猜的。
-        val stored = facts.chunks.map { it.trim().lowercase() }.filter { it.isNotEmpty() }
-        if (stored.size >= 2 && stored.joinToString("") == clean) return stored
-        if (clean.length <= 5) return listOf(clean)
-        val suffix = COMMON_SUFFIXES.firstOrNull { clean.length - it.length >= 3 && clean.endsWith(it) }
-        val withoutSuffix = if (suffix == null) clean else clean.dropLast(suffix.length)
-        val prefix = COMMON_PREFIXES.firstOrNull { withoutSuffix.length - it.length >= 3 && withoutSuffix.startsWith(it) }
-        val stem = if (prefix == null) withoutSuffix else withoutSuffix.drop(prefix.length)
-        val parts = listOfNotNull(prefix, stem.ifBlank { null }, suffix)
-        if (parts.size >= 2) return parts
-        val size = (clean.length / 3.0).toInt().coerceAtLeast(2)
-        return clean.chunked(size)
+        val stored = facts.chunks.map { it.trim().lowercase() }
+        if (stored.size in 1..4 && stored.none { it.isEmpty() } && stored.joinToString("") == clean) return stored
+        return listOf(clean)
     }
-
-    private val COMMON_SUFFIXES = listOf(
-        "tion", "sion", "ment", "ness", "able", "ible", "ance", "ence", "ful", "ing", "ed", "ly",
-    )
-
-    private val COMMON_PREFIXES = listOf(
-        "inter", "trans", "under", "over", "dis", "mis", "pre", "pro", "sub", "com", "con", "ex",
-        "en", "in", "im", "re", "un", "de",
-    )
 
     fun classifyErrors(expected: String, answer: String): Set<SpellingErrorType> {
         val e = normalize(expected)
