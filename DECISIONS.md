@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "6.0"
+version: "6.1"
 updated: "2026-09-07"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -10,6 +10,24 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 ---
 
 # 决策记录
+
+## D-073：撤掉 term 的唯一索引，判重口径只留仓储层一份
+
+- 状态：已确认（2026-09-07，用户报崩溃：添加词义时 `UNIQUE constraint failed:
+  vocabulary_details.term` 闪退）
+- 问题：D-036 把身份层换成 (lemma, 词性) 并给多义词留了 `senseOrder`，
+  但 `vocabulary_details.term` 上那条更早的唯一索引没跟着撤。于是 D-036 明写「各自成条」
+  的两种情况，一插就崩在主线程：`record/NOUN` 与 `record/VERB`（同 term 不同词性），
+  以及 `run/VERB` 的「跑」和「经营」（同 term 同词性，靠 `senseOrder` 分开）。
+  DB 挡的是「同名」，代码判的是「同一个词条的同一个词义」——两份口径不一样，严的那份先炸。
+- 决定：索引降级为非唯一（Room v21 → v22，只 DROP/CREATE 索引，不迁数据：
+  老库一直被这条索引挡着，本来就不存在重复 term）。判重只在
+  `KnowledgeRepository.addVocabulary` 里按 (lemma, 词性) 做一次，DB 这层只负责查得快。
+- 被否决方案：
+  - 改成 `(term, pos)` 唯一：同一个词条的第二个词义照样被挡，正是 D-036 要留的那种。
+  - 插入处 catch 掉约束异常：把口径冲突藏起来，"什么算重复"仍然有两份定义。
+- 影响：只动 `Entities.kt` 的索引声明和一条迁移。查询、界面、FSRS、拼写进度一律不变；
+  无新依赖、抽象、表、层次或依赖方向变化。
 
 ## D-072：谐音先贴近真实读音，再在画面中做诙谐联想
 
@@ -691,6 +709,8 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 - 未验证：`lemma` 的还原质量取决于模型，尤其是 `saw` / `left` 这类歧义词，要真机看一批。
 
 ## D-036：词条身份换成 (lemma, 词性)，多义词各自成条
+
+> v13 漏了 `term` 的唯一索引没撤，「各自成条」其实一条也存不进去；D-073 补上。
 
 - 状态：已确认（2026-09-02，用户给出 `单词记忆DESIGN.md`（Vocabulary Data Model Design）并要求落实）
 - 背景：D-035 把词条身份从"句子里的表面形式"收敛到原型，但键仍然只是一个字符串。
