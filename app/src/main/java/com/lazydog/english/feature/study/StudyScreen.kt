@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material.icons.outlined.Spellcheck
@@ -90,6 +91,7 @@ fun StudyScreen(
     modifier: Modifier = Modifier,
     onSpeakingClick: () -> Unit,
     onListeningClick: () -> Unit,
+    onPronunciationClick: () -> Unit,
     onSpellingClick: () -> Unit,
     onWordsClick: () -> Unit,
     onGrammarClick: () -> Unit,
@@ -143,6 +145,7 @@ fun StudyScreen(
         StudyEntry(Icons.Outlined.Spellcheck, "拼写", "认得不算，写得出才算", onClick = onSpellingClick),
         StudyEntry(Icons.Outlined.RecordVoiceOver, "情景演练", "和难说话的人练一轮", onClick = onScenarioClick),
         StudyEntry(Icons.Outlined.Verified, "还记得吗", "两周前学的词，听得出来吗", onClick = onProofChallengeClick),
+        StudyEntry(Icons.Outlined.GraphicEq, "发音与音标", "先分清声音，再认符号", onClick = onPronunciationClick),
     )
 
     val copy = appCopy

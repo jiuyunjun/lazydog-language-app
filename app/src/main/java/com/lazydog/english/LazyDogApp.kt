@@ -33,6 +33,8 @@ import com.lazydog.english.feature.ask.AskHost
 import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.production.ProductionScreen
+import com.lazydog.english.feature.pronunciation.AllSoundsScreen
+import com.lazydog.english.feature.pronunciation.SoundCardScreen
 import com.lazydog.english.feature.proof.ProofChallengeScreen
 import com.lazydog.english.feature.settings.ModelPickScreen
 import com.lazydog.english.feature.settings.ModelSettingsScreen
@@ -67,6 +69,8 @@ object Routes {
     const val Spelling = "study/spelling"
     const val SpellingProfile = "study/spelling/profile"
     const val ListeningProfile = "listening/profile"
+    const val Pronunciation = "pronunciation"
+    const val PronunciationSound = "pronunciation/sound/{phonemeId}"
     const val GrammarStudy = "study/grammar"
     const val Production = "study/production"
     const val ProofChallenge = "study/proof"
@@ -91,6 +95,7 @@ object Routes {
     fun nativeReadingOpen(materialId: Long) = "reading/native/open/$materialId"
     fun wordDetail(itemId: Long) = "library/word/$itemId"
     fun scenarioOpen(sessionId: Long) = "scenario/open/$sessionId"
+    fun pronunciationSound(phonemeId: String) = "pronunciation/sound/$phonemeId"
 }
 
 @Composable
@@ -183,6 +188,7 @@ private fun AppNavHost(
                 knowledgeRepository = knowledgeRepository,
                 onStartSpeaking = { navController.navigate(Routes.Speaking) },
                 onStartListening = { navController.navigate(Routes.Listening) },
+                onStartPronunciation = { navController.navigate(Routes.Pronunciation) },
                 onStartWordStudy = { navController.navigate(Routes.WordStudy) },
                 onStartSpelling = { navController.navigate(Routes.Spelling) },
                 onStartGrammarStudy = { navController.navigate(Routes.GrammarStudy) },
@@ -298,6 +304,25 @@ private fun AppNavHost(
 
         composable(Routes.ListeningProfile) {
             ListeningProfileScreen(onExit = { navController.popBackStack() })
+        }
+
+        composable(Routes.Pronunciation) {
+            AllSoundsScreen(
+                onExit = { navController.popOnce() },
+                onOpenSound = { id -> navController.navigate(Routes.pronunciationSound(id)) },
+            )
+        }
+
+        composable(
+            route = Routes.PronunciationSound,
+            arguments = listOf(navArgument("phonemeId") { type = NavType.StringType }),
+        ) { entry ->
+            SoundCardScreen(
+                phonemeId = entry.arguments?.getString("phonemeId").orEmpty(),
+                onExit = { navController.popOnce() },
+                // M21.3 接上听辨训练之前，「开始练习」先回到总览，不做成一个点了没反应的按钮。
+                onPractice = { navController.popOnce() },
+            )
         }
 
         composable(Routes.SpellingProfile) {
