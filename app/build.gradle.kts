@@ -18,6 +18,18 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        // debug 签名固定在仓库里，不用 AGP 默认的 ~/.android/debug.keystore：
+        // 后者每台机器随机生成，多机开发时签名不一致，装包必须先卸载（D-075）。
+        // 口令是 Android 公开的 debug 口令，不签 release 包，不属于密钥。
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

@@ -14,6 +14,8 @@ local.properties
 # Signing and secrets
 *.jks
 *.keystore
+# 例外：共用的 debug 签名，口令公开，只签 debug 包（D-075）
+!app/debug.keystore
 secrets.properties
 .env
 .env.*
