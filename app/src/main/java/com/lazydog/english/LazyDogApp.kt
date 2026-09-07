@@ -35,6 +35,7 @@ import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.production.ProductionScreen
 import com.lazydog.english.feature.pronunciation.AllSoundsScreen
 import com.lazydog.english.feature.pronunciation.PerceptionScreen
+import com.lazydog.english.feature.pronunciation.ProduceScreen
 import com.lazydog.english.feature.pronunciation.SoundCardScreen
 import com.lazydog.english.feature.proof.ProofChallengeScreen
 import com.lazydog.english.feature.settings.ModelPickScreen
@@ -73,6 +74,7 @@ object Routes {
     const val Pronunciation = "pronunciation"
     const val PronunciationSound = "pronunciation/sound/{phonemeId}"
     const val PronunciationPerceive = "pronunciation/perceive/{contrastId}"
+    const val PronunciationProduce = "pronunciation/produce/{phonemeId}"
     const val GrammarStudy = "study/grammar"
     const val Production = "study/production"
     const val ProofChallenge = "study/proof"
@@ -99,6 +101,7 @@ object Routes {
     fun scenarioOpen(sessionId: Long) = "scenario/open/$sessionId"
     fun pronunciationSound(phonemeId: String) = "pronunciation/sound/$phonemeId"
     fun pronunciationPerceive(contrastId: String) = "pronunciation/perceive/$contrastId"
+    fun pronunciationProduce(phonemeId: String) = "pronunciation/produce/$phonemeId"
 }
 
 @Composable
@@ -326,6 +329,7 @@ private fun AppNavHost(
             SoundCardScreen(
                 phonemeId = phonemeId,
                 onExit = { navController.popOnce() },
+                onProduce = { id -> navController.navigate(Routes.pronunciationProduce(id)) },
                 onPractice = { id ->
                     // 练一个音位，实际练的是它参与的第一组对比：孤立地听一个音建立不了类别，
                     // 边界要靠对比才立得起来（设计文档 §4.2）。
@@ -334,6 +338,16 @@ private fun AppNavHost(
                         navController.navigate(Routes.pronunciationPerceive(contrast.id))
                     }
                 },
+            )
+        }
+
+        composable(
+            route = Routes.PronunciationProduce,
+            arguments = listOf(navArgument("phonemeId") { type = NavType.StringType }),
+        ) { entry ->
+            ProduceScreen(
+                phonemeId = entry.arguments?.getString("phonemeId").orEmpty(),
+                onExit = { navController.popOnce() },
             )
         }
 

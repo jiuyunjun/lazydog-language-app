@@ -84,4 +84,28 @@ class PronunciationJsonTest {
         assertTrue(overallComment(30).isNotBlank())
         assertEquals(4, setOf(overallComment(90), overallComment(75), overallComment(55), overallComment(30)).size)
     }
+
+    @Test
+    fun `phoneme level evidence parses when the service sends it`() {
+        val json = """
+            {"DisplayText":"think","NBest":[{"Display":"think",
+            "PronunciationAssessment":{"AccuracyScore":78.0,"FluencyScore":80.0,
+            "CompletenessScore":100.0,"PronScore":78.0},
+            "Words":[{"Word":"think","PronunciationAssessment":{"AccuracyScore":78.0,"ErrorType":"None"},
+            "Phonemes":[{"Phoneme":"θ","PronunciationAssessment":{"AccuracyScore":58.0}},
+            {"Phoneme":"ɪ","PronunciationAssessment":{"AccuracyScore":92.0}}]}]}]}
+        """.trimIndent()
+
+        val word = PronunciationJson.parse(json)!!.words.single()
+
+        assertEquals(listOf("θ", "ɪ"), word.phonemes.map { it.symbol })
+        assertEquals(listOf(58, 92), word.phonemes.map { it.accuracyScore })
+    }
+
+    @Test
+    fun `word level responses simply have no phonemes`() {
+        // 没请求音素粒度时 Azure 不返回 Phonemes。那是空列表，不是错误——
+        // 既有的朗读页仍然走逐词粒度，解析不能因此变严格。
+        assertTrue(PronunciationJson.parse(sample)!!.words.all { it.phonemes.isEmpty() })
+    }
 }

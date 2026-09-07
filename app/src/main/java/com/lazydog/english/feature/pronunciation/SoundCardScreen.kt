@@ -65,6 +65,7 @@ fun SoundCardScreen(
     phonemeId: String,
     onExit: () -> Unit,
     onPractice: (String) -> Unit,
+    onProduce: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -110,12 +111,23 @@ fun SoundCardScreen(
         bottomBar = {
             if (phoneme != null) {
                 Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
-                    Button(
-                        onClick = { onPractice(phonemeId) },
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
-                    ) { Text("开始练习") }
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        // 一个主按钮：先听辨。跟读是次操作——听不出来的时候练发音，
+                        // 用户没有可以对照的目标（设计文档 §4.1）。
+                        Button(
+                            onClick = { onPractice(phonemeId) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("开始练习") }
+                        androidx.compose.material3.TextButton(
+                            onClick = { onProduce(phonemeId) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("跟读这个音") }
+                    }
                 }
             }
         },

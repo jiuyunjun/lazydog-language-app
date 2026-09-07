@@ -84,9 +84,12 @@ class SpeechController(context: Context, private val prefs: UserPreferences) {
         provider?.stopSpeaking(keepLink = false)
     }
 
-    suspend fun assessReading(referenceText: String): AssessmentResult {
+    suspend fun assessReading(
+        referenceText: String,
+        phonemeLevel: Boolean = false,
+    ): AssessmentResult {
         haltForRecording()
-        return provider().assessReading(referenceText)
+        return provider().assessReading(referenceText, phonemeLevel)
     }
 
     suspend fun transcribeOnce(languages: List<String> = listOf("en-US")): TranscriptionResult {

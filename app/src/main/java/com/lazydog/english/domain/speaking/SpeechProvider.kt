@@ -40,8 +40,15 @@ interface SpeechProvider {
     /**
      * 从麦克风录一句朗读并对照 [referenceText] 做发音评估。
      * 调用前必须已获得录音权限。
+     *
+     * [phonemeLevel] 为 true 时额外要一份**音素级**证据（发音与音标模块要它，D-077）：
+     * 只有逐词分数的话，反馈只能说「think 这个词 76 分」，说不出「/θ/ 的摩擦不够、
+     * 听起来接近 /t/」——而后者才是用户能照着改的东西。默认 false，既有调用方行为不变。
      */
-    suspend fun assessReading(referenceText: String): AssessmentResult
+    suspend fun assessReading(
+        referenceText: String,
+        phonemeLevel: Boolean = false,
+    ): AssessmentResult
 
     /** 从麦克风听写一句话，只转成文字，不做口语评分。 */
     suspend fun transcribeOnce(languages: List<String> = listOf("en-US")): TranscriptionResult
@@ -118,6 +125,20 @@ data class WordFeedback(
     val word: String,
     val accuracyScore: Int,
     val errorType: WordErrorType,
+    /** 只有请求了音素级粒度才非空。 */
+    val phonemes: List<PhonemeFeedback> = emptyList(),
+)
+
+/**
+ * 一个音素的准确度。
+ *
+ * [symbol] 用的是服务返回的字母表原文（发音与音标模块请求 IPA）。匹配时要**归一化**——
+ * 长音符号、重音标记、附加符号在两边的写法不一定一致，硬字符串相等会大面积匹配不上，
+ * 而那时候界面看起来只是「没有音素证据」，不会有任何报错。
+ */
+data class PhonemeFeedback(
+    val symbol: String,
+    val accuracyScore: Int,
 )
 
 enum class WordErrorType(val labelZh: String) {

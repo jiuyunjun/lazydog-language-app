@@ -230,7 +230,10 @@ class AzureSpeechProvider(
         }
     }
 
-    override suspend fun assessReading(referenceText: String): AssessmentResult =
+    override suspend fun assessReading(
+        referenceText: String,
+        phonemeLevel: Boolean,
+    ): AssessmentResult =
         withContext(Dispatchers.IO) {
             if (closed) return@withContext AssessmentResult.Failed("服务已释放")
             var audioConfig: AudioConfig? = null
@@ -245,9 +248,18 @@ class AzureSpeechProvider(
                 assessmentConfig = PronunciationAssessmentConfig(
                     referenceText,
                     PronunciationAssessmentGradingSystem.HundredMark,
-                    PronunciationAssessmentGranularity.Word,
+                    if (phonemeLevel) {
+                        PronunciationAssessmentGranularity.Phoneme
+                    } else {
+                        PronunciationAssessmentGranularity.Word
+                    },
                     /* enableMiscue = */ true,
                 )
+                if (phonemeLevel) {
+                    // 默认返回的是 SAPI 音素名（`th`、`ih`），和音位表里的 IPA 对不上。
+                    // 要 IPA 才能把「这个词 76 分」翻译成「/θ/ 的摩擦不够」。
+                    assessmentConfig.setPhonemeAlphabet("IPA")
+                }
                 assessmentConfig.applyTo(recognizer)
                 result = recognizer.recognizeOnceAsync().get()
                 toAssessmentResult(result)

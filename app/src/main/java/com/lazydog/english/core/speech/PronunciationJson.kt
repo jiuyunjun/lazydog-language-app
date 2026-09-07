@@ -1,5 +1,6 @@
 package com.lazydog.english.core.speech
 
+import com.lazydog.english.domain.speaking.PhonemeFeedback
 import com.lazydog.english.domain.speaking.PronunciationFeedback
 import com.lazydog.english.domain.speaking.WordErrorType
 import com.lazydog.english.domain.speaking.WordFeedback
@@ -33,6 +34,12 @@ object PronunciationJson {
                     word = word.word,
                     accuracyScore = (word.pronunciationAssessment?.accuracyScore ?: 0.0).roundToInt(),
                     errorType = word.pronunciationAssessment?.errorType.toWordErrorType(),
+                    phonemes = word.phonemes.map { phoneme ->
+                        PhonemeFeedback(
+                            symbol = phoneme.phoneme,
+                            accuracyScore = (phoneme.pronunciationAssessment?.accuracyScore ?: 0.0).roundToInt(),
+                        )
+                    },
                 )
             },
         )
@@ -71,6 +78,19 @@ object PronunciationJson {
     private data class WordPayload(
         @SerialName("Word") val word: String = "",
         @SerialName("PronunciationAssessment") val pronunciationAssessment: WordAssessmentPayload? = null,
+        /** 只有请求了音素级粒度才有；没请求时是空列表，不是错误。 */
+        @SerialName("Phonemes") val phonemes: List<PhonemePayload> = emptyList(),
+    )
+
+    @Serializable
+    private data class PhonemePayload(
+        @SerialName("Phoneme") val phoneme: String = "",
+        @SerialName("PronunciationAssessment") val pronunciationAssessment: PhonemeAssessmentPayload? = null,
+    )
+
+    @Serializable
+    private data class PhonemeAssessmentPayload(
+        @SerialName("AccuracyScore") val accuracyScore: Double = 0.0,
     )
 
     @Serializable
