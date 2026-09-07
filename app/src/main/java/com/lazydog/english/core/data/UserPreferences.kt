@@ -74,6 +74,9 @@ class UserPreferences(private val context: Context) {
         val AskShakeEnabled = booleanPreferencesKey("ask_shake_enabled")
         val AskShakeSensitivity = intPreferencesKey("ask_shake_sensitivity")
         val AskTopBarIcon = booleanPreferencesKey("ask_top_bar_icon")
+
+        /** 发音模块的声音摸底做完没有（D-077）。只记做没做过，画像本身在三张表里。 */
+        val VoiceScreeningDone = booleanPreferencesKey("voice_screening_done")
         val CompletionTokenModels = stringSetPreferencesKey("models_need_completion_tokens")
         val NoReasoningEffortModels = stringSetPreferencesKey("models_reject_reasoning_effort")
         val RejectedEfforts = stringSetPreferencesKey("model_rejected_reasoning_efforts")
@@ -82,6 +85,15 @@ class UserPreferences(private val context: Context) {
 
     val onboardingCompleted: Flow<Boolean> =
         context.dataStore.data.map { it[Keys.OnboardingCompleted] ?: false }
+
+    /**
+     * 声音摸底做完没有。
+     *
+     * 只是个「要不要在首页推这一步」的开关：摸出来的结论全部写进 `perception_attempts`，
+     * 这里不存任何画像，跳过摸底的人照样能靠平时的练习长出画像来。
+     */
+    val voiceScreeningDone: Flow<Boolean> =
+        context.dataStore.data.map { it[Keys.VoiceScreeningDone] ?: false }
 
     val aiBaseUrl: Flow<String> =
         context.dataStore.data.map { it[Keys.AiBaseUrl].orDefault(LocalEnv.AI_BASE_URL) }
@@ -409,6 +421,10 @@ class UserPreferences(private val context: Context) {
 
     suspend fun setOnboardingCompleted() {
         context.dataStore.edit { it[Keys.OnboardingCompleted] = true }
+    }
+
+    suspend fun setVoiceScreeningDone() {
+        context.dataStore.edit { it[Keys.VoiceScreeningDone] = true }
     }
 
     suspend fun saveLearnerProfile(

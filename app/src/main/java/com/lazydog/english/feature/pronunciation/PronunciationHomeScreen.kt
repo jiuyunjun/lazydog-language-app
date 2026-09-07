@@ -55,6 +55,7 @@ import com.lazydog.english.domain.pronunciation.PronunciationTarget
 @Composable
 fun PronunciationHomeScreen(
     onExit: () -> Unit,
+    onScreening: () -> Unit,
     onPractice: (String) -> Unit,
     onOpenAllSounds: () -> Unit,
     onOpenProfile: () -> Unit,
@@ -64,6 +65,7 @@ fun PronunciationHomeScreen(
     val app = remember { context.applicationContext as LazyDogApplication }
     val catalog = remember { app.phonemeCatalog }
     val progressList by app.pronunciationRepository.progress.collectAsState(initial = emptyList())
+    val screened by app.userPreferences.voiceScreeningDone.collectAsState(initial = true)
     val now = remember(progressList) { System.currentTimeMillis() }
 
     val ranked = remember(progressList, now) {
@@ -106,6 +108,11 @@ fun PronunciationHomeScreen(
                 .padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
+            // 没摸过底就先摆这一条：让用户从第一个音标开始，正是这个模块想避免的事。
+            if (!screened) {
+                ScreeningPrompt(onStart = onScreening, modifier = Modifier.padding(top = 8.dp))
+            }
+
             recommended?.let { (contrast, progress) ->
                 Recommendation(
                     contrast = contrast,
