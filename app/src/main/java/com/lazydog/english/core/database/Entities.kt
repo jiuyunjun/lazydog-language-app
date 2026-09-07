@@ -40,7 +40,10 @@ data class KnowledgeItemEntity(
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [Index(value = ["term"], unique = true)],
+    // term 不唯一：`record/NOUN` 和 `record/VERB` 是两个词条，`run/VERB` 的"跑"和"经营"
+    // 是同一个词条的两个词义（单词记忆DESIGN.md §3、§5），三者 term 都一样。
+    // 判重按 (lemma, 词性) 在 KnowledgeRepository.addVocabulary 里做，DB 只管查得快。
+    indices = [Index(value = ["term"])],
 )
 data class VocabularyDetailEntity(
     @PrimaryKey val itemId: Long,

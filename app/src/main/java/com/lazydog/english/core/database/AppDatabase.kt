@@ -24,7 +24,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ListeningAttemptEntity::class,
         VocabularySenseImageEntity::class,
     ],
-    version = 21,
+    version = 22,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -77,7 +77,13 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "lazydog.db")
-                .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_10_11, MIGRATION_12_13)
+                .addMigrations(
+                    MIGRATION_6_7,
+                    MIGRATION_7_8,
+                    MIGRATION_10_11,
+                    MIGRATION_12_13,
+                    MIGRATION_21_22,
+                )
                 .build()
 
         /**
@@ -222,6 +228,26 @@ abstract class AppDatabase : RoomDatabase() {
                             "WHERE LOWER(TRIM(`pos`)) IN (" + list + ")",
                     )
                 }
+            }
+        }
+
+        /**
+         * 摘掉 `vocabulary_details.term` 的唯一索引。
+         *
+         * v13 把词条身份换成 (lemma, 词性)、又给同一词条留了 senseOrder 放多个词义，
+         * 但索引一直没跟着改，于是「同名不同词性」和「同词条第二个词义」这两种
+         * 本来就该存两条的情况，一插就 UNIQUE 冲突崩在主线程。判重逻辑在
+         * KnowledgeRepository.addVocabulary 里，DB 这层不该再兜一遍口径不同的重。
+         *
+         * 老库里不可能有重复 term（一直被这条索引挡着），所以只放宽、不迁数据。
+         */
+        internal val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP INDEX IF EXISTS `index_vocabulary_details_term`")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_vocabulary_details_term` " +
+                        "ON `vocabulary_details` (`term`)",
+                )
             }
         }
 
