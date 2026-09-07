@@ -2124,8 +2124,8 @@ class OpenAiContentGenerator(
     companion object {
         const val SCHEMA_VERSION = 1
         const val PROMPT_VERSION = 1
-        const val WORDS_PROMPT_VERSION = 5
-        const val WORD_EXPLANATION_PROMPT_VERSION = 4
+        const val WORDS_PROMPT_VERSION = 6
+        const val WORD_EXPLANATION_PROMPT_VERSION = 5
         const val READING_PROMPT_VERSION = 2
         const val NATIVE_READING_PROMPT_VERSION = 2
         const val GRAMMAR_PROMPT_VERSION = 2
@@ -2134,7 +2134,7 @@ class OpenAiContentGenerator(
         const val SCENARIO_PROMPT_VERSION = 1
         const val ASK_PROMPT_VERSION = 1
         const val LISTENING_PROMPT_VERSION = 2
-        const val MEMORY_PROMPT_VERSION = 4
+        const val MEMORY_PROMPT_VERSION = 5
         const val VISUAL_QUERY_PROMPT_VERSION = 2
         const val SUGGEST_PROMPT_VERSION = 1
 
@@ -2442,14 +2442,20 @@ class OpenAiContentGenerator(
 
         /** 批量短提示与单词独立生成共用同一质量口径。 */
         private fun memoryCueRules(): String = buildString {
-            appendLine("学习者是中文母语者，偏好中文邪修联想/谐音助记。优先主动尝试中文声音关键词，" +
-                "可以荒诞、土、好笑；关键是读完能从中文关键词回到这个英文，而不是多背一句释义。")
+            appendLine("学习者是中文母语者，喜欢诙谐的中文谐音助记，但贴近原词真实读音是硬前提。" +
+                "优先级：读音贴近 > 当前词义准确 > 画面好记 > 好笑。笑点放在动作、反差和画面里，不靠扭曲读音造梗。")
             appendLine("主线索写成『目标英文 → 中文谐音/形状抓手 → 带目标词义的动作或画面』。" +
                 "只用一个短而熟悉的中文关键词，明确讲完它和当前词义的联系，不藏到展开字段。")
-            appendLine("用户认可的谐音联想：ambition → 俺必胜 → 握拳喊「俺必胜」，这股一定要赢的雄心。")
-            appendLine("用户认可的谐音联想：crab → 快来剥 → 端上一盘螃蟹，招呼大家「快来剥」螃蟹。")
-            appendLine("这两例是宽松的声音助记，不是准确音译；允许近似，不要求逐音节完全相等，" +
-                "但不能毫无声音联系。标「谐音联想」，结尾短注「助记，非读音」；不能声称单词就读成这几个汉字。")
+            appendLine("先按当前词性和词义确定标准发音，核对音标、音节数、重音及音素顺序，再选中文抓手；" +
+                "不能按英文字母的名字或拼写外观猜谐音，也不能为了让谐音成立改写音标或混拼英美读音。拿不准读音就不用谐音。")
+            appendLine("逐音节对照：保留主要元音、辅音和词尾，尤其重读音节；不能增加或吞掉音节、" +
+                "拆散辅音连缀、调换音的顺序、补出原词没有的尾音。普通话没有的英语音只容许最接近的近似，差异明显就放弃。")
+            appendLine("反例，禁止沿用：crab → 快来剥，把一个音节拉成三个，故事再好笑也不合格；" +
+                "ambition → 俺必胜，也不能因为有雄心的画面就忽略重读部分和词尾的声音偏差。旧提示不能当作正确读音依据。")
+            appendLine("只找到局部近音时，明确标『局部谐音』并指明对应的实际音节或连续部分，" +
+                "不把它包装成整词读音，也不强行给剩余部分补汉字。找不到自然贴近的中文抓手，就换非谐音方法。")
+            appendLine("谐音提示标「谐音联想」，结尾短注「助记，非读音」；这句说明不能豁免声音偏差，" +
+                "不能声称单词就读成这几个汉字，也不要求为了完全匹配而编生僻汉字或无意义中文串。")
             appendLine("谐音不好时再选中文字形联想、能解释清楚的真实构词或针对错拼的口诀。" +
                 "例如 dessert → 中间两个 s 像两份甜点，提醒自己别少写一个 s（字形联想）。" +
                 "例如 unhappy：un- 表示不，happy 是开心；给开心加个「不」就变成不开心（真实构词）。")
@@ -2462,6 +2468,8 @@ class OpenAiContentGenerator(
                 "想象奇怪画面就是 bizarre；用 terrain 等陌生词解释 territory。")
             appendLine("写完自检：具体借了哪段声音/字形？中文关键词怎样连到词义？" +
                 "把目标英文拿掉，剩下的是否仍是一条有辨识度的助记链，而不是任意词都能套的场景？")
+            appendLine("若用了谐音，再逐音节比对中文抓手和真实发音：有没有多音节、丢辅音、换主要元音或添词尾？" +
+                "是否为了包袱改音？任一明显偏差就删掉这个谐音，改字形/可靠构词或留空；只输出最终合格线索，不输出自检过程。")
             appendLine("没有合适助记就把 memoryHintZh / memory_hook 填空字符串；不要为了交作业凑普通例句。" +
                 "宁缺毋滥；禁止编造词源，不把人为拆分说成词根，禁止『多读几遍』『记住这个单词』等通用建议。")
         }
@@ -2617,7 +2625,7 @@ class OpenAiContentGenerator(
                 "例如 ambition 对应『握拳喊着一定要赢，这股「雄心」用刚学的英文怎么说？』；不要在问题里直接重复谐音关键词。")
 
             appendLine("输出原则：简洁优先；每一条都必须服务于记忆；" +
-                "禁止百科式解释、禁止编造词源、禁止无声音联系的硬凑谐音。" +
+                "禁止百科式解释、禁止编造词源、禁止偏离原词读音的硬凑谐音。" +
                 "宁缺毋滥——没有好的联想时留空，比写一条牵强的强。")
             appendLine("输出 JSON schema（用不上的字段填 null 或空数组，不要省略）：")
             appendLine(

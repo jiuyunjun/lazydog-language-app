@@ -1119,7 +1119,7 @@ class MemoryAssistanceGeneratorTest {
     )
 
     @Test
-    fun `sound mnemonic with nullable details passes the full generation pipeline`() = runBlocking {
+    fun `legacy sound mnemonic remains parseable without claiming phonetic validation`() = runBlocking {
         val payload = """{"schemaVersion":1,"word":"ambition","core_meaning":"雄心",
             "primary_memory_type":"VISUAL_ASSOCIATION","secondary_memory_type":null,
             "memory_hook":"谐音联想：俺必胜——握拳喊着俺必胜，这股一定要赢的雄心。（助记，非读音）",
@@ -1132,7 +1132,7 @@ class MemoryAssistanceGeneratorTest {
         val success = result as GenerationResult.Success
         assertTrue(success.data.memoryHookZh.contains("俺必胜"))
         assertEquals(MemoryType.VisualAssociation, success.data.primaryType)
-        assertEquals(4, success.promptVersion)
+        assertEquals(5, success.promptVersion)
     }
 
     @Test
@@ -1244,7 +1244,7 @@ class MemoryAssistanceGeneratorTest {
         val result = generator().generateMemoryAssistance(request, onPartialHook = { hooks.add(it) })
         assertTrue(result is GenerationResult.Success)
         assertTrue(hooks.any { it == "purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。" })
-        assertEquals(4, (result as GenerationResult.Success).promptVersion)
+        assertEquals(5, (result as GenerationResult.Success).promptVersion)
     }
 
 }
@@ -1260,8 +1260,13 @@ class MemoryAssistancePromptTest {
             assertTrue(prompt.contains("就地给中文含义"))
             assertTrue(prompt.contains("CEFR 等级不等于认识某个辅助词"))
             assertTrue(prompt.contains("borrow a book（借一本书）"))
-            assertTrue(prompt.contains("ambition → 俺必胜"))
-            assertTrue(prompt.contains("crab → 快来剥"))
+            assertTrue(prompt.contains("贴近原词真实读音是硬前提"))
+            assertTrue(prompt.contains("音节数、重音及音素顺序"))
+            assertTrue(prompt.contains("反例，禁止沿用：crab → 快来剥"))
+            assertTrue(prompt.contains("这句说明不能豁免声音偏差"))
+            assertTrue(prompt.contains("找不到自然贴近的中文抓手，就换非谐音方法"))
+            assertFalse(prompt.contains("用户认可的谐音联想"))
+            assertFalse(prompt.contains("不要求逐音节完全相等"))
             assertTrue(prompt.contains("助记，非读音"))
             assertTrue(prompt.contains("禁止用普通场景或双语搭配兜底"))
         }
