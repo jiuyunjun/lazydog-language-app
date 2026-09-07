@@ -60,6 +60,7 @@ private enum class SoundTab(val labelZh: String) { Vowels("元音"), Consonants(
 fun AllSoundsScreen(
     onExit: () -> Unit,
     onOpenSound: (String) -> Unit,
+    onPracticeContrast: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -116,6 +117,7 @@ fun AllSoundsScreen(
                                 contrast = contrast,
                                 catalog = catalog,
                                 progress = progressByTarget[PronunciationTarget.ofContrast(contrast.id)],
+                                onClick = { onPracticeContrast(contrast.id) },
                             )
                         }
                     }
@@ -236,8 +238,9 @@ private fun ContrastRow(
     contrast: PhonemeContrast,
     catalog: com.lazydog.english.domain.pronunciation.PhonemeCatalog,
     progress: PronunciationProgress?,
+    onClick: () -> Unit,
 ) {
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),

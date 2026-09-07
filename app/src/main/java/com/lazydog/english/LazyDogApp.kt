@@ -34,6 +34,7 @@ import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.production.ProductionScreen
 import com.lazydog.english.feature.pronunciation.AllSoundsScreen
+import com.lazydog.english.feature.pronunciation.PerceptionScreen
 import com.lazydog.english.feature.pronunciation.SoundCardScreen
 import com.lazydog.english.feature.proof.ProofChallengeScreen
 import com.lazydog.english.feature.settings.ModelPickScreen
@@ -71,6 +72,7 @@ object Routes {
     const val ListeningProfile = "listening/profile"
     const val Pronunciation = "pronunciation"
     const val PronunciationSound = "pronunciation/sound/{phonemeId}"
+    const val PronunciationPerceive = "pronunciation/perceive/{contrastId}"
     const val GrammarStudy = "study/grammar"
     const val Production = "study/production"
     const val ProofChallenge = "study/proof"
@@ -96,6 +98,7 @@ object Routes {
     fun wordDetail(itemId: Long) = "library/word/$itemId"
     fun scenarioOpen(sessionId: Long) = "scenario/open/$sessionId"
     fun pronunciationSound(phonemeId: String) = "pronunciation/sound/$phonemeId"
+    fun pronunciationPerceive(contrastId: String) = "pronunciation/perceive/$contrastId"
 }
 
 @Composable
@@ -310,6 +313,7 @@ private fun AppNavHost(
             AllSoundsScreen(
                 onExit = { navController.popOnce() },
                 onOpenSound = { id -> navController.navigate(Routes.pronunciationSound(id)) },
+                onPracticeContrast = { id -> navController.navigate(Routes.pronunciationPerceive(id)) },
             )
         }
 
@@ -317,12 +321,32 @@ private fun AppNavHost(
             route = Routes.PronunciationSound,
             arguments = listOf(navArgument("phonemeId") { type = NavType.StringType }),
         ) { entry ->
+            val app = context.applicationContext as LazyDogApplication
+            val phonemeId = entry.arguments?.getString("phonemeId").orEmpty()
             SoundCardScreen(
-                phonemeId = entry.arguments?.getString("phonemeId").orEmpty(),
+                phonemeId = phonemeId,
                 onExit = { navController.popOnce() },
-                // M21.3 接上听辨训练之前，「开始练习」先回到总览，不做成一个点了没反应的按钮。
-                onPractice = { navController.popOnce() },
+                onPractice = { id ->
+                    // 练一个音位，实际练的是它参与的第一组对比：孤立地听一个音建立不了类别，
+                    // 边界要靠对比才立得起来（设计文档 §4.2）。
+                    val contrast = app.phonemeCatalog.contrastsOf(id).firstOrNull()
+                    if (contrast != null) {
+                        navController.navigate(Routes.pronunciationPerceive(contrast.id))
+                    }
+                },
             )
+        }
+
+        composable(
+            route = Routes.PronunciationPerceive,
+            arguments = listOf(navArgument("contrastId") { type = NavType.StringType }),
+        ) { entry ->
+            AskHost {
+                PerceptionScreen(
+                    contrastId = entry.arguments?.getString("contrastId").orEmpty(),
+                    onExit = { navController.popOnce() },
+                )
+            }
         }
 
         composable(Routes.SpellingProfile) {
