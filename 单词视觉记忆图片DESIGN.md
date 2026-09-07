@@ -2,7 +2,7 @@
 doc: "单词视觉记忆图片DESIGN.md"
 tier: "L4 专项设计"
 status: "部分落地"
-version: "1.0"
+version: "1.1"
 updated: "2026-09-07"
 authority: "英语词汇视觉检索、图片筛选、记忆辅助、Brave Image Search 集成与反馈闭环"
 index: "DOCS.md"
@@ -777,7 +777,7 @@ Accept: application/json
 推荐默认：
 
 ```text
-count = 20
+count = 30
 safesearch = strict
 spellcheck = true
 ```
@@ -830,7 +830,7 @@ Visual Quality Ranker
 Top 1
 ```
 
-建议保留 Top 3 给用户“换一张”。
+建议保留 Top 8 给用户“换一张”。原稿写的是 Top 3，实现时改大：硬过滤挺狠，抽象一点的词义前几张常常都不贴切，三张换完只剩“重新找”，而重搜要再花一次模型加一次搜索；候选是同一次搜索里白拿的，多留几张只是多存几行 JSON。
 
 ---
 
@@ -864,7 +864,7 @@ extreme aspect ratio
 
 ```text
 URL dedupe
-source dedupe
+source dedupe（同一个站最多两张）
 perceptual hash
 ```
 
@@ -1125,7 +1125,7 @@ Brave ranking
 ↓
 hard filters
 ↓
-Top 3–5
+Top 8
 ↓
 default Top 1 + user can change
 ```
@@ -1400,7 +1400,7 @@ backup asset
 hide image area
 ```
 
-每个 sense 建议保留 Top 3。
+每个 sense 保留 Top 8（见 §18）。
 
 ---
 
@@ -2076,10 +2076,10 @@ overall < 0.70
 3. LLM 生成 `visual_search_query`。
 4. 1 primary + 2 fallback query。
 5. Brave Image Search。
-6. `count=20`。
+6. `count=30`。
 7. `safesearch=strict`。
 8. 基础 size / URL / duplicate filter。
-9. 保存 Top 3。
+9. 保存 Top 8。
 10. 默认展示 Top 1。
 11. 用户可“换一张”。
 12. 记录换图行为。
@@ -2543,11 +2543,11 @@ VocabularySense
 ↓
 LLM：生成 1 primary + 2 fallback visual_search_query
 ↓
-Brave Image Search：primary query，count=20，strict
+Brave Image Search：primary query，count=30，strict
 ↓
 基础过滤
 ↓
-取 Top 3
+取 Top 8
 ↓
 默认 Top 1
 ↓
@@ -2562,7 +2562,7 @@ Brave Image Search：primary query，count=20，strict
 
 ```text
 默认图换图率
-Top 3 命中率
+Top 8 命中率
 不同词性的失败率
 ```
 

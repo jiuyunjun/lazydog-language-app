@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.HideImage
@@ -383,8 +385,12 @@ private fun FeedbackMenu(
 /**
  * 换一张（§40）。
  *
- * 每条候选都写一句来源，不只是三张缩略图并排：用户不是在挑好看的，
+ * 每条候选都写一句来源，不只是几张缩略图并排：用户不是在挑好看的，
  * 是在挑说得清这个意思的，来源本身就是判断依据的一部分。
+ *
+ * 候选有八张（VisualCandidateFilter.KEEP），一屏放不下，所以这里自己滚——
+ * ModalBottomSheet 不给内容加滚动，列表长了会直接被裁掉，
+ * 最下面那两个「重新找」「不用配图」就永远够不着。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -400,6 +406,7 @@ private fun ImagePickerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

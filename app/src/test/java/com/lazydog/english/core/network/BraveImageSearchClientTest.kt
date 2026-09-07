@@ -70,12 +70,12 @@ class BraveImageSearchClientTest {
         Unit
     }
 
-    /** §16：图片搜索不支持分页，一次 20 张够用；再多只是多花配额。 */
+    /** §16：图片搜索不支持分页，一次 30 张够筛出八张候选；再多只是多花配额。 */
     @Test
-    fun `默认取二十张，超过上限会被夹住`() = runBlocking {
+    fun `默认取三十张，超过上限会被夹住`() = runBlocking {
         server.enqueue(MockResponse().setBody(payload))
         client().search("x")
-        assertTrue(server.takeRequest().path.orEmpty().contains("count=20"))
+        assertTrue(server.takeRequest().path.orEmpty().contains("count=30"))
 
         server.enqueue(MockResponse().setBody(payload))
         client().search("x", count = 999)

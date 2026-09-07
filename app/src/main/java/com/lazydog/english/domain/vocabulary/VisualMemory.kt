@@ -226,8 +226,20 @@ object VisualQueryValidation {
  */
 object VisualCandidateFilter {
 
-    /** 每个词义留几张：默认第一张，其余给「换一张」（设计文档 §18、§37）。 */
-    const val KEEP = 3
+    /**
+     * 每个词义留几张：默认第一张，其余给「换一张」（设计文档 §18、§37）。
+     *
+     * 设计文档写的是 Top 3，实际用下来太紧：抽象一点的词义前几张常常都不贴切，
+     * 换两下就只剩「重新找」这一条路，而重搜要再花一次模型加一次搜索。
+     * 候选是白拿的——一次搜索本来就拉回三十条，留下来只是多存几行 JSON。
+     */
+    const val KEEP = 8
+
+    /**
+     * 同一个站最多留几张。留 1 太狠：一个词义的好图经常扎堆在同一个图库站，
+     * 一刀切会把第二好的图换成一张只是"来源不重样"的图（设计文档 §19 source dedupe）。
+     */
+    const val MAX_PER_HOST = 2
 
     const val MIN_WIDTH = 200
     const val MIN_HEIGHT = 150
@@ -263,7 +275,7 @@ object VisualCandidateFilter {
         mustShow: List<String> = emptyList(),
         avoid: List<String> = emptyList(),
     ): List<VocabularyImageAsset> {
-        val seenHosts = mutableSetOf<String>()
+        val hostCounts = mutableMapOf<String, Int>()
         val seenUrls = mutableSetOf<String>()
         return candidates
             .asSequence()
@@ -274,9 +286,18 @@ object VisualCandidateFilter {
             .map { it.copy(score = score(it, term, mustShow, avoid)) }
             .filter { it.score > 0 }
             .sortedByDescending { it.score }
-            // 同一个站最多留一张：三张候选全来自同一个页面，等于只有一张
+            // 候选全来自同一个页面等于只有一张，所以每个站有上限
             // （设计文档 §19 的 source dedupe）。
-            .filter { seenHosts.add(it.hostLabel.lowercase().ifBlank { it.thumbnailUrl }) }
+            .filter { asset ->
+                val host = asset.hostLabel.lowercase().ifBlank { asset.thumbnailUrl }
+                val used = hostCounts.getOrDefault(host, 0)
+                if (used >= MAX_PER_HOST) {
+                    false
+                } else {
+                    hostCounts[host] = used + 1
+                    true
+                }
+            }
             .take(KEEP)
             .toList()
     }

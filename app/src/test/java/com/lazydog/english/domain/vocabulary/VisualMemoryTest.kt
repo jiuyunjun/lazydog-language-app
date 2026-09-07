@@ -121,16 +121,27 @@ class VisualMemoryTest {
         assertEquals("c.example", ranked.first().hostLabel)
     }
 
-    /** §18/§37：留三张给「换一张」和外链失效兜底，多了没用。 */
+    /** §18/§37：留 [VisualCandidateFilter.KEEP] 张给「换一张」和外链失效兜底。 */
     @Test
-    fun `最多留三张，且同一个站只留一张`() {
+    fun `最多留八张`() {
         val ranked = VisualCandidateFilter.rank(
-            candidates = (1..8).map { asset("hand gripping handle $it", "site$it.example") } +
-                (1..3).map { asset("hand gripping handle dup $it", "site1.example") },
+            candidates = (1..20).map { asset("hand gripping handle $it", "site$it.example") },
             term = "grip",
         )
-        assertEquals(3, ranked.size)
-        assertEquals(3, ranked.map { it.hostLabel }.distinct().size)
+        assertEquals(VisualCandidateFilter.KEEP, ranked.size)
+    }
+
+    /** §19 source dedupe：一个站最多两张，剩下的名额让给别的来源。 */
+    @Test
+    fun `同一个站最多留两张`() {
+        val ranked = VisualCandidateFilter.rank(
+            candidates = (1..6).map { asset("hand gripping handle dup $it", "dup.example") } +
+                listOf(asset("hand gripping handle a", "other-a.example")) +
+                listOf(asset("hand gripping handle b", "other-b.example")),
+            term = "grip",
+        )
+        assertEquals(2, ranked.count { it.hostLabel == "dup.example" })
+        assertEquals(4, ranked.size)
     }
 
     @Test

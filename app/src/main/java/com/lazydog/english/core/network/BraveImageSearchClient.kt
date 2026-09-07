@@ -31,7 +31,7 @@ interface ImageSearchProvider {
  * （`ARCHITECTURE.md` §8）。设计文档 §38 要求密钥只放后端，但这个 App 没有后端那一层，
  * 密钥是用户自己的——和 AI 密钥、Azure 密钥同一个口径（D-071）。
  *
- * 图片搜索**不支持分页**，一次要多少就是多少；一个词义 20 张候选足够（§16），
+ * 图片搜索**不支持分页**，一次要多少就是多少；一个词义 30 张原始候选足够（§16），
  * 拉 100 张只是多花配额。
  */
 class BraveImageSearchClient(
@@ -144,8 +144,12 @@ class BraveImageSearchClient(
     companion object {
         const val ENDPOINT = "https://api.search.brave.com/res/v1/images/search"
 
-        /** §16：10~30 个候选就够，不需要每次拉 100~200 张。 */
-        const val DEFAULT_COUNT = 20
+        /**
+         * §16：10~30 个候选就够，不需要每次拉 100~200 张。取上限是因为过滤挺狠
+         * （尺寸、黑名单站、text-heavy、每站限量），20 条常常筛不满
+         * VisualCandidateFilter.KEEP 那几张，而多要十条不额外花一次请求。
+         */
+        const val DEFAULT_COUNT = 30
 
         /** Brave 文档给的上限。 */
         const val MAX_COUNT = 200

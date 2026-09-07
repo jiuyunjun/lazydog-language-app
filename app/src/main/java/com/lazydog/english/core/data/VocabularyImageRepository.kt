@@ -60,7 +60,7 @@ class VocabularyImageRepository(
     /**
      * 缓存里有就用缓存，没有才去找（§64：打开词卡不该现跑 `模型 → Brave`）。
      *
-     * [force] 是用户点了「三张都不行，重新找」：换一批检索词重搜，并清掉上次的失败原因。
+     * [force] 是用户点了「都不合适，重新找」：换一批检索词重搜，并清掉上次的失败原因。
      * 用户说过「这个词不用配图」时除非 [force] 否则不动——那是他的决定，不该被下次打开覆盖。
      */
     suspend fun ensure(
@@ -120,7 +120,7 @@ class VocabularyImageRepository(
 
     /**
      * 显示时发现这张图挂了（404、站点拒绝、地址过期），自动顶下一张（§37）。
-     * 三张都挂就落到"这次没有图"，而不是一直转圈。
+     * 候选全挂了才落到"这次没有图"，而不是一直转圈。
      */
     suspend fun dropBroken(senseKey: SenseKey, index: Int) {
         val entity = dao.get(senseKey.value) ?: return

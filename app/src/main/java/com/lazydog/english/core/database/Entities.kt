@@ -400,7 +400,7 @@ data class VocabularyMemoryHintEntity(
  *
  * [assetsJson] 存的是**引用**——缩略图地址、原页面地址、来源站名——不是图本身。
  * Brave 负责发现，不等于拿到第三方图片的版权（§33、§35），所以不把原图下载下来长期持有。
- * 代价是外链会失效，靠留三张候选和 [selectedIndex] 依次顶上兜（§37）。
+ * 代价是外链会失效，靠留一批候选和 [selectedIndex] 依次顶上兜（§37）。
  */
 @Entity(tableName = "vocabulary_sense_images")
 data class VocabularySenseImageEntity(
