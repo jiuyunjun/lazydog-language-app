@@ -23,8 +23,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ListeningMaterialEntity::class,
         ListeningAttemptEntity::class,
         VocabularySenseImageEntity::class,
+        PronunciationProgressEntity::class,
+        PerceptionAttemptEntity::class,
+        ProductionAttemptEntity::class,
     ],
-    version = 22,
+    version = 23,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -54,6 +57,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 19, to = 20),
         // v21 只新增 vocabulary_sense_images，老表一列没动。
         AutoMigration(from = 20, to = 21),
+        // v23 只新增发音与音标的三张表（D-077），老表一列没动。
+        AutoMigration(from = 22, to = 23),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -73,6 +78,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun listeningMaterialDao(): ListeningMaterialDao
 
     abstract fun vocabularyImageDao(): VocabularyImageDao
+
+    abstract fun pronunciationDao(): PronunciationDao
 
     companion object {
         fun create(context: Context): AppDatabase =

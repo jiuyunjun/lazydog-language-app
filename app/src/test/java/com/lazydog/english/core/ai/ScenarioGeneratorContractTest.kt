@@ -11,6 +11,10 @@ import com.lazydog.english.domain.scenario.ScenarioSource
 import com.lazydog.english.domain.scenario.ScenarioSpeaker
 import com.lazydog.english.domain.scenario.ScenarioTurnRequest
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -62,6 +66,26 @@ class ScenarioGeneratorContractTest {
         val result = generator().judgeScenarioTurn(turnRequest())
 
         assertTrue(result is GenerationResult.Failure)
+    }
+
+    @Test
+    fun `common input boundary is sent with both general and specialized system messages`() = runBlocking {
+        server.enqueue(chatResponse("""{"translationZh":"你好。","explanationZh":"日常问候。"}"""))
+        server.enqueue(chatResponse("""{"achievedGoalIds":[],"communicationFailure":null}"""))
+        val client = generator()
+        assertTrue(client.explainSentence("Hello.", "A1") is GenerationResult.Success)
+        assertTrue(client.judgeScenarioTurn(turnRequest()) is GenerationResult.Success)
+        val systems = (1..2).map {
+            val body = Json.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+            val messages = body.getValue("messages").jsonArray
+            assertEquals(2, messages.size)
+            assertEquals("system", messages[0].jsonObject.getValue("role").jsonPrimitive.content)
+            assertEquals("user", messages[1].jsonObject.getValue("role").jsonPrimitive.content)
+            messages[0].jsonObject.getValue("content").jsonPrimitive.content
+        }
+        systems.forEach { assertTrue(it.contains("输入边界：")) }
+        assertTrue(systems[0].contains("英语学习内容"))
+        assertTrue(systems[1].contains("隐藏判定器"))
     }
 
     private fun generator() = OpenAiContentGenerator(

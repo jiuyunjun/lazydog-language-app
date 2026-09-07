@@ -7,12 +7,14 @@ import com.lazydog.english.core.ai.ModelCatalog
 import com.lazydog.english.core.ai.OpenAiContentGenerator
 import com.lazydog.english.core.backup.BackupFileStore
 import com.lazydog.english.core.backup.BackupRepository
+import com.lazydog.english.core.data.AssetPhonemeCatalog
 import com.lazydog.english.core.data.AssetWordFrequencyIndex
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.ListeningMaterialRepository
 import com.lazydog.english.core.data.MemoryHintRepository
 import com.lazydog.english.core.data.MistakeRepository
 import com.lazydog.english.core.data.ProgressRepository
+import com.lazydog.english.core.data.PronunciationRepository
 import com.lazydog.english.core.data.ReadingRepository
 import com.lazydog.english.core.data.ScenarioSessionRepository
 import kotlinx.coroutines.flow.first
@@ -28,6 +30,7 @@ import com.lazydog.english.domain.generation.WebSearchProvider
 import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.scheduling.FsrsScheduler
+import com.lazydog.english.domain.pronunciation.PhonemeCatalog
 import com.lazydog.english.domain.vocabulary.WordFrequencyIndex
 
 /**
@@ -57,6 +60,14 @@ class LazyDogApplication : Application() {
     }
 
     val speechController: SpeechController by lazy { SpeechController(this, userPreferences) }
+
+    /** 音位表：内容不是状态，走 assets 不进库（D-077）。读不出来退化成空目录。 */
+    val phonemeCatalog: PhonemeCatalog by lazy { AssetPhonemeCatalog(this) }
+
+    /** 发音与音标：听辨和发音各记各的，页面不碰 DAO 也不碰 assets。 */
+    val pronunciationRepository: PronunciationRepository by lazy {
+        PronunciationRepository(database, phonemeCatalog)
+    }
 
     val readingRepository: ReadingRepository by lazy { ReadingRepository(database) }
 

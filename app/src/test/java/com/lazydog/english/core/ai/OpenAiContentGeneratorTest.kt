@@ -1132,7 +1132,7 @@ class MemoryAssistanceGeneratorTest {
         val success = result as GenerationResult.Success
         assertTrue(success.data.memoryHookZh.contains("俺必胜"))
         assertEquals(MemoryType.VisualAssociation, success.data.primaryType)
-        assertEquals(5, success.promptVersion)
+        assertEquals(6, success.promptVersion)
     }
 
     @Test
@@ -1244,7 +1244,7 @@ class MemoryAssistanceGeneratorTest {
         val result = generator().generateMemoryAssistance(request, onPartialHook = { hooks.add(it) })
         assertTrue(result is GenerationResult.Success)
         assertTrue(hooks.any { it == "purchase a ticket（购买一张票）：订票页面让你付款买票，用 purchase 表示这次购买。" })
-        assertEquals(5, (result as GenerationResult.Success).promptVersion)
+        assertEquals(6, (result as GenerationResult.Success).promptVersion)
     }
 
 }

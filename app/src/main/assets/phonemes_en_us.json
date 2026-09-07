@@ -1,0 +1,738 @@
+{
+  "accent": {
+    "id": "general-american",
+    "displayName": "美音",
+    "locale": "en-US",
+    "phonemeSetVersion": "1"
+  },
+  "phonemes": [
+    {
+      "id": "i-short",
+      "ipa": "ɪ",
+      "category": "Vowel",
+      "group": "短元音",
+      "displayOrder": 10,
+      "shortDescription": "短、松的前元音",
+      "articulation": {
+        "tongue": "靠前、偏高，但别顶到最高",
+        "lips": "放松，不往两边扯",
+        "jaw": "微微张开",
+        "keyAction": "全身放松、一带而过。它比 /iː/ 短，也比 /iː/ 松。",
+        "term": "前高松元音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "iː",
+          "exampleEn": "ship",
+          "soundsLikeEn": "sheep",
+          "fix": "别照着中文的「衣」读——那个音又长又紧。舌头往下松一点，声音一带而过。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "sit", "ipa": "/sɪt/" },
+        { "word": "big", "ipa": "/bɪɡ/" },
+        { "word": "busy", "ipa": "/ˈbɪzi/" },
+        { "word": "minute", "ipa": "/ˈmɪnɪt/" }
+      ],
+      "contrastIds": ["i-short__i-long"]
+    },
+    {
+      "id": "i-long",
+      "ipa": "iː",
+      "category": "Vowel",
+      "group": "长元音",
+      "displayOrder": 11,
+      "shortDescription": "长、紧的前元音",
+      "articulation": {
+        "tongue": "靠前，抬到最高",
+        "lips": "微微往两边展开，像在忍住笑",
+        "jaw": "几乎不张",
+        "keyAction": "拉住、绷住。嘴角往两边，声音拖得比 /ɪ/ 明显长。",
+        "term": "前高紧元音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "ɪ",
+          "exampleEn": "leave",
+          "soundsLikeEn": "live",
+          "fix": "长度和紧张度都要给够。读完这个音，嘴角应该还是往两边绷着的。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "see", "ipa": "/siː/" },
+        { "word": "team", "ipa": "/tiːm/" },
+        { "word": "please", "ipa": "/pliːz/" },
+        { "word": "believe", "ipa": "/bɪˈliːv/" }
+      ],
+      "contrastIds": ["i-short__i-long"]
+    },
+    {
+      "id": "e-mid",
+      "ipa": "e",
+      "category": "Vowel",
+      "group": "短元音",
+      "displayOrder": 12,
+      "shortDescription": "中前元音，嘴张得比 /ɪ/ 大一点",
+      "articulation": {
+        "tongue": "靠前，高度中等",
+        "lips": "自然放松",
+        "jaw": "张开一点点",
+        "keyAction": "介于「衣」和「啊」之间，别张太大——张大就成了 /æ/。",
+        "term": "前中元音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "æ",
+          "exampleEn": "bed",
+          "soundsLikeEn": "bad",
+          "fix": "下巴别往下掉。/e/ 的嘴型比 /æ/ 小一圈。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "bed", "ipa": "/bed/" },
+        { "word": "head", "ipa": "/hed/" },
+        { "word": "many", "ipa": "/ˈmeni/" }
+      ],
+      "contrastIds": ["ae__e-mid"]
+    },
+    {
+      "id": "ae",
+      "ipa": "æ",
+      "category": "Vowel",
+      "group": "短元音",
+      "displayOrder": 13,
+      "shortDescription": "前低元音，嘴张得很开",
+      "articulation": {
+        "tongue": "靠前，压得很低",
+        "lips": "往两边拉开",
+        "jaw": "明显下沉",
+        "keyAction": "把下巴放下去，同时舌头还留在前面。中文里没有这个音，得刻意张大。",
+        "term": "前低元音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "e",
+          "exampleEn": "bad",
+          "soundsLikeEn": "bed",
+          "fix": "嘴张不够就会退回 /e/。读的时候下巴要明显往下走。"
+        },
+        {
+          "substitute": "ʌ",
+          "exampleEn": "cat",
+          "soundsLikeEn": "cut",
+          "fix": "舌头别往后缩。/æ/ 是靠前的，/ʌ/ 在中间。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "cat", "ipa": "/kæt/" },
+        { "word": "man", "ipa": "/mæn/" },
+        { "word": "happy", "ipa": "/ˈhæpi/" }
+      ],
+      "contrastIds": ["ae__e-mid", "uh__ae"]
+    },
+    {
+      "id": "uh",
+      "ipa": "ʌ",
+      "category": "Vowel",
+      "group": "短元音",
+      "displayOrder": 14,
+      "shortDescription": "central 的短元音，最省力的那个",
+      "articulation": {
+        "tongue": "放在中间，不前不后",
+        "lips": "完全放松",
+        "jaw": "半开",
+        "keyAction": "什么都不做，让声音自然出来。用力就跑偏了。",
+        "term": "央元音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "æ",
+          "exampleEn": "cut",
+          "soundsLikeEn": "cat",
+          "fix": "别把嘴张那么大，也别把舌头往前推。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "cup", "ipa": "/kʌp/" },
+        { "word": "love", "ipa": "/lʌv/" },
+        { "word": "money", "ipa": "/ˈmʌni/" }
+      ],
+      "contrastIds": ["uh__ae"]
+    },
+    {
+      "id": "u-short",
+      "ipa": "ʊ",
+      "category": "Vowel",
+      "group": "短元音",
+      "displayOrder": 15,
+      "shortDescription": "短、松的后元音",
+      "articulation": {
+        "tongue": "靠后，偏高但不到顶",
+        "lips": "微微收圆，不用力",
+        "jaw": "几乎不动",
+        "keyAction": "圆唇但松，短促。别噘嘴。",
+        "term": "后高松元音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "uː",
+          "exampleEn": "full",
+          "soundsLikeEn": "fool",
+          "fix": "嘴唇别噘出去，音也别拖。这个音很短。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "book", "ipa": "/bʊk/" },
+        { "word": "good", "ipa": "/ɡʊd/" },
+        { "word": "put", "ipa": "/pʊt/" }
+      ],
+      "contrastIds": ["u-short__u-long"]
+    },
+    {
+      "id": "u-long",
+      "ipa": "uː",
+      "category": "Vowel",
+      "group": "长元音",
+      "displayOrder": 16,
+      "shortDescription": "长、圆的后元音",
+      "articulation": {
+        "tongue": "靠后，抬到最高",
+        "lips": "明显收圆、往前噘",
+        "jaw": "几乎不张",
+        "keyAction": "噘嘴、拖长。嘴唇的动作要看得出来。",
+        "term": "后高紧元音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "ʊ",
+          "exampleEn": "fool",
+          "soundsLikeEn": "full",
+          "fix": "长度不够就退回 /ʊ/。噘住嘴多撑半拍。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "food", "ipa": "/fuːd/" },
+        { "word": "school", "ipa": "/skuːl/" },
+        { "word": "true", "ipa": "/truː/" }
+      ],
+      "contrastIds": ["u-short__u-long"]
+    },
+    {
+      "id": "th-voiceless",
+      "ipa": "θ",
+      "category": "Consonant",
+      "group": "摩擦音",
+      "displayOrder": 30,
+      "shortDescription": "舌尖伸到齿间的清摩擦音",
+      "articulation": {
+        "tongue": "舌尖轻轻搭在上下齿之间，露出来一点",
+        "lips": "自然张开，不参与",
+        "airflow": "气从舌头和牙齿的缝里持续漏出去",
+        "voicing": "不振动声带",
+        "keyAction": "舌尖别顶住牙齿背面，让它搭在齿缝上，气一直漏。",
+        "term": "清齿间摩擦音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "s",
+          "exampleEn": "think",
+          "soundsLikeEn": "sink",
+          "fix": "舌尖不能缩在嘴里。伸出来一点点，让牙齿轻轻压住它。"
+        },
+        {
+          "substitute": "t",
+          "exampleEn": "three",
+          "soundsLikeEn": "tree",
+          "fix": "气被完全堵住了才会变成 /t/。要让气一直漏出去，不要爆开。"
+        },
+        {
+          "substitute": "f",
+          "exampleEn": "thought",
+          "soundsLikeEn": "fought",
+          "fix": "别用下唇碰上齿——那是 /f/。这个音靠的是舌尖。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "think", "ipa": "/θɪŋk/" },
+        { "word": "three", "ipa": "/θriː/" },
+        { "word": "nothing", "ipa": "/ˈnʌθɪŋ/" },
+        { "word": "mouth", "ipa": "/maʊθ/" }
+      ],
+      "contrastIds": ["th-voiceless__s", "f__th-voiceless"]
+    },
+    {
+      "id": "th-voiced",
+      "ipa": "ð",
+      "category": "Consonant",
+      "group": "摩擦音",
+      "displayOrder": 31,
+      "shortDescription": "和 /θ/ 一样的口型，但声带在振",
+      "articulation": {
+        "tongue": "舌尖搭在上下齿之间，和 /θ/ 完全一样",
+        "airflow": "气持续漏出",
+        "voicing": "声带振动——摸喉咙能感觉到",
+        "keyAction": "口型照 /θ/ 摆好，然后出声。同一个 th，两个音。",
+        "term": "浊齿间摩擦音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "d",
+          "exampleEn": "they",
+          "soundsLikeEn": "day",
+          "fix": "舌尖别顶住上齿龈。它应该在牙齿中间，而且气不断。"
+        },
+        {
+          "substitute": "z",
+          "exampleEn": "then",
+          "soundsLikeEn": "zen",
+          "fix": "舌尖伸到齿间去，不要留在嘴里。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "this", "ipa": "/ðɪs/" },
+        { "word": "there", "ipa": "/ðer/" },
+        { "word": "mother", "ipa": "/ˈmʌðər/" }
+      ],
+      "contrastIds": []
+    },
+    {
+      "id": "s",
+      "ipa": "s",
+      "category": "Consonant",
+      "group": "摩擦音",
+      "displayOrder": 32,
+      "shortDescription": "舌尖靠近上齿龈的清摩擦音",
+      "articulation": {
+        "tongue": "舌尖靠近上齿龈，留一条窄缝",
+        "lips": "自然，不圆",
+        "airflow": "气从窄缝里挤出去，声音尖",
+        "voicing": "不振动声带",
+        "keyAction": "舌尖在嘴里，不伸出来。这是它和 /θ/ 唯一的区别。",
+        "term": "清齿龈摩擦音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "ʃ",
+          "exampleEn": "sea",
+          "soundsLikeEn": "she",
+          "fix": "嘴唇别收圆，舌头别往后。/s/ 的声音更尖更细。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "sit", "ipa": "/sɪt/" },
+        { "word": "pass", "ipa": "/pæs/" },
+        { "word": "outside", "ipa": "/ˌaʊtˈsaɪd/" }
+      ],
+      "contrastIds": ["th-voiceless__s", "s__sh"]
+    },
+    {
+      "id": "z",
+      "ipa": "z",
+      "category": "Consonant",
+      "group": "摩擦音",
+      "displayOrder": 33,
+      "shortDescription": "和 /s/ 一样的口型，声带在振",
+      "articulation": {
+        "tongue": "舌尖靠近上齿龈",
+        "airflow": "持续，带嗡嗡的振动",
+        "voicing": "声带振动",
+        "keyAction": "摆好 /s/ 的口型再出声。词尾的 /z/ 最容易被读成 /s/。",
+        "term": "浊齿龈摩擦音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "s",
+          "exampleEn": "eyes",
+          "soundsLikeEn": "ice",
+          "fix": "词尾也要让声带振起来，不能一到结尾就松掉。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "zoo", "ipa": "/zuː/" },
+        { "word": "please", "ipa": "/pliːz/" },
+        { "word": "because", "ipa": "/bɪˈkʌz/" }
+      ],
+      "contrastIds": []
+    },
+    {
+      "id": "sh",
+      "ipa": "ʃ",
+      "category": "Consonant",
+      "group": "摩擦音",
+      "displayOrder": 34,
+      "shortDescription": "舌面靠后、嘴唇微圆的清摩擦音",
+      "articulation": {
+        "tongue": "舌面抬起来靠近硬腭，比 /s/ 靠后",
+        "lips": "微微收圆、往前送",
+        "airflow": "面积更大的气流，声音更闷",
+        "voicing": "不振动声带",
+        "keyAction": "舌头往后退一点，嘴唇收圆。和中文的「师」还不一样，别卷舌。",
+        "term": "清腭龈摩擦音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "s",
+          "exampleEn": "she",
+          "soundsLikeEn": "sea",
+          "fix": "舌头往后、嘴唇收圆，两个动作一起做。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "she", "ipa": "/ʃiː/" },
+        { "word": "fish", "ipa": "/fɪʃ/" },
+        { "word": "station", "ipa": "/ˈsteɪʃn/" }
+      ],
+      "contrastIds": ["s__sh"]
+    },
+    {
+      "id": "f",
+      "ipa": "f",
+      "category": "Consonant",
+      "group": "摩擦音",
+      "displayOrder": 35,
+      "shortDescription": "上齿轻碰下唇的清摩擦音",
+      "articulation": {
+        "tongue": "不参与",
+        "lips": "下唇轻轻贴住上齿",
+        "airflow": "气从唇齿的缝里出去",
+        "voicing": "不振动声带",
+        "keyAction": "上齿搭在下唇上，吹气。舌头完全不动。",
+        "term": "清唇齿摩擦音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "θ",
+          "exampleEn": "free",
+          "soundsLikeEn": "three",
+          "fix": "别把舌尖伸出来。这个音只用嘴唇和牙齿。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "food", "ipa": "/fuːd/" },
+        { "word": "coffee", "ipa": "/ˈkɔːfi/" },
+        { "word": "safe", "ipa": "/seɪf/" }
+      ],
+      "contrastIds": ["f__th-voiceless", "v__f"]
+    },
+    {
+      "id": "v",
+      "ipa": "v",
+      "category": "Consonant",
+      "group": "摩擦音",
+      "displayOrder": 36,
+      "shortDescription": "和 /f/ 一样的口型，声带在振",
+      "articulation": {
+        "tongue": "不参与",
+        "lips": "下唇轻贴上齿，保持接触",
+        "airflow": "持续摩擦，不是一下就放开",
+        "voicing": "声带振动",
+        "keyAction": "上齿咬住下唇，然后出声。中文里没有这个音，所以最容易滑成 /w/。",
+        "term": "浊唇齿摩擦音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "w",
+          "exampleEn": "very",
+          "soundsLikeEn": "wary",
+          "fix": "嘴唇不能圆起来。牙齿必须碰到下唇，而且要碰住不放。"
+        },
+        {
+          "substitute": "f",
+          "exampleEn": "save",
+          "soundsLikeEn": "safe",
+          "fix": "口型对了但没出声。摸着喉咙读，应该能感觉到振动。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "very", "ipa": "/ˈveri/" },
+        { "word": "love", "ipa": "/lʌv/" },
+        { "word": "never", "ipa": "/ˈnevər/" }
+      ],
+      "contrastIds": ["v__w", "v__f"]
+    },
+    {
+      "id": "w",
+      "ipa": "w",
+      "category": "Consonant",
+      "group": "近音",
+      "displayOrder": 40,
+      "shortDescription": "圆唇的滑音",
+      "articulation": {
+        "tongue": "舌后部抬起来靠近软腭",
+        "lips": "先收圆、往前噘，然后滑向后面的元音",
+        "voicing": "声带振动",
+        "keyAction": "嘴唇先噘起来再张开，中间不能碰到牙齿。",
+        "term": "浊唇软腭近音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "v",
+          "exampleEn": "wine",
+          "soundsLikeEn": "vine",
+          "fix": "牙齿别碰下唇。这个音从头到尾嘴唇都是圆的。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "we", "ipa": "/wiː/" },
+        { "word": "water", "ipa": "/ˈwɔːtər/" },
+        { "word": "away", "ipa": "/əˈweɪ/" }
+      ],
+      "contrastIds": ["v__w"]
+    },
+    {
+      "id": "r",
+      "ipa": "r",
+      "category": "Consonant",
+      "group": "近音",
+      "displayOrder": 41,
+      "shortDescription": "舌尖不碰任何地方的卷音",
+      "articulation": {
+        "tongue": "舌尖抬起来朝后卷，但**不接触**上颚",
+        "lips": "微微收圆",
+        "voicing": "声带振动",
+        "keyAction": "舌尖悬空。碰到上颚就变成 /l/ 或者一个中文的「日」。",
+        "term": "浊齿龈近音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "l",
+          "exampleEn": "right",
+          "soundsLikeEn": "light",
+          "fix": "关键在舌尖碰不碰得到上颚：/l/ 碰，/r/ 不碰。先只练这一个动作。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "red", "ipa": "/red/" },
+        { "word": "problem", "ipa": "/ˈprɑːbləm/" },
+        { "word": "sorry", "ipa": "/ˈsɑːri/" }
+      ],
+      "contrastIds": ["l__r"]
+    },
+    {
+      "id": "l",
+      "ipa": "l",
+      "category": "Consonant",
+      "group": "近音",
+      "displayOrder": 42,
+      "shortDescription": "舌尖顶住上齿龈，气从两侧走",
+      "articulation": {
+        "tongue": "舌尖抵住上齿龈并停住",
+        "airflow": "气从舌头两侧绕过去",
+        "voicing": "声带振动",
+        "keyAction": "舌尖要真的顶上去、停一下。这是它和 /r/ 唯一的区别。",
+        "term": "浊齿龈边近音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "r",
+          "exampleEn": "light",
+          "soundsLikeEn": "right",
+          "fix": "舌尖没顶到位就会滑成 /r/。顶住，停半拍再走。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "light", "ipa": "/laɪt/" },
+        { "word": "little", "ipa": "/ˈlɪtl/" },
+        { "word": "school", "ipa": "/skuːl/" }
+      ],
+      "contrastIds": ["l__r"]
+    },
+    {
+      "id": "n",
+      "ipa": "n",
+      "category": "Consonant",
+      "group": "鼻音",
+      "displayOrder": 50,
+      "shortDescription": "舌尖顶住上齿龈的鼻音",
+      "articulation": {
+        "tongue": "舌尖抵住上齿龈",
+        "airflow": "气全部从鼻子出去",
+        "voicing": "声带振动",
+        "keyAction": "舌尖顶住前面。收尾时舌头要在上齿龈上，不能垮下去。",
+        "term": "浊齿龈鼻音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "ŋ",
+          "exampleEn": "sin",
+          "soundsLikeEn": "sing",
+          "fix": "很多方言里前后鼻音不分。收尾时确认舌尖顶到了前面的齿龈。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "no", "ipa": "/noʊ/" },
+        { "word": "thin", "ipa": "/θɪn/" },
+        { "word": "dinner", "ipa": "/ˈdɪnər/" }
+      ],
+      "contrastIds": ["n__ng"]
+    },
+    {
+      "id": "ng",
+      "ipa": "ŋ",
+      "category": "Consonant",
+      "group": "鼻音",
+      "displayOrder": 51,
+      "shortDescription": "舌后部顶住软腭的鼻音",
+      "articulation": {
+        "tongue": "舌根抬起来顶住软腭，舌尖放平不动",
+        "airflow": "气从鼻子出去",
+        "voicing": "声带振动",
+        "keyAction": "舌尖不要动。发力的是舌头后半截。",
+        "term": "浊软腭鼻音"
+      },
+      "commonErrors": [
+        {
+          "substitute": "n",
+          "exampleEn": "sing",
+          "soundsLikeEn": "sin",
+          "fix": "舌尖别往前跑。整个动作发生在嘴的后半部分。"
+        }
+      ],
+      "exampleWords": [
+        { "word": "sing", "ipa": "/sɪŋ/" },
+        { "word": "thing", "ipa": "/θɪŋ/" },
+        { "word": "long", "ipa": "/lɔːŋ/" }
+      ],
+      "contrastIds": ["n__ng"]
+    }
+  ],
+  "contrasts": [
+    {
+      "id": "i-short__i-long",
+      "leftPhonemeId": "i-short",
+      "rightPhonemeId": "i-long",
+      "difficulty": 0.95,
+      "minimalPairs": [
+        { "leftWord": "ship", "rightWord": "sheep", "leftIpa": "/ʃɪp/", "rightIpa": "/ʃiːp/", "note": "最经典的一对，也最容易在真实句子里出事。" },
+        { "leftWord": "sit", "rightWord": "seat", "leftIpa": "/sɪt/", "rightIpa": "/siːt/" },
+        { "leftWord": "live", "rightWord": "leave", "leftIpa": "/lɪv/", "rightIpa": "/liːv/", "note": "两个都是常用动词，混了整句意思就反了。" },
+        { "leftWord": "fill", "rightWord": "feel", "leftIpa": "/fɪl/", "rightIpa": "/fiːl/" },
+        { "leftWord": "bit", "rightWord": "beat", "leftIpa": "/bɪt/", "rightIpa": "/biːt/" },
+        { "leftWord": "hill", "rightWord": "heal", "leftIpa": "/hɪl/", "rightIpa": "/hiːl/" }
+      ]
+    },
+    {
+      "id": "l__r",
+      "leftPhonemeId": "l",
+      "rightPhonemeId": "r",
+      "difficulty": 0.9,
+      "minimalPairs": [
+        { "leftWord": "light", "rightWord": "right", "leftIpa": "/laɪt/", "rightIpa": "/raɪt/" },
+        { "leftWord": "lice", "rightWord": "rice", "leftIpa": "/laɪs/", "rightIpa": "/raɪs/" },
+        { "leftWord": "low", "rightWord": "row", "leftIpa": "/loʊ/", "rightIpa": "/roʊ/" },
+        { "leftWord": "glass", "rightWord": "grass", "leftIpa": "/ɡlæs/", "rightIpa": "/ɡræs/", "note": "夹在辅音后面时最难听出来。" },
+        { "leftWord": "collect", "rightWord": "correct", "leftIpa": "/kəˈlekt/", "rightIpa": "/kəˈrekt/" },
+        { "leftWord": "play", "rightWord": "pray", "leftIpa": "/pleɪ/", "rightIpa": "/preɪ/" }
+      ]
+    },
+    {
+      "id": "th-voiceless__s",
+      "leftPhonemeId": "th-voiceless",
+      "rightPhonemeId": "s",
+      "difficulty": 0.85,
+      "minimalPairs": [
+        { "leftWord": "think", "rightWord": "sink", "leftIpa": "/θɪŋk/", "rightIpa": "/sɪŋk/" },
+        { "leftWord": "thick", "rightWord": "sick", "leftIpa": "/θɪk/", "rightIpa": "/sɪk/" },
+        { "leftWord": "mouth", "rightWord": "mouse", "leftIpa": "/maʊθ/", "rightIpa": "/maʊs/", "note": "词尾比词首更难听出来。" },
+        { "leftWord": "path", "rightWord": "pass", "leftIpa": "/pæθ/", "rightIpa": "/pæs/" },
+        { "leftWord": "thing", "rightWord": "sing", "leftIpa": "/θɪŋ/", "rightIpa": "/sɪŋ/" }
+      ]
+    },
+    {
+      "id": "f__th-voiceless",
+      "leftPhonemeId": "f",
+      "rightPhonemeId": "th-voiceless",
+      "difficulty": 0.75,
+      "minimalPairs": [
+        { "leftWord": "free", "rightWord": "three", "leftIpa": "/friː/", "rightIpa": "/θriː/" },
+        { "leftWord": "fought", "rightWord": "thought", "leftIpa": "/fɔːt/", "rightIpa": "/θɔːt/" },
+        { "leftWord": "deaf", "rightWord": "death", "leftIpa": "/def/", "rightIpa": "/deθ/" },
+        { "leftWord": "first", "rightWord": "thirst", "leftIpa": "/fɜːrst/", "rightIpa": "/θɜːrst/" }
+      ]
+    },
+    {
+      "id": "v__w",
+      "leftPhonemeId": "v",
+      "rightPhonemeId": "w",
+      "difficulty": 0.8,
+      "minimalPairs": [
+        { "leftWord": "vine", "rightWord": "wine", "leftIpa": "/vaɪn/", "rightIpa": "/waɪn/" },
+        { "leftWord": "vest", "rightWord": "west", "leftIpa": "/vest/", "rightIpa": "/west/" },
+        { "leftWord": "veal", "rightWord": "wheel", "leftIpa": "/viːl/", "rightIpa": "/wiːl/" },
+        { "leftWord": "vary", "rightWord": "wary", "leftIpa": "/ˈveri/", "rightIpa": "/ˈweri/" }
+      ]
+    },
+    {
+      "id": "v__f",
+      "leftPhonemeId": "v",
+      "rightPhonemeId": "f",
+      "difficulty": 0.6,
+      "minimalPairs": [
+        { "leftWord": "van", "rightWord": "fan", "leftIpa": "/væn/", "rightIpa": "/fæn/" },
+        { "leftWord": "vine", "rightWord": "fine", "leftIpa": "/vaɪn/", "rightIpa": "/faɪn/" },
+        { "leftWord": "save", "rightWord": "safe", "leftIpa": "/seɪv/", "rightIpa": "/seɪf/", "note": "词尾清浊之分，中文母语者最常在这里丢掉振动。" },
+        { "leftWord": "leave", "rightWord": "leaf", "leftIpa": "/liːv/", "rightIpa": "/liːf/" }
+      ]
+    },
+    {
+      "id": "ae__e-mid",
+      "leftPhonemeId": "ae",
+      "rightPhonemeId": "e-mid",
+      "difficulty": 0.7,
+      "minimalPairs": [
+        { "leftWord": "bad", "rightWord": "bed", "leftIpa": "/bæd/", "rightIpa": "/bed/" },
+        { "leftWord": "man", "rightWord": "men", "leftIpa": "/mæn/", "rightIpa": "/men/", "note": "单复数听不出来，整句就跟着错。" },
+        { "leftWord": "pat", "rightWord": "pet", "leftIpa": "/pæt/", "rightIpa": "/pet/" },
+        { "leftWord": "sad", "rightWord": "said", "leftIpa": "/sæd/", "rightIpa": "/sed/" }
+      ]
+    },
+    {
+      "id": "uh__ae",
+      "leftPhonemeId": "uh",
+      "rightPhonemeId": "ae",
+      "difficulty": 0.65,
+      "minimalPairs": [
+        { "leftWord": "cup", "rightWord": "cap", "leftIpa": "/kʌp/", "rightIpa": "/kæp/" },
+        { "leftWord": "cut", "rightWord": "cat", "leftIpa": "/kʌt/", "rightIpa": "/kæt/" },
+        { "leftWord": "bun", "rightWord": "ban", "leftIpa": "/bʌn/", "rightIpa": "/bæn/" },
+        { "leftWord": "hut", "rightWord": "hat", "leftIpa": "/hʌt/", "rightIpa": "/hæt/" }
+      ]
+    },
+    {
+      "id": "n__ng",
+      "leftPhonemeId": "n",
+      "rightPhonemeId": "ng",
+      "difficulty": 0.7,
+      "minimalPairs": [
+        { "leftWord": "sin", "rightWord": "sing", "leftIpa": "/sɪn/", "rightIpa": "/sɪŋ/" },
+        { "leftWord": "thin", "rightWord": "thing", "leftIpa": "/θɪn/", "rightIpa": "/θɪŋ/" },
+        { "leftWord": "ban", "rightWord": "bang", "leftIpa": "/bæn/", "rightIpa": "/bæŋ/" },
+        { "leftWord": "win", "rightWord": "wing", "leftIpa": "/wɪn/", "rightIpa": "/wɪŋ/" }
+      ]
+    },
+    {
+      "id": "u-short__u-long",
+      "leftPhonemeId": "u-short",
+      "rightPhonemeId": "u-long",
+      "difficulty": 0.6,
+      "minimalPairs": [
+        { "leftWord": "full", "rightWord": "fool", "leftIpa": "/fʊl/", "rightIpa": "/fuːl/" },
+        { "leftWord": "pull", "rightWord": "pool", "leftIpa": "/pʊl/", "rightIpa": "/puːl/" },
+        { "leftWord": "look", "rightWord": "Luke", "leftIpa": "/lʊk/", "rightIpa": "/luːk/" },
+        { "leftWord": "would", "rightWord": "wooed", "leftIpa": "/wʊd/", "rightIpa": "/wuːd/" }
+      ]
+    },
+    {
+      "id": "s__sh",
+      "leftPhonemeId": "s",
+      "rightPhonemeId": "sh",
+      "difficulty": 0.5,
+      "minimalPairs": [
+        { "leftWord": "sea", "rightWord": "she", "leftIpa": "/siː/", "rightIpa": "/ʃiː/" },
+        { "leftWord": "save", "rightWord": "shave", "leftIpa": "/seɪv/", "rightIpa": "/ʃeɪv/" },
+        { "leftWord": "sock", "rightWord": "shock", "leftIpa": "/sɑːk/", "rightIpa": "/ʃɑːk/" },
+        { "leftWord": "sign", "rightWord": "shine", "leftIpa": "/saɪn/", "rightIpa": "/ʃaɪn/" }
+      ]
+    }
+  ]
+}

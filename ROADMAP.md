@@ -603,13 +603,21 @@ Claude Design 稿为准。核心口径三条：**听辨和发音分开记、分�
 
 ### M21.1 地基：领域层 + 音位表 + 三张表
 
-- [ ] `domain/pronunciation`：音位 / 对比 / 最小对立词的纯 Kotlin 模型，
+- [x] `domain/pronunciation`：音位 / 对比 / 最小对立词的纯 Kotlin 模型，
       `PronunciationStage` 五级，`SkillEstimate`（分数 + 样本数 + 置信度），
       听辨与发音的评分函数、阶段推导、推荐队列配比、提示阶梯与难度带。全部可 JVM 单测。
-- [ ] `app/src/main/assets/phonemes_en_us.json`：美音音位、发音动作、中文母语者常见误读、
-      例词、音位对与最小对立词表。`PhonemeCatalog` 接口在 domain，
+- [x] `app/src/main/assets/phonemes_en_us.json`：19 个美音音位、11 组对比、49 对最小对立词，
+      带发音动作、中文母语者常见误读和例词。`PhonemeCatalog` 接口在 domain，
       `AssetPhonemeCatalog` 在 `core/data` 读它——和 `WordFrequencyIndex` 同一条路子。
-- [ ] Room v23 三张新表 + `PronunciationDao` + `PronunciationRepository`，自动迁移。
+- [x] Room v23 三张新表 + `PronunciationDao` + `PronunciationRepository`，自动迁移。
+      仓储每次作答后由记录**全量重算**聚合状态，不做增量更新：增量做不到「旧的自然滑出窗口」，
+      而且一次写坏会永远留在那个数里。
+
+验证：`PronunciationScoringTest` 守住证据不足不下结论、看答案那一题不计分、
+单次异常不构成稳定问题、录音不可用不进分、听得出不等于发得出、一个词读顺了不算稳；
+`PronunciationPracticeTest` 守住提示五级单调、难度带的上下调、证据不足不插队，
+以及 assets 那份音位表自身的自洽（引用的 id 都存在、每组至少三对词、常见误读四段齐全）。
+`assembleDebug` 与 `testDebugUnitTest` 通过。
 
 ### M21.2 音位卡与全部声音
 
