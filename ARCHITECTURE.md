@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.5"
+version: "1.6"
 updated: "2026-09-07"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -439,6 +439,36 @@ interface ReviewScheduler {
   ——**只读缓存，绝不现搜**。阅读点开等三秒会毁掉阅读节奏，图是文章生成完那次预取好的（§48、§49）。
 - 图片区在**释义之后、例句之前**，不在词头之上：它可能没有也可能加载失败，放最上面时
   收起会让词头每次开卡都跳位。
+
+### 发音与音标（`发音与音标学习DESIGN.md`，D-077）
+
+产品上独立、基础设施上完全复用的一个模块。它**不接全局学习系统**：不写 `ErrorRecord`、
+不进 FSRS 与每日队列、不改 Mastery 和 CEFR，因此不反向依赖 `KnowledgeRepository`。
+
+- **音位表是静态资源，不进库。** `app/src/main/assets/phonemes_en_us.json` 存音位、发音动作、
+  中文母语者常见误读、例词、音位对和最小对立词表。分层落点照 `WordFrequencyIndex` 的先例：
+  `domain/pronunciation/PhonemeCatalog.kt` 定义接口和纯 Kotlin 模型，
+  `core/data/AssetPhonemeCatalog` 读 assets 实现它。**读不出来不算错误**——退化成空目录，
+  模块首页显示「音位表读不出来」，不影响 App 其余部分。
+  它没有任何用户状态：换一版词表重装就生效，进了库反而要为「改词表」写迁移。
+- **三张表（Room v23，自动迁移，老表一列没动）：**
+  `pronunciation_progress` 每个目标（音位 id 或音位对 id）一行，装听辨与发音各自的分数、
+  样本数、阶段和最近练习时间；`perception_attempts` 和 `production_attempts` 是追加式记录，
+  分别存每一次听辨作答（答案、对错、重放次数、提示级别、反应时间）和每一次跟读
+  （文本、层级、服务原始分、归一化分、音素级证据 JSON、录音质量）。
+  聚合状态可以由记录重算，不只保存一个说不清来历的最终分数——和 `LearningEvent` 同一条原则。
+- **两条能力线不合并。** `SkillEstimate`（分数 + 样本数 + 置信度）在听辨和发音上各存一份，
+  数据层不提供把两者平均的方法，界面上也没有一处显示合成总分。能听出来不等于能发出来，
+  合成之后这个差距就看不见了，而它恰恰是这个模块要解决的问题。
+- **样本不够就不是结论。** 样本少于 `SkillEstimate.MIN_CONFIDENT_SAMPLES` 的目标不进推荐队列、
+  不排优先级、界面走灰态并附一句人话。单次异常分不改变任何状态，连续多次才算
+  （设计文档 §26.1、§26.2）。这条判断写在 `domain/pronunciation`，不写在页面里。
+- **不新建语音基础设施。** TTS、录音、发音评估一律走 `SpeechController → SpeechProvider →
+  AzureSpeechProvider`，密钥沿用设置页那一份 Azure 配置，本模块不新增密钥入口。
+  需要音素级证据，因此 `SpeechProvider.assessReading` 增加可选参数 `phonemeLevel`
+  （默认 false，既有调用方行为不变），而不是另开一个评估入口——§0.3 点名的
+  `PronunciationSpeechService` 就是这里最容易犯的错。
+- 本模块的三张表**不进备份**（§9 的 schema 未改）。这是范围取舍，不是技术限制。
 
 ### 页面内返回
 

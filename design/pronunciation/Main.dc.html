@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&family=Roboto+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; background: #FEF7FF; color: #1D1B20; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 390px; min-height: 1000px; background: #FEF7FF; display: flex; flex-direction: column">
+
+  <div style="display: flex; align-items: center; gap: 4px; height: 64px; padding: 0px 4px; flex-shrink: 0">
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="#1D1B20" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div style="font: 400 22px/28px Roboto, sans-serif; color: #1D1B20; flex-grow: 1">发音与音标</div>
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="5.5" r="1.6" fill="#49454F"/><circle cx="12" cy="12" r="1.6" fill="#49454F"/><circle cx="12" cy="18.5" r="1.6" fill="#49454F"/></svg>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 24px; padding: 4px 16px 32px 16px; flex-grow: 1">
+
+    <div style="display: flex; flex-direction: column; gap: 14px; background: #E8DEF8; border-radius: 12px; padding: 16px">
+      <div style="font: 500 12px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #1D192B">今天最值得练</div>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div style="font: 400 32px/40px 'Roboto Mono', monospace; color: #1D192B">/ɪ/</div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 8.5h10l-2.6-2.6M17 15.5H7l2.6 2.6" stroke="#4F378B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div style="font: 400 32px/40px 'Roboto Mono', monospace; color: #1D192B">/iː/</div>
+      </div>
+      <div style="font: 400 14px/20px Roboto, sans-serif; letter-spacing: 0.25px; color: #1D192B">最近 ship 和 sheep 有 4 次听成了同一个。</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #1D192B; width: 30px">听辨</div>
+          <div style="flex-grow: 1; height: 4px; border-radius: 2px; background: #D0C4E8; display: flex">
+            <div style="width: 62%; height: 4px; border-radius: 2px; background: #6750A4"></div>
+          </div>
+          <div style="font: 500 12px/16px 'Roboto Mono', monospace; color: #1D192B; width: 36px; text-align: right">62%</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #1D192B; width: 30px">发音</div>
+          <div style="flex-grow: 1; height: 4px; border-radius: 2px; background: #D0C4E8; display: flex">
+            <div style="width: 71%; height: 4px; border-radius: 2px; background: #6750A4"></div>
+          </div>
+          <div style="font: 500 12px/16px 'Roboto Mono', monospace; color: #1D192B; width: 36px; text-align: right">71%</div>
+        </div>
+      </div>
+      <div style="height: 48px; border-radius: 24px; background: #6750A4; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 2px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 5.5 18.5 12 8 18.5v-13Z" stroke="#FFFFFF" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <div style="font: 500 14px/20px Roboto, sans-serif; letter-spacing: 0.1px; color: #FFFFFF">练 2 分钟</div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div style="font: 500 14px/20px Roboto, sans-serif; letter-spacing: 0.1px; color: #1D1B20">我的声音</div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+        <div style="background: #F3EDF7; border-radius: 12px; padding: 14px 12px; display: flex; flex-direction: column; gap: 6px; min-height: 84px">
+          <div style="font: 500 14px/20px Roboto, sans-serif; letter-spacing: 0.1px; color: #1D1B20">元音</div>
+          <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #49454F">20 个 · 练过 9</div>
+        </div>
+        <div style="background: #F3EDF7; border-radius: 12px; padding: 14px 12px; display: flex; flex-direction: column; gap: 6px; min-height: 84px">
+          <div style="font: 500 14px/20px Roboto, sans-serif; letter-spacing: 0.1px; color: #1D1B20">辅音</div>
+          <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #49454F">24 个 · 练过 6</div>
+        </div>
+        <div style="background: #F3EDF7; border-radius: 12px; padding: 14px 12px; display: flex; flex-direction: column; gap: 6px; min-height: 84px">
+          <div style="font: 500 14px/20px Roboto, sans-serif; letter-spacing: 0.1px; color: #1D1B20">声音对比</div>
+          <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #49454F">12 组</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: baseline; gap: 8px">
+        <div style="font: 500 14px/20px Roboto, sans-serif; letter-spacing: 0.1px; color: #1D1B20; flex-grow: 1">我的薄弱项</div>
+        <div style="font: 500 14px/20px Roboto, sans-serif; letter-spacing: 0.1px; color: #6750A4">查看全部</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+
+        <div style="background: #F3EDF7; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; min-height: 72px">
+          <div style="font: 400 18px/26px 'Roboto Mono', monospace; color: #1D1B20; width: 96px">/ɪ/ ↔ /iː/</div>
+          <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #49454F; width: 30px">听辨</div>
+              <div style="flex-grow: 1; height: 4px; border-radius: 2px; background: #E8DEF8; display: flex"><div style="width: 62%; height: 4px; border-radius: 2px; background: #6750A4"></div></div>
+              <div style="font: 500 12px/16px 'Roboto Mono', monospace; color: #1D1B20; width: 36px; text-align: right">62%</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #49454F; width: 30px">发音</div>
+              <div style="flex-grow: 1; height: 4px; border-radius: 2px; background: #E8DEF8; display: flex"><div style="width: 71%; height: 4px; border-radius: 2px; background: #6750A4"></div></div>
+              <div style="font: 500 12px/16px 'Roboto Mono', monospace; color: #1D1B20; width: 36px; text-align: right">71%</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #F3EDF7; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; min-height: 72px">
+          <div style="font: 400 18px/26px 'Roboto Mono', monospace; color: #1D1B20; width: 96px">/r/ ↔ /l/</div>
+          <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #49454F; width: 30px">听辨</div>
+              <div style="flex-grow: 1; height: 4px; border-radius: 2px; background: #E8DEF8; display: flex"><div style="width: 68%; height: 4px; border-radius: 2px; background: #6750A4"></div></div>
+              <div style="font: 500 12px/16px 'Roboto Mono', monospace; color: #1D1B20; width: 36px; text-align: right">68%</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="#79747E" stroke-width="1.8"/><path d="M12 11.4v5M12 7.8v.8" stroke="#79747E" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">才练了 4 次，这个数还不作数</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #F3EDF7; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; min-height: 72px">
+          <div style="font: 400 18px/26px 'Roboto Mono', monospace; color: #1D1B20; width: 96px">/θ/</div>
+          <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #49454F; width: 30px">发音</div>
+              <div style="flex-grow: 1; height: 4px; border-radius: 2px; background: #E8DEF8; display: flex"><div style="width: 70%; height: 4px; border-radius: 2px; background: #6750A4"></div></div>
+              <div style="font: 500 12px/16px 'Roboto Mono', monospace; color: #1D1B20; width: 36px; text-align: right">70%</div>
+            </div>
+            <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">听得出来，自己读容易变成 /s/</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0px 2px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0" aria-hidden="true"><path d="M3.5 12h3l3-6 3.6 12 3-6h3.4" stroke="#79747E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">音标是标签，声音才是要学的东西。</div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

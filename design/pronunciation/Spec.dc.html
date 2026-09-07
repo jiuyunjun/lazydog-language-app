@@ -1,0 +1,198 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&family=Roboto+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #FEF7FF; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    * { box-sizing: border-box; }
+    .h1 { font-size: 28px; line-height: 36px; font-weight: 600; color: #1D1B20; }
+    .h2 { font-size: 12px; line-height: 16px; letter-spacing: 0.6px; color: #6750A4; font-weight: 500; }
+    .b { font-size: 14px; line-height: 22px; color: #49454F; }
+    .mono { font-family: "Roboto Mono", ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 20px; color: #1D1B20; }
+    .cell { padding: 12px 14px; border-top: 1px solid #CAC4D0; }
+    .hd { padding: 12px 14px; font-size: 13px; font-weight: 500; color: #1D1B20; }
+    .tbl { margin-top: 16px; border: 1px solid #CAC4D0; border-radius: 12px; overflow: hidden; }
+  </style>
+</helmet>
+
+<div style="width: 900px; min-height: 3000px; background: #FEF7FF; padding: 48px 56px">
+
+  <div class="h1">发音与音标 · 界面与交互规范</div>
+  <div class="b" style="margin-top: 8px; max-width: 660px">对应 <span class="mono">发音与音标学习DESIGN.md</span> 1.0 的 P0 范围（§32）。令牌全部取自 <span class="mono">core/designsystem/Color.kt</span>，没有为这个模块新增颜色。这份稿子描述<b>目标形态</b>，不代表已实现——现状看 <span class="mono">ROADMAP.md</span> 和代码。</div>
+
+  <div class="h2" style="margin-top: 40px">1 · 入口与它不碰的东西</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    入口挂在<b>学习</b>页，排在听力训练之后，是第七个入口。它<b>不进今天的必做流程</b>，理由和听力训练一样：这是一个可以完全不碰也能把每日闭环走完的模块，塞进必做会把 10～15 分钟撑爆。
+    底部一级导航仍然是四项，本模块不占位。
+  </div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    按设计文档 §2.2 和 §37，本期<b>只共享基础设施，不共享学习状态</b>：不写全局 <span class="mono">ErrorRecord</span>、不进 FSRS、不进 Daily Learning Queue、不改 Mastery、不动 CEFR，词卡里的音标也<b>不</b>跳到这里来。
+    界面上这意味着三件事：本模块的结束页不出现「今日进度 +1」；首页的推荐只从本模块自己的队列里出；词卡上的 <span class="mono">/ɡrɪp/</span> 保持不可点。
+  </div>
+
+  <div class="h2" style="margin-top: 40px">2 · 画板清单</div>
+  <div class="tbl">
+    <div style="display: grid; grid-template-columns: 200px 1fr; background: #F3EDF7">
+      <div class="hd">画板</div>
+      <div class="hd">覆盖的状态</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">Main</span> 首页</div>
+      <div class="cell b">今天推荐（一个主按钮）· 我的声音三入口 · 薄弱项前三条（含低置信条目的灰态）。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">Onboarding</span> 摸底</div>
+      <div class="cell b">开场说明与权限告知 · 听辨题（无反馈）· 发音采样录音中 · 结果画像三分组。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">SoundCard</span> 音位卡</div>
+      <div class="cell b">大播放 · 舌位图 · 三行发音动作 · 中文母语者误读 · 对比与例词 · 本人表现 · 单一主按钮。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">Perceive</span> 听辨</div>
+      <div class="cell b">答题态 · 答对 · 答错带解释 · Sound → IPA 三选一。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">Produce</span> 跟读</div>
+      <div class="cell b">待录 · 评分反馈（分数 + 逐词证据 + 修正动作 + 双向回放）· 句子跟读。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">Hints</span> 提示与难度</div>
+      <div class="cell b">提示面板走到第 3 级 · 五级提示各放什么 · 难度上下调的触发条件。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">States</span> 边界态</div>
+      <div class="cell b">录音质量差 · 证据不足 · 单次异常 · 无麦克风权限 · 未配置 Azure · 评估失败 · 单音不打分。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">AllSounds</span> 总览</div>
+      <div class="cell b">元音 / 辅音 / 对比分段 · 五种状态的图块 · 状态图例。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">Profile</span> 我的声音</div>
+      <div class="cell b">听得出 / 发得出两个计数 · 五个分组 · 低置信分组 · 排序口径说明。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">SessionEnd</span> 结束页</div>
+      <div class="cell b">前后对比条 · 三条具体证据 · 周进步一行 · 主按钮与「今天到这里」。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 200px 1fr">
+      <div class="cell b"><span class="mono">Dark</span> 深色对照</div>
+      <div class="cell b">推荐卡 · 答错两项 · 评分卡。深色下语义色的取值与浅色不同。</div>
+    </div>
+  </div>
+
+  <div class="h2" style="margin-top: 40px">3 · 双轨评分怎么显示</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    设计文档 §14.3 说数据层必须保留听辨和发音两个方向。界面上把这条执行到底：<b>任何一屏都不出现把两者合成的单一分数</b>，包括首页、总览图块和结束页。
+    Profile 顶部那两个数字（听得出 14 / 发得出 6）是<b>计数</b>，不是平均分，它存在的意义正是让这两条线的差距可见。
+  </div>
+  <div class="tbl">
+    <div style="display: grid; grid-template-columns: 180px 1fr; background: #F3EDF7">
+      <div class="hd">规则</div>
+      <div class="hd">界面上长什么样</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 180px 1fr">
+      <div class="cell b">样本 &lt; 8</div>
+      <div class="cell b">百分比用 <span class="mono">outline #79747E</span>，进度条降到 <span class="mono">outlineVariant</span>，后面挂一句「才练了 N 次，这个数还不作数」。不标红、不进推荐队列、不排优先级。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 180px 1fr">
+      <div class="cell b">单次异常</div>
+      <div class="cell b">不改变任何状态标签、不改变排序、不触发降级文案。界面对这条的唯一表现是：分数<b>没有</b>跳。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 180px 1fr">
+      <div class="cell b">连续低分</div>
+      <div class="cell b">连续 5 次落在低区才改状态。改的时候也只改状态标签和推荐顺序，不弹任何提示。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 180px 1fr">
+      <div class="cell b">降级</div>
+      <div class="cell b">题目变简单，文案不出现「退步」「掉下来了」「重新开始」。降级在界面上必须是静默的。</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 180px 1fr">
+      <div class="cell b">一次分数的权力</div>
+      <div class="cell b">评分卡上「这次 78」旁边必须同时出现最近 5 次，让单次分数在上下文里被读。不允许只显示一个数。</div>
+    </div>
+  </div>
+
+  <div class="h2" style="margin-top: 40px">4 · 一屏只问一件事</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    答题态（<span class="mono">Perceive</span> 01、<span class="mono">Hints</span> 01）上<b>不允许</b>出现：音标、发音位置说明、例词、分数、上一题结果、下一步推荐、任何形式的答案提示。
+    顺序永远是<b>先答 → 再给正确答案 → 再给解释</b>。答错屏的主按钮是「再听一次这两个」而不是「下一题」：错了那一刻是这组对比最值得听的时候，直接推进等于把这一次错误浪费掉。
+  </div>
+
+  <div class="h2" style="margin-top: 40px">5 · 音频</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    同一组对比不能长期只用一个声线，否则用户学会的是「适应这个 TTS」而不是分辨这个音（§24.1）。变化维度按优先级：<b>speaker → 词 → 语境 → 语速</b>；只改音量不算变化。
+    <span class="mono">replayCount</span> 每题都记，它既是难度证据也是提示阶梯 Level 1 的来源。初级不限制重放次数，进阶逐渐收紧，但<b>永远不禁止重放</b>——听不清就是听不清。
+  </div>
+
+  <div class="h2" style="margin-top: 40px">6 · 复用现有语音链路（这是硬约束）</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    设计文档 §25.1 和 <span class="mono">ARCHITECTURE.md</span> §0 同向：本模块的「独立」是产品意义上的独立，<b>不是</b>可以另起一套语音基础设施。
+    TTS、录音、发音评估一律走既有的 <span class="mono">SpeechController → SpeechProvider → AzureSpeechProvider</span>，密钥沿用设置页里那一份 Azure 配置，本模块<b>不新增</b>密钥入口。
+    禁止出现 <span class="mono">PronunciationSpeechService</span> / <span class="mono">AudioEngine</span> / <span class="mono">VoiceManager</span> 这类平行抽象。
+  </div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    播放状态机和并发不变量以 <span class="mono">语音服务DESIGN.md</span> 为准：同一时刻只有一个音源在响，进入录音前必须先停掉正在播的 TTS。
+    <span class="mono">Perceive</span> 里的「再放一次」和 <span class="mono">Produce</span> 里的「听我刚才那次 / 听标准的」都受这条约束。
+  </div>
+
+  <div class="h2" style="margin-top: 40px">7 · Material 3 组件映射</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    听辨选项 = <span class="mono">OutlinedCard</span>（未选）→ 反馈态换 2dp 描边 + container 底色，<b>不用</b> <span class="mono">RadioButton</span>：整块是触摸目标，高度 72dp。<br>
+    总览分段 = <span class="mono">SingleChoiceSegmentedButtonRow</span>。音位图块 = <span class="mono">Card</span>，未学态用 1dp 虚线描边而不是灰底。<br>
+    提示面板 = 页面内的 <span class="mono">Surface</span>（<span class="mono">surfaceContainer</span>，顶部 16dp 圆角），<b>不是</b> <span class="mono">ModalBottomSheet</span>：题目必须一直可见，遮住题目再给提示没有意义。<br>
+    录音按钮 = 88dp 的 <span class="mono">FilledIconButton</span>，长按录音 / 点击开始两种都支持。波形 = 自绘 <span class="mono">Canvas</span>，不引依赖。<br>
+    失败提示 = 行内 <span class="mono">Surface</span>，不是 <span class="mono">Snackbar</span>（会挡住底部主按钮）。
+  </div>
+
+  <div class="h2" style="margin-top: 40px">8 · 无障碍</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    状态一律<b>文字 + 图标 + 进度</b>三重表达，颜色不是唯一信息（§29.1）。「稳了 / 能听辨 / 在练发音」各有自己的图标形状，色盲用户靠形状也能读。<br>
+    IPA 符号必须带 <span class="mono">contentDescription</span>——TalkBack 念 <span class="mono">/ɪ/</span> 会念成乱码，语义标签写「短音 i」。<br>
+    所有触摸目标不小于 48dp；选项卡 72dp。字体放大到 200% 时，音位图块允许换行成两列，不允许截断状态文字。<br>
+    每道听辨题进入时自动播放一次，同时发 <span class="mono">liveRegion</span> 播报「已播放，请选择」，纯听障用户能知道这一题不适用而不是卡住。
+  </div>
+
+  <div class="h2" style="margin-top: 40px">9 · 文案边界</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    按 <span class="mono">UI_BRIEF.md</span> §2.1，本模块里<b>可以随语气变皮</b>的只有：首页那句「音标是标签…」、结束页标题、空状态。<br>
+    <b>任何语气下都照直说</b>的：分数、样本数、状态标签、发音动作说明、错误原因、权限与隐私说明、音标本身。发音指令写错会让用户练错肌肉，这里没有幽默的位置。<br>
+    「今天到这里」和「再练 2 分钟」在结束页是<b>平等选项</b>，前者不带愧疚、不出现积压数字。录音隐私那句（「录完就评分，评完就删」）必须在每个录音屏都出现，不能只在首次说一遍。
+  </div>
+
+  <div class="h2" style="margin-top: 40px">10 · 建议的实现顺序</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    1. 音位与对比的静态数据 + <span class="mono">SoundCard</span> + TTS 播放（不需要评分服务就能做完）。<br>
+    2. <span class="mono">Perceive</span> 二选一四态 + <span class="mono">PerceptionAttempt</span> 落库 + 听辨分。<br>
+    3. <span class="mono">Main</span> 首页与模块内推荐队列（40 / 25 / 20 / 15 的配比先写死）。<br>
+    4. <span class="mono">Produce</span> 单词跟读 + Azure Pronunciation Assessment + <span class="mono">States</span> 的四种失败态。<br>
+    5. <span class="mono">Profile</span> + 置信度 + <span class="mono">SessionEnd</span> 的前后对比。<br>
+    6. <span class="mono">Onboarding</span> 摸底（放在最后：它依赖前面所有题型都已经能跑）。<br>
+    7. <span class="mono">Hints</span> 提示阶梯与自适应难度。<br>
+    句中最小对立、多 speaker、Same / Different、短语跟读属于 P1，先不做。
+  </div>
+
+  <div class="h2" style="margin-top: 40px">11 · 我做的假设 · 需要你拍板的</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    <b>假设：</b>入口挂在学习页第七位、不进今天必做流程。设计文档只说了「独立入口」，没说挂在哪一级；按 <span class="mono">UI_BRIEF.md</span> §4.2 的既有分工，学习页是自由学习入口的容器，这里最合适。<br>
+    <b>假设：</b>音位、对比、最小对立词表是<b>随包的静态数据</b>（assets），不走 AI 生成。发音描述和中文误读说明是这个模块的知识基座，让模型每次现编会出现同一个音两种说法。这也意味着它不需要新的 AI 契约。<br>
+    <b>假设：</b>例词和句子的音频由现有 Azure TTS 现合成并缓存，不预置音频文件。<br>
+    <b>假设：</b>「稳了」只是模块内状态，总览页的图例里明说了这一点，避免用户以为它等于全局掌握。<br>
+    <b>需要你定 1：</b>这个模块要<b>四张新表</b>（音位、对比、听辨记录、发音记录）加一次 Room 迁移。按 <span class="mono">AGENTS.md</span> §2，加表要先走架构变更请求——这份稿子只画了界面，没有替你批准这件事。要不要开这个口子，是先做的决定。<br>
+    <b>需要你定 2：</b>多 speaker 在设计文档里是 P1，但 <span class="mono">Perceive</span> Level 3 的价值几乎全在换声线上。只有一个声线时，听辨分到 85% 以上就没什么意义了。是把多 speaker 提到 P0，还是接受第一版的分数在高区不准？<br>
+    <b>需要你定 3：</b>摸底放在最后实现（顺序第 6 条），意味着第一版进来的用户看不到画像，首页推荐得有个冷启动兜底。现在按「先推最常见的三组对比」画的，没画专门的冷启动屏。<br>
+    <b>还有一件事：</b><span class="mono">发音与音标学习DESIGN.md</span> 现在还没登记进 <span class="mono">DOCS.md</span> §3 和 §6，<span class="mono">python tools/check_docs.py</span> 过不去。这份稿子没动它——要不要我顺手补上登记和变更日志，你说一声。
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

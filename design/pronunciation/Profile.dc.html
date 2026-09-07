@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&family=Roboto+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; background: #FEF7FF; color: #1D1B20; }
+    a { color: #6750A4; } a:hover { color: #4F378B; }
+    * { box-sizing: border-box; }
+    .grp { font: 500 14px/20px Roboto, sans-serif; letter-spacing: 0.1px; color: #1D1B20; }
+    .row { background: #F3EDF7; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
+    .tgt { font: 400 18px/26px "Roboto Mono", monospace; color: #1D1B20; width: 96px; flex-shrink: 0; }
+    .cap { font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #49454F; width: 30px; }
+    .num { font: 500 12px/16px "Roboto Mono", monospace; color: #1D1B20; width: 36px; text-align: right; }
+    .trk { flex-grow: 1; height: 4px; border-radius: 2px; background: #E8DEF8; display: flex; }
+    .bar { height: 4px; border-radius: 2px; background: #6750A4; }
+  </style>
+</helmet>
+
+<div style="width: 390px; min-height: 1180px; background: #FEF7FF; display: flex; flex-direction: column">
+
+  <div style="display: flex; align-items: center; gap: 4px; height: 64px; padding: 0px 4px; flex-shrink: 0">
+    <div style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="#1D1B20" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div style="font: 400 22px/28px Roboto, sans-serif; color: #1D1B20; flex-grow: 1">我的声音</div>
+  </div>
+
+  <div style="padding: 4px 16px 32px 16px; display: flex; flex-direction: column; gap: 24px">
+
+    <div style="background: #E8DEF8; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; gap: 20px">
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #1D192B">听得出来</div>
+          <div style="font: 400 28px/36px 'Roboto Mono', monospace; color: #1D192B">14</div>
+        </div>
+        <div style="width: 1px; background: #D0C4E8"></div>
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #1D192B">自己发得出</div>
+          <div style="font: 400 28px/36px 'Roboto Mono', monospace; color: #1D192B">6</div>
+        </div>
+      </div>
+      <div style="font: 400 12px/18px Roboto, sans-serif; color: #1D192B">这两个数不会合成一个总分。听得出来和发得出来是两件事，中间那 8 个就是接下来要干的活。</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <div class="grp" style="flex-grow: 1">需要优先练</div>
+        <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">弱 · 证据够 · 用得上</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div class="row">
+          <div class="tgt">/ɪ/ ↔ /iː/</div>
+          <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+            <div style="display: flex; align-items: center; gap: 8px"><div class="cap">听辨</div><div class="trk"><div class="bar" style="width: 61%"></div></div><div class="num">61%</div></div>
+            <div style="display: flex; align-items: center; gap: 8px"><div class="cap">发音</div><div class="trk"><div class="bar" style="width: 72%"></div></div><div class="num">72%</div></div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="tgt">/r/ ↔ /l/</div>
+          <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+            <div style="display: flex; align-items: center; gap: 8px"><div class="cap">听辨</div><div class="trk"><div class="bar" style="width: 68%"></div></div><div class="num">68%</div></div>
+            <div style="display: flex; align-items: center; gap: 8px"><div class="cap">发音</div><div class="trk"><div class="bar" style="width: 81%"></div></div><div class="num">81%</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div class="grp">听得出，读不准</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div class="row">
+          <div class="tgt">/θ/</div>
+          <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+            <div style="display: flex; align-items: center; gap: 8px"><div class="cap">听辨</div><div class="trk"><div class="bar" style="width: 89%"></div></div><div class="num">89%</div></div>
+            <div style="display: flex; align-items: center; gap: 8px"><div class="cap">发音</div><div class="trk"><div class="bar" style="width: 70%"></div></div><div class="num">70%</div></div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="tgt">/v/</div>
+          <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+            <div style="display: flex; align-items: center; gap: 8px"><div class="cap">听辨</div><div class="trk"><div class="bar" style="width: 86%"></div></div><div class="num">86%</div></div>
+            <div style="display: flex; align-items: center; gap: 8px"><div class="cap">发音</div><div class="trk"><div class="bar" style="width: 66%"></div></div><div class="num">66%</div></div>
+          </div>
+        </div>
+      </div>
+      <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">这一组只排跟读，不排听辨题——耳朵那关已经过了。</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div class="grp">正在变稳</div>
+      <div class="row">
+        <div class="tgt">/æ/ ↔ /e/</div>
+        <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+          <div style="display: flex; align-items: center; gap: 8px"><div class="cap">听辨</div><div class="trk"><div class="bar" style="width: 84%"></div></div><div class="num">84%</div></div>
+          <div style="display: flex; align-items: center; gap: 6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0" aria-hidden="true"><path d="M4.5 16.5 10 11l3.5 3.5L20 7.5" stroke="#2E6B4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #2E6B4F">两周前还是 66%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div class="grp">已经稳定</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <div style="height: 36px; padding: 0px 14px; border-radius: 8px; background: #DCEDE3; display: flex; align-items: center; font: 400 15px/20px 'Roboto Mono', monospace; color: #0F2A1C">/m/</div>
+        <div style="height: 36px; padding: 0px 14px; border-radius: 8px; background: #DCEDE3; display: flex; align-items: center; font: 400 15px/20px 'Roboto Mono', monospace; color: #0F2A1C">/n/</div>
+        <div style="height: 36px; padding: 0px 14px; border-radius: 8px; background: #DCEDE3; display: flex; align-items: center; font: 400 15px/20px 'Roboto Mono', monospace; color: #0F2A1C">/k/</div>
+        <div style="height: 36px; padding: 0px 14px; border-radius: 8px; background: #DCEDE3; display: flex; align-items: center; font: 400 15px/20px 'Roboto Mono', monospace; color: #0F2A1C">/p/</div>
+        <div style="height: 36px; padding: 0px 14px; border-radius: 8px; background: #DCEDE3; display: flex; align-items: center; font: 400 15px/20px 'Roboto Mono', monospace; color: #0F2A1C">/s/</div>
+        <div style="height: 36px; padding: 0px 14px; border-radius: 8px; background: #DCEDE3; display: flex; align-items: center; font: 400 15px/20px 'Roboto Mono', monospace; color: #0F2A1C">/iː/</div>
+      </div>
+      <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">稳定的也会偶尔回来抽查一次，不会就此不再出现。</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div class="grp">还看不准</div>
+      <div style="background: #F3EDF7; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <div style="font: 400 16px/24px 'Roboto Mono', monospace; color: #79747E; flex-grow: 1">/s/ ↔ /θ/</div>
+          <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">练过 3 次</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <div style="font: 400 16px/24px 'Roboto Mono', monospace; color: #79747E; flex-grow: 1">/w/ ↔ /v/</div>
+          <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">练过 2 次</div>
+        </div>
+        <div style="font: 400 11px/16px Roboto, sans-serif; letter-spacing: 0.5px; color: #79747E">样本太少，先不给分也不排优先级，只安排它们多出现几次。</div>
+      </div>
+    </div>
+
+    <div style="background: #F3EDF7; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px">
+      <div style="font: 500 14px/20px Roboto, sans-serif; letter-spacing: 0.1px; color: #1D1B20">这个顺序是怎么排的</div>
+      <div style="font: 400 12px/18px Roboto, sans-serif; color: #49454F">弱到什么程度 × 证据够不够 × 这个音有多常用 × 多久没练了。四项都占权重，所以最弱的那个不一定排第一——只练过三次的不会插队。</div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
