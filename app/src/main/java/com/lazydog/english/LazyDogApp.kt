@@ -36,6 +36,8 @@ import com.lazydog.english.feature.production.ProductionScreen
 import com.lazydog.english.feature.pronunciation.AllSoundsScreen
 import com.lazydog.english.feature.pronunciation.PerceptionScreen
 import com.lazydog.english.feature.pronunciation.ProduceScreen
+import com.lazydog.english.feature.pronunciation.PronunciationHomeScreen
+import com.lazydog.english.feature.pronunciation.VoiceProfileScreen
 import com.lazydog.english.feature.pronunciation.SoundCardScreen
 import com.lazydog.english.feature.proof.ProofChallengeScreen
 import com.lazydog.english.feature.settings.ModelPickScreen
@@ -72,6 +74,8 @@ object Routes {
     const val SpellingProfile = "study/spelling/profile"
     const val ListeningProfile = "listening/profile"
     const val Pronunciation = "pronunciation"
+    const val PronunciationAllSounds = "pronunciation/sounds"
+    const val PronunciationProfile = "pronunciation/profile"
     const val PronunciationSound = "pronunciation/sound/{phonemeId}"
     const val PronunciationPerceive = "pronunciation/perceive/{contrastId}"
     const val PronunciationProduce = "pronunciation/produce/{phonemeId}"
@@ -313,10 +317,26 @@ private fun AppNavHost(
         }
 
         composable(Routes.Pronunciation) {
+            PronunciationHomeScreen(
+                onExit = { navController.popOnce() },
+                onPractice = { id -> navController.navigate(Routes.pronunciationPerceive(id)) },
+                onOpenAllSounds = { navController.navigate(Routes.PronunciationAllSounds) },
+                onOpenProfile = { navController.navigate(Routes.PronunciationProfile) },
+            )
+        }
+
+        composable(Routes.PronunciationAllSounds) {
             AllSoundsScreen(
                 onExit = { navController.popOnce() },
                 onOpenSound = { id -> navController.navigate(Routes.pronunciationSound(id)) },
                 onPracticeContrast = { id -> navController.navigate(Routes.pronunciationPerceive(id)) },
+            )
+        }
+
+        composable(Routes.PronunciationProfile) {
+            VoiceProfileScreen(
+                onExit = { navController.popOnce() },
+                onPractice = { id -> navController.navigate(Routes.pronunciationPerceive(id)) },
             )
         }
 

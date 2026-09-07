@@ -61,6 +61,7 @@ import com.lazydog.english.domain.pronunciation.PerceptionScoring
 import com.lazydog.english.domain.pronunciation.PhonemeContrast
 import com.lazydog.english.domain.pronunciation.PronunciationHint
 import com.lazydog.english.domain.pronunciation.PronunciationTarget
+import com.lazydog.english.domain.pronunciation.SkillEstimate
 import com.lazydog.english.domain.pronunciation.allowsSymbolRecall
 import kotlinx.coroutines.launch
 
@@ -110,6 +111,11 @@ fun PerceptionScreen(
     var askedAt by remember { mutableStateOf(0L) }
     var recentVariants by remember { mutableStateOf(listOf<String>()) }
     var ready by remember { mutableStateOf(false) }
+    // 结束页要给前后对比，所以进来时先把这条线的当前值留一份。
+    var beforeEstimate by remember { mutableStateOf(SkillEstimate.Unknown) }
+    var afterEstimate by remember { mutableStateOf(SkillEstimate.Unknown) }
+    var streak by remember { mutableStateOf(0) }
+    var provenWords by remember { mutableStateOf(listOf<String>()) }
 
     fun promptSource(q: PerceptionQuestion) = PlaybackSource.word(q.promptWord)
 
@@ -124,16 +130,31 @@ fun PerceptionScreen(
         app.speechController.play(promptSource(next))
     }
 
+    fun finish() {
+        phase = Phase.Finished
+        app.speechController.stop()
+        scope.launch {
+            val attempts = repository.recentPerception(targetId)
+            afterEstimate = PerceptionScoring.estimate(attempts)
+            streak = PerceptionScoring.currentStreak(attempts)
+            // 「这一轮分清了 ship / sheep」靠的是它：本轮答对过的词对，去重。
+            provenWords = attempts.sortedBy { it.occurredAt }
+                .takeLast(SESSION_QUESTIONS)
+                .filter { it.correct }
+                .map { it.variantId.substringAfterLast(':') }
+                .distinct()
+        }
+    }
+
     fun advance() {
         val current = contrast ?: return
         if (index >= SESSION_QUESTIONS) {
-            phase = Phase.Finished
-            app.speechController.stop()
+            finish()
             return
         }
         val next = factory.next(current, difficulty, recentVariants)
         if (next == null) {
-            phase = Phase.Finished
+            finish()
             return
         }
         index += 1
@@ -144,6 +165,7 @@ fun PerceptionScreen(
     LaunchedEffect(contrastId) {
         val progress = repository.progressFor(targetId)
         val recent = repository.recentPerception(targetId)
+        beforeEstimate = progress.perception
         val accuracy = PerceptionScoring.recentAccuracy(recent)
         var start = DifficultyPolicy.adjust(PerceptionDifficulty.RotatingPair, accuracy, recent.size)
         // Sound → IPA 只在这个音已经能听辨之后才出（§11.6）。
@@ -237,8 +259,16 @@ fun PerceptionScreen(
         }
         when (val state = phase) {
             Phase.Finished -> SessionSummary(
+                label = contrastLabel(
+                    catalog.phoneme(current.leftPhonemeId),
+                    catalog.phoneme(current.rightPhonemeId),
+                ),
                 correct = correctCount,
                 total = index,
+                before = beforeEstimate,
+                after = afterEstimate,
+                streak = streak,
+                provenWords = provenWords,
                 onAgain = {
                     index = 0
                     correctCount = 0
@@ -619,31 +649,147 @@ private fun Explanation(
 }
 
 /**
- * 一轮练完。
+ * 一轮练完的进步证据（设计文档 §22、§23）。
  *
- * 完整的进步证据页在 M21.5，这里先给「这一轮对了几题」——它是事实，不是评价，
- * 而且不出现 XP、不出现「今天学了几个音标」。
+ * **不出现 XP，也不出现「今天练了 6 道题」。** 这一屏要回答的是能力发生了什么变化：
+ * 前后对比、这一轮分清了哪几对、还差哪一个。
+ *
+ * 「今天到这里」和「再练 2 分钟」是**平等选项**（`UI_BRIEF.md` §2.1 的硬边界）：
+ * 前者不带愧疚，也不出现任何数字。
  */
 @Composable
 private fun SessionSummary(
+    label: String,
     correct: Int,
     total: Int,
+    before: SkillEstimate,
+    after: SkillEstimate,
+    streak: Int,
+    provenWords: List<String>,
     onAgain: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Text("这一轮练完了", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            text = "$total 题里对了 $correct 题",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Button(onClick = onAgain, modifier = Modifier.fillMaxWidth()) { Text("再练一轮") }
+        Text("今天这两分钟的收成", style = MaterialTheme.typography.headlineSmall)
+
+        Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                if (before.hasEvidence && after.hasEvidence) {
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "听辨",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "${before.percent}%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        Text(
+                            text = "→",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        Text(
+                            text = "${after.percent}%",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                    if (!after.confident) {
+                        Text(
+                            text = "才练了 ${after.sampleCount} 次，这个数还不作数。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "第一次练这一组，还没有可比的历史。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+            }
+        }
+
+        if (streak >= 3) {
+            Evidence(
+                title = "连着分对 $streak 次",
+                note = "中间换过词，不是同一道题答了几遍。",
+                positive = true,
+            )
+        }
+        if (provenWords.isNotEmpty()) {
+            Evidence(
+                title = "这一轮分清了：${provenWords.joinToString("、")}",
+                note = "这些是本轮答对的那几对词。",
+                positive = true,
+            )
+        }
+        if (correct < total) {
+            Evidence(
+                title = "还有 ${total - correct} 题没过",
+                note = "同一对音，换个词就又混了。下次从它开始。",
+                positive = false,
+            )
+        }
+
+        Button(onClick = onAgain, modifier = Modifier.fillMaxWidth()) { Text("再练 2 分钟") }
         TextButton(onClick = onExit, modifier = Modifier.fillMaxWidth()) { Text("今天到这里") }
+    }
+}
+
+@Composable
+private fun Evidence(title: String, note: String, positive: Boolean) {
+    val extended = LazyDogTheme.extendedColors
+    Surface(
+        color = if (positive) extended.correctContainer else MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            val onColor = if (positive) {
+                extended.onCorrectContainer
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
+            Text(text = title, style = MaterialTheme.typography.titleSmall, color = onColor)
+            Text(
+                text = note,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (positive) onColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
