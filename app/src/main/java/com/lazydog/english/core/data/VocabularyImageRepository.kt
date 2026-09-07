@@ -2,6 +2,7 @@ package com.lazydog.english.core.data
 
 import com.lazydog.english.core.database.AppDatabase
 import com.lazydog.english.core.database.VocabularySenseImageEntity
+import com.lazydog.english.core.network.ImageDownloader
 import com.lazydog.english.core.network.ImageSearchProvider
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.LearningContentGenerator
@@ -32,11 +33,16 @@ import kotlinx.serialization.json.Json
  * 1. **缓存以词义为单位**，key 是 [SenseKey]，不是词形（§24）。
  * 2. **失败不清空已有内容**：搜不到就是这次没搜到，原来选中的那张还留着（和记忆提示同一条规矩）。
  * 3. **不无限扩大搜索**：一个词义最多发三次请求（主查询 + 两个备用），之后就认了（§29）。
+ *
+ * 选中的那一张会下载到本地留一份（[downloader]，D-076）：外链会失效，
+ * Coil 的磁盘缓存又是系统随时可以回收的空间，两者都不足以让"我挑好的那张图"活到下次复习。
+ * 没配下载器（单测）或者下载失败时一切照旧走外链，不当作错误。
  */
 class VocabularyImageRepository(
     private val database: AppDatabase,
     private val generator: LearningContentGenerator,
     private val search: ImageSearchProvider,
+    private val downloader: ImageDownloader? = null,
     private val now: () -> Instant = Instant::now,
 ) {
     private val dao = database.vocabularyImageDao()
@@ -108,14 +114,39 @@ class VocabularyImageRepository(
     /** 用户在「换一张」里挑了另一张。记下来——这比模型自评分更能说明默认那张不好用（§40）。 */
     suspend fun select(senseKey: SenseKey, index: Int) {
         val entity = dao.get(senseKey.value) ?: return
-        if (index !in decodeAssets(entity.assetsJson).indices) return
+        val assets = decodeAssets(entity.assetsJson)
+        if (index !in assets.indices) return
+        // 换成这张之后它才是"用户挑定的那张"，这时候才值得下载；
+        // 上一张的本地副本留着——换回去是常事，删了就要重下（§40）。
         dao.save(
             entity.copy(
+                assetsJson = encodeAssets(downloadSelected(assets, index)),
                 selectedIndex = index,
                 replacedByUser = entity.replacedByUser || index != entity.selectedIndex,
                 updatedAt = now().toEpochMilli(),
             ),
         )
+    }
+
+    /**
+     * 草稿卡入库了，把图搬到正式的词义键上（§24 的草稿键就是为了这一步）。
+     *
+     * 不搬的话：预览时挑好的图在按下「添加」之后查不到，详情页会重跑一遍
+     * `模型 → Brave`，用户刚做的选择白做。目标键已经有图时不覆盖——
+     * 那多半是同一个词义又被添加了一次，已入库的那份更可信。
+     */
+    suspend fun adoptDraft(draftKey: SenseKey, itemId: Long) {
+        val target = SenseKey.of(itemId)
+        if (draftKey.value == target.value) return
+        val draft = dao.get(draftKey.value) ?: return
+        if (dao.get(target.value) == null) {
+            dao.save(draft.copy(senseKey = target.value, updatedAt = now().toEpochMilli()))
+            // 本地副本的路径跟着记录走了，这里只删草稿这条索引，不动文件。
+            dao.delete(draftKey.value)
+        } else {
+            deleteLocalCopies(decodeAssets(draft.assetsJson))
+            dao.delete(draftKey.value)
+        }
     }
 
     /**
@@ -127,9 +158,13 @@ class VocabularyImageRepository(
         val assets = decodeAssets(entity.assetsJson)
         if (index !in assets.indices) return
         val remaining = assets.filterIndexed { i, _ -> i != index }
+        // 这张已经确认打不开，本地那份（如果下过）同样没用了。
+        deleteLocalCopies(listOf(assets[index]))
         dao.save(
             entity.copy(
-                assetsJson = encodeAssets(remaining),
+                assetsJson = encodeAssets(
+                    if (remaining.isEmpty()) remaining else downloadSelected(remaining, 0),
+                ),
                 selectedIndex = 0,
                 failureReason = if (remaining.isEmpty()) ImageFailureReason.NoResults.name else "",
                 updatedAt = now().toEpochMilli(),
@@ -209,6 +244,8 @@ class VocabularyImageRepository(
                 lastFailure = ImageFailureReason.LowSemanticMatch
                 continue
             }
+            // 重搜是覆盖，上一批的本地副本没有记录再指向它们，留着就是垃圾文件。
+            previous?.let { deleteLocalCopies(it.assets) }
             val entity = VocabularySenseImageEntity(
                 senseKey = senseKey.value,
                 term = term,
@@ -216,7 +253,7 @@ class VocabularyImageRepository(
                 strategy = plan.strategy.name,
                 query = query,
                 visualTarget = plan.visualTarget,
-                assetsJson = encodeAssets(ranked),
+                assetsJson = encodeAssets(downloadSelected(ranked, 0)),
                 selectedIndex = 0,
                 failureReason = "",
                 hiddenByUser = false,
@@ -277,6 +314,28 @@ class VocabularyImageRepository(
         promptVersion = 0,
         updatedAt = now().toEpochMilli(),
     )
+
+    /**
+     * 把第 [index] 张下到本地，返回改好 `localPath` 的整批候选。
+     *
+     * 下载失败就原样返回：外链还在，图照常显示，只是这次没留下本地副本——
+     * 和"没搜到"不一样，这不值得让用户看见任何东西（D-076）。
+     */
+    private suspend fun downloadSelected(
+        assets: List<VocabularyImageAsset>,
+        index: Int,
+    ): List<VocabularyImageAsset> {
+        val store = downloader ?: return assets
+        val asset = assets.getOrNull(index) ?: return assets
+        if (asset.localPath.isNotBlank()) return assets
+        val path = store.download(asset.thumbnailUrl.ifBlank { asset.originalUrl }) ?: return assets
+        return assets.mapIndexed { i, item -> if (i == index) item.copy(localPath = path) else item }
+    }
+
+    private suspend fun deleteLocalCopies(assets: List<VocabularyImageAsset>) {
+        val store = downloader ?: return
+        assets.forEach { if (it.localPath.isNotBlank()) store.delete(it.localPath) }
+    }
 
     private fun encodeAssets(assets: List<VocabularyImageAsset>): String =
         json.encodeToString(ListSerializer(VocabularyImageAsset.serializer()), assets)

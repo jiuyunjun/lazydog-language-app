@@ -20,6 +20,8 @@ import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.database.AppDatabase
 import com.lazydog.english.core.data.VocabularyImageRepository
 import com.lazydog.english.core.network.BraveImageSearchClient
+import com.lazydog.english.core.network.ImageDownloader
+import com.lazydog.english.core.network.LocalImageDownloader
 import com.lazydog.english.core.network.BraveSearchClient
 import com.lazydog.english.core.network.ImageSearchProvider
 import com.lazydog.english.domain.generation.WebSearchProvider
@@ -74,9 +76,17 @@ class LazyDogApplication : Application() {
         BraveImageSearchClient(apiKey = { userPreferences.braveApiKey.first() })
     }
 
+    /**
+     * 选中的那张图存进 `filesDir`，不是 `cacheDir`（D-076）：
+     * 系统清缓存、外链失效都不该让用户挑好的配图消失。
+     */
+    val imageDownloader: ImageDownloader by lazy {
+        LocalImageDownloader(java.io.File(filesDir, LocalImageDownloader.DIRECTORY_NAME))
+    }
+
     /** 单词视觉记忆图片：查缓存、找图、换图都在这里，页面不碰 Brave 也不碰模型。 */
     val vocabularyImageRepository: VocabularyImageRepository by lazy {
-        VocabularyImageRepository(database, contentGenerator, imageSearch)
+        VocabularyImageRepository(database, contentGenerator, imageSearch, imageDownloader)
     }
 
     val listeningMaterialRepository: ListeningMaterialRepository by lazy {

@@ -1,5 +1,7 @@
 package com.lazydog.english.domain.vocabulary
 
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -177,5 +179,31 @@ class VisualMemoryTest {
             visualTarget = "一只手紧紧握住金属把手",
         )
         assertEquals("一只手紧紧握住金属把手", state.contentDescriptionZh())
+    }
+
+    // ---- 本地副本（D-076）----
+
+    /**
+     * `localPath` 是后加的字段，老记录的 JSON 里没有它。
+     * 解不出来就整批候选作废的话，用户已有的配图会在升级后一次性全没（§37 的兜底也救不了）。
+     */
+    @Test
+    fun `老候选没有本地路径字段也能解出来`() {
+        val legacy = """[{"thumbnailUrl":"https://img.example/grip.jpg","publisher":"example.com"}]"""
+        val assets = Json { ignoreUnknownKeys = true }
+            .decodeFromString(ListSerializer(VocabularyImageAsset.serializer()), legacy)
+        assertEquals(1, assets.size)
+        assertEquals("", assets.first().localPath)
+    }
+
+    @Test
+    fun `本地路径跟着候选一起存下来`() {
+        val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        val serializer = ListSerializer(VocabularyImageAsset.serializer())
+        val original = listOf(
+            VocabularyImageAsset(thumbnailUrl = "https://img.example/grip.jpg", localPath = "/data/x/abc"),
+        )
+        val restored = json.decodeFromString(serializer, json.encodeToString(serializer, original))
+        assertEquals("/data/x/abc", restored.first().localPath)
     }
 }

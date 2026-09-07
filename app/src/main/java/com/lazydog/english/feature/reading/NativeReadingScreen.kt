@@ -474,7 +474,14 @@ fun NativeReadingScreen(
                             meaningZh = span.meaningZh,
                             ipa = span.pronunciation,
                             exampleZh = span.sourceZh,
-                        )
+                        )?.also { id ->
+                            // 读文章时已经为这个词义预取过图（§49），挂在草稿键上。
+                            // 加进复习后搬到 itemId 上，词卡直接就有图（D-076）。
+                            app.vocabularyImageRepository.adoptDraft(
+                                SenseKey.ofDraft(span.renderedEn, "", span.meaningZh),
+                                id,
+                            )
+                        }
                     } else {
                         app.knowledgeRepository.addExpression(span.renderedEn, span.meaningZh)
                     }

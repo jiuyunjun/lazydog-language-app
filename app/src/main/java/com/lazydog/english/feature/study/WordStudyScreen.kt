@@ -72,6 +72,7 @@ import com.lazydog.english.domain.spelling.SpellingEngine
 import com.lazydog.english.domain.spelling.SpellingFacts
 import com.lazydog.english.domain.spelling.SpellingProgress
 import com.lazydog.english.domain.spelling.SpellingStage
+import com.lazydog.english.domain.vocabulary.SenseKey
 import com.lazydog.english.domain.vocabulary.VocabularyCandidates
 import com.lazydog.english.domain.vocabulary.posLabelZh
 import com.lazydog.english.feature.spelling.SpellingCard
@@ -294,6 +295,12 @@ fun WordStudyScreen(
                     forms = card.forms,
                 )
                 if (id != null) {
+                    // 学的时候这张卡还没有 itemId，配图挂在草稿键上；
+                    // 不搬过来，详情页就会为同一个词义再跑一遍模型 + Brave（D-076）。
+                    app.vocabularyImageRepository.adoptDraft(
+                        SenseKey.ofDraft(card.term, card.pos, card.meaningZh),
+                        id,
+                    )
                     repository.recordReview(id, grade, source = "card")
                     newLearnedCount += 1
                 }

@@ -401,9 +401,12 @@ data class VocabularyMemoryHintEntity(
  * 按词形缓存会让两个意思共用一张图。草稿卡（还没添加到记录）也有 senseKey，
  * 所以预览时找到的图在按下「添加」之后不用重搜；同样因为草稿没有 itemId，这里没有外键。
  *
- * [assetsJson] 存的是**引用**——缩略图地址、原页面地址、来源站名——不是图本身。
- * Brave 负责发现，不等于拿到第三方图片的版权（§33、§35），所以不把原图下载下来长期持有。
- * 代价是外链会失效，靠留一批候选和 [selectedIndex] 依次顶上兜（§37）。
+ * [assetsJson] 存的主要是**引用**——缩略图地址、原页面地址、来源站名。整批候选都只留地址，
+ * 外链失效时靠 [selectedIndex] 依次顶上兜（§37）。
+ *
+ * 例外是**被选中的那一张**：它的缩略图会下到应用私有存储，路径记在候选的 `localPath` 上
+ * （D-076，设计文档 §33/§35 的有意偏离）。理由是这个 App 只给用户本人离线学习用，
+ * 不再分发也不商用；不留副本的话，用户挑定的那张会随外链失效或系统清缓存一起消失。
  */
 @Entity(tableName = "vocabulary_sense_images")
 data class VocabularySenseImageEntity(

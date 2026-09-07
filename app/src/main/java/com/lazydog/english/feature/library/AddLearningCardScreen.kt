@@ -37,6 +37,7 @@ import com.lazydog.english.domain.generation.LearningTargetRequest
 import com.lazydog.english.domain.generation.LearningTargetSuggestion
 import com.lazydog.english.domain.generation.GeneratedWord
 import com.lazydog.english.domain.generation.validateWordCard
+import com.lazydog.english.domain.vocabulary.SenseKey
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -172,6 +173,14 @@ fun AddLearningCardScreen(
             try {
                 val id = word?.let { repository.saveWordCard(it, snapshot, memoryHint) }
                     ?: if (word == null) grammar?.let { repository.saveGrammarCard(it, snapshot) } else null
+                // 预览时挑好的配图挂在草稿键上，入库后搬到 itemId 上，
+                // 否则详情页查不到，会再跑一遍模型 + Brave（D-076）。
+                if (id != null) word?.data?.let { card ->
+                    app.vocabularyImageRepository.adoptDraft(
+                        SenseKey.ofDraft(card.term, card.pos, card.meaningZh),
+                        id,
+                    )
+                }
                 if (id != null) onDismiss()
                 else error = "记录中已经有这张卡了，未重复保存。"
             } catch (cancelled: CancellationException) {

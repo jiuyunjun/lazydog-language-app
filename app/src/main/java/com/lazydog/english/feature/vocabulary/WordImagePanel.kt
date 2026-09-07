@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
+import java.io.File
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.domain.vocabulary.ImageFailureReason
@@ -276,6 +277,13 @@ private fun SectionLabel() {
 }
 
 /**
+ * 有本地副本就用本地的（D-076）：外链失效或者没网时，用户挑定的那张仍然在。
+ * 文件被清掉了就退回外链，不额外报错——下次选中这张时仓储会再下一份。
+ */
+private fun VocabularyImageAsset.displayModel(): Any =
+    localPath.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.exists() } ?: thumbnailUrl
+
+/**
  * 固定 16:9 裁切，而不是按原图比例撑高：候选图的长宽千奇百怪，
  * 跟着原图走会让每张词卡的高度都不一样，翻卡时整页都在跳。
  */
@@ -286,7 +294,7 @@ private fun ImageFrame(
     onBroken: () -> Unit,
 ) {
     AsyncImage(
-        model = asset.thumbnailUrl,
+        model = asset.displayModel(),
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
         onState = { imageState -> if (imageState is AsyncImagePainter.State.Error) onBroken() },
@@ -438,7 +446,7 @@ private fun ImagePickerSheet(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AsyncImage(
-                            model = asset.thumbnailUrl,
+                            model = asset.displayModel(),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
