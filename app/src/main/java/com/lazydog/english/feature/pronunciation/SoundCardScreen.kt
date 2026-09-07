@@ -36,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.LazyDogTheme
@@ -316,7 +315,6 @@ private fun CommonErrors(errors: List<CommonError>) {
                     Text(
                         text = "${error.exampleEn} → 听成 ${error.soundsLikeEn}（读成了 /${error.substituteIpa}/）",
                         style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace,
                         color = LazyDogTheme.extendedColors.onAttentionContainer,
                     )
                     Text(
@@ -344,7 +342,6 @@ private fun ContrastCard(contrast: PhonemeContrast, left: Phoneme?, right: Phone
             Text(
                 text = contrastLabel(left, right),
                 style = MaterialTheme.typography.titleMedium,
-                fontFamily = FontFamily.Monospace,
             )
             contrast.minimalPairs.take(3).forEach { pair ->
                 Text(

@@ -45,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.LazyDogTheme
@@ -456,7 +455,6 @@ private fun ResultGroup(
                                 )
                             } ?: raw,
                             style = MaterialTheme.typography.bodyLarge,
-                            fontFamily = FontFamily.Monospace,
                             color = onContainer,
                             modifier = Modifier.weight(1f),
                         )

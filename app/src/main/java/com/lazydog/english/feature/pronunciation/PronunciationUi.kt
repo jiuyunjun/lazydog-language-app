@@ -163,6 +163,13 @@ fun StageLabel(stage: PronunciationStage, modifier: Modifier = Modifier) {
 /**
  * 音标符号。
  *
+ * **不要给音标设 `FontFamily.Monospace`。** 设计稿里音标是 Roboto Mono，那是因为浏览器
+ * 从 Google Fonts 拉了一份带 IPA 的字体；Android 系统的等宽字体（Droid Sans Mono）
+ * 没有 IPA 扩展和修饰符那两个区段，`ː` `ɪ` `θ` `ŋ` `ʃ` 在真机上全是豆腐块。
+ * 词卡那边的音标一直用的就是默认字体，这里照做。
+ *
+ * 等宽只留给**纯数字**（百分比、分数）——那里的理由是列对齐，而数字等宽字体是有的。
+ *
  * TalkBack 念 `/ɪ/` 会念成一串乱码，所以每个音标都得带一句能念的语义标签
  * （设计文档 §29.1 的无障碍要求）。
  */
@@ -177,7 +184,6 @@ fun IpaText(
     Text(
         text = "/$ipa/",
         style = style,
-        fontFamily = FontFamily.Monospace,
         color = color,
         modifier = modifier.semantics {
             contentDescription = spokenName?.let { "音标 $it" } ?: "音标 $ipa"

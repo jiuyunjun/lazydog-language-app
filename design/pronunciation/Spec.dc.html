@@ -153,6 +153,17 @@
     失败提示 = 行内 <span class="mono">Surface</span>，不是 <span class="mono">Snackbar</span>（会挡住底部主按钮）。
   </div>
 
+  <div class="h2" style="margin-top: 40px">7.1 · 音标不要用等宽字体（这一条这份稿子自己踩过）</div>
+  <div class="b" style="margin-top: 12px; max-width: 660px">
+    这份稿子里的音标是 <span class="mono">Roboto Mono</span>，在浏览器里没问题——页面从 Google Fonts
+    拉了一份带 IPA 的字体。<b>但 Android 上照搬会全变成豆腐块</b>：系统等宽字体（Droid Sans Mono）
+    没有 IPA 扩展（U+0250–02AF）和修饰符（U+02B0–02FF）那两个区段，<span class="mono">ː</span>
+    <span class="mono">ɪ</span> <span class="mono">θ</span> <span class="mono">ŋ</span>
+    <span class="mono">ʃ</span> 一个都画不出来。<br>
+    Compose 里音标用<b>默认字体</b>（词卡那边一直就是这么做的）。等宽只留给<b>纯数字</b>——
+    百分比和分数，那里的理由是列对齐，而数字等宽字体是有的。
+  </div>
+
   <div class="h2" style="margin-top: 40px">8 · 无障碍</div>
   <div class="b" style="margin-top: 12px; max-width: 660px">
     状态一律<b>文字 + 图标 + 进度</b>三重表达，颜色不是唯一信息（§29.1）。「稳了 / 能听辨 / 在练发音」各有自己的图标形状，色盲用户靠形状也能读。<br>

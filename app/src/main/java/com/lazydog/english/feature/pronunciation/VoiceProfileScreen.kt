@@ -126,7 +126,6 @@ fun VoiceProfileScreen(
                                 Text(
                                     text = labelOf(progress, catalog),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    fontFamily = FontFamily.Monospace,
                                     color = LazyDogTheme.extendedColors.onCorrectContainer,
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                                 )
@@ -158,7 +157,6 @@ fun VoiceProfileScreen(
                                     Text(
                                         text = labelOf(progress, catalog),
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontFamily = FontFamily.Monospace,
                                         color = MaterialTheme.colorScheme.outline,
                                         modifier = Modifier.weight(1f),
                                     )
@@ -269,7 +267,6 @@ private fun Group(
                     Text(
                         text = labelOf(progress, catalog),
                         style = MaterialTheme.typography.titleMedium,
-                        fontFamily = FontFamily.Monospace,
                         modifier = Modifier.width(104.dp),
                     )
                     Column(

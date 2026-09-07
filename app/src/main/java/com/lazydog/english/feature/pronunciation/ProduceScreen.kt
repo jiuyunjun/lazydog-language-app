@@ -331,7 +331,6 @@ private fun Prompt(
         Text(
             text = phoneme.exampleWords.firstOrNull { it.word == word }?.ipa.orEmpty(),
             style = MaterialTheme.typography.bodyLarge,
-            fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         OutlinedButton(onClick = onPlaySample) {

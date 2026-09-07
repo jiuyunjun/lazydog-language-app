@@ -216,7 +216,6 @@ fun PerceptionScreen(
                             catalog.phoneme(contrast?.leftPhonemeId.orEmpty()),
                             catalog.phoneme(contrast?.rightPhonemeId.orEmpty()),
                         ),
-                        fontFamily = FontFamily.Monospace,
                     )
                 },
                 navigationIcon = {
@@ -505,7 +504,6 @@ private fun OptionCard(
                 Text(
                     text = option.ipa,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontFamily = FontFamily.Monospace,
                 )
             }
         }
@@ -554,7 +552,6 @@ private fun HintPanel(
                     Text(
                         text = "${option.label}  ${option.ipa}",
                         style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace,
                     )
                 }
             }
@@ -691,7 +688,6 @@ private fun SessionSummary(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.titleLarge,
-                    fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 if (before.hasEvidence && after.hasEvidence) {

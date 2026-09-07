@@ -32,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.domain.pronunciation.PhonemeCatalog
@@ -221,7 +220,6 @@ private fun Recommendation(
                     catalog.phoneme(contrast.rightPhonemeId),
                 ),
                 style = MaterialTheme.typography.headlineMedium,
-                fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             Text(
@@ -298,7 +296,6 @@ private fun WeaknessRow(
             Text(
                 text = label,
                 style = MaterialTheme.typography.titleMedium,
-                fontFamily = FontFamily.Monospace,
                 modifier = Modifier.width(104.dp),
             )
             Column(
