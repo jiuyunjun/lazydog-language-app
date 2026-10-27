@@ -22,14 +22,13 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lazydog.english.core.ai.AiTask
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
-import com.lazydog.english.feature.ask.AskHost
+import com.lazydog.english.core.ask.AskPagePolicy
 import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.production.ProductionScreen
@@ -194,7 +193,7 @@ private fun AppNavHost(
             },
         )
 
-        composable(Routes.Main) {
+        appScreen(Routes.Main, ask = AskPagePolicy.Disabled("首页、学习目录、记录和设置不提供学习提问")) {
             MainScreen(
                 prefs = prefs,
                 knowledgeRepository = knowledgeRepository,
@@ -224,7 +223,7 @@ private fun AppNavHost(
         }
 
         listOf(Routes.AddWordCard, Routes.AddGrammarCard).forEach { route ->
-            composable(route) {
+            appScreen(route, ask = AskPagePolicy.Disabled("记录中的学习卡草稿")) {
                 com.lazydog.english.feature.library.AddLearningCardScreen(
                     isVocab = route == Routes.AddWordCard,
                     app = context.applicationContext as LazyDogApplication,
@@ -234,7 +233,7 @@ private fun AppNavHost(
             }
         }
 
-        composable(Routes.ModelSettings) {
+        appScreen(Routes.ModelSettings, ask = AskPagePolicy.Disabled("模型设置")) {
             ModelSettingsScreen(
                 prefs = prefs,
                 onPick = { task ->
@@ -244,8 +243,9 @@ private fun AppNavHost(
             )
         }
 
-        composable(
+        appScreen(
             route = Routes.ModelPick,
+            ask = AskPagePolicy.Disabled("模型设置"),
             arguments = listOf(navArgument("task") { type = NavType.StringType }),
         ) { entry ->
             ModelPickScreen(
@@ -255,11 +255,11 @@ private fun AppNavHost(
             )
         }
 
-        composable(Routes.Assessment) {
+        appScreen(Routes.Assessment, ask = AskPagePolicy.Disabled("能力测评期间不提供辅助答案")) {
             AssessmentScreen(onExit = { navController.popOnce() })
         }
 
-        composable(Routes.Speaking) {
+        appScreen(Routes.Speaking, ask = AskPagePolicy.Required) {
             SpeakingScreen(
                 prefs = prefs,
                 repository = knowledgeRepository,
@@ -267,58 +267,49 @@ private fun AppNavHost(
             )
         }
 
-        // 学习类页面包一层 AskHost：摇一摇提问只在这些页面可用（DESIGN 屏 45～49）。
-        composable(Routes.Listening) {
-            AskHost {
-                ListeningScreen(
-                    onExit = { navController.popOnce() },
-                    onOpenProfile = { navController.navigate(Routes.ListeningProfile) },
-                )
-            }
+        // 所有页面走 appScreen；提问策略没有默认值，新增页面必须明确选择。
+        appScreen(Routes.Listening, ask = AskPagePolicy.Required) {
+            ListeningScreen(
+                onExit = { navController.popOnce() },
+                onOpenProfile = { navController.navigate(Routes.ListeningProfile) },
+            )
         }
 
-        composable(Routes.Scenario) {
-            AskHost {
-                ScenarioScreen(sessionId = null, onExit = { navController.popOnce() })
-            }
+        appScreen(Routes.Scenario, ask = AskPagePolicy.Required) {
+            ScenarioScreen(sessionId = null, onExit = { navController.popOnce() })
         }
 
-        composable(
+        appScreen(
             route = Routes.ScenarioOpen,
+            ask = AskPagePolicy.Required,
             arguments = listOf(navArgument("sessionId") { type = NavType.LongType }),
         ) { entry ->
-            AskHost {
-                ScenarioScreen(
-                    sessionId = entry.arguments?.getLong("sessionId"),
-                    onExit = { navController.popOnce() },
-                )
-            }
+            ScenarioScreen(
+                sessionId = entry.arguments?.getLong("sessionId"),
+                onExit = { navController.popOnce() },
+            )
         }
 
-        composable(Routes.WordStudy) {
-            AskHost {
-                WordStudyScreen(
-                    repository = knowledgeRepository,
-                    onExit = { navController.popOnce() },
-                )
-            }
+        appScreen(Routes.WordStudy, ask = AskPagePolicy.Required) {
+            WordStudyScreen(
+                repository = knowledgeRepository,
+                onExit = { navController.popOnce() },
+            )
         }
 
-        composable(Routes.Spelling) {
-            AskHost {
-                SpellingScreen(
-                    repository = knowledgeRepository,
-                    onExit = { navController.popOnce() },
-                    onOpenProfile = { navController.navigate(Routes.SpellingProfile) },
-                )
-            }
+        appScreen(Routes.Spelling, ask = AskPagePolicy.Required) {
+            SpellingScreen(
+                repository = knowledgeRepository,
+                onExit = { navController.popOnce() },
+                onOpenProfile = { navController.navigate(Routes.SpellingProfile) },
+            )
         }
 
-        composable(Routes.ListeningProfile) {
+        appScreen(Routes.ListeningProfile, ask = AskPagePolicy.Disabled("听力统计")) {
             ListeningProfileScreen(onExit = { navController.popBackStack() })
         }
 
-        composable(Routes.Pronunciation) {
+        appScreen(Routes.Pronunciation, ask = AskPagePolicy.Disabled("发音训练目录")) {
             PronunciationHomeScreen(
                 onExit = { navController.popOnce() },
                 onScreening = { navController.navigate(Routes.PronunciationScreening) },
@@ -328,7 +319,7 @@ private fun AppNavHost(
             )
         }
 
-        composable(Routes.PronunciationAllSounds) {
+        appScreen(Routes.PronunciationAllSounds, ask = AskPagePolicy.Disabled("音位目录，具体讲解在音位卡")) {
             AllSoundsScreen(
                 onExit = { navController.popOnce() },
                 onOpenSound = { id -> navController.navigate(Routes.pronunciationSound(id)) },
@@ -336,7 +327,7 @@ private fun AppNavHost(
             )
         }
 
-        composable(Routes.PronunciationScreening) {
+        appScreen(Routes.PronunciationScreening, ask = AskPagePolicy.Disabled("首次摸底期间不提供辅助答案")) {
             VoiceScreeningScreen(
                 onExit = { navController.popOnce() },
                 onPractice = { id ->
@@ -346,15 +337,16 @@ private fun AppNavHost(
             )
         }
 
-        composable(Routes.PronunciationProfile) {
+        appScreen(Routes.PronunciationProfile, ask = AskPagePolicy.Disabled("发音统计")) {
             VoiceProfileScreen(
                 onExit = { navController.popOnce() },
                 onPractice = { id -> navController.navigate(Routes.pronunciationPerceive(id)) },
             )
         }
 
-        composable(
+        appScreen(
             route = Routes.PronunciationSound,
+            ask = AskPagePolicy.Required,
             arguments = listOf(navArgument("phonemeId") { type = NavType.StringType }),
         ) { entry ->
             val app = context.applicationContext as LazyDogApplication
@@ -374,8 +366,9 @@ private fun AppNavHost(
             )
         }
 
-        composable(
+        appScreen(
             route = Routes.PronunciationProduce,
+            ask = AskPagePolicy.Required,
             arguments = listOf(navArgument("phonemeId") { type = NavType.StringType }),
         ) { entry ->
             ProduceScreen(
@@ -384,19 +377,18 @@ private fun AppNavHost(
             )
         }
 
-        composable(
+        appScreen(
             route = Routes.PronunciationPerceive,
+            ask = AskPagePolicy.Required,
             arguments = listOf(navArgument("contrastId") { type = NavType.StringType }),
         ) { entry ->
-            AskHost {
-                PerceptionScreen(
-                    contrastId = entry.arguments?.getString("contrastId").orEmpty(),
-                    onExit = { navController.popOnce() },
-                )
-            }
+            PerceptionScreen(
+                contrastId = entry.arguments?.getString("contrastId").orEmpty(),
+                onExit = { navController.popOnce() },
+            )
         }
 
-        composable(Routes.SpellingProfile) {
+        appScreen(Routes.SpellingProfile, ask = AskPagePolicy.Disabled("拼写统计")) {
             SpellingProfileScreen(
                 repository = knowledgeRepository,
                 onBack = { navController.popOnce() },
@@ -410,61 +402,51 @@ private fun AppNavHost(
             )
         }
 
-        composable(Routes.GrammarStudy) {
-            AskHost {
-                GrammarStudyScreen(
-                    repository = knowledgeRepository,
-                    onExit = { navController.popOnce() },
-                )
-            }
+        appScreen(Routes.GrammarStudy, ask = AskPagePolicy.Required) {
+            GrammarStudyScreen(
+                repository = knowledgeRepository,
+                onExit = { navController.popOnce() },
+            )
         }
 
-        composable(Routes.ProofChallenge) {
+        appScreen(Routes.ProofChallenge, ask = AskPagePolicy.Disabled("独立小测期间不提供辅助答案")) {
             ProofChallengeScreen(onExit = { navController.popBackStack() })
         }
 
-        composable(Routes.Production) {
-            AskHost {
-                ProductionScreen(onExit = { navController.popOnce() })
-            }
+        appScreen(Routes.Production, ask = AskPagePolicy.Required) {
+            ProductionScreen(onExit = { navController.popOnce() })
         }
 
-        composable(Routes.ReadingGenerate) {
-            AskHost {
-                ReadingScreen(mode = ReadingMode.Generate, onExit = { navController.popOnce() })
-            }
+        appScreen(Routes.ReadingGenerate, ask = AskPagePolicy.Required) {
+            ReadingScreen(mode = ReadingMode.Generate, onExit = { navController.popOnce() })
         }
 
-        composable(Routes.NativeReading) {
-            AskHost {
-                NativeReadingScreen(mode = NativeReadingMode.New, onExit = { navController.popOnce() })
-            }
+        appScreen(Routes.NativeReading, ask = AskPagePolicy.Required) {
+            NativeReadingScreen(mode = NativeReadingMode.New, onExit = { navController.popOnce() })
         }
 
-        composable(
+        appScreen(
             route = Routes.NativeReadingOpen,
+            ask = AskPagePolicy.Required,
             arguments = listOf(navArgument("materialId") { type = NavType.LongType }),
         ) { entry ->
             val materialId = entry.arguments?.getLong("materialId") ?: 0L
-            AskHost {
-                NativeReadingScreen(
-                    mode = NativeReadingMode.Open(materialId),
-                    onExit = { navController.popOnce() },
-                )
-            }
+            NativeReadingScreen(
+                mode = NativeReadingMode.Open(materialId),
+                onExit = { navController.popOnce() },
+            )
         }
 
-        composable(Routes.ReadingPaste) {
-            AskHost {
-                ReadingScreen(mode = ReadingMode.Paste, onExit = { navController.popOnce() })
-            }
+        appScreen(Routes.ReadingPaste, ask = AskPagePolicy.Required) {
+            ReadingScreen(mode = ReadingMode.Paste, onExit = { navController.popOnce() })
         }
 
-        composable(
+        appScreen(
             route = Routes.WordDetail,
+            ask = AskPagePolicy.Disabled("记录详情按 UI_BRIEF 禁用提问"),
             arguments = listOf(navArgument("itemId") { type = NavType.LongType }),
         ) { entry ->
-            // 不包 AskHost：UI_BRIEF.md §5.4 说好了记录里的页面不响应摇一摇提问。
+            // 记录详情明确禁用提问；正文手势仍独立可用。
             WordDetailScreen(
                 itemId = entry.arguments?.getLong("itemId") ?: 0L,
                 repository = knowledgeRepository,
@@ -472,14 +454,13 @@ private fun AppNavHost(
             )
         }
 
-        composable(
+        appScreen(
             route = Routes.ReadingOpen,
+            ask = AskPagePolicy.Required,
             arguments = listOf(navArgument("materialId") { type = NavType.LongType }),
         ) { entry ->
             val materialId = entry.arguments?.getLong("materialId") ?: 0L
-            AskHost {
-                ReadingScreen(mode = ReadingMode.Open(materialId), onExit = { navController.popOnce() })
-            }
+            ReadingScreen(mode = ReadingMode.Open(materialId), onExit = { navController.popOnce() })
         }
     }
 }
@@ -491,7 +472,7 @@ private fun NavGraphBuilder.onboardingGraph(
     finishOnboarding: () -> Unit,
 ) {
     navigation(startDestination = Routes.OnboardingWelcome, route = Routes.Onboarding) {
-        composable(Routes.OnboardingWelcome) {
+        appScreen(Routes.OnboardingWelcome, ask = AskPagePolicy.Disabled("首次设置")) {
             WelcomeScreen(
                 onStart = { navigateNext(Routes.OnboardingGoals) },
                 onRestored = finishOnboarding,
@@ -499,7 +480,7 @@ private fun NavGraphBuilder.onboardingGraph(
         }
         // AI 服务与朗读服务改为读取 LocalEnv 写死的本地配置，不再让用户在 onboarding 里填写。
         // 对应的 AiServiceScreen / SpeechScreen 暂时保留，后续开放手动配置时再接回来。
-        composable(Routes.OnboardingGoals) {
+        appScreen(Routes.OnboardingGoals, ask = AskPagePolicy.Disabled("首次设置")) {
             val scope = rememberCoroutineScope()
             GoalsScreen(
                 onBack = navigateBack,

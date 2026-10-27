@@ -332,7 +332,10 @@ fun WordStudyScreen(
     }
 
     // 只有正翻着卡片时才能提问；生成中、总结页摇了也不弹。
-    ProvideAskContext((phase as? WordStudyPhase.Cards)?.let { it.cards[it.index].toAskContext(it.revealed) })
+    ProvideAskContext(
+        (phase as? WordStudyPhase.Cards)?.let { it.cards[it.index].toAskContext(it.revealed) },
+        unavailableReason = "选词、生成或本轮已结束，当前没有词卡",
+    )
 
     Scaffold(
         topBar = {

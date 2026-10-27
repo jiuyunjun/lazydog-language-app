@@ -274,6 +274,7 @@ private fun MemoryHintContent(
 /** 不透明全屏遮住标题、例句和提示；回想只是练习，不写入自评或复习进度。 */
 @Composable
 private fun MemoryRecallDialog(hint: MemoryAssistance, onDismiss: () -> Unit) {
+    com.lazydog.english.core.ask.SuspendAsk("全屏回想期间隐藏词卡上下文")
     var revealed by remember(hint) { mutableStateOf(false) }
     Dialog(
         onDismissRequest = onDismiss,
@@ -289,9 +290,9 @@ private fun MemoryRecallDialog(hint: MemoryAssistance, onDismiss: () -> Unit) {
                 Text("试着说出刚学的英文，想不起来也可以看答案。", style = MaterialTheme.typography.bodyMedium)
                 Text(hint.recallQuestionZh, style = MaterialTheme.typography.titleLarge)
                 if (revealed) {
-                    Text(hint.term, style = MaterialTheme.typography.headlineMedium)
-                    Text(hint.coreMeaningZh, style = MaterialTheme.typography.bodyLarge)
-                    Text(hint.memoryHookZh, style = MaterialTheme.typography.bodyLarge)
+                    InteractiveEnglishText(hint.term, style = MaterialTheme.typography.headlineMedium)
+                    InteractiveEnglishText(hint.coreMeaningZh, style = MaterialTheme.typography.bodyLarge)
+                    InteractiveEnglishText(hint.memoryHookZh, style = MaterialTheme.typography.bodyLarge)
                     Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("回到词卡") }
                 } else {
                     Button(onClick = { revealed = true }, modifier = Modifier.fillMaxWidth()) { Text("看答案") }
@@ -374,7 +375,7 @@ private fun MemoryHintDetails(hint: MemoryAssistance) {
                     )
                 }
                 if (hint.commonErrors.isNotEmpty()) {
-                    Text(
+                    InteractiveEnglishText(
                         text = "别写成：${hint.commonErrors.joinToString("、")}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -406,7 +407,7 @@ private fun MemoryHintDetails(hint: MemoryAssistance) {
         }
         if (hint.visualAssociationZh.isNotBlank()) {
             DetailBlock("画面") {
-                Text(
+                InteractiveEnglishText(
                     text = hint.visualAssociationZh,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -422,7 +423,7 @@ private fun MemoryHintDetails(hint: MemoryAssistance) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
-                        Text(
+                        InteractiveEnglishText(
                             text = confusion.differenceZh,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,

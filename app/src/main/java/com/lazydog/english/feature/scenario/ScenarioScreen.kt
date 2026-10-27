@@ -447,6 +447,7 @@ fun ScenarioScreen(sessionId: Long?, onExit: () -> Unit) {
         brief?.takeIf { phase == ScenarioPhase.Conversation }?.let { current ->
             askContextFor(current, messages, achievedGoals.keys)
         },
+        unavailableReason = "仅对话进行中提供提问",
     )
 
     Scaffold(
@@ -1081,7 +1082,7 @@ private fun ScenarioFinishView(summary: ScenarioSummary, savedCount: Int, onDone
             Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
                 Column(Modifier.fillMaxWidth().padding(13.dp)) {
                     InteractiveEnglishText(phrase.en)
-                    Text(phrase.zh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    InteractiveEnglishText(phrase.zh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

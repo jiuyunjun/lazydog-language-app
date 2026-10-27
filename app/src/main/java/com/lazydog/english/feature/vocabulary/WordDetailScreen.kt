@@ -161,7 +161,7 @@ fun WordDetailScreen(
                     )
                 }
                 if (detail.meaningZh.isNotBlank()) {
-                    Text(
+                    InteractiveEnglishText(
                         text = if (!isExpression && detail.pos.isNotBlank()) {
                             "${posLabelZh(detail.pos)} ${detail.meaningZh}"
                         } else {
@@ -192,7 +192,7 @@ fun WordDetailScreen(
                 // 词块拆分和学习页那张 S0 接触卡是同一份东西。整句表达拆不出词块，跳过。
                 if (!isExpression) SpellingChunks(detail.term, facts)
                 if (forms.isNotEmpty()) {
-                    Text(
+                    InteractiveEnglishText(
                         text = "变形：${forms.joinToString(" · ")}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -231,7 +231,7 @@ fun WordDetailScreen(
                                 )
                             }
                             if (detail.exampleZh.isNotBlank()) {
-                                Text(
+                                InteractiveEnglishText(
                                     text = detail.exampleZh,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,

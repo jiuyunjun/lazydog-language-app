@@ -197,6 +197,7 @@ fun ProductionScreen(onExit: () -> Unit) {
             is ProductionPhase.Feedback -> p.tasks[p.index].toAskContext(p.written, p.feedback)
             else -> null
         },
+        unavailableReason = "准备、批改或总结期间暂停提问",
     )
 
     Scaffold(

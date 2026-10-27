@@ -388,6 +388,7 @@ fun ListeningScreen(onExit: () -> Unit, onOpenProfile: () -> Unit) {
                 optionsZh = if (phase == ListeningPhase.Question && optionsShown) options else emptyList(),
             )
         },
+        unavailableReason = "尚未进入听力题目",
     )
 
     Scaffold(
@@ -774,7 +775,7 @@ private fun PickScene(
                                 )
                                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(item.nameZh, style = MaterialTheme.typography.titleMedium)
-                                    Text(
+                                    InteractiveEnglishText(
                                         text = item.noteZh,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -868,8 +869,8 @@ private fun SoundChangesCard(item: ListeningItem) {
                         )
                     },
                     below = {
-                        Text(change.noteZh, style = MaterialTheme.typography.bodyMedium)
-                        Text(
+                        InteractiveEnglishText(change.noteZh, style = MaterialTheme.typography.bodyMedium)
+                        InteractiveEnglishText(
                             text = change.rule.ruleZh,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1084,7 +1085,7 @@ private fun HintCard(title: String, cost: String, body: String) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(body, style = MaterialTheme.typography.bodyMedium)
+            InteractiveEnglishText(body, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -1145,7 +1146,7 @@ private fun Reveal(
                 style = MaterialTheme.typography.headlineSmall,
                 highlightWords = wordsOf(item.keyExpression.en).toSet(),
             )
-            Text(
+            InteractiveEnglishText(
                 text = item.meaningZh,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1195,7 +1196,7 @@ private fun Reveal(
                 )
             },
             below = {
-                Text(item.keyExpression.meaningZh, style = MaterialTheme.typography.bodyMedium)
+                InteractiveEnglishText(item.keyExpression.meaningZh, style = MaterialTheme.typography.bodyMedium)
                 if (item.audioFeatures.isNotEmpty()) {
                     Text(
                         text = "刚才难在这儿：" +
@@ -1320,7 +1321,7 @@ private fun Summary(modifier: Modifier, answers: List<ListeningAnswer>, onOpenPr
                             text = record.item.textEn,
                             style = MaterialTheme.typography.bodyLarge,
                         )
-                        Text(
+                        InteractiveEnglishText(
                             text = record.item.meaningZh,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

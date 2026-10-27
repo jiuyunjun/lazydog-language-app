@@ -2,8 +2,8 @@
 doc: "AGENTS.md"
 tier: "L1 工作规则"
 status: "生效"
-version: "1.2"
-updated: "2026-09-06"
+version: "2.0"
+updated: "2026-10-28"
 authority: "所有 agent 的强制工程规则、Git 方式、实现流程与完成定义"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -59,7 +59,10 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 3. 做影响分析（`ARCHITECTURE.md` §0.6）：这件事归谁管、预计改哪些文件、是否需要新依赖或
    架构变更。和现有架构冲突时先说明冲突，不要边实现边绕开。
 4. 实现最小但完整的改动。优先扩展已有抽象，不要另起一套（§0.4）。
-5. 运行与改动风险相称的格式化、静态检查和测试。
+5. 运行与改动风险相称的格式化、静态检查和测试。界面改动还必须运行
+   `python tools/check_ui_capabilities.py` 与 `python -m unittest discover -s tools -p test_ui_capabilities.py`。
+   新页面通过 `appScreen` 声明提问策略；学习正文使用既有交互文本组件。普通文本例外必须逐条说明原因，
+   不得批量刷新 `tools/ui_text_exceptions.json` 来绕过失败；新增模态学习内容须处理底层提问暂停。
 6. 做一次架构漂移自查（`ARCHITECTURE.md` §0.6 的 8 条），有漂移就明确报出来。
 7. 检查 `git diff`，确认没有密钥、生成物或无关修改。
 8. 按 §8 更新受影响的文档，并跑 `python tools/check_docs.py`。

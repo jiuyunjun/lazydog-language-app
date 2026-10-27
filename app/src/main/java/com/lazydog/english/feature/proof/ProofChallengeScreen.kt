@@ -246,7 +246,7 @@ private fun Revealed(phase: ProofPhase.Revealed, onExit: () -> Unit) {
     }
 
     InteractiveEnglishText(text = challenge.sentenceEn, style = MaterialTheme.typography.titleMedium)
-    Text(
+    InteractiveEnglishText(
         text = challenge.sentenceZh,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -264,7 +264,7 @@ private fun Revealed(phase: ProofPhase.Revealed, onExit: () -> Unit) {
                     tint = if (term in phase.picked) extended.correct else MaterialTheme.colorScheme.outlineVariant,
                     modifier = Modifier.size(18.dp),
                 )
-                Text(term, style = MaterialTheme.typography.bodyLarge)
+                InteractiveEnglishText(term, style = MaterialTheme.typography.bodyLarge)
             }
         }
     }

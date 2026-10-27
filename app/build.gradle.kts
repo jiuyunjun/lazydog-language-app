@@ -67,6 +67,15 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// 和文档检查共用 Python；开发机和 CI 构建都必须经过能力覆盖检查。
+val checkUiCapabilities by tasks.registering(Exec::class) {
+    group = "verification"
+    workingDir(rootProject.projectDir)
+    commandLine("python", "tools/check_ui_capabilities.py")
+    environment("PYTHONIOENCODING", "utf-8")
+}
+tasks.named("preBuild") { dependsOn(checkUiCapabilities) }
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)

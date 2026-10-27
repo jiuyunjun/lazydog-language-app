@@ -1,0 +1,2300 @@
+[
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "\"English\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "\"只发卡片里的结构化内容给 AI，不截屏；阅读页会包含当前材料全文。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "\"正在收音（${if (locale == \"zh-CN\") \"中文\" else \"English\"}）· 停顿后自动结束\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "\"没答上来：${round.error}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "askContext.kind.cardLabel",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "detail.label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "if (transcribing) \"边说边显示…\" else placeholder",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "message",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "suggestion",
+    "count": 1,
+    "reason": "建议问题按钮，单击发起提问"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "用户自己的问题气泡；AI 回答和学习上下文另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/ask/AskHost.kt",
+    "text": "when (state) { AddState.Added -> \"${term.term} 已加进复习\" AddState.Existing -> \"${term.term} 早就在知识库里了\" null -> \"把 ${term.term} 加进复习\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"$currentLevel 附近\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"$wordCount 词 · 建议 ${task.minWords}~${task.maxWords} 词，不用太精确\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"${dim.score} / 4\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"AI 看完了\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"Write in English…\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"Write the corrected sentence…\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"合理区间 ${outcome.plausibleRange} · 词汇量估计 ${outcome.vocabRangeText}\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"客观题答对 ${outcome.correctCount} / ${outcome.totalCount} 道。一次测试只是初始估计，不用太当真。\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"已答 ${ladderState.answered.size} 题 · 难度还在调\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"已答 ${saved.state.answered.size} 题客观题，当前难度 ${labelForScore(saved.state.score)}。\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"手动改成 Pre-A1 / A1 / A2 / B1 / B2 / C1\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"没成功：$reason\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"画像已保存，AI 出题会按这个水平来。\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "\"这题只是让 AI 看看你的表达习惯，不参与上面的难度评估。\"",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "ExpressionDimension.label(dim.dimension)",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "ReadingTag.label(question.tag)",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "displayLabel",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "if (overrideLabel != null) \"自己调的\" else outcome.confidenceLabel",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "level.label",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "name",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "note",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "outcome.gapNoteZh",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "outcome.watchNoteZh",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "row.label",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "row.name",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "skillLabel",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "skipLabel",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "summary",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/assessment/AssessmentScreen.kt",
+    "text": "task.promptZh",
+    "count": 1,
+    "reason": "测评表单、等级/结果指标或中文引导；答题输入保留系统行为"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/grammar/GrammarLearningContent.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/AddLearningCardScreen.kt",
+    "text": "\"AI 会先把整张卡写出来给你看，看过之后再决定要不要添加到记录。\"",
+    "count": 1,
+    "reason": "生成表单、候选选择或生成状态；候选行单击选择目标，预览正文使用共用学习组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/AddLearningCardScreen.kt",
+    "text": "\"你说的是「$queryZh」\"",
+    "count": 1,
+    "reason": "生成表单、候选选择或生成状态；候选行单击选择目标，预览正文使用共用学习组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/AddLearningCardScreen.kt",
+    "text": "if (isVocab) \"单词学习卡\" else \"语法学习卡\"",
+    "count": 1,
+    "reason": "生成表单、候选选择或生成状态；候选行单击选择目标，预览正文使用共用学习组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/AddLearningCardScreen.kt",
+    "text": "if (isVocab) \"打中文也行：「深思熟虑」「表示后悔的说法」都可以，先挑目标再生成卡\" else \"打中文也行：「已经做完了怎么说」这种描述也认，先挑目标再生成卡\"",
+    "count": 1,
+    "reason": "生成表单、候选选择或生成状态；候选行单击选择目标，预览正文使用共用学习组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/AddLearningCardScreen.kt",
+    "text": "if (isVocab) \"英文单词原形，或中文\" else \"语法名称、英文结构，或中文\"",
+    "count": 1,
+    "reason": "生成表单、候选选择或生成状态；候选行单击选择目标，预览正文使用共用学习组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/AddLearningCardScreen.kt",
+    "text": "it",
+    "count": 1,
+    "reason": "生成表单、候选选择或生成状态；候选行单击选择目标，预览正文使用共用学习组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/AddLearningCardScreen.kt",
+    "text": "suggestion.labelZh",
+    "count": 1,
+    "reason": "生成表单、候选选择或生成状态；候选行单击选择目标，预览正文使用共用学习组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/AddLearningCardScreen.kt",
+    "text": "suggestion.noteZh",
+    "count": 1,
+    "reason": "生成表单、候选选择或生成状态；候选行单击选择目标，预览正文使用共用学习组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/AddLearningCardScreen.kt",
+    "text": "suggestion.target",
+    "count": 1,
+    "reason": "生成表单、候选选择或生成状态；候选行单击选择目标，预览正文使用共用学习组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/AddLearningCardScreen.kt",
+    "text": "when { saving -> \"正在添加\" hasDraft -> \"添加\" // 中文进来时先找目标，按钮就得说这一下会发生什么， // 不能还写着\"生成学习卡\"——那会让人以为卡马上就出来了。 needsSuggesting -> \"找找学什么\" else -> \"生成学习卡\" }",
+    "count": 1,
+    "reason": "生成表单、候选选择或生成状态；候选行单击选择目标，预览正文使用共用学习组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "\"删除「$title」？\"",
+    "count": 1,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "\"单词 ${vocab.size}\"",
+    "count": 1,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "\"复习 ${item.reviewCount} 次 · 忘过 ${item.lapseCount} 次 · \" + dueLabel(item.nextReviewAt, System.currentTimeMillis())",
+    "count": 1,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "\"表达 ${expressions.size}\"",
+    "count": 1,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "\"语法 ${grammar.size}\"",
+    "count": 1,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "dueLabel(item.nextReviewAt, now)",
+    "count": 1,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "grade.label",
+    "count": 1,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "subtitle",
+    "count": 2,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "summary",
+    "count": 1,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "记录列表的导航摘要、数量、自评/删除动作或空状态；完整内容在详情组件"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningProfileScreen.kt",
+    "text": "\"${it.type.labelZh} · ${it.count} 次\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningProfileScreen.kt",
+    "text": "\"满 $MIN_ATTEMPTS_FOR_PROFILE 题之后才给总正确率——\" + \"三五道题的正确率是噪声，摆出来只会误导。\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningProfileScreen.kt",
+    "text": "// 样本不够就只报次数，不报百分比：两题里错一题不是\"50% 的水平\"。 text = if (enough) \"${score.percent}%\" else \"还只练了 ${score.attempts} 次\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningProfileScreen.kt",
+    "text": "// 正确率会被提示和重听拉高，所以另给一个更硬的数。 text = \"其中 ${profile.firstListen} 题是裸听一遍就懂的\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningProfileScreen.kt",
+    "text": "profile.percent?.let { \"总体听懂 $it%\" } ?: \"一共答了 ${profile.attempts} 题\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningProfileScreen.kt",
+    "text": "score.feature",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "\"${answer.score} 分\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "\"${index + 1} / $total\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "\"${summary.totalScore}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "\"${summary.total} 句听完了\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "\"你听成了「${mishear.meaningZh}」\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "\"刚才难在这儿：\" + item.audioFeatures.joinToString(\"、\") { audioFeatureLabelZh(it) }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "\"答错时最常栽在「${summary.weakestMishear.labelZh}」\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "\"这一类叫「${mishear.mishearType.labelZh}」\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "audioFeatureLabelZh(summary.weakestFeature)",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "change.rule.labelZh",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "cost",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "error",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "if (answer.correct) \"听懂了\" else \"这次没听出来\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "if (saved) \"已加入复习计划\" else \"加入复习计划\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "item.nameZh",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "label",
+    "count": 2,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "note",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "scoreReason(answer)",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "scoreReason(record)",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "text",
+    "count": 2,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "title",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "value",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "when (level) { ListeningHintLevel.None -> \"要点提示\" ListeningHintLevel.Scene -> \"还是没听清，提示关键词\" ListeningHintLevel.Keyword -> \"给我看挖空的英文\" else -> \"直接给我完整英文\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/listening/ListeningScreen.kt",
+    "text": "where",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/main/MainScreen.kt",
+    "text": "tab.label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/AiServiceScreen.kt",
+    "text": "\"API 密钥\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/AiServiceScreen.kt",
+    "text": "\"Base URL\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/AiServiceScreen.kt",
+    "text": "\"gpt-4o-mini\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/AiServiceScreen.kt",
+    "text": "\"https://api.example.com/v1\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/AiServiceScreen.kt",
+    "text": "\"保存在本机。卸载 App 即删除。\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/AiServiceScreen.kt",
+    "text": "\"填一个 OpenAI 兼容接口就行。密钥只保存在本机，不上传任何服务器。\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/GoalsScreen.kt",
+    "text": "\"${minutes.roundToInt()} 分钟\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/OnboardingComponents.kt",
+    "text": "\"第 $step / $totalSteps 步\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/OnboardingComponents.kt",
+    "text": "title",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/SpeechScreen.kt",
+    "text": "\"Azure Speech 只用于朗读的识别和发音反馈。现在不填也行，随时能在设置里补。朗读功能会在后续版本上线，这一版填了也先不保存。\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/SpeechScreen.kt",
+    "text": "\"Speech Key\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/WelcomeScreen.kt",
+    "text": "\"AI 帮你备课，你只管学。\\n每天 10～15 分钟，今天少学一点，也算学了。\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/WelcomeScreen.kt",
+    "text": "restoreStatus.orEmpty()",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/onboarding/WelcomeScreen.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/production/ProductionScreen.kt",
+    "text": "\"${lines.size} 句里对了 $okCount 句\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/production/ProductionScreen.kt",
+    "text": "\"判不了：${p.reason}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/production/ProductionScreen.kt",
+    "text": "\"没拿到句子：${p.reason}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/production/ProductionScreen.kt",
+    "text": "\"第 $current / $total 句\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/production/ProductionScreen.kt",
+    "text": "\"记到错题里：${tags.joinToString(\"、\") { GrammarErrorTag.labelZh(it) }}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/production/ProductionScreen.kt",
+    "text": "feedback.verdict.labelZh",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/production/ProductionScreen.kt",
+    "text": "if (isLast) \"写完了\" else \"下一句\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/production/ProductionScreen.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/AllSoundsScreen.kt",
+    "text": "\"发音模块的音位表随安装包一起走，这次没读到。重装一次应该就好了，\" + \"App 的其他部分不受影响。\"",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/AllSoundsScreen.kt",
+    "text": "\"状态同时用文字、图标和进度表达，不靠颜色区分。\" + \"「稳了」只是这个模块内的状态，不代表全局掌握。\"",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/AllSoundsScreen.kt",
+    "text": "contrast.minimalPairs.take(3) .joinToString(\" · \") { \"${it.leftWord} / ${it.rightWord}\" }",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/AllSoundsScreen.kt",
+    "text": "contrastLabel( catalog.phoneme(contrast.leftPhonemeId), catalog.phoneme(contrast.rightPhonemeId), )",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/AllSoundsScreen.kt",
+    "text": "entry.labelZh",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/AllSoundsScreen.kt",
+    "text": "note",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/AllSoundsScreen.kt",
+    "text": "stage.labelZh",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "\"$index / $SESSION_QUESTIONS\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "\"${after.percent}%\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "\"${before.percent}%\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "\"再听 ${question.correctOption.label}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "\"才练了 ${after.sampleCount} 次，这个数还不作数。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "\"用了提示也算练。这一题会记成「需要第 ${hint.level} 级提示」。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "\"第 ${hint.level} 级 / 共 ${PronunciationHint.RevealAnswer.level} 级\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "contrastLabel( catalog.phoneme(contrast?.leftPhonemeId.orEmpty()), catalog.phoneme(contrast?.rightPhonemeId.orEmpty()), )",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "if (chosen.correct) \"为什么是它\" else \"差在哪\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "if (hint == PronunciationHint.None) \"给点提示\" else \"还是分不清\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "note",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "option.ipa",
+    "count": 1,
+    "reason": "IPA 或拆音节记号，不作为英语单词；完整例词另有交互入口"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "option.label",
+    "count": 2,
+    "reason": "尚未揭晓的答案选择，或重听选项的按钮标签；揭晓后的词已使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "title",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "when (question.exercise) { PerceptionExercise.SoundToIpa -> \"刚才这个声音，写成哪个符号？\" else -> \"你听到的是哪一个？\" }",
+    "count": 1,
+    "reason": "IPA 或拆音节记号，不作为英语单词；完整例词另有交互入口"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "\"$score\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "\"${word.accuracyScore}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "\"${wordIndex + 1} / ${words.size}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "\"最近 ${state.history.size} 次：${state.history.joinToString(\" · \")}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "\"用来看你这个音发得怎么样。录音实时传给语音服务做这一次评估，\" + \"评完就没了，不保存在手机上。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "\"跟读需要先配置 Azure Speech\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "\"这次没拿到 /${phoneme.ipa}/ 单独的分，上面是整个词的分数。\"",
+    "count": 1,
+    "reason": "IPA 或拆音节记号，不作为英语单词；完整例词另有交互入口"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "if (phase is ProducePhase.Recording) \"正在听，读完自动结束\" else \"点一下开始读\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "phoneme.exampleWords.firstOrNull { it.word == word }?.ipa.orEmpty()",
+    "count": 1,
+    "reason": "IPA 或拆音节记号，不作为英语单词；完整例词另有交互入口"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "quality.messageZh ?: \"再来一次。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "reason",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/ProduceScreen.kt",
+    "text": "when { score >= 85 -> \"这个音站住了\" good -> \"接近了，但还不稳\" else -> \"这个音还没出来\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationHomeScreen.kt",
+    "text": "contrast.minimalPairs.firstOrNull() ?.let { \"从 ${it.leftWord} / ${it.rightWord} 开始。\" } .orEmpty()",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationHomeScreen.kt",
+    "text": "contrastLabel( catalog.phoneme(contrast.leftPhonemeId), catalog.phoneme(contrast.rightPhonemeId), )",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationHomeScreen.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationHomeScreen.kt",
+    "text": "note",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationHomeScreen.kt",
+    "text": "title",
+    "count": 1,
+    "reason": "音位目录/训练入口预览，单击进入音位卡或训练"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationUi.kt",
+    "text": "\"${estimate.percent}%\"",
+    "count": 1,
+    "reason": "音标符号、分类标签或统计数字；IPA 不是英语单词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationUi.kt",
+    "text": "\"/$ipa/\"",
+    "count": 1,
+    "reason": "音标符号、分类标签或统计数字；IPA 不是英语单词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationUi.kt",
+    "text": "\"才练了 ${estimate.sampleCount} 次，这个数还不作数\"",
+    "count": 1,
+    "reason": "音标符号、分类标签或统计数字；IPA 不是英语单词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationUi.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "音标符号、分类标签或统计数字；IPA 不是英语单词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationUi.kt",
+    "text": "stage.labelZh",
+    "count": 1,
+    "reason": "音标符号、分类标签或统计数字；IPA 不是英语单词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationUi.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "音标符号、分类标签或统计数字；IPA 不是英语单词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PronunciationUi.kt",
+    "text": "trailing",
+    "count": 1,
+    "reason": "音标符号、分类标签或统计数字；IPA 不是英语单词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/SoundCardScreen.kt",
+    "text": "contrastLabel(left, right)",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/SoundCardScreen.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/SoundCardScreen.kt",
+    "text": "note",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceProfileScreen.kt",
+    "text": "\"$value\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceProfileScreen.kt",
+    "text": "\"弱到什么程度 × 证据够不够 × 这个音有多常用 × 多久没练了。\" + \"四项都占权重，所以最弱的那个不一定排第一——只练过三次的不会插队。\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceProfileScreen.kt",
+    "text": "\"练过 ${progress.perception.sampleCount} 次\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceProfileScreen.kt",
+    "text": "\"这两个数不会合成一个总分。听得出来和发得出来是两件事，\" + \"中间那些就是接下来要干的活。\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceProfileScreen.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceProfileScreen.kt",
+    "text": "labelOf(progress, catalog)",
+    "count": 3,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceScreeningScreen.kt",
+    "text": "\"$index / $SCREENING_QUESTIONS\"",
+    "count": 1,
+    "reason": "摸底题选项、题号或结果标签；答题控件不提供辅助查词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceScreeningScreen.kt",
+    "text": "\"${progress.perception.sampleCount} 题\"",
+    "count": 1,
+    "reason": "摸底题选项、题号或结果标签；答题控件不提供辅助查词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceScreeningScreen.kt",
+    "text": "\"十二道听辨题，大约三分钟。这不是考试——做完你会拿到一张自己的声音画像，\" + \"之后练什么由它来决定。\"",
+    "count": 1,
+    "reason": "摸底题选项、题号或结果标签；答题控件不提供辅助查词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceScreeningScreen.kt",
+    "text": "\"发音标准按美音（en-US）。以后要支持英音会单独开一套，不会改这一套的口径。\"",
+    "count": 1,
+    "reason": "摸底题选项、题号或结果标签；答题控件不提供辅助查词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceScreeningScreen.kt",
+    "text": "contrast?.let { contrastLabel( catalog.phoneme(it.leftPhonemeId), catalog.phoneme(it.rightPhonemeId), ) } ?: raw",
+    "count": 1,
+    "reason": "摸底题选项、题号或结果标签；答题控件不提供辅助查词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceScreeningScreen.kt",
+    "text": "if (phase == ScreeningPhase.Done) \"你的声音画像\" else \"声音摸底\"",
+    "count": 1,
+    "reason": "摸底题选项、题号或结果标签；答题控件不提供辅助查词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceScreeningScreen.kt",
+    "text": "option.label",
+    "count": 1,
+    "reason": "摸底题选项、题号或结果标签；答题控件不提供辅助查词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/VoiceScreeningScreen.kt",
+    "text": "title",
+    "count": 1,
+    "reason": "摸底题选项、题号或结果标签；答题控件不提供辅助查词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/proof/ProofChallengeScreen.kt",
+    "text": "// 这句话是这一关的全部意义（§15）：不是\"你得了几分\"，是\"你听懂了多久以前的东西\"。 text = \"你听懂了 ${challenge.oldestDaysAgo} 天前学的 $hit 个表达\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/proof/ProofChallengeScreen.kt",
+    "text": "body",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/proof/ProofChallengeScreen.kt",
+    "text": "if (p.playCount == 0) \"点一下播放\" else \"已经听了 ${p.playCount} 遍 · 想听几遍都行\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/proof/ProofChallengeScreen.kt",
+    "text": "option",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/proof/ProofChallengeScreen.kt",
+    "text": "title",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "\"${SpanKind.labelZh(span.kind)} · ${MasteryClass.labelZh(span.masteryClass)}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "\"「${amount.labelZh}」大约把 ${amount.percent}% 的内容显示成英语。读着不顺随时能改，改的只是这一篇。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "\"中文照读，英语一点点长出来：文章用中文写，其中一部分说法换成英语。\" + \"读不动的地方长按就能看回中文。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "if (chosen.isBlank()) \"给我写一篇\" else \"写一篇「$chosen」\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "listOfNotNull( view.article.category.ifBlank { null }, \"英语约 ${(view.document.englishSurfaceActual * 100).toInt()}%\", \"${view.document.spans.count { it.isTarget }} 个新表达\", ).joinToString(\" · \")",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "option",
+    "count": 1,
+    "reason": "理解题答案选择控件，保留单击选择"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "option.labelZh",
+    "count": 2,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "p.reason",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "selectedTopic.ifBlank { \"比如：为什么日本便利店很少缺货\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "span.pronunciation",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "topic",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "\"挑个主题，AI 会写一篇约 $TARGET_LENGTH 词的短文，把你到期的复习词编进去，再带最多 $MAX_NEW_WORDS 个新词。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "\"答对 $correct / ${questions.size}。读完了，今天的阅读算数。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "ReadingQuestionKind.labelZh(question.kind)",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "if (chosen.isBlank()) \"生成短文\" else \"生成「$chosen」的短文\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "if (liked) \"已喜欢\" else \"喜欢\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "if (paragraph == null) { \"题目对应原文\" } else { \"题目对应原文 · 第 ${paragraph} 段\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "if (saved) \"已保存\" else \"保存\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "p.reason",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "selectedTopic.ifBlank { \"比如：一次搞砸的露营\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "topic",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "\"$number ${item.titleZh}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "\"${achievedGoals.size}/${brief.goals.size}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "\"${brief.goals.size} 件事做到 ${achievedGoals.size} 件，用了 $turnCount 轮。${summary.overviewZh}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "\"${brief.opponentName} · ${brief.opponentRoleZh}\"",
+    "count": 2,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "\"${index + 1} / $total\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "\"已把 $savedCount 个表达排进复习。下次可能在别的场景里让你再用一遍。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "\"收下这 ${summary.keepPhrases.size} 个表达就行\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "\"第 $turn 轮\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "\"要做到这 ${brief.goals.size} 件事\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "\"难度 · ${difficultyLabel(brief.difficulty)}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "brief.titleZh",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "detail",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "error",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "if (index + 1 < total) \"下一句\" else \"收下这些表达\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "if (phase == ScenarioPhase.Brief) \"开演前\" else \"情景演练\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "if (replyMode == ScenarioReplyMode.Options) \"挑一句说\" else \"自己说 · 不用怕说错\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "if (replyMode == ScenarioReplyMode.Options) \"自己说\" else \"给我选项\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "if (transcribing) \"在听…\" else \"语音转文字\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "improvement.promptZh",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "listOfNotNull( \"礼貌拒绝\".takeIf { brief.difficulty.requiresPoliteRefusal }, \"可能有误解\".takeIf { brief.difficulty.includesMisunderstanding }, ).joinToString(\" · \").ifBlank { \"没有额外机关\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "phrase",
+    "count": 1,
+    "reason": "将短语填入输入框的操作按钮；保留单击填入"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "preview",
+    "count": 1,
+    "reason": "生成过程中的不完整预览；完成后的演练正文使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "seed.title",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "seed.who",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "stageDetail(stage, rememberWaitedSeconds())",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "summary.outcomeTitleZh",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "title",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
+    "text": "trailing",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/ModelSettingsScreen.kt",
+    "text": "\"拉不到模型列表：${s.reason}\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/ModelSettingsScreen.kt",
+    "text": "if (modelIgnoresEffort) { \"$effectiveModel 不认这个参数（试过一次被拒了），这里选什么都不会发出去。\" } else { \"推理模型开口前会先想一阵，这段实测能占掉整次调用的大半。\" + \"取值随模型而异，选了不支持的会自动往下退，不会因此报错。\" }",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/ModelSettingsScreen.kt",
+    "text": "if (showAll) \"只看对话模型\" else \"显示全部（另有 $hiddenCount 个生图、嵌入、语音等）\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/ModelSettingsScreen.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/ModelSettingsScreen.kt",
+    "text": "name",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/ModelSettingsScreen.kt",
+    "text": "task?.labelZh ?: \"默认\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/ModelSettingsScreen.kt",
+    "text": "task?.noteZh ?: \"没单独设过的功能，用的就是这里配的模型和力度。\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/ModelSettingsScreen.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/ModelSettingsScreen.kt",
+    "text": "value",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "\"各模块生成内容时各取各的等级。空着的项按总等级\" + overallLevel.ifBlank { \"（还没测）\" } + \"来。\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "\"提问用的是你自己配的 AI 服务，问一次算一次调用。问答只留在当前抽屉里，关掉就结束。\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "anchor.label",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "current ?: \"跟随总等级\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "kind.labelZh",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "kind.usage",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "name",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "option",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "title",
+    "count": 2,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "value",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "detail",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "overallComment(feedback.pronunciationScore)",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "playback.error?.message.orEmpty()",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "rate.label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "sentence.sourceNote",
+    "count": 1,
+    "reason": "练习句的来源标注，正文原句已接入交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "state.message",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "\"${chunks[trickyIndex]} 是最容易拼错的部分\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "\"${entry.term.length} 个字母\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "\"提示 · ${nextHint.labelZh}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "// 空格子也得是个 Text：没有文字就没有基线，这一格会跟着掉下去。 // 用不换行空格占位，字形高度和真字母一致。 text = filled?.toString() ?: \" \"",
+    "count": 1,
+    "reason": "拼写答案/字母操作控件，保留选字和填空，不通过查词暴露答案"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "char.toString()",
+    "count": 1,
+    "reason": "拼写答案/字母操作控件，保留选字和填空，不通过查词暴露答案"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "chunk",
+    "count": 1,
+    "reason": "拼写分组是字母片段，不是独立词义；查词应作用于完整词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "entry.ipa",
+    "count": 1,
+    "reason": "IPA 或拆音节记号，不作为英语单词；完整例词另有交互入口"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "entry.ipa.ifBlank { entry.meaningZh }",
+    "count": 1,
+    "reason": "IPA 或拆音节记号，不作为英语单词；完整例词另有交互入口"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "if (result.likelyTypo) { \"看着像手滑——这次不算退步，再打一次就好。\" } else { // 只说错在哪一类，不给字母。要字母去点「给点提示」，那才是要花分的。 SpellingEngine.mistakeNote(entry.term, result.normalizedAnswer) }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "inputLabel(card.questionType)",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "ipa",
+    "count": 2,
+    "reason": "IPA 或拆音节记号，不作为英语单词；完整例词另有交互入口"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "option",
+    "count": 1,
+    "reason": "拼写答案/字母操作控件，保留选字和填空，不通过查词暴露答案"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingCard.kt",
+    "text": "when { hintLevel == 0 -> \"一次就写对 · 掌握度 +${formatCredit(credit)}\" else -> \"写对了 · 用了提示，掌握度 +${formatCredit(credit)}\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingProfileScreen.kt",
+    "text": "\"${(rate * 100).roundToInt()}%\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingProfileScreen.kt",
+    "text": "\"${(value * 100).roundToInt()}%\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingProfileScreen.kt",
+    "text": "\"占你 ${current.wrongCount} 次错误的比例，一次错可能同时命中几类。\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingProfileScreen.kt",
+    "text": "\"无提示默写答对时，平均用 ${\"%.1f\".format(millis / 1000.0)} 秒。\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingProfileScreen.kt",
+    "text": "advice ?: \"再练几轮。目前的错误还不够多，说不准哪一类是你的真弱点。\"",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingProfileScreen.kt",
+    "text": "dimension.labelZh",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingProfileScreen.kt",
+    "text": "type.labelZh",
+    "count": 1,
+    "reason": "统计指标、分类标签或统计说明；数值不作为英语正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingScreen.kt",
+    "text": "\"${phase.answered} 道题，${phase.correctFirstTry} 个一次就写对；${phase.hintUsed} 个用了提示。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingScreen.kt",
+    "text": "if (phase.retested > 0) { \"其中 ${phase.retested} 个词在这一轮里排回来又考了一遍——刚写对不算记住。\" } else { \"用过提示的词会自己排回来，不用记着回头找。\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/spelling/SpellingScreen.kt",
+    "text": "if (round != null) { \"拼写练习 · ${round.index + 1} / ${round.cards.size}\" } else { \"拼写练习\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/GrammarStudyScreen.kt",
+    "text": "\"有 ${due.size} 条语法到期了\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/GrammarStudyScreen.kt",
+    "text": "\"没拿到讲解：${p.reason}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/GrammarStudyScreen.kt",
+    "text": "\"留空让 AI 挑时，会优先挑能治这些错的语法点。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/GrammarStudyScreen.kt",
+    "text": "\"第 ${p.session.index + 1} / ${p.session.items.size} 题\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/GrammarStudyScreen.kt",
+    "text": "\"让 AI 讲一讲\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/GrammarStudyScreen.kt",
+    "text": "\"题没出来：${p.reason}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/GrammarStudyScreen.kt",
+    "text": "if (saving) \"记下了，正在出题…\" else \"记进知识库，练几句\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/GrammarStudyScreen.kt",
+    "text": "if (session.isLast) \"这组做完了\" else \"下一题\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/GrammarStudyScreen.kt",
+    "text": "if (weakSpots.isEmpty()) { \"想学哪个语法点？留空就让 AI 按你的语法水平挑一个。看完会当场出几道填空题。\" } else { \"想学哪个语法点？留空就挑一个能治上面这些错的。看完会当场出几道填空题。\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/StudyScreen.kt",
+    "text": "buildString { when (item) { is RecentStudyItem.Reading -> { append(item.category) append(\" · ${item.readingMinutes} min\") if (item.cefr.isNotBlank()) append(\" · ${item.cefr}\") if (item.newWordCount > 0) append(\" · ${item.newWordCount} 个新词\") if (item.source != ReadingRepository.SOURCE_AI) append(\" · 粘贴导入\") } is RecentStudyItem.Scenario -> { append(formatDate(item.timestamp)) append(\" · \") append(if (item.stage == \"Finished\") \"情景演练 · 已完成\" else \"情景演练 · 继续\") } is RecentStudyItem.Listening -> { append(formatDate(item.timestamp)) append(\" · ${item.sceneZh.ifBlank { \"听力\" }}\") append(\" · 播过 ${item.playCount} 次 · ${item.meaningZh}\") } } }",
+    "count": 1,
+    "reason": "学习目录或历史条目的导航预览，整行单击进入内容页"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/StudyScreen.kt",
+    "text": "copy.studyPickNote",
+    "count": 1,
+    "reason": "学习目录或历史条目的导航预览，整行单击进入内容页"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/StudyScreen.kt",
+    "text": "entry.name",
+    "count": 1,
+    "reason": "学习目录或历史条目的导航预览，整行单击进入内容页"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/StudyScreen.kt",
+    "text": "entry.note",
+    "count": 1,
+    "reason": "学习目录或历史条目的导航预览，整行单击进入内容页"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/StudyScreen.kt",
+    "text": "item.teaser",
+    "count": 1,
+    "reason": "学习目录或历史条目的导航预览，整行单击进入内容页"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/StudyScreen.kt",
+    "text": "item.title",
+    "count": 1,
+    "reason": "学习目录或历史条目的导航预览，整行单击进入内容页"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "\"${if (p.cards.first().isNew) \"新词\" else \"复习\"} ${p.index + 1} / ${p.cards.size}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "\"新词没拿到：${p.reason}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "buildString { if (reviewedCount > 0) append(copy.wordReviewedCount(reviewedCount)) if (reviewedCount > 0 && newCount > 0) append(\" · \") if (newCount > 0) append(copy.wordLearnedCount(newCount)) }.ifBlank { copy.wordLearnedNothing }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "copy.wordAskForNew(newWordCount)",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "copy.wordFinish",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "copy.wordNothingDue",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "copy.wordReviewDone(reviewedCount)",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "copy.wordRoundDone",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "copy.wordScheduledNote",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "copy.wordStopToday",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "if (card.isNew) \"这个词你原来认识吗？照实点，算法才准\" else \"刚才想起来了吗？照实点，算法才准\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "if (card.isNew) grade.newLabel else grade.label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "\"再学几分钟：${nextStep.step.title}\"",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "\"回忆满 $MINIMUM_RETRIEVALS 次，或完成任一步，今天就算数了\"",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "\"旅程 ${activity.journeyDays} 天 · 近 30 天 ${activity.activeDaysIn30} 天 · $streakLabel\"",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "\"测出水平后，AI 出的词、语法和文章都会更合身。\"",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "copy.proofDaysAgo(proof.daysAgo)",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "copy.todayComebackTitle + report.recoveredNames.take(3).joinToString(\"、\")",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "copy.todayKeepGoing",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "copy.todayLearned(progress.learned)",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "copy.todayPlanTitle",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "copy.todayRecalled(progress.reviewed, progress.remembered) + if (percent != null) \" · $percent%\" else \"\"",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "copy.todayReportTitle",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "copy.todayStopHere",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "if (allDone) { copy.todayFinishedNote } else if (mood == Mood.Comeback) { // §26 点名不要说\"你已经落后 74 个复习\"——那是在为回来这件事加一道门槛。 // 也确实不用补：FSRS 里过期越久可提取性越低，本来就是连续的，不会堆成债。 copy.todayRecoveryNote } else if (mood == Mood.Tired) { copy.todayFatigueNote } else if (dueVocab + dueGrammar > 0) { buildList { if (dueVocab > 0) add(\"$dueVocab 个词\") if (dueGrammar > 0) add(\"$dueGrammar 个语法点\") }.joinToString(\"、\", postfix = copy.todayDueSuffix) } else { copy.todayNothingDue }",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "if (done) \"完成了\" else if (skipped) \"今天已跳过 · 不计入完成\" else \"${planned.note} · 约 ${planned.step.minutes} 分钟\"",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "if (done) copy.todayMinimumDone else \"回忆 $reviewed / $MINIMUM_RETRIEVALS 次\"",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "if (doneSteps.isEmpty()) copy.todayStart else \"继续：${nextStep.step.title}\"",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "if (skipped) \"恢复\" else \"跳过\"",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "planned.step.title",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
+    "text": "when { wrappedUp -> copy.todaySignOff allDone -> copy.todayFinishedTitle mood == Mood.Comeback -> copy.todayGreeting mood == Mood.Tired -> copy.todayMinimumReachedTitle else -> copy.todayPlannedMinutes(plan.sumOf { it.step.minutes }) }",
+    "count": 1,
+    "reason": "首页计划、进度或氛围文案；学习词例另用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/CollocationChip.kt",
+    "text": "translation",
+    "count": 1,
+    "reason": "中文翻译处于 InteractiveEnglishBlock 内，整块已统一接入手势"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/MemoryHintPanel.kt",
+    "text": "\"最容易错的一段：${hint.weakSegment}\"",
+    "count": 1,
+    "reason": "易错字母片段，不是独立词义"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/MemoryHintPanel.kt",
+    "text": "\"没拿到提示：${p.reason}\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/MemoryHintPanel.kt",
+    "text": "// 已经有一条时是「换一条」而不是「再生成」：请求里会带上旧钩子， // 明确要求换个角度，不然多半只是把同一句话重新措辞。 text = when { phase is HintPhase.Failed -> \"再试一次\" current != null || fallbackHintZh.isNotBlank() -> \"换个记法\" else -> \"生成记忆提示\" }",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/MemoryHintPanel.kt",
+    "text": "// 重音那一节标出来，其余按顺序摆着；stress 为 0 表示没给或给错了。 text = hint.pronunciation.syllables.mapIndexed { index, syllable -> if (index + 1 == hint.pronunciation.stress) \"ˈ$syllable\" else syllable }.joinToString(\" · \")",
+    "count": 1,
+    "reason": "IPA 或拆音节记号，不作为英语单词；完整例词另有交互入口"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/MemoryHintPanel.kt",
+    "text": "// 钩子一到就显示钩子；还没到就说清楚现在卡在哪一步—— // \"模型在想\"和\"没接通\"用户该做的反应不一样。 text = phase.partialHook.ifBlank { when (val s = phase.stage) { GenerationStage.Connecting -> \"正在接通…\" is GenerationStage.Thinking -> \"模型正在想这个词该怎么记…\" is GenerationStage.Writing -> \"正在写…（${s.chars} 字）\" } }",
+    "count": 1,
+    "reason": "生成过程中的不完整预览；完成后的助记正文已使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/MemoryHintPanel.kt",
+    "text": "hint.recallQuestionZh",
+    "count": 1,
+    "reason": "未揭晓的回想问题，不开放会帮助推测答案的查词讲句"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/MemoryHintPanel.kt",
+    "text": "if (expanded) \"收起\" else \"更多记忆提示\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/MemoryHintPanel.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/MemoryHintPanel.kt",
+    "text": "type.labelZh",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/SpellingChunks.kt",
+    "text": "\"${chunks[trickyIndex]} 是最容易拼错的部分\"",
+    "count": 1,
+    "reason": "拼写分组是字母片段，不是独立词义；查词应作用于完整词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/SpellingChunks.kt",
+    "text": "chunk",
+    "count": 1,
+    "reason": "拼写分组是字母片段，不是独立词义；查词应作用于完整词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
+    "text": "\"${record.item.stageOrDefault().label} · 复习 ${record.item.reviewCount} 次 · \" + \"忘过 ${record.item.lapseCount} 次 · \" + dueLabel(record.item.nextReviewAt, System.currentTimeMillis())",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
+    "text": "\"删除「${record.detail.term}」？\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
+    "text": "detail.ipa",
+    "count": 1,
+    "reason": "IPA 或拆音节记号，不作为英语单词；完整例词另有交互入口"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
+    "text": "grade.label",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
+    "text": "record?.detail?.term.orEmpty()",
+    "count": 1,
+    "reason": "顶栏页面标题，正文中的同一词已使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordImagePanel.kt",
+    "text": "\"来自网络搜索\" + asset.hostLabel.takeIf { it.isNotBlank() }?.let { \" · $it\" }.orEmpty()",
+    "count": 1,
+    "reason": "图片搜索/版权来源和候选选择状态；图片标题用于选图"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordImagePanel.kt",
+    "text": "\"正在给「${state?.meaningZh.orEmpty().ifBlank { \"这个意思\" }}」找图\"",
+    "count": 1,
+    "reason": "图片搜索/版权来源和候选选择状态；图片标题用于选图"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordImagePanel.kt",
+    "text": "(failure ?: ImageFailureReason.NoResults).messageZh",
+    "count": 1,
+    "reason": "图片搜索/版权来源和候选选择状态；图片标题用于选图"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordImagePanel.kt",
+    "text": "// 把 sense-first 说给用户听：他挑的是\"哪张说清了这个意思\"，不是\"哪张和这个词有关\"。 text = \"都是照着「${state.meaningZh.ifBlank { \"这个意思\" }}」找的，不是照着 ${state.term} 这个词\"",
+    "count": 1,
+    "reason": "图片搜索/版权来源和候选选择状态；图片标题用于选图"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordImagePanel.kt",
+    "text": "asset.hostLabel",
+    "count": 1,
+    "reason": "图片搜索/版权来源和候选选择状态；图片标题用于选图"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordImagePanel.kt",
+    "text": "asset.rightsNoteZh",
+    "count": 1,
+    "reason": "图片搜索/版权来源和候选选择状态；图片标题用于选图"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordImagePanel.kt",
+    "text": "asset.title.ifBlank { \"这张图\" }",
+    "count": 1,
+    "reason": "图片搜索/版权来源和候选选择状态；图片标题用于选图"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordImagePanel.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "图片搜索/版权来源和候选选择状态；图片标题用于选图"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordLearningContent.kt",
+    "text": "card.ipa",
+    "count": 1,
+    "reason": "IPA 或拆音节记号，不作为英语单词；完整例词另有交互入口"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordLearningContent.kt",
+    "text": "copy.wordNewCardHint",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/AiWaiting.kt",
+    "text": "detail ?: stageDetail(stage, seconds)",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/AiWaiting.kt",
+    "text": "if (stage is GenerationStage.Thinking) \"$title（模型正在想）\" else title",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/AiWaiting.kt",
+    "text": "preview",
+    "count": 1,
+    "reason": "流式生成中的未完成预览，完成后的学习正文使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "\"AI 正在结合这句话查词…\"",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "\"AI 正在翻译并拆解这句话…\"",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "\"查询失败：$error\"",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "\"讲解失败：$error\"",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "annotated",
+    "count": 1,
+    "reason": "统一手势组件的底层 Text 已绑定 pointerInput；text 另含中文生成状态标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "detail",
+    "count": 1,
+    "reason": "流式生成中的未完成预览，完成后的学习正文使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "if (saved) \"已在表达里\" else \"摘下这句\"",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "if (saved) \"已记入，会安排复习\" else \"这个意思也记下来\"",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "if (speakOnSingleTap) \"单击朗读 · 双击查词 · 三击讲句\" else \"快速双击查词 · 快速三击讲句\"",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "it",
+    "count": 1,
+    "reason": "查词标题旁的 IPA 音标，不是英语单词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "meaning",
+    "count": 1,
+    "reason": "流式生成中的未完成预览，完成后的学习正文使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "text",
+    "count": 2,
+    "reason": "统一手势组件的底层 Text 已绑定 pointerInput；text 另含中文生成状态标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "translation",
+    "count": 1,
+    "reason": "流式生成中的未完成预览，完成后的学习正文使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "usage",
+    "count": 1,
+    "reason": "流式生成中的未完成预览，完成后的学习正文使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
+    "text": "when { saved -> \"已记入，会安排复习\" value.inflected -> \"把 ${value.headword} 放进生词本\" else -> \"放进生词本\" }",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/TagPicker.kt",
+    "text": "addPlaceholder",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/TagPicker.kt",
+    "text": "option",
+    "count": 1,
+    "reason": "共用控件的状态、操作标签或表单提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
+    "text": "span.meaningZh",
+    "count": 1,
+    "reason": "读后回想问题，不通过讲句提前翻译出待回忆的英文；片段讲解面板的释义已使用交互文本"
+  }
+]

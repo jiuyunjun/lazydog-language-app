@@ -1,5 +1,9 @@
 package com.lazydog.english.feature.pronunciation
 
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.ask.ProvideAskContext
+import com.lazydog.english.feature.ask.AskTopBarAction
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -82,6 +86,8 @@ fun SoundCardScreen(
     // 打开卡片就算「认识了」：这一步只推进阶段，不写任何作答，看一眼不是一次练习。
     LaunchedEffect(targetId) { app.pronunciationRepository.markCardSeen(targetId) }
 
+    ProvideAskContext(phoneme?.toAskContext(), unavailableReason = "音位资料不可用")
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -101,6 +107,7 @@ fun SoundCardScreen(
                     }
                 },
                 actions = {
+                    AskTopBarAction()
                     if (progress.stage != PronunciationStage.Unseen) {
                         StageLabel(progress.stage, Modifier.padding(end = 16.dp))
                     }
@@ -171,8 +178,8 @@ fun SoundCardScreen(
                     }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(phoneme.shortDescriptionZh, style = MaterialTheme.typography.titleLarge)
-                    Text(
+                    InteractiveEnglishText(phoneme.shortDescriptionZh, style = MaterialTheme.typography.titleLarge)
+                    InteractiveEnglishText(
                         text = headline?.let { "在 $it 里听这个音 · ${phoneme.category.labelZh} · 美音" }
                             ?: "${phoneme.category.labelZh} · 美音",
                         style = MaterialTheme.typography.bodyMedium,
@@ -206,7 +213,15 @@ fun SoundCardScreen(
                             onClick = {
                                 app.speechController.onPlayClicked(PlaybackSource.word(example.word))
                             },
-                            label = { Text(example.word) },
+                            label = {
+                                InteractiveEnglishText(
+                                    text = example.word,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    onSingleTap = {
+                                        app.speechController.onPlayClicked(PlaybackSource.word(example.word))
+                                    },
+                                )
+                            },
                             leadingIcon = {
                                 Icon(
                                     Icons.AutoMirrored.Outlined.VolumeUp,
@@ -251,14 +266,14 @@ private fun Articulation(phoneme: Phoneme) {
                         color = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.width(40.dp),
                     )
-                    Text(text = value, style = MaterialTheme.typography.bodySmall)
+                    InteractiveEnglishText(text = value, style = MaterialTheme.typography.bodySmall)
                 }
             }
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 shape = MaterialTheme.shapes.small,
             ) {
-                Text(
+                InteractiveEnglishText(
                     text = "关键动作：${guide.keyActionZh}",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -267,7 +282,7 @@ private fun Articulation(phoneme: Phoneme) {
             }
             if (guide.termZh.isNotBlank()) {
                 // 术语收在最后一行的小字里：先给动作，术语只是给想深究的人一个词
-                Text(
+                InteractiveEnglishText(
                     text = guide.termZh,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
@@ -312,12 +327,12 @@ private fun CommonErrors(errors: List<CommonError>) {
             }
             errors.forEach { error ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
+                    InteractiveEnglishText(
                         text = "${error.exampleEn} → 听成 ${error.soundsLikeEn}（读成了 /${error.substituteIpa}/）",
                         style = MaterialTheme.typography.bodyMedium,
                         color = LazyDogTheme.extendedColors.onAttentionContainer,
                     )
-                    Text(
+                    InteractiveEnglishText(
                         text = error.fixZh,
                         style = MaterialTheme.typography.bodyMedium,
                         color = LazyDogTheme.extendedColors.onAttentionContainer,
@@ -344,7 +359,7 @@ private fun ContrastCard(contrast: PhonemeContrast, left: Phoneme?, right: Phone
                 style = MaterialTheme.typography.titleMedium,
             )
             contrast.minimalPairs.take(3).forEach { pair ->
-                Text(
+                InteractiveEnglishText(
                     text = "${pair.leftWord} / ${pair.rightWord}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

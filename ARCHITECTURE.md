@@ -2,8 +2,8 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.6"
-updated: "2026-09-07"
+version: "1.7"
+updated: "2026-10-28"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -216,6 +216,24 @@ app/
     generation/
     validation/
 ```
+
+### 全局学习能力的接入边界（D-078）
+
+- 应用层 `AppScreen.kt` 是唯一 Navigation Compose 页面注册入口，`ask` 参数没有默认值。
+  `Required` 自动挂载既有 `feature/ask/AskHost`；`Disabled(reason)` 必须给出原因。
+  每个导航条目有自己的控制器，避免转场、返回和相同路由的不同参数互相覆盖。
+- `core/ask/AskController` 区分 `Missing`、`Unavailable(reason)`、`Ready(context)`。
+  页面始终调用 `ProvideAskContext(context, unavailableReason)`，加载/失败态也声明。
+  静态检查核对入口，debug 前台运行时检查实际注册。传感器仅 RESUMED 监听；ON_STOP 关闭聊天，
+  系统权限弹窗的 ON_PAUSE 保留会话；抽屉退出取消会话协程并停止听写。控制器使用注册 owner，旧页面释放不能清掉新上下文。
+- 既有 `InteractiveEnglishText` / `InteractiveEnglishBlock` 继续拥有单/双/三击逻辑。
+  混排正文通过注解和位置回调保留单击/长按语义，共用多击判定；组件退出时取消延迟单击。
+  `SuspendAsk(reason)` 让回想、学习片段和查词模态面板暂停底层提问，退出后恢复；不另存上下文副本。
+- `tools/check_ui_capabilities.py` 在 Gradle `preBuild` 和 CI 中执行；普通动态文本及英文常量
+  按文件、表达式和出现次数核对 `tools/ui_text_exceptions.json` 的人工审查例外。
+  纯中文固定标签自动放行。改正文语义仍需审查：静态检查不是完整 Kotlin 语义分析，也不能证明真机手势效果。
+- 依赖方向、表和全局单例不变；`core/designsystem → core/ask → domain/ask` 单向。
+  没有新增层、框架或手势系统，状态仍限于导航条目和 Compose 生命周期。
 
 ## 5. 核心数据模型
 

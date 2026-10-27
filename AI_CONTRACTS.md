@@ -2,8 +2,8 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "10.0"
-updated: "2026-09-07"
+version: "11.0"
+updated: "2026-10-28"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -95,6 +95,12 @@ interface LearningContentGenerator {
   以上是生成约束，未新增视觉识别或语义校验，也未更改输出结构和请求次数。
 
 ### 摇一摇提问调用边界
+
+D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下文类型，用于音位卡、跟读和朗读。
+音位上下文仅含音标、发音动作、例词与常见误读，朗读含当前原句；不传录音，不能声称听过用户发音。
+听辨只在提交后提供播放词、选项、本人选择和正确答案，答前不给本题上下文。
+录音/评估期间不允许打开提问；输出 schema、历史轮数、校验和调用接口保持不变。
+
 
 `askAboutContext` 是单次调用，输入 = 当前页面注册的结构化上下文 + 本次抽屉内的追问历史 + 用户这次的问题：
 
@@ -553,7 +559,7 @@ interface LearningContentGenerator {
 | `GRAMMAR_DRILL_PROMPT_VERSION` | 2 |
 | `TRANSLATION_PROMPT_VERSION` | 2 |
 | `SCENARIO_PROMPT_VERSION` | 2 |
-| `ASK_PROMPT_VERSION` | 2 |
+| `ASK_PROMPT_VERSION` | 3 |
 | `LISTENING_PROMPT_VERSION` | 3 |
 | `MEMORY_PROMPT_VERSION` | 6 |
 | `VISUAL_QUERY_PROMPT_VERSION` | 3 |

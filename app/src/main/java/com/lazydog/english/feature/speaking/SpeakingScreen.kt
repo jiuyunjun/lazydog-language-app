@@ -1,5 +1,11 @@
 package com.lazydog.english.feature.speaking
 
+import com.lazydog.english.domain.ask.AskContext
+import com.lazydog.english.domain.ask.AskContextKind
+import com.lazydog.english.domain.ask.AskDetail
+import com.lazydog.english.core.ask.ProvideAskContext
+import com.lazydog.english.feature.ask.AskTopBarAction
+
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -181,9 +187,20 @@ fun SpeakingScreen(
         speech.onPlayClicked(sampleSource)
     }
 
+    ProvideAskContext(
+        if (busy) null else AskContext(
+            kind = AskContextKind.Pronunciation,
+            title = "朗读练习",
+            details = listOf(AskDetail("当前原句", sentence.text)),
+            suggestions = listOf("这句话怎么连读？", "这句话的重音在哪里？"),
+        ),
+        unavailableReason = "正在准备音频、录音或生成反馈",
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
+                actions = { AskTopBarAction() },
                 title = { Text("朗读") },
                 navigationIcon = {
                     IconButton(onClick = onExit) {

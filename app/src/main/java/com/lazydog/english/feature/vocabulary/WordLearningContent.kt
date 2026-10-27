@@ -1,5 +1,6 @@
 package com.lazydog.english.feature.vocabulary
 
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -48,7 +49,7 @@ fun WordLearningContent(
         )
     }
     if (revealed) {
-        Text(
+        InteractiveEnglishText(
             text = if (card.pos.isNotBlank()) "${posLabelZh(card.pos)} ${card.meaningZh}" else card.meaningZh,
             style = MaterialTheme.typography.titleMedium,
         )
@@ -112,7 +113,7 @@ fun WordLearningContent(
                         )
                     }
                     if (card.exampleZh.isNotBlank()) {
-                        Text(
+                        InteractiveEnglishText(
                             text = card.exampleZh,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

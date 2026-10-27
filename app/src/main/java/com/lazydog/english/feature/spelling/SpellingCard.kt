@@ -509,7 +509,7 @@ private fun ExposureBody(card: SpellingCard, play: PlaybackSource) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    Text(
+    InteractiveEnglishText(
         text = listOfNotNull(entry.pos.takeIf { it.isNotBlank() }?.let(::posLabelZh), entry.meaningZh)
             .joinToString(" · "),
         style = MaterialTheme.typography.titleMedium,
@@ -525,7 +525,7 @@ private fun ExposureBody(card: SpellingCard, play: PlaybackSource) {
                 speakOnSingleTap = true,
             )
             if (entry.exampleZh.isNotBlank()) {
-                Text(
+                InteractiveEnglishText(
                     text = entry.exampleZh,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -933,7 +933,7 @@ private fun HintExtras(hint: SpellingHint, term: String, ipaAlways: String = "")
         )
     }
     if (hint.noteZh.isNotBlank()) {
-        Text(
+        InteractiveEnglishText(
             text = hint.noteZh,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,

@@ -51,6 +51,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
@@ -63,6 +65,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -98,11 +103,29 @@ private enum class AddState { Added, Existing }
  * 这里只负责触发方式、抽屉和一次会话的问答状态。关掉抽屉状态即清空（不留历史）。
  */
 @Composable
-fun AskHost(content: @Composable () -> Unit) {
+fun AskHost(pageName: String, content: @Composable () -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
-    val scope = rememberCoroutineScope()
     val controller = remember { AskController() }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var resumed by remember(lifecycle) { mutableStateOf(lifecycle.currentState == Lifecycle.State.RESUMED) }
+    DisposableEffect(lifecycle, controller) {
+        val observer = LifecycleEventObserver { _, event ->
+            resumed = lifecycle.currentState == Lifecycle.State.RESUMED
+            // 系统权限弹窗只会暂停：保留聊天和权限回调；后台/离页才结束会话。
+            if (event == Lifecycle.Event.ON_STOP) controller.close()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    val debug = remember { (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
+    LaunchedEffect(resumed, controller.isDeclared) {
+        if (debug && resumed && !controller.isDeclared) {
+            // 等子页面的 DisposableEffect 完成；加载/失败态也必须显式注册。
+            withFrameNanos { }
+            controller.requireDeclared(pageName)
+        }
+    }
 
     val shakeEnabled by app.userPreferences.askShakeEnabled.collectAsState(initial = true)
     val sensitivity by app.userPreferences.askShakeSensitivity.collectAsState(initial = 1)
@@ -113,7 +136,7 @@ fun AskHost(content: @Composable () -> Unit) {
     controller.showTopBarIcon = controller.canAsk && (!hasSensor || topBarIconPref)
 
     ShakeToAsk(
-        enabled = shakeEnabled && hasSensor && controller.canAsk && !controller.visible,
+        enabled = resumed && shakeEnabled && hasSensor && controller.canAsk && !controller.visible,
         sensitivity = sensitivity,
         onShake = controller::open,
     )
@@ -143,7 +166,6 @@ fun AskHost(content: @Composable () -> Unit) {
                     )
                     if (id != null) AddState.Added else AddState.Existing
                 },
-                scopeLaunch = { block -> scope.launch { block() } },
             )
         }
     }
@@ -175,8 +197,10 @@ private fun AskSheet(
     onStopTranscribing: () -> Unit,
     learnerLevel: suspend () -> String,
     onAddToReview: suspend (AskAddableTerm) -> AddState,
-    scopeLaunch: (suspend () -> Unit) -> Unit,
 ) {
+    // 会话关闭时取消本次网络/听写工作，不能活得比抽屉更久。
+    val scope = rememberCoroutineScope()
+    fun scopeLaunch(block: suspend () -> Unit) { scope.launch { block() } }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var rounds by remember { mutableStateOf<List<AskRound>>(emptyList()) }
     var input by remember { mutableStateOf("") }
@@ -188,6 +212,10 @@ private fun AskSheet(
     val added = remember { mutableStateMapOf<String, AddState>() }
     val listScroll = rememberScrollState()
     val context = LocalContext.current
+
+    DisposableEffect(Unit) {
+        onDispose { if (transcribing) onStopTranscribing() }
+    }
 
     fun transcribe() {
         if (busy) return
@@ -466,7 +494,7 @@ private fun ContextCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Text(text = askContext.title, style = MaterialTheme.typography.bodyMedium)
+                    InteractiveEnglishText(text = askContext.title, style = MaterialTheme.typography.bodyMedium)
                 }
                 Icon(
                     imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
@@ -482,7 +510,7 @@ private fun ContextCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        Text(
+                        InteractiveEnglishText(
                             text = detail.value,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

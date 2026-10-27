@@ -261,7 +261,10 @@ fun ReadingScreen(
     // 默认拿整篇材料当上下文；答过题之后换成最近这道题（含你选了什么）。
     var askQuestionContext by remember { mutableStateOf<AskContext?>(null) }
     val material = (phase as? ReadingPhase.Viewing)?.material
-    ProvideAskContext(material?.let { askQuestionContext ?: it.toAskContext() })
+    ProvideAskContext(
+        material?.let { askQuestionContext ?: it.toAskContext() },
+        unavailableReason = "尚未载入阅读材料",
+    )
 
     Scaffold(
         topBar = {
@@ -519,7 +522,7 @@ private fun MaterialContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(material.title, style = MaterialTheme.typography.headlineSmall)
+        InteractiveEnglishText(material.title, style = MaterialTheme.typography.headlineSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (material.cefr.isNotBlank()) Tag("难度 ${material.cefr}")
             Tag(if (material.source == ReadingRepository.SOURCE_AI) "AI 定制" else "粘贴导入")

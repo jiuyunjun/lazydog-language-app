@@ -31,6 +31,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Set up Python for UI capability checks
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 

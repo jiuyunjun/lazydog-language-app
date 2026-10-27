@@ -1,5 +1,6 @@
 package com.lazydog.english.feature.today
 
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -484,12 +485,12 @@ private fun LongTermProofCard(proof: LongTermProof, modifier: Modifier = Modifie
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
-            Text(
+            InteractiveEnglishText(
                 text = copy.proofPastAnswer(proof.pastAnswer),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
-            Text(
+            InteractiveEnglishText(
                 text = copy.proofNow(proof.term),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,

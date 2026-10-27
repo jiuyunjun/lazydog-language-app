@@ -74,10 +74,10 @@ private const val MULTI_TAP_WINDOW_MILLIS = 280L
  * [InteractiveEnglishBlock] 装在整块上。判定逻辑只该有一份。
  */
 @Stable
-private class EnglishTapState(
+internal class EnglishTapState(
     val text: String,
     private val scope: CoroutineScope,
-    private val context: Context,
+    private val onSpeak: () -> Unit,
 ) {
     var word by mutableStateOf<Pair<String, String>?>(null)
     var sentence by mutableStateOf<String?>(null)
@@ -87,8 +87,12 @@ private class EnglishTapState(
 
     fun speak() {
         // 单击念的和旁边喇叭念的是同一个 source，所以喇叭会跟着显示成"正在播"。
-        (context.applicationContext as LazyDogApplication).speechController
-            .onPlayClicked(PlaybackSource.sentence(text))
+        onSpeak()
+    }
+
+    fun cancelPendingTap() {
+        settleJob?.cancel()
+        tapCount = 0
     }
 
     /**
@@ -115,12 +119,26 @@ private class EnglishTapState(
 private fun rememberEnglishTapState(text: String): EnglishTapState {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    return remember(text, scope, context) { EnglishTapState(text, scope, context) }
+    val state = remember(text, scope, context) {
+        EnglishTapState(text, scope) {
+            (context.applicationContext as LazyDogApplication).speechController
+                .onPlayClicked(PlaybackSource.sentence(text))
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(state) {
+        onDispose { state.cancelPendingTap() }
+    }
+    return state
 }
 
 /** 查词和讲句的面板。两个入口都要挂，所以单独放一份。 */
 @Composable
 private fun EnglishSheets(state: EnglishTapState) {
+    if ((state.word != null || state.sentence != null) &&
+        com.lazydog.english.core.ask.LocalAskController.current?.visible != true
+    ) {
+        com.lazydog.english.core.ask.SuspendAsk("查词或讲句面板已打开")
+    }
     state.word?.let { (word, sentence) ->
         GlobalWordSheet(word, sentence) { state.word = null }
     }
@@ -155,13 +173,19 @@ fun InteractiveEnglishText(
     highlightStyle: SpanStyle? = null,
     speakOnSingleTap: Boolean = false,
     onSingleTap: (() -> Unit)? = null,
+    textAlign: androidx.compose.ui.text.style.TextAlign? = null,
+    fontFamily: androidx.compose.ui.text.font.FontFamily? = null,
+    annotations: AnnotatedString? = null,
+    onSingleTapAt: ((Int) -> Unit)? = null,
+    onLongPressAt: ((Int) -> Unit)? = null,
 ) {
+    require(annotations == null || annotations.text == text) { "注解与交互文本必须一致" }
     val state = rememberEnglishTapState(text)
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val highlightLower = remember(highlightWords) { highlightWords.map { it.lowercase() }.toSet() }
     val primary = MaterialTheme.colorScheme.primary
-    val annotated = remember(text, highlightLower, primary, highlightStyle) {
-        highlightedText(text, highlightLower, highlightStyle ?: SpanStyle(
+    val annotated = remember(text, annotations, highlightLower, primary, highlightStyle) {
+        annotations ?: highlightedText(text, highlightLower, highlightStyle ?: SpanStyle(
             color = primary,
             fontWeight = FontWeight.Medium,
             textDecoration = TextDecoration.Underline,
@@ -171,11 +195,20 @@ fun InteractiveEnglishText(
     Text(
         text = annotated,
         modifier = modifier
-            .pointerInput(text, onSingleTap, speakOnSingleTap) {
-                detectTapGestures { position ->
-                    val offset = layout?.getOffsetForPosition(position) ?: return@detectTapGestures
-                    state.onTap(offset, speakOnSingleTap, onSingleTap)
-                }
+            .pointerInput(text, onSingleTap, speakOnSingleTap, onSingleTapAt, onLongPressAt) {
+                detectTapGestures(
+                    onLongPress = onLongPressAt?.let { callback ->
+                        { position ->
+                            state.cancelPendingTap()
+                            layout?.getOffsetForPosition(position)?.let(callback)
+                        }
+                    },
+                    onTap = { position ->
+                        val offset = layout?.getOffsetForPosition(position) ?: return@detectTapGestures
+                        val single = onSingleTapAt?.let { callback -> { callback(offset) } } ?: onSingleTap
+                        state.onTap(offset, speakOnSingleTap, single)
+                    },
+                )
             },
         style = style,
         color = color,
@@ -183,6 +216,8 @@ fun InteractiveEnglishText(
         textDecoration = textDecoration,
         maxLines = maxLines,
         overflow = overflow,
+        textAlign = textAlign,
+        fontFamily = fontFamily,
         onTextLayout = { layout = it },
     )
 
@@ -454,7 +489,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
             // 但朗读仍读他点的那个形态：他要听的是这句话里这个词怎么念。
             val headword = shown?.headword ?: word
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(headword, style = MaterialTheme.typography.headlineSmall)
+                InteractiveEnglishText(headword, style = MaterialTheme.typography.headlineSmall)
                 shown?.ipa?.takeIf { it.isNotBlank() }?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -462,7 +497,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
             }
             // 换了个词形就得说清楚，不然用户会以为自己点错了行、或者存进去的词丢了。
             if (shown?.inflected == true) {
-                Text(
+                InteractiveEnglishText(
                     text = "你点的是 $word，它是 $headword 的变形",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -479,7 +514,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                     // 就没法知道用户到底会了哪个（单词记忆DESIGN.md Principle 3）。
                     val another = otherSense
                     if (another != null) {
-                        Text(
+                        InteractiveEnglishText(
                             text = "这句里它是另一个意思：${another.meaningZh}",
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -573,7 +608,7 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                     Text("AI 正在结合这句话查词…")
                 }
             }
-            Text("「$sentence」", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            InteractiveEnglishText("「$sentence」", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }
     }
 }
@@ -618,7 +653,7 @@ private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(sentence, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                InteractiveEnglishText(sentence, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 SpeakButton(PlaybackSource.sentence(sentence), contentDescription = "朗读这句话")
             }
             when {
@@ -673,7 +708,7 @@ private fun WordExample(exampleEn: String, exampleZh: String) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             InteractiveEnglishText(text = exampleEn, style = MaterialTheme.typography.bodyMedium)
             if (exampleZh.isNotBlank()) {
-                Text(exampleZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                InteractiveEnglishText(exampleZh, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

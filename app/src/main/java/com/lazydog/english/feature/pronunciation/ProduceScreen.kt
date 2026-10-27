@@ -1,5 +1,9 @@
 package com.lazydog.english.feature.pronunciation
 
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.ask.ProvideAskContext
+import com.lazydog.english.feature.ask.AskTopBarAction
+
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -192,6 +196,11 @@ fun ProduceScreen(
         if (granted) assess() else showRationale = true
     }
 
+    ProvideAskContext(
+        phoneme?.takeIf { current != null && phase != ProducePhase.Recording }?.toAskContext(current),
+        unavailableReason = "音位资料不可用或正在录音评估",
+    )
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -211,6 +220,7 @@ fun ProduceScreen(
                     }
                 },
                 actions = {
+                    AskTopBarAction()
                     if (words.isNotEmpty()) {
                         Text(
                             text = "${wordIndex + 1} / ${words.size}",
@@ -327,7 +337,7 @@ private fun Prompt(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(text = word, style = MaterialTheme.typography.displaySmall)
+        InteractiveEnglishText(text = word, style = MaterialTheme.typography.displaySmall)
         Text(
             text = phoneme.exampleWords.firstOrNull { it.word == word }?.ipa.orEmpty(),
             style = MaterialTheme.typography.bodyLarge,
@@ -351,7 +361,7 @@ private fun Prompt(
             shape = MaterialTheme.shapes.medium,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(
+            InteractiveEnglishText(
                 text = phoneme.articulation.keyActionZh,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -431,7 +441,7 @@ private fun FeedbackBlock(state: ProducePhase.Feedback, phoneme: Phoneme) {
                         fontFamily = FontFamily.Monospace,
                         color = onColor,
                     )
-                    Text(
+                    InteractiveEnglishText(
                         text = "这次 · ${state.attempt.text}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = onColor,
@@ -476,7 +486,7 @@ private fun FeedbackBlock(state: ProducePhase.Feedback, phoneme: Phoneme) {
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text("这次主要问题", style = MaterialTheme.typography.titleSmall)
-                    Text(
+                    InteractiveEnglishText(
                         text = "/${phoneme.ipa}/ 容易滑成 /${problem.substituteIpa}/——" +
                             "那样 ${problem.exampleEn} 会听成 ${problem.soundsLikeEn}。",
                         style = MaterialTheme.typography.bodyMedium,
@@ -486,7 +496,7 @@ private fun FeedbackBlock(state: ProducePhase.Feedback, phoneme: Phoneme) {
                         color = MaterialTheme.colorScheme.secondaryContainer,
                         shape = MaterialTheme.shapes.small,
                     ) {
-                        Text(
+                        InteractiveEnglishText(
                             text = "试试：${problem.fixZh}",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -505,7 +515,7 @@ private fun FeedbackBlock(state: ProducePhase.Feedback, phoneme: Phoneme) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(
+                        InteractiveEnglishText(
                             text = word.word,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.width(84.dp),

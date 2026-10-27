@@ -2,7 +2,6 @@ package com.lazydog.english.feature.reading
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -57,10 +56,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -338,7 +335,10 @@ fun NativeReadingScreen(
     }
 
     val current = (phase as? NativePhase.Reading)?.view ?: (phase as? NativePhase.WrapUp)?.view
-    ProvideAskContext(current?.toAskContext())
+    ProvideAskContext(
+        (phase as? NativePhase.Reading)?.view?.toAskContext(),
+        unavailableReason = "尚未载入材料或正在读后回想，暂停全文提问",
+    )
 
     // 文章有了就把本篇目标词的图预取掉（`单词视觉记忆图片DESIGN.md` §49）。
     // 只处理这一篇的新目标词：给文章里所有熟词都预取一遍，是拿配额换没人会看的图。
@@ -691,7 +691,7 @@ private fun NativeArticleView(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(4.dp))
-            Text(view.article.title, style = MaterialTheme.typography.headlineSmall)
+            InteractiveEnglishText(view.article.title, style = MaterialTheme.typography.headlineSmall)
             Text(
                 text = listOfNotNull(
                     view.article.category.ifBlank { null },
@@ -738,7 +738,7 @@ private fun NativeArticleView(
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                         Spacer(Modifier.height(6.dp))
-                        Text(
+                        InteractiveEnglishText(
                             text = view.article.readerPayoff,
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -783,7 +783,6 @@ private fun MixedParagraph(
     onLongPress: (LearningSpan) -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
-    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val annotated = remember(paragraph, revealed.toList(), colors) {
         buildAnnotatedString {
             paragraph.forEach { segment ->
@@ -815,30 +814,19 @@ private fun MixedParagraph(
         }
     }
 
-    Text(
-        text = annotated,
+    InteractiveEnglishText(
+        text = annotated.text,
+        annotations = annotated,
         style = MaterialTheme.typography.bodyLarge,
-        modifier = Modifier
-            .fillMaxWidth()
-            .pointerInput(annotated) {
-                detectTapGestures(
-                    onTap = { position ->
-                        val offset = layout?.getOffsetForPosition(position) ?: return@detectTapGestures
-                        annotated.getStringAnnotations(SPAN_TAG, offset, offset)
-                            .firstOrNull()
-                            ?.let { spans[it.item] }
-                            ?.let(onTap)
-                    },
-                    onLongPress = { position ->
-                        val offset = layout?.getOffsetForPosition(position) ?: return@detectTapGestures
-                        annotated.getStringAnnotations(SPAN_TAG, offset, offset)
-                            .firstOrNull()
-                            ?.let { spans[it.item] }
-                            ?.let(onLongPress)
-                    },
-                )
-            },
-        onTextLayout = { layout = it },
+        modifier = Modifier.fillMaxWidth(),
+        onSingleTapAt = { offset ->
+            annotated.getStringAnnotations(SPAN_TAG, offset, offset)
+                .firstOrNull()?.let { spans[it.item] }?.let(onTap)
+        },
+        onLongPressAt = { offset ->
+            annotated.getStringAnnotations(SPAN_TAG, offset, offset)
+                .firstOrNull()?.let { spans[it.item] }?.let(onLongPress)
+        },
     )
 }
 
@@ -874,6 +862,7 @@ private fun SpanSheet(
     onDismiss: () -> Unit,
     onAdd: () -> Unit,
 ) {
+    com.lazydog.english.core.ask.SuspendAsk("学习片段面板已打开")
     val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -905,14 +894,14 @@ private fun SpanSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(span.meaningZh, style = MaterialTheme.typography.titleMedium)
+            InteractiveEnglishText(span.meaningZh, style = MaterialTheme.typography.titleMedium)
             // 只读缓存，这里绝不现搜（`单词视觉记忆图片DESIGN.md` §48）：
             // 点开等三秒会把阅读节奏毁掉。图是文章生成完那次预取顺手找好的。
             if (!span.isGrammar) {
                 CachedSenseImage(SenseKey.ofDraft(span.renderedEn, "", span.meaningZh))
             }
             if (span.patternEn.isNotBlank()) {
-                Text(
+                InteractiveEnglishText(
                     text = span.patternEn,
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
@@ -929,10 +918,10 @@ private fun SpanSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text(span.sourceZh, style = MaterialTheme.typography.bodyMedium)
+                    InteractiveEnglishText(span.sourceZh, style = MaterialTheme.typography.bodyMedium)
                     if (span.noteZh.isNotBlank()) {
                         Spacer(Modifier.height(8.dp))
-                        Text(
+                        InteractiveEnglishText(
                             text = span.noteZh,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1030,7 +1019,7 @@ private fun QuestionBlock(
     onAnswer: (Int) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(question.promptZh, style = MaterialTheme.typography.titleMedium)
+        InteractiveEnglishText(question.promptZh, style = MaterialTheme.typography.titleMedium)
         question.options.forEachIndexed { index, option ->
             val correct = index == question.answerIndex
             val container = when {
@@ -1063,7 +1052,7 @@ private fun QuestionBlock(
             }
         }
         if (answered >= 0 && question.explanationZh.isNotBlank()) {
-            Text(
+            InteractiveEnglishText(
                 text = question.explanationZh,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1081,6 +1070,7 @@ private fun RecallCard(span: LearningSpan, revealed: Boolean, onReveal: () -> Un
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // 这是未揭晓的回想问题，不能三击把中文翻译成待回忆的英文。
             Text(span.meaningZh, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             if (revealed) {
@@ -1094,7 +1084,7 @@ private fun RecallCard(span: LearningSpan, revealed: Boolean, onReveal: () -> Un
                     SpeakButton(source = PlaybackSource.sentence(span.renderedEn))
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(
+                InteractiveEnglishText(
                     text = "文章里是：${span.sourceZh}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

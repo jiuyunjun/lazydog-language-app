@@ -300,6 +300,7 @@ fun GrammarStudyScreen(
             is GrammarPhase.Drilling -> p.session.toAskContext()
             else -> null
         },
+        unavailableReason = "尚未进入语法讲解或练习",
     )
 
     Scaffold(
@@ -504,7 +505,7 @@ private fun WeakSpotCard(weakSpots: List<MistakeSummary>) {
                 color = MaterialTheme.colorScheme.primary,
             )
             weakSpots.forEach { spot ->
-                Text(
+                InteractiveEnglishText(
                     text = "${spot.labelZh} · 错过 ${spot.count} 次" +
                         if (spot.patterns.isNotEmpty()) "（${spot.patterns.first()}）" else "",
                     style = MaterialTheme.typography.bodyMedium,
@@ -703,7 +704,7 @@ private fun SummaryView(
         )
         Text("这轮语法搞定", style = MaterialTheme.typography.headlineSmall)
         practiced.forEach { line ->
-            Text(
+            InteractiveEnglishText(
                 text = line,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

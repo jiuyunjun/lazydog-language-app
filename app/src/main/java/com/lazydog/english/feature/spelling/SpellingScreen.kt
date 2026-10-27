@@ -102,7 +102,10 @@ fun SpellingScreen(
     }
 
     val round = phase as? SpellingPhase.Round
-    ProvideAskContext(round?.let { spellingAskContext(it.card, answer) })
+    ProvideAskContext(
+        round?.let { spellingAskContext(it.card, answer) },
+        unavailableReason = "加载或本轮已结束，当前没有拼写题",
+    )
 
     Scaffold(
         topBar = {

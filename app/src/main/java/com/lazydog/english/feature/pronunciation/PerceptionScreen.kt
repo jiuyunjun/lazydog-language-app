@@ -1,5 +1,9 @@
 package com.lazydog.english.feature.pronunciation
 
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
+import com.lazydog.english.core.ask.ProvideAskContext
+import com.lazydog.english.feature.ask.AskTopBarAction
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -206,6 +210,11 @@ fun PerceptionScreen(
         }
     }
 
+    ProvideAskContext(
+        perceptionAskContext(question, (phase as? Phase.Answered)?.chosen),
+        unavailableReason = "听辨答题前、加载或总结阶段暂停提问",
+    )
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -224,6 +233,7 @@ fun PerceptionScreen(
                     }
                 },
                 actions = {
+                    AskTopBarAction()
                     if (phase != Phase.Finished) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -494,11 +504,19 @@ private fun OptionCard(
                     modifier = Modifier.weight(1f),
                 )
             } else {
-                Text(
-                    text = option.label,
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.weight(1f),
-                )
+                if (reveal) {
+                    InteractiveEnglishText(
+                        text = option.label,
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Text(
+                        text = option.label,
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
             if (reveal && !symbol) {
                 Text(
@@ -549,7 +567,7 @@ private fun HintPanel(
             }
             if (hint.level >= PronunciationHint.ShowIpa.level) {
                 question.options.forEach { option ->
-                    Text(
+                    InteractiveEnglishText(
                         text = "${option.label}  ${option.ipa}",
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -559,7 +577,7 @@ private fun HintPanel(
                 listOf(question.leftPhonemeId, question.rightPhonemeId)
                     .mapNotNull { catalog.phoneme(it) }
                     .forEach { phoneme ->
-                        Text(
+                        InteractiveEnglishText(
                             text = "/${phoneme.ipa}/：${phoneme.articulation.keyActionZh}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -567,7 +585,7 @@ private fun HintPanel(
                     }
             }
             if (hint.isFinal) {
-                Text(
+                InteractiveEnglishText(
                     text = "答案是 ${question.correctOption.label}。这一题不计入听辨分。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -620,7 +638,7 @@ private fun Explanation(
                                 style = MaterialTheme.typography.titleMedium,
                                 spokenName = phoneme.shortDescriptionZh,
                             )
-                            Text(
+                            InteractiveEnglishText(
                                 text = phoneme.shortDescriptionZh,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -634,7 +652,7 @@ private fun Explanation(
                 ?.noteZh
                 .orEmpty()
             if (pairNote.isNotBlank()) {
-                Text(text = pairNote, style = MaterialTheme.typography.bodyMedium)
+                InteractiveEnglishText(text = pairNote, style = MaterialTheme.typography.bodyMedium)
             }
             OutlinedButton(onClick = { onPlayWord(question.correctOption.label) }) {
                 Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))

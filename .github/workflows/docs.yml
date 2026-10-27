@@ -29,3 +29,8 @@ jobs:
 
       - name: Check doc metadata against DOCS.md
         run: python tools/check_docs.py
+
+      - name: Check UI capability coverage and guard regressions
+        run: |
+          python tools/check_ui_capabilities.py
+          python -m unittest discover -s tools -p "test_ui_capabilities.py"

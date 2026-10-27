@@ -844,7 +844,7 @@ private fun WritingResultView(assessment: ExpressionAssessment, onContinue: () -
                     Text("${dim.score} / 4", style = MaterialTheme.typography.bodyLarge)
                 }
                 dim.evidenceZh.forEach { evidence ->
-                    Text(
+                    InteractiveEnglishText(
                         text = "· $evidence",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

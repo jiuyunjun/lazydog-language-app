@@ -1,5 +1,6 @@
 package com.lazydog.english.feature.grammar
 
+import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -124,7 +125,7 @@ private fun ExampleBlock(
                 speakOnSingleTap = speakSource != null,
             )
             if (note.isNotBlank()) {
-                Text(
+                InteractiveEnglishText(
                     text = note,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

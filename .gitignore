@@ -11,6 +11,9 @@ build/
 **/build/
 local.properties
 
+# Python verification tools
+__pycache__/
+
 # Signing and secrets
 *.jks
 *.keystore

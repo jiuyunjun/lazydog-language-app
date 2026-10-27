@@ -2,8 +2,8 @@
 doc: "README.md"
 tier: "L0 入口"
 status: "生效"
-version: "1.2"
-updated: "2026-09-06"
+version: "1.3"
+updated: "2026-10-28"
 authority: "项目是什么、怎么构建运行、从哪儿开始读"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -27,10 +27,12 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 
 ## 构建与运行
 
-- 要求：JDK 17+、Android SDK（compileSdk 35）。在仓库根目录创建 `local.properties` 写入 `sdk.dir`（Android Studio 会自动生成）。
+- 要求：JDK 17+、Python 3.10+（构建时检查全局 UI 能力）、Android SDK（compileSdk 35）。在仓库根目录创建 `local.properties` 写入 `sdk.dir`（Android Studio 会自动生成）。
 - 服务配置：复制 `app/src/main/java/com/lazydog/english/core/config/LocalEnv.kt.example` 为同目录 `LocalEnv.kt` 并填入自己的密钥（该文件被 gitignore，见 DECISIONS D-012）。不填也能启动，只是 AI 连接测试会失败。
 - 构建：`./gradlew assembleDebug`
-- 验证：`./gradlew lintDebug testDebugUnitTest`
+- 验证：`./gradlew lintDebug testDebugUnitTest`（preBuild 自动执行全局 UI 能力检查）；另跑
+  `python -m unittest discover -s tools -p test_ui_capabilities.py` 和 `python tools/check_docs.py`。
+- 新增页面与文本交互的要求见 `UI_BRIEF.md` §5.5；普通文本例外必须人工审查，禁止批量更新清单消除报错。
 - 运行：Android Studio 直接运行 `app`，或 `adb install app/build/outputs/apk/debug/app-debug.apk`
 - 说明：设置页点击「AI 服务」一行即可用内置配置做连接测试；朗读（Azure Speech）功能在 M5 才接入。
 

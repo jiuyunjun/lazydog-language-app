@@ -2133,7 +2133,7 @@ class OpenAiContentGenerator(
         const val GRAMMAR_DRILL_PROMPT_VERSION = 2
         const val TRANSLATION_PROMPT_VERSION = 2
         const val SCENARIO_PROMPT_VERSION = 2
-        const val ASK_PROMPT_VERSION = 2
+        const val ASK_PROMPT_VERSION = 3
         const val LISTENING_PROMPT_VERSION = 3
         const val MEMORY_PROMPT_VERSION = 6
         const val VISUAL_QUERY_PROMPT_VERSION = 3
