@@ -2,7 +2,7 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "11.0"
+version: "12.0"
 updated: "2026-10-28"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
@@ -159,7 +159,7 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
   保留模型、提示词版本、schema、过滤备注和保存时间。只刷新或退出不创建知识项和复习记录。
 - 首次生成与详情页刷新复用面板，失败保留旧内容；切到另一个词取消旧面板任务，不能串词。
 - 流式预览读取实际 snake_case 字段 `memory_hook` / `core_meaning`，不等待整个 JSON 才显示。
-- 新词与点词提示版本分别为 `WORDS_PROMPT_VERSION=7`、`WORD_EXPLANATION_PROMPT_VERSION=6`，
+- 新词与点词提示版本分别为 `WORDS_PROMPT_VERSION=8`（D-080 加入可选的已确认词义）、`WORD_EXPLANATION_PROMPT_VERSION=6`，
   独立记忆提示为 `MEMORY_PROMPT_VERSION=6`；输出 schema 仍为 1，旧数据不自动重写。
   本次收紧模型生成与自检规则，本地字符校验不具备音系相似度判断能力；
   旧谐音仍可能显示，用户可用已有「换个记法」重新生成。没有自动读音评分或真实模型效果保证。
@@ -264,6 +264,11 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 - `count`、`learnerLevel`、`topics`、`knownTerms`（发给模型的只截前 200 条）
 - `targetTerm` / `sentenceContext`：手动添加的可选指定词与语境；指定词时只生成该原形的完整卡，
   非指定词返回失败。普通学习不传这两项，仍由本地词频候选选词。
+- `confirmedSenseZh`（D-080）：查词速记卡后台补全时传入用户已看过、已存下的词义（如「动词 经营」），
+  提示词以 `<sense>` 标签隔离，要求词性、释义、搭配、例句、记忆提示都围绕这个词义。
+  语境句只是参考、锁不住词义，所以需要这一项。为空时提示词与之前逐字相同。
+  补全结果本地合并：模型换词或词性对不上则整张作废；释义、原句不覆盖；词块拼不回原词、
+  易错段不在词内的丢弃；写回时记录 `origin = "quick-lookup"` 的生成信息。
 - `preferredCandidates`：本地按词频挑好的候选词，高频在前。
   用能力值算出取词排名窗口，窗口内按排名升序、跳过**全部**已学词，
   取 `count × 6` 个——模型会跳掉一部分，只给 `count` 个必然凑不满。
@@ -551,7 +556,7 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 | 常量 | 版本 |
 | --- | --- |
 | `PROMPT_VERSION` | 2 |
-| `WORDS_PROMPT_VERSION` | 7 |
+| `WORDS_PROMPT_VERSION` | 8 |
 | `WORD_EXPLANATION_PROMPT_VERSION` | 6 |
 | `READING_PROMPT_VERSION` | 3 |
 | `NATIVE_READING_PROMPT_VERSION` | 3 |

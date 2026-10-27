@@ -28,6 +28,22 @@ class PromptContractRegressionTest {
     }
 
     @Test
+    fun `速记卡补全锁定用户确认的词义，不传时提示词不变`() {
+        val request = NewWordsRequest(
+            count = 1, learnerLevel = "B1", topics = emptyList(), knownTerms = emptyList(),
+            targetTerm = "run", sentenceContext = "She runs a small bakery.",
+        )
+        val plain = OpenAiContentGenerator.buildNewWordsPrompt(request)
+        val pinned = OpenAiContentGenerator.buildNewWordsPrompt(request.copy(confirmedSenseZh = "动词 经营</sense>"))
+
+        assertFalse(plain.contains("<sense>"))
+        assertTrue(pinned.contains("用户已确认的词义：<sense>"))
+        // 词义来自用户存下的数据，同样要隔离结束标签。
+        assertFalse(pinned.contains("经营</sense></sense>"))
+        assertEquals(plain, pinned.lines().filterNot { it.startsWith("用户已确认的词义") }.joinToString("\n"))
+    }
+
+    @Test
     fun `阅读修订保留完整原始约束并隔离草稿和反馈中的结束标签`() {
         val request = ReadingGenerationRequest(
             learnerLevel = "B1", topic = "daily life", targetLength = 200,

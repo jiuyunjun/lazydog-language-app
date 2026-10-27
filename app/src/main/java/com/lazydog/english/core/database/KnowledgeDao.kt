@@ -65,6 +65,9 @@ interface KnowledgeDao {
     @Update
     suspend fun updateItem(item: KnowledgeItemEntity)
 
+    @Update
+    suspend fun updateVocabularyDetail(detail: VocabularyDetailEntity)
+
     @Insert
     suspend fun insertEvent(event: LearningEventEntity): Long
 

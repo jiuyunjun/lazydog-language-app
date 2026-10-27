@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.9"
+version: "1.10"
 updated: "2026-10-28"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -410,6 +410,13 @@ interface ReviewScheduler {
 这三项本地都能算，但算出来的东西不能用：启发式把 `necessary` 拆成 `nec/ess/ary`、`separate` 拆成 `se/pa/ra/te`，而本地生成的干扰项给不出 `seperate`、`recieve`——真正会犯的错不在选项里，那道四选一不会拼也能做对。更糟的是 S0 卡片会照着猜出来的词块断言"这里最容易拼错"，那是一句假话。所以它们属于内容，不属于推断，和释义一样在生成时校验后入库（`ContentValidation` 检查词块能拼回原词、易错段在词内、错拼不含正确形式）。
 
 老数据这三列为空，引擎自动退回启发式；坏 JSON 解码成空列表，不炸页面。
+
+**查词速记卡的后台补全（D-080）。** 双击查词 / 扫一扫的面板只讲释义和例句，"放进生词本"先立即存一张
+速记卡，再由 `core/data/WordEnrichmentWorker`（WorkManager，一词一个唯一任务，需联网，失败最多试 3 次）
+用 `generateNewWords` 按完整卡规格补齐上面这些字段。速记卡的判定是 `VocabularyRecord.isQuickCard()`：
+非表达、没有生成信息、搭配/词块/错拼全空——不加列，不迁移。合并规则在 `domain/vocabulary/QuickCardEnrichment`
+（纯函数）：身份三项（词形、词性、释义）和原句不动，只补缺的。写回走 `KnowledgeRepository.applyEnrichment`，
+事务内再确认一次仍是速记卡。复习进度不受影响。
 
 ### 6.2 渐进拼写子状态
 

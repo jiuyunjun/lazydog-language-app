@@ -2233,7 +2233,7 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
-    "text": "if (saved) \"已记入，会安排复习\" else \"这个意思也记下来\"",
+    "text": "if (saved) \"已记入，后台补全完整学习卡\" else \"这个意思也记下来\"",
     "count": 1,
     "reason": "共用控件的状态、操作标签或表单提示"
   },
@@ -2275,7 +2275,7 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/core/designsystem/InteractiveEnglishText.kt",
-    "text": "when { saved -> \"已记入，会安排复习\" value.inflected -> \"把 ${value.headword} 放进生词本\" else -> \"放进生词本\" }",
+    "text": "when { saved -> \"已记入，后台补全完整学习卡\" value.inflected -> \"把 ${value.headword} 放进生词本\" else -> \"放进生词本\" }",
     "count": 1,
     "reason": "共用控件的状态、操作标签或表单提示"
   },
@@ -2338,5 +2338,17 @@
     "text": "if (mode == ScanMode.Word) \"按加号先看讲解，再决定放不放进生词本\" else \"按加号先看翻译，再决定摘不摘进「表达」\"",
     "count": 1,
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文",
+    "text": "when (state) { WordEnrichmentWorker.State.Running -> \"正在补全搭配、词块拆分和常见拼错…\" WordEnrichmentWorker.State.Waiting -> \"排队补全中，没网的话联网后自动继续\" WordEnrichmentWorker.State.Failed -> \"补全没成功，这张卡还只有释义和原句\" WordEnrichmentWorker.State.Idle -> \"这张卡是查词时速记的，只有释义和原句\" }"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文",
+    "text": "if (state == WordEnrichmentWorker.State.Failed) \"再试一次\" else \"补全\""
   }
 ]

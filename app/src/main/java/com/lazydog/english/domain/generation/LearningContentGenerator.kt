@@ -294,6 +294,11 @@ data class NewWordsRequest(
     /** 手动添加时仅为指定词形生成完整卡，不自动挑选其他词。 */
     val targetTerm: String? = null,
     val sentenceContext: String = "",
+    /**
+     * 用户已经看过、确认存下的那个词义（"动词 经营"）。查词速记卡补全时用：
+     * 语境只是参考，不锁死词义，模型可能补出另一个意思的搭配和例句。空则不约束。
+     */
+    val confirmedSenseZh: String = "",
 )
 
 /**

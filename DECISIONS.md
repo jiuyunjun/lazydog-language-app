@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "6.7"
+version: "6.8"
 updated: "2026-10-28"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -10,6 +10,32 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 ---
 
 # 决策记录
+
+## D-080：查词面板存词先入库，再在后台补全成完整学习卡
+
+- 状态：已确认（2026-10-28，用户反馈「从 modal 来的新词信息都很少，进生词本时能不能用完整的新词添加」，
+  并明确「具体怎么设计你来定」）。
+- 问题：双击查词 / 扫一扫的面板为了快只讲释义、音标、例句和一句记忆提示，存进去的卡没有搭配、
+  词块拆分、易错段、常见错拼——拼写训练和复习卡都缺材料，详情页也空。
+- 决定：点「放进生词本」照旧立即入库（速记卡），同时排一个后台任务，用记录页完整学习卡的同一个生成接口
+  （`generateNewWords`，指定词 + 原句）补全；补全锁定用户已确认的词义（新增可选入参 `confirmedSenseZh`，
+  提示词版本 7 → 8）。合并只补缺的，不覆盖用户看过的释义和他读到的原句。详情页对速记卡显示一条状态：
+  补全中 / 排队等网 / 失败可重试 / 老卡可手动「补全」。
+- 被否决的方案：
+  - 点「放进生词本」跳到完整学习卡页面预览再添加：查词多半发生在阅读、听力、扫一扫中途，
+    跳去一整页会打断正在做的事；而且多一次确认，"顺手记一下"就不顺手了。
+  - 在面板里直接调完整生成再存：要多等十几秒，用户等不住会关面板，页面协程一取消就白跑。
+  - 每次打开详情页时现生成：每看一次都要等，没网时永远是空卡。
+  - 加一列 `isQuick` 标记：要迁移。按内容判断已经够用（见 ARCHITECTURE §6.1）。
+- 已知边界：每日新词（`WordStudyScreen`）存的完整卡至今没写生成信息，这是此前就有的缺口，本次没改；
+  按内容判定不会把它们误认成速记卡。提问抽屉「加进复习」和母语阅读的存词仍是速记卡，不自动补全，
+  可在详情页手动补全。
+- 影响：新增 `domain/vocabulary/QuickCardEnrichment`、`core/data/WordEnrichmentWorker`、
+  `KnowledgeDao.updateVocabularyDetail`、`KnowledgeRepository.quickCardOf / applyEnrichment`、
+  `NewWordsRequest.confirmedSenseZh`。WorkManager 是已有依赖，无新依赖、无表结构变化、无迁移。
+- 漂移自查（§0.6 八条）：依赖方向不变（designsystem / feature → core/data → domain）；后台任务沿用
+  `AutoBackupWorker` 的写法，无新模式；生成复用既有接口，无平行抽象；合并规则在 domain；
+  Worker 只做调度与调用；无新增全局状态；写库走 repository；只多一个 DAO 更新方法，已是最小改动。
 
 ## D-079：扫一扫取词：CameraX + ML Kit 端上识别，结果交给既有查词/讲句面板
 

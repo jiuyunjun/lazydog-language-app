@@ -8,12 +8,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,6 +44,8 @@ import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.VocabularyJson
+import com.lazydog.english.core.data.WordEnrichmentWorker
+import com.lazydog.english.core.data.isQuickCard
 import com.lazydog.english.core.data.spellingFacts
 import com.lazydog.english.core.data.stageOrDefault
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
@@ -170,6 +174,7 @@ fun WordDetailScreen(
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
+                if (!isExpression && record.isQuickCard()) QuickCardBanner(record.item.id)
                 // 详情页永远显示图：这是查阅，不是复习，不受"复习时逐渐撤图"影响
                 // （`单词视觉记忆图片DESIGN.md` §46）。整句表达不配图，它没有单一词义可言。
                 if (!isExpression) {
@@ -301,6 +306,49 @@ fun WordDetailScreen(
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("留着") } },
         )
+    }
+}
+
+/**
+ * 速记卡的提示条：说清楚这张卡还缺东西，以及补全进行到哪一步。
+ *
+ * 查词面板存的词会自动补全；更早存下的、补全失败的，在这里手动点一下。
+ * 补全成功后这张卡不再是速记卡，这一条随记录刷新自己消失。
+ */
+@Composable
+private fun QuickCardBanner(itemId: Long) {
+    val context = LocalContext.current
+    val state by remember(itemId) { WordEnrichmentWorker.observe(context, itemId) }
+        .collectAsState(initial = WordEnrichmentWorker.State.Idle)
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            val working = state == WordEnrichmentWorker.State.Running || state == WordEnrichmentWorker.State.Waiting
+            if (working) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            Text(
+                text = when (state) {
+                    WordEnrichmentWorker.State.Running -> "正在补全搭配、词块拆分和常见拼错…"
+                    WordEnrichmentWorker.State.Waiting -> "排队补全中，没网的话联网后自动继续"
+                    WordEnrichmentWorker.State.Failed -> "补全没成功，这张卡还只有释义和原句"
+                    WordEnrichmentWorker.State.Idle -> "这张卡是查词时速记的，只有释义和原句"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            if (!working) {
+                TextButton(onClick = { WordEnrichmentWorker.enqueue(context, itemId) }) {
+                    Text(if (state == WordEnrichmentWorker.State.Failed) "再试一次" else "补全")
+                }
+            }
+        }
     }
 }
 

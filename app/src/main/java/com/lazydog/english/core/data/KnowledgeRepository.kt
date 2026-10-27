@@ -32,7 +32,9 @@ import com.lazydog.english.domain.spelling.SpellingStage
 import com.lazydog.english.domain.spelling.WeakSegment
 import com.lazydog.english.domain.grammar.GrammarCategory
 import com.lazydog.english.domain.grammar.grammarPointKey
+import com.lazydog.english.domain.vocabulary.EnrichedWord
 import com.lazydog.english.domain.vocabulary.PartOfSpeech
+import com.lazydog.english.domain.vocabulary.QuickCard
 import com.lazydog.english.domain.vocabulary.normalizePos
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -162,6 +164,51 @@ class KnowledgeRepository(
     /** 同一个词条（lemma + 词性）下已经存下的词义，按顺序。 */
     suspend fun sensesOf(lemma: String, pos: String): List<VocabularyDetailEntity> =
         dao.getSensesOf(lemma.trim(), normalizePos(pos))
+
+    /** 这一条还是查词速记卡、等着补全时返回它的现状；已经是完整卡、是表达或已删除时返回 null。 */
+    suspend fun quickCardOf(itemId: Long): QuickCard? {
+        val item = dao.getItem(itemId) ?: return null
+        val detail = dao.getVocabularyDetail(itemId) ?: return null
+        if (!VocabularyRecord(item, detail).isQuickCard()) return null
+        return QuickCard(
+            term = detail.term,
+            pos = detail.pos,
+            meaningZh = detail.meaningZh,
+            ipa = detail.ipa,
+            exampleEn = detail.exampleEn,
+            exampleZh = detail.exampleZh,
+            memoryHintZh = detail.memoryHintZh,
+            forms = VocabularyJson.decodeList(detail.formsJson),
+            collocations = VocabularyJson.decodeCollocations(detail.collocationsJson),
+        )
+    }
+
+    /**
+     * 把补全结果写回速记卡，并记下生成信息——从此它就是一张完整卡，不会再补第二次。
+     * 词形、词性、释义、复习进度一概不动。写之前再确认一次它还是速记卡：
+     * 补全跑在后台，这期间用户可能删了它，或者别的路径已经补过了。
+     */
+    suspend fun applyEnrichment(itemId: Long, word: EnrichedWord, generationMetadataJson: String): Boolean =
+        database.withTransaction {
+            val item = dao.getItem(itemId) ?: return@withTransaction false
+            val detail = dao.getVocabularyDetail(itemId) ?: return@withTransaction false
+            if (!VocabularyRecord(item, detail).isQuickCard()) return@withTransaction false
+            dao.updateVocabularyDetail(
+                detail.copy(
+                    ipa = word.ipa.trim(),
+                    exampleEn = word.exampleEn.trim(),
+                    exampleZh = word.exampleZh.trim(),
+                    memoryHintZh = word.memoryHintZh.trim(),
+                    formsJson = VocabularyJson.encodeList(word.forms),
+                    collocationsJson = VocabularyJson.encodeCollocations(word.collocations),
+                    chunksJson = VocabularyJson.encodeList(word.chunks),
+                    trickyPart = word.trickyPart.trim(),
+                    misspellingsJson = VocabularyJson.encodeList(word.misspellings),
+                ),
+            )
+            dao.updateItem(item.copy(generationMetadataJson = generationMetadataJson))
+            true
+        }
 
     /** @return 新知识项 id；同名语法点已存在时返回 null。 */
     suspend fun addGrammar(
@@ -581,6 +628,21 @@ fun VocabularyDetailEntity.spellingFacts() = SpellingFacts(
 
 private fun VocabularyDetailEntity.isExpression(): Boolean =
     pos.equals("expression", ignoreCase = true) || pos.equals("phrase", ignoreCase = true)
+
+/**
+ * 查词面板、提问抽屉这类"顺手记一下"的路径存下的速记卡：搭配、词块、常见拼错一样都没有。
+ *
+ * 不能只看有没有生成信息：每日新词那条路（`WordStudyScreen`）存的是完整卡，却没写生成信息。
+ * 所以按内容判断，再用生成信息兜底——补全写回时会带上生成信息，模型就算没给出搭配，
+ * 这张卡也不会被当成速记卡再补一遍。整句表达不算：它不走单词卡那套搭配、词块、拼写。
+ * 不另加一列标记，免得为它做迁移。
+ */
+fun VocabularyRecord.isQuickCard(): Boolean =
+    !detail.isExpression() &&
+        item.generationMetadataJson.isBlank() &&
+        VocabularyJson.decodeList(detail.chunksJson).isEmpty() &&
+        VocabularyJson.decodeList(detail.misspellingsJson).isEmpty() &&
+        VocabularyJson.decodeCollocations(detail.collocationsJson).isEmpty()
 
 /** 新数据直接读分层字段；旧数据尽量从混合标题和说明中提取一个可读回退。 */
 fun GrammarDetailEntity.displayPattern(): String {

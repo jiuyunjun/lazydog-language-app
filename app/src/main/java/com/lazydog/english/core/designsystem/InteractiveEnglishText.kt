@@ -55,6 +55,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
+import com.lazydog.english.core.data.WordEnrichmentWorker
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.WordExplanation
@@ -513,7 +514,7 @@ fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Unit) {
                         Button(
                             onClick = {
                                 scope.launch {
-                                    saved = app.knowledgeRepository.addVocabulary(
+                                    val id = app.knowledgeRepository.addVocabulary(
                                         term = another.headword,
                                         meaningZh = another.meaningZh,
                                         ipa = another.ipa,
@@ -524,14 +525,16 @@ fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Unit) {
                                         seenAs = if (sentence.isBlank()) "" else word,
                                         forms = another.forms,
                                         asNewSense = true,
-                                    ) != null
+                                    )
+                                    saved = id != null
+                                    id?.let { WordEnrichmentWorker.enqueue(context, it) }
                                 }
                             },
                             enabled = !saved,
                         ) {
                             Icon(Icons.Outlined.LibraryAdd, contentDescription = null)
                             Text(
-                                text = if (saved) "已记入，会安排复习" else "这个意思也记下来",
+                                text = if (saved) "已记入，后台补全完整学习卡" else "这个意思也记下来",
                                 modifier = Modifier.padding(start = 8.dp),
                             )
                         }
@@ -548,7 +551,7 @@ fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Unit) {
                     Button(
                         onClick = {
                             scope.launch {
-                                saved = app.knowledgeRepository.addVocabulary(
+                                val id = app.knowledgeRepository.addVocabulary(
                                     // 存词条，不存句子里那个形态：went 和 go 是同一个词，
                                     // 分开存就会各自走一遍拼写阶段、各攒一份画像。
                                     term = value.headword,
@@ -562,7 +565,9 @@ fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Unit) {
                                     // 原句里出现的是变形，语境默写要挖的空是它而不是词条。
                                     seenAs = if (sentence.isBlank()) "" else word,
                                     forms = value.forms,
-                                ) != null
+                                )
+                                saved = id != null
+                                id?.let { WordEnrichmentWorker.enqueue(context, it) }
                             }
                         },
                         enabled = !saved,
@@ -570,9 +575,11 @@ fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Unit) {
                         Icon(Icons.Outlined.LibraryAdd, contentDescription = null)
                         // 存的是词条，按钮就得报词条的名字：用户点 went 存完，
                         // 回记录里只找得到 go，不明说他会以为丢了。
+                        // 存完说一声会在后台补全：面板只讲了最要紧的几项，
+                        // 不说的话他以为生词本里就只有这么点东西。
                         Text(
                             text = when {
-                                saved -> "已记入，会安排复习"
+                                saved -> "已记入，后台补全完整学习卡"
                                 value.inflected -> "把 ${value.headword} 放进生词本"
                                 else -> "放进生词本"
                             },

@@ -2,7 +2,7 @@
 doc: "ROADMAP.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "2.8"
+version: "2.9"
 updated: "2026-10-28"
 authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
 index: "DOCS.md"
@@ -747,6 +747,23 @@ Claude Design 稿为准。核心口径三条：**听辨和发音分开记、分�
 验证：`assembleDebug`、`testDebugUnitTest`、`lintDebug`、`tools/check_ui_capabilities.py`、
 `tools/check_docs.py` 通过。`ScanAimTest` 守住框内命中与标点剥离、空隙吸附与容差、数字和中文不算词、
 弯撇号归一、跨行拼句与整句高亮框数、断词接回与大写不接、句子不跨段、短标签无语境、帧间保持。
+
+## M23：查词速记卡后台补全（D-080）
+
+- [x] 双击查词 / 扫一扫面板「放进生词本」后立即入库，并排后台任务按完整学习卡规格补全
+      搭配、词块拆分、易错段、常见错拼、不规则变形、缺失的音标与记忆提示。
+- [x] 补全锁定用户确认的词义（`confirmedSenseZh`，提示词版本 8）；换词、换词性整张作废；
+      释义与原句不覆盖；拼不回原词的词块丢弃。
+- [x] 需联网、断网等网，失败最多 3 次；写回前事务内再确认仍是速记卡。
+- [x] 详情页速记卡状态条：补全中 / 排队 / 失败重试 / 老卡手动补全；补全后自动消失。
+- [ ] 真机验收：真实模型下词义是否被锁住、补全耗时、离线存词后联网自动补全。
+
+本次没做：提问抽屉「加进复习」与母语阅读存词的自动补全（可手动补）；
+原句的中文翻译（原句保留为例句，例句译文仍为空）；每日新词卡补写生成信息。
+
+验证：`assembleDebug`、`testDebugUnitTest`、`lintDebug`、`tools/check_ui_capabilities.py`、
+`tools/check_docs.py` 通过。`QuickCardEnrichmentTest` 守住只补缺、不覆盖原句与释义、变形与错拼去重、
+词块校验、换词换词性拒绝；`PromptContractRegressionTest` 守住词义锁定的标签隔离及不传时提示词不变。
 
 ## 已知限制
 
