@@ -449,10 +449,10 @@ private fun AppNavHost(
 
         appScreen(
             route = Routes.WordDetail,
-            ask = AskPagePolicy.Disabled("记录详情按 UI_BRIEF 禁用提问"),
+            ask = AskPagePolicy.Required,
             arguments = listOf(navArgument("itemId") { type = NavType.LongType }),
         ) { entry ->
-            // 记录详情明确禁用提问；正文手势仍独立可用。
+            // 单词/表达详情可以提问（D-081）；记录列表本身仍禁用。
             WordDetailScreen(
                 itemId = entry.arguments?.getLong("itemId") ?: 0L,
                 repository = knowledgeRepository,

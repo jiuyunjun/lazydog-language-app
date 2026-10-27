@@ -409,6 +409,8 @@ private fun ImagePickerSheet(
     onHide: () -> Unit,
     onRefresh: () -> Unit,
 ) {
+    // 换图抽屉盖住了词卡；没有提问宿主的页面（学习卡草稿）这一句什么也不做。
+    com.lazydog.english.core.ask.SuspendAsk("换图抽屉已打开")
     val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(

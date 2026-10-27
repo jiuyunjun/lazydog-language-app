@@ -43,7 +43,13 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.data.KnowledgeRepository
+import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.VocabularyJson
+import com.lazydog.english.core.database.VocabularyRecord
+import com.lazydog.english.domain.ask.AskContext
+import com.lazydog.english.domain.ask.AskContextKind
+import com.lazydog.english.domain.ask.AskDetail
+import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.core.data.WordEnrichmentWorker
 import com.lazydog.english.core.data.isQuickCard
 import com.lazydog.english.core.data.spellingFacts
@@ -87,6 +93,13 @@ fun WordDetailScreen(
 
     var confirmDelete by remember { mutableStateOf(false) }
 
+    // 详情页摊开的内容和学习时翻开的词卡一样多，看词时想问"它和谁容易混"很自然（D-081）。
+    // 这里没有未揭晓的答案，整张卡都可以交给提问。
+    val askContext = remember(record?.item?.id, record?.detail, isExpression) {
+        record?.toAskContext(isExpression)
+    }
+    ProvideAskContext(askContext, unavailableReason = "这条记录已经不在了")
+
     // 打开就读一遍（设置里可关）。表达是整句，按句子读；单词用播音腔。
     LaunchedEffect(record?.item?.id, isExpression) {
         val term = record?.detail?.term ?: return@LaunchedEffect
@@ -104,6 +117,7 @@ fun WordDetailScreen(
                     }
                 },
                 actions = {
+                    AskTopBarAction()
                     if (record != null) {
                         IconButton(onClick = { confirmDelete = true }) {
                             Icon(
@@ -289,6 +303,7 @@ fun WordDetailScreen(
     }
 
     if (confirmDelete && record != null) {
+        com.lazydog.english.core.ask.SuspendAsk("删除确认框已打开")
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("删除「${record.detail.term}」？") },
@@ -307,6 +322,32 @@ fun WordDetailScreen(
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("留着") } },
         )
     }
+}
+
+/** 交给提问的上下文。和学习词卡揭晓后交的是同一组字段，抽屉里看到的东西也一样。 */
+private fun VocabularyRecord.toAskContext(isExpression: Boolean): AskContext {
+    val collocations = VocabularyJson.decodeCollocations(detail.collocationsJson)
+    return AskContext(
+        kind = AskContextKind.Word,
+        title = listOf(detail.term, detail.meaningZh).filter { it.isNotBlank() }.joinToString(" · "),
+        details = buildList {
+            add(AskDetail(if (isExpression) "表达" else "词条", detail.term))
+            if (detail.ipa.isNotBlank()) add(AskDetail("音标", detail.ipa))
+            if (!isExpression && detail.pos.isNotBlank()) add(AskDetail("词性", posLabelZh(detail.pos)))
+            if (detail.meaningZh.isNotBlank()) add(AskDetail("释义", detail.meaningZh))
+            if (collocations.isNotEmpty()) {
+                add(AskDetail("搭配", collocations.joinToString("、") { listOf(it.en, it.zh).filter { part -> part.isNotBlank() }.joinToString(" ") }))
+            }
+            if (detail.exampleEn.isNotBlank()) add(AskDetail("例句", detail.exampleEn))
+            if (detail.memoryHintZh.isNotBlank()) add(AskDetail("记忆提示", detail.memoryHintZh))
+            add(AskDetail("卡片类型", "记录里已经学过的词，正在查看详情"))
+        },
+        suggestions = if (isExpression) {
+            listOf("这句话什么场合用？", "换个更口语的说法", "拆一下这句的结构")
+        } else {
+            listOf("有哪些容易混的近义词？", "这个词平时说话会用吗？", "再给我两个例句")
+        },
+    )
 }
 
 /**
