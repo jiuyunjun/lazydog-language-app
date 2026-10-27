@@ -13,6 +13,13 @@ private val ENGLISH_WORD = Regex("[A-Za-z]+(?:['\\-][A-Za-z]+)*")
  * 扫一扫用的是预览视图的像素坐标，准星就是视图正中心。
  */
 data class TextBox(val left: Float, val top: Float, val right: Float, val bottom: Float) {
+    val width get() = right - left
+    val height get() = bottom - top
+    val centerX get() = (left + right) / 2f
+    val centerY get() = (top + bottom) / 2f
+
+    fun offset(dx: Float, dy: Float) = TextBox(left + dx, top + dy, right + dx, bottom + dy)
+
     /** 点到框的距离；点在框里是 0。 */
     fun distanceTo(x: Float, y: Float): Float {
         val dx = max(max(left - x, 0f), x - right)
@@ -64,15 +71,27 @@ object ScanAim {
      * 准星落在词框里最好；落在两个词之间的空隙、行间距里也算最近那个词，
      * 但离得比 [tolerance] 还远就当没对准——手一晃准星扫过空白处，
      * 不该还把半屏外的某个词报出来。
+     *
+     * [prefer] 是上一帧锁定的词：这一帧里同一个词的距离先减掉 [stickiness] 再比。
+     * 准星压在两个词交界处时，手一抖离谁更近每帧都在变；不给现任一点粘性，
+     * 目标就在两个词之间来回跳。
      */
-    fun aim(blocks: List<ScannedBlock>, x: Float, y: Float, tolerance: Float): ScanTarget? {
+    fun aim(
+        blocks: List<ScannedBlock>,
+        x: Float,
+        y: Float,
+        tolerance: Float,
+        prefer: ScanTarget? = null,
+        stickiness: Float = 0f,
+    ): ScanTarget? {
         var best: Pair<BlockText, Token>? = null
         var bestDistance = Float.MAX_VALUE
         for (block in blocks) {
             val text = BlockText.of(block)
             for (token in text.tokens) {
-                if (token.word == null) continue
-                val distance = token.boxes.minOf { it.distanceTo(x, y) }
+                val word = token.word ?: continue
+                val raw = token.boxes.minOf { it.distanceTo(x, y) }
+                val distance = if (prefer != null && sameWord(word, token.boxes.first(), prefer)) raw - stickiness else raw
                 if (distance < bestDistance) {
                     bestDistance = distance
                     best = text to token
@@ -91,6 +110,19 @@ object ScanAim {
                 .filter { it.start <= range.last && it.end > range.first }
                 .flatMap { it.boxes },
         )
+    }
+
+    /**
+     * 两帧里认到的是不是同一个词：字面相同（不分大小写），而且位置没跳出一个半行高。
+     * 只比字面不行——一页书上 the 有几十个，准星从这个 the 挪到下一行那个 the 是换了目标。
+     */
+    fun sameWord(a: ScanTarget, b: ScanTarget): Boolean = sameWord(a.word, a.wordBoxes.first(), b)
+
+    private fun sameWord(word: String, box: TextBox, other: ScanTarget): Boolean {
+        if (!word.equals(other.word, ignoreCase = true)) return false
+        val otherBox = other.wordBoxes.first()
+        val reach = max(box.height, otherBox.height) * 1.5f
+        return hypot(box.centerX - otherBox.centerX, box.centerY - otherBox.centerY) <= reach
     }
 
     /** 词元里真正的英文词："(world," → world，"don't" 保留撇号，纯数字和中文给 null。 */
@@ -160,29 +192,4 @@ fun sentenceRange(text: String, index: Int): IntRange {
         }
     }
     return start until end
-}
-
-/**
- * 准星下的目标在帧与帧之间短暂丢失时先别撤。
- *
- * 实时识别每一帧都重新认一遍，手稍微一抖就有一两帧认不出字。
- * 不留这一下，底下那张结果卡和高亮框会一闪一闪，加号也跟着时亮时灭。
- */
-class ScanAimHold(private val holdMillis: Long = 600) {
-    private var last: ScanTarget? = null
-    private var lastAt = 0L
-
-    fun update(target: ScanTarget?, nowMillis: Long): ScanTarget? {
-        if (target != null) {
-            last = target
-            lastAt = nowMillis
-            return target
-        }
-        if (last != null && nowMillis - lastAt > holdMillis) last = null
-        return last
-    }
-
-    fun clear() {
-        last = null
-    }
 }

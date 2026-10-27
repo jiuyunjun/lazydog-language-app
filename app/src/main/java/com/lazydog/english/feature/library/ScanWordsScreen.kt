@@ -7,6 +7,10 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -75,15 +79,16 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.lazydog.english.core.designsystem.GlobalSentenceSheet
 import com.lazydog.english.core.designsystem.GlobalWordSheet
 import com.lazydog.english.core.ocr.LiveTextCamera
-import com.lazydog.english.domain.vocabulary.ScanAim
-import com.lazydog.english.domain.vocabulary.ScanAimHold
 import com.lazydog.english.domain.vocabulary.ScanMode
+import com.lazydog.english.domain.vocabulary.ScanStabilizer
 import com.lazydog.english.domain.vocabulary.ScanTarget
-import com.lazydog.english.domain.vocabulary.ScannedBlock
 import com.lazydog.english.domain.vocabulary.TextBox
 
 /** 准星离最近的词还有多远就不算对准。比一行字高一点，手抖一下不会丢。 */
 private val AIM_TOLERANCE = 28.dp
+
+/** 已锁定的词享有的粘性：别的词要比它近出这么多才抢得走，交界处不来回跳。 */
+private val AIM_STICKINESS = 12.dp
 
 /** 这么久一个字都没认出来，就提示用户靠近、拿稳或者开手电。 */
 private const val NO_TEXT_HINT_MILLIS = 2_000L
@@ -180,9 +185,9 @@ private fun ScanViewfinder(torchOn: Boolean, onCameraError: () -> Unit) {
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val tolerance = with(density) { AIM_TOLERANCE.toPx() }
-    val hold = remember { ScanAimHold() }
+    val stickiness = with(density) { AIM_STICKINESS.toPx() }
+    val stabilizer = remember { ScanStabilizer() }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
-    var blocks by remember { mutableStateOf<List<ScannedBlock>>(emptyList()) }
     var target by remember { mutableStateOf<ScanTarget?>(null) }
     var lastTextAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var noTextForAWhile by remember { mutableStateOf(false) }
@@ -196,6 +201,21 @@ private fun ScanViewfinder(torchOn: Boolean, onCameraError: () -> Unit) {
         if (lockKey != null) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
 
+    // 识别每秒只出十来帧，平滑过的框仍然是一格一格跳的。高亮在两帧之间用弹簧滑过去；
+    // 换了一个词就直接跳到位，不从上一个词那儿滑过来。
+    val glide = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    val glideTarget = target?.wordBoxes?.first()?.topLeft
+    val glideIdentity = remember { arrayOf<String?>(null) }
+    LaunchedEffect(glideTarget) {
+        val to = glideTarget ?: return@LaunchedEffect
+        if (glideIdentity[0] != target?.word) {
+            glideIdentity[0] = target?.word
+            glide.snapTo(to)
+        } else {
+            glide.animateTo(to, spring(stiffness = Spring.StiffnessMediumLow))
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         LiveTextCamera(
             modifier = Modifier.fillMaxSize().onSizeChanged { viewSize = it },
@@ -203,12 +223,10 @@ private fun ScanViewfinder(torchOn: Boolean, onCameraError: () -> Unit) {
             torchOn = torchOn,
             onText = { recognized ->
                 val now = System.currentTimeMillis()
-                blocks = recognized
                 if (recognized.isNotEmpty()) lastTextAt = now
                 noTextForAWhile = recognized.isEmpty() && now - lastTextAt > NO_TEXT_HINT_MILLIS
-                target = hold.update(
-                    ScanAim.aim(recognized, viewSize.width / 2f, viewSize.height / 2f, tolerance),
-                    now,
+                target = stabilizer.update(
+                    recognized, viewSize.width / 2f, viewSize.height / 2f, tolerance, stickiness, now,
                 )
             },
             onCameraError = onCameraError,
@@ -217,17 +235,13 @@ private fun ScanViewfinder(torchOn: Boolean, onCameraError: () -> Unit) {
         val highlight = MaterialTheme.colorScheme.primary
         Canvas(Modifier.fillMaxSize()) {
             if (picked == null) {
-                // 认出来的字都描一圈淡框：用户能看见"它认到了哪些"，知道该往哪儿挪。
-                blocks.forEach { block ->
-                    block.lines.forEach { line ->
-                        line.words.forEach { word -> outlineBox(word.box, Color.White.copy(alpha = 0.35f), 1.dp.toPx()) }
-                    }
-                }
                 target?.let { aimed ->
                     val boxes = if (mode == ScanMode.Word) aimed.wordBoxes else aimed.sentenceBoxes
+                    val shift = glide.value - aimed.wordBoxes.first().topLeft
                     boxes.forEach { box ->
-                        fillBox(box, highlight.copy(alpha = 0.35f))
-                        outlineBox(box, Color.White, 2.dp.toPx())
+                        val drawn = box.offset(shift.x, shift.y)
+                        fillBox(drawn, highlight.copy(alpha = 0.35f))
+                        outlineBox(drawn, Color.White, 2.dp.toPx())
                     }
                 }
             }
@@ -247,7 +261,7 @@ private fun ScanViewfinder(torchOn: Boolean, onCameraError: () -> Unit) {
     picked?.let { (aimed, pickedMode) ->
         val close = {
             picked = null
-            hold.clear()
+            stabilizer.clear()
             target = null
         }
         when (pickedMode) {
@@ -372,6 +386,8 @@ private fun CameraPermissionPane(asked: Boolean, onRequest: () -> Unit, onOpenSe
         }
     }
 }
+
+private val TextBox.topLeft get() = Offset(left, top)
 
 private fun DrawScope.outlineBox(box: TextBox, color: Color, width: Float) {
     drawRoundRect(

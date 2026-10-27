@@ -123,15 +123,25 @@ class ScanAimTest {
     }
 
     @Test
-    fun `hold keeps the last target briefly then drops it`() {
-        val hold = ScanAimHold(holdMillis = 600)
-        val target = ScanTarget("cat", "cat", emptyList(), emptyList())
+    fun `stickiness keeps the locked word when a neighbour is only slightly closer`() {
+        val blocks = listOf(ScannedBlock(listOf(line(0f, "alpha", "beta"))))
+        val locked = ScanAim.aim(blocks, 43f, 10f, 10f)!!
 
-        assertSame(target, hold.update(target, 1_000))
-        assertSame(target, hold.update(null, 1_500))
-        assertNull(hold.update(null, 1_700))
-        // 丢了之后不会因为又过了一帧而复活。
-        assertNull(hold.update(null, 1_710))
+        // 48 离 beta 2、离 alpha 8；不给粘性会换成 beta，给 12 的粘性就留在 alpha。
+        assertEquals("beta", ScanAim.aim(blocks, 48f, 10f, 10f)!!.word)
+        assertEquals("alpha", ScanAim.aim(blocks, 48f, 10f, 10f, prefer = locked, stickiness = 12f)!!.word)
+        // 真挪过去了（准星压进 beta 深处）粘性也留不住。
+        assertEquals("beta", ScanAim.aim(blocks, 85f, 10f, 10f, prefer = locked, stickiness = 12f)!!.word)
+    }
+
+    @Test
+    fun `same text on another line is a different word`() {
+        val blocks = listOf(ScannedBlock(listOf(line(0f, "the", "cat."), line(100f, "the", "dog."))))
+        val top = ScanAim.aim(blocks, 20f, 10f, 5f)!!
+        val bottom = ScanAim.aim(blocks, 20f, 110f, 5f)!!
+
+        assertEquals(false, ScanAim.sameWord(top, bottom))
+        assertEquals(true, ScanAim.sameWord(top, top))
     }
 
     @Test
