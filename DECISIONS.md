@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "6.6"
+version: "6.7"
 updated: "2026-10-28"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -10,6 +10,45 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 ---
 
 # 决策记录
+
+## D-079：扫一扫取词：CameraX + ML Kit 端上识别，结果交给既有查词/讲句面板
+
+- 状态：已确认（2026-10-28，用户明确要求「记录加号里支持扫一扫获取词汇，完善设计，实现」；
+  相机与文字识别没有不加依赖的做法，这两项依赖新增以此为准，属于架构变更预算的一次例外）。
+- 问题：要从纸书、屏幕上直接把词或句子收进记录。需要后置相机实时取景、实时认字、
+  判断准星对着哪个词，现有代码里三样都没有。
+- 决定一（依赖）：引入 CameraX 1.4.1（`camera-camera2` / `lifecycle` / `view` / `mlkit-vision`）
+  和 ML Kit 拉丁文字识别 **bundled 版** `com.google.mlkit:text-recognition:16.0.1`。
+  选 bundled 不选 Play Services 版：模型打进 APK（每个 ABI 约多几 MB），但国内手机多数没有 GMS，
+  Play Services 版在那些机器上永远等不到模型下载，功能等于不存在。识别全在本机，不联网、不存图。
+- 决定二（落点）：
+  - `domain/vocabulary/ScanAim.kt`：纯 Kotlin。取景文字的数据结构、准星命中判定（框内优先、
+    空隙吸附最近的词、超出容差算没对准）、跨行拼句、行尾连字符断词接回、短标签不当语境、
+    帧间短暂丢失的保持。句界口径抽成 `sentenceRange`，`core/designsystem` 的 `sentenceAround`
+    改为调用它——三击讲句和扫一扫取句只有一套句界规则。
+  - `core/ocr/LiveTextCamera.kt`：新开的 `core` 子包，只有这一个组件。CameraX + ML Kit 是第三方 SDK，
+    按 §0.1 不该直接出现在 `feature`；现有 `core` 子包里没有管相机或图像的（`core/speech` 管音频），
+    塞进去反而让那个包的职责变含糊。它只向外吐 `domain` 的类型；相机、识别器跟着组件生命周期走，
+    不挂到 `LazyDogApplication`，不新增全局单例。
+  - `feature/library/ScanWordsScreen.kt`：取景页。入口在记录页「单词」页签的加号菜单
+    （手动添加 / 扫一扫），语法页签的加号照旧直达。
+- 决定三（不另造保存链路）：按下加号后，取词打开既有 `GlobalWordSheet`，取句打开既有
+  `GlobalSentenceSheet`（两者从 `private` 改为公开，仍在 `core/designsystem`）。查库判重、
+  还原词条、存哪个形态、例句用原句、句子进「表达」这些规则都只有一份；同样是「先看讲解，
+  用户按按钮才记入」，不因为扫一扫就自动入库。
+- 被否决的方案：
+  - 按下加号直接入库：生词本要释义，必须过一次 AI；OCR 也会认错字，用户得先看一眼。
+  - 自己用 CameraX 原始帧 + 自己算坐标变换：`camera-mlkit-vision` 的 `COORDINATE_SYSTEM_VIEW_REFERENCED`
+    已经把旋转、裁切、缩放换算到预览视图坐标，自己写只是多一处会错的地方。
+  - Play Services 版 ML Kit：见决定一。
+  - 拍照后静态识别再框选：用户要的是实时预览 + 准星，多一步拍照就不是「扫」了。
+- 影响：新增两个依赖组、`CAMERA` 权限（进入取景页才请求，`camera.any` 声明为非必需）、
+  一个 `core` 子包、一个导航目的地（提问策略 Disabled，查词面板自带讲解）。无新表、无迁移、
+  无 AI 契约变化（复用既有查词与讲句调用）、依赖方向不变。
+- 漂移自查（§0.6 八条）：依赖方向不变（feature → core/ocr → domain）；无新架构模式；
+  没有重复抽象，保存走既有面板与 `KnowledgeRepository`；命中判定、拼句、断词等逻辑在 domain，
+  UI 只画框和转发；`core/ocr` 只做相机与识别；无新增全局状态；未绕过 repository；
+  新依赖是相机与 OCR 的最小集合，`core/ocr` 一个文件是唯一新增结构，原因见决定二。
 
 ## D-078：全局学习能力统一接入，缺失声明由检查拦截
 

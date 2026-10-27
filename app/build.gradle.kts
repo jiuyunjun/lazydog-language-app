@@ -98,6 +98,12 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.documentfile)
+    // 扫一扫取词：CameraX 取景 + ML Kit 端上拉丁文字识别（D-079 批准的依赖新增）。
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.camera.mlkit.vision)
+    implementation(libs.mlkit.text.recognition)
 
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)

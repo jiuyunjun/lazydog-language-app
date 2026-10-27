@@ -64,6 +64,7 @@ fun MainScreen(
     onOpenModelSettings: () -> Unit,
     onOpenWord: (Long) -> Unit,
     onAddCard: (Boolean) -> Unit,
+    onScanWords: () -> Unit,
 ) {
     var currentTab by rememberSaveable { mutableStateOf(MainTab.Today) }
 
@@ -120,6 +121,7 @@ fun MainScreen(
                 repository = knowledgeRepository,
                 onOpenWord = onOpenWord,
                 onAddCard = onAddCard,
+                onScanWords = onScanWords,
             )
             MainTab.Settings -> SettingsScreen(
                 modifier = contentModifier,

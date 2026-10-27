@@ -376,30 +376,22 @@ internal fun wordAt(text: String, index: Int): String? {
         ?: words.lastOrNull { it.range.last < safeIndex }?.value
 }
 
+/** 句界口径和扫一扫取句共用一份（[com.lazydog.english.domain.vocabulary.sentenceRange]）。 */
 internal fun sentenceAround(text: String, index: Int): String {
-    if (text.isEmpty()) return ""
-    val safeIndex = index.coerceIn(0, text.lastIndex)
-    val ends = charArrayOf('.', '!', '?')
-    var start = 0
-    for (i in (safeIndex - 1) downTo 0) {
-        if (text[i] in ends) {
-            start = i + 1
-            break
-        }
-    }
-    var end = text.length
-    for (i in safeIndex until text.length) {
-        if (text[i] in ends) {
-            end = i + 1
-            break
-        }
-    }
-    return text.substring(start, end).trim()
+    val range = com.lazydog.english.domain.vocabulary.sentenceRange(text, index)
+    if (range.isEmpty()) return ""
+    return text.substring(range.first, range.last + 1).trim()
 }
 
+/**
+ * 查词面板：库里有就摊开库里那条，没有就结合 [sentence] 讲解，用户按按钮才记入生词本。
+ *
+ * 双击查词和扫一扫取词共用这一个面板——查词、判重、还原词条、存哪个形态，
+ * 这些规则只该有一份。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Unit) {
+fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
@@ -608,14 +600,18 @@ private fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Uni
                     Text("AI 正在结合这句话查词…")
                 }
             }
-            InteractiveEnglishText("「$sentence」", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            // 扫一扫对准的是标题或招牌时没有原句，空着就别摆一对空引号。
+            if (sentence.isNotBlank()) {
+                InteractiveEnglishText("「$sentence」", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            }
         }
     }
 }
 
+/** 讲句面板：翻译拆解这句话，用户按「摘下这句」才存进表达。三击讲句和扫一扫取句共用。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
+fun GlobalSentenceSheet(sentence: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()

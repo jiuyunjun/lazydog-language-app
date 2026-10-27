@@ -69,6 +69,7 @@ object Routes {
     const val Listening = "listening"
     const val AddWordCard = "library/add-word"
     const val AddGrammarCard = "library/add-grammar"
+    const val ScanWords = "library/scan"
     const val WordStudy = "study/words"
     const val Spelling = "study/spelling"
     const val SpellingProfile = "study/spelling/profile"
@@ -219,7 +220,12 @@ private fun AppNavHost(
                 onOpenModelSettings = { navController.navigate(Routes.ModelSettings) },
                 onOpenWord = { id -> navController.navigate(Routes.wordDetail(id)) },
                 onAddCard = { isWord -> navController.navigate(if (isWord) Routes.AddWordCard else Routes.AddGrammarCard) },
+                onScanWords = { navController.navigate(Routes.ScanWords) },
             )
+        }
+
+        appScreen(Routes.ScanWords, ask = AskPagePolicy.Disabled("扫一扫取景页没有学习正文，查词与讲句在面板里进行")) {
+            com.lazydog.english.feature.library.ScanWordsScreen(onExit = { navController.popOnce() })
         }
 
         listOf(Routes.AddWordCard, Routes.AddGrammarCard).forEach { route ->

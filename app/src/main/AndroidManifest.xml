@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- 学习提醒通知，在设置里开启提醒时请求。 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 扫一扫取词，只在进入扫一扫页时才请求；没有相机的设备照样能装，只是入口打不开相机。 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!-- 无账户、密钥存本机：禁止系统备份把本地数据带上云。 -->
     <application

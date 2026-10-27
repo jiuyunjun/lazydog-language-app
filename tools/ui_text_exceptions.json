@@ -2296,5 +2296,47 @@
     "text": "span.meaningZh",
     "count": 1,
     "reason": "读后回想问题，不通过讲句提前翻译出待回忆的英文；片段讲解面板的释义已使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
+    "text": "\"打不开后置相机。可能被别的 App 占着，关掉它再回来试试。\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
+    "text": "if (noTextForAWhile) \"没认出字。靠近一点、拿稳，光线暗就开手电\" else \"把准星对准一个英文词\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
+    "text": "target.word",
+    "count": 1,
+    "reason": "扫一扫取景的实时识别结果，随相机每帧刷新、准星一挪就换；在这里双击三击会和取景冲突，查词讲句统一由加号打开的查词/讲句面板提供"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
+    "text": "target.contextSentence",
+    "count": 1,
+    "reason": "扫一扫取景的实时识别结果，随相机每帧刷新、准星一挪就换；在这里双击三击会和取景冲突，查词讲句统一由加号打开的查词/讲句面板提供"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
+    "text": "target.sentence",
+    "count": 1,
+    "reason": "扫一扫取景的实时识别结果，随相机每帧刷新、准星一挪就换；在这里双击三击会和取景冲突，查词讲句统一由加号打开的查词/讲句面板提供"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
+    "text": "if (option == ScanMode.Word) \"取词\" else \"取句\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
+    "text": "if (mode == ScanMode.Word) \"按加号先看讲解，再决定放不放进生词本\" else \"按加号先看翻译，再决定摘不摘进「表达」\"",
+    "count": 1,
+    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   }
 ]

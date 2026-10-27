@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.7"
+version: "1.8"
 updated: "2026-10-28"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -166,6 +166,8 @@ VoiceManager / AudioEngine / SpeechService
 - Azure Speech SDK
 - Kotlin Serialization
 - Coil（只用于显示外链缩略图，D-071 批准；用 2.x 不用 3.x，后者会把 OkHttp 4 一起拖着换）
+- CameraX + ML Kit 拉丁文字识别 bundled 版（只用于扫一扫取词，D-079 批准；模型打进包里，
+  不依赖 Google Play 服务）
 - Hilt（仅在依赖关系复杂到值得引入时）
 
 具体依赖版本在创建工程时以当时的稳定官方版本为准，不在立项文档中锁死。
@@ -234,6 +236,20 @@ app/
   纯中文固定标签自动放行。改正文语义仍需审查：静态检查不是完整 Kotlin 语义分析，也不能证明真机手势效果。
 - 依赖方向、表和全局单例不变；`core/designsystem → core/ask → domain/ask` 单向。
   没有新增层、框架或手势系统，状态仍限于导航条目和 Compose 生命周期。
+
+### 扫一扫取词（D-079）
+
+```text
+feature/library/ScanWordsScreen ──► core/ocr/LiveTextCamera ──► domain/vocabulary/ScanAim
+          │                          (CameraX + ML Kit，结果换算到预览视图坐标)
+          └──► core/designsystem/GlobalWordSheet / GlobalSentenceSheet ──► KnowledgeRepository
+```
+
+- `core/ocr` 是唯一碰相机和 ML Kit 的地方，只向外吐 `ScannedBlock` 等 domain 类型。
+  相机控制器与识别器随组件创建、随组件释放，不挂 `LazyDogApplication`。
+- 准星命中、跨行拼句、行尾断词、短标签不当语境、帧间保持都在 `domain/vocabulary/ScanAim`，
+  可 JVM 单测。句界规则 `sentenceRange` 与三击讲句共用。
+- 取景页不写任何记录。入库只走既有查词/讲句面板，规则与双击查词、三击讲句完全一致。
 
 ## 5. 核心数据模型
 
