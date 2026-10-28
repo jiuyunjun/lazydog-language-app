@@ -38,6 +38,10 @@ class NewsSourcesTest {
         assertTrue(search.startsWith("https://news.google.com/rss/search?q="))
         assertTrue(java.net.URLDecoder.decode(search, "UTF-8").contains("杭州 体育 when:2d"))
         assertTrue(google.urlFor(NewsQuery(NewsEdition.Taiwan, NewsCategory.Top)).endsWith("ceid=TW:zh-Hant"))
+        // 外文媒体：分类检索用那门语言的关键词。
+        val tokyo = google.urlFor(NewsQuery(NewsEdition.Japan, NewsCategory.Sports, "東京"))
+        assertTrue(java.net.URLDecoder.decode(tokyo, "UTF-8").contains("東京 スポーツ when:2d"))
+        assertTrue(tokyo.endsWith("hl=ja&gl=JP&ceid=JP:ja"))
     }
 
     private val rss = """

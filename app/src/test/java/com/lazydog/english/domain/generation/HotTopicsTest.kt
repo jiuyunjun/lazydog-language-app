@@ -2,6 +2,7 @@ package com.lazydog.english.domain.generation
 
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -135,6 +136,57 @@ class HotTopicsTest {
             listOf(NewsCleanup.Kept(0, ""), NewsCleanup.Kept(0, ""), NewsCleanup.Kept(9, "x")),
         )
         assertEquals(listOf(source[0]), outcome.paragraphs)
+    }
+
+    // ---- 外文全文翻译 ----
+
+    private val english = listOf(
+        "Tokyo's governor announced on Tuesday that the city will expand free childcare to all children under five starting next April.",
+        "The program is expected to cost about 120 billion yen a year, according to the metropolitan government.",
+        "Subscribe to our newsletter for more stories like this.",
+    )
+
+    @Test
+    fun `完整译文接受，杂质段可以不译，顺序按原文`() {
+        val outcome = NewsTranslation.apply(
+            english,
+            listOf(
+                NewsTranslation.Translated(1, "据东京都政府称，该项目预计每年花费约1200亿日元。"),
+                NewsTranslation.Translated(0, "东京都知事周二宣布，从明年4月起，东京将把免费托育扩大到所有五岁以下儿童。"),
+            ),
+            NewsLanguage.English,
+        )
+        assertEquals(null, outcome.failure)
+        assertTrue(outcome.paragraphs.first().startsWith("东京都知事"))
+    }
+
+    /** 偷偷写成摘要是翻译最容易出的错：篇幅比远低于正常译文就整篇不用。 */
+    @Test
+    fun `译文短得像摘要就判失败`() {
+        val outcome = NewsTranslation.apply(
+            english,
+            listOf(NewsTranslation.Translated(0, "东京扩大免费托育。"), NewsTranslation.Translated(1, "年费1200亿日元。")),
+            NewsLanguage.English,
+        )
+        assertTrue(outcome.failure!!.contains("摘要"))
+    }
+
+    @Test
+    fun `没翻成中文的段落去掉`() {
+        assertTrue(NewsTranslation.looksChinese("东京都知事周二宣布扩大免费托育，NHK 报道称预算约1200亿日元。"))
+        // 日文汉字也是汉字，得看假名。
+        assertFalse(NewsTranslation.looksChinese("東京都の知事は火曜日に、保育の無償化を拡大すると発表した。"))
+        assertFalse(NewsTranslation.looksChinese("The governor announced free childcare."))
+        assertFalse(NewsTranslation.looksChinese("서울시는 무상 보육을 확대한다고 밝혔다"))
+    }
+
+    @Test
+    fun `分类关键词按媒体语言给`() {
+        assertEquals("スポーツ", NewsCategory.Sports.keyword(NewsLanguage.Japanese))
+        assertEquals("sports", NewsCategory.Sports.keyword(NewsLanguage.English))
+        assertEquals("体育", NewsCategory.Sports.keyword(NewsLanguage.Chinese))
+        assertTrue(NewsEdition.Japan.language.needsTranslation)
+        assertFalse(NewsEdition.HongKong.language.needsTranslation)
     }
 
     @Test

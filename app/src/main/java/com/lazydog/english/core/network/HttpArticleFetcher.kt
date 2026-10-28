@@ -24,7 +24,7 @@ class HttpArticleFetcher(
                 .url(url)
                 // 不少新闻站给"像爬虫"的请求回空壳页；用普通手机浏览器的 UA。
                 .header("User-Agent", USER_AGENT)
-                .header("Accept-Language", "zh-CN,zh;q=0.9")
+                .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7,ko;q=0.6")
                 .tag(CallHooks::class.java, CallHooks(op = "新闻原文"))
                 .get()
                 .build()

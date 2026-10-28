@@ -247,22 +247,30 @@ fun NativeReadingScreen(
                     }
                     is NewsArticleLoader.Result.Success -> loaded.article
                 }
+                val language = news.edition.language
                 source = NewsSourceRef(
                     name = story.source.ifBlank { NewsText.hostOf(fetched.url) },
                     url = fetched.url,
                     publishedAt = story.publishedAt,
+                    translatedFrom = if (language.needsTranslation) language.labelZh else "",
+                    originalTitle = if (language.needsTranslation) story.title else "",
                 )
-                phase = NativePhase.Working("正在清理新闻原文")
+                val request = NativeNewsRequest(
+                    title = story.title,
+                    source = story.source,
+                    category = news.category.labelZh,
+                    paragraphs = NewsCleanup.trimSource(fetched.paragraphs, language.maxSourceChars),
+                    language = language,
+                )
                 stage = GenerationStage.Connecting
-                app.contentGenerator.cleanNativeNews(
-                    NativeNewsRequest(
-                        title = story.title,
-                        source = story.source,
-                        category = news.category.labelZh,
-                        paragraphs = NewsCleanup.trimSource(fetched.paragraphs),
-                    ),
-                    onStage = { stage = it },
-                )
+                // 中文原文只清理不改字；外文原文整段全文翻译，不做摘要（D-088、D-089）。
+                if (language.needsTranslation) {
+                    phase = NativePhase.Working("正在把新闻全文译成中文")
+                    app.contentGenerator.translateNativeNews(request, onStage = { stage = it })
+                } else {
+                    phase = NativePhase.Working("正在清理新闻原文")
+                    app.contentGenerator.cleanNativeNews(request, onStage = { stage = it })
+                }
             } else {
                 // 热点先检索再写（§36.7）。搜不到就照常写，只是不带时效事实——
                 // 因为搜索失败读不到文章，对用户来说是纯粹的倒退。
@@ -696,7 +704,7 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, PickedN
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                val chosen = customTopic.trim().ifBlank { selectedTopic }.ifBlank { headline?.story?.title.orEmpty() }
+                val chosen = customTopic.trim().ifBlank { selectedTopic }.ifBlank { headline?.displayTitle.orEmpty() }
                 // 挑了新闻但没 Brave 密钥：找不到原文，按钮直接说清楚，不让他点了再失败。
                 val needsKey = headline != null && headline?.story?.direct != true && !braveReady
                 OutlinedTextField(

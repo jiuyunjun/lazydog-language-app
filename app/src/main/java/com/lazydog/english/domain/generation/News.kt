@@ -10,12 +10,26 @@ import kotlinx.serialization.Serializable
  * 所以列表只给标题和出处，正文一定从报道网页上抓，AI 那一步只能删、不能改（[NewsCleanup]）。
  */
 
+/** 新闻原文的语言。不是中文的，读之前要全文翻成中文（D-089）。 */
+enum class NewsLanguage(val labelZh: String, val maxSourceChars: Int) {
+    Chinese("中文", 4_000),
+    /** 英文字符多、信息密度低，同样篇幅给得宽一些；翻成中文大约是原文字符数的一半。 */
+    English("英文", 5_000),
+    /** 日文、韩文翻成中文篇幅相近，收紧一点，免得一篇译文读不完。 */
+    Japanese("日文", 2_500),
+    Korean("韩文", 2_500),
+    ;
+
+    val needsTranslation: Boolean get() = this != Chinese
+}
+
 /**
- * 新闻看哪一版。母语阅读读的是中文，所以只列中文版本；
- * 想看别的国家，写在地区里（「日本」「美国」），由那一版的中文报道来讲。
+ * 看哪里的媒体。决定的是**谁来报**：用哪国/地区的媒体、什么口径、什么语言；
+ * 「报哪里」由地区决定。外文媒体的新闻全文翻成中文再读（D-089）。
  */
 enum class NewsEdition(
     val labelZh: String,
+    val language: NewsLanguage,
     /** Google 新闻的 hl / gl / ceid 三件套。 */
     val hl: String,
     val gl: String,
@@ -24,9 +38,13 @@ enum class NewsEdition(
     val braveCountry: String,
     val braveLang: String,
 ) {
-    Mainland("中国大陆", "zh-CN", "CN", "CN:zh-Hans", "CN", "zh-hans"),
-    HongKong("香港", "zh-HK", "HK", "HK:zh-Hant", "HK", "zh-hant"),
-    Taiwan("台湾", "zh-TW", "TW", "TW:zh-Hant", "TW", "zh-hant"),
+    Mainland("中国大陆", NewsLanguage.Chinese, "zh-CN", "CN", "CN:zh-Hans", "CN", "zh-hans"),
+    HongKong("香港", NewsLanguage.Chinese, "zh-HK", "HK", "HK:zh-Hant", "HK", "zh-hant"),
+    Taiwan("台湾", NewsLanguage.Chinese, "zh-TW", "TW", "TW:zh-Hant", "TW", "zh-hant"),
+    Japan("日本", NewsLanguage.Japanese, "ja", "JP", "JP:ja", "JP", "ja"),
+    UnitedStates("美国", NewsLanguage.English, "en-US", "US", "US:en", "US", "en"),
+    UnitedKingdom("英国", NewsLanguage.English, "en-GB", "GB", "GB:en", "GB", "en"),
+    Korea("韩国", NewsLanguage.Korean, "ko", "KR", "KR:ko", "KR", "ko"),
     ;
 
     companion object {
@@ -35,20 +53,35 @@ enum class NewsEdition(
 }
 
 /**
- * 新闻分类。[googleTopic] 是 Google 新闻的分区名，`null` 表示首页要闻；
- * [keyword] 用在"地区 + 分类"的检索里和 Brave 兜底里——这两条路都没有分区，只能靠词。
+ * 新闻分类。[googleTopic] 是 Google 新闻的分区名，`null` 表示首页要闻。
+ * 关键词用在"地区 + 分类"的检索里和 Brave 兜底里——这两条路都没有分区，只能靠词，
+ * 而且得是那一版媒体的语言：拿「体育」去搜日本媒体搜不到东西。
  */
-enum class NewsCategory(val labelZh: String, val googleTopic: String?, val keyword: String) {
-    Top("要闻", null, "新闻"),
-    Nation("国内", "NATION", "国内新闻"),
-    World("国际", "WORLD", "国际新闻"),
-    Business("财经", "BUSINESS", "财经"),
-    Tech("科技", "TECHNOLOGY", "科技"),
-    Sports("体育", "SPORTS", "体育"),
-    Entertainment("娱乐", "ENTERTAINMENT", "娱乐"),
-    Science("科学", "SCIENCE", "科学"),
-    Health("健康", "HEALTH", "健康"),
+enum class NewsCategory(
+    val labelZh: String,
+    val googleTopic: String?,
+    private val zh: String,
+    private val ja: String,
+    private val en: String,
+    private val ko: String,
+) {
+    Top("要闻", null, "新闻", "ニュース", "news", "뉴스"),
+    Nation("国内", "NATION", "国内新闻", "国内", "national news", "국내"),
+    World("国际", "WORLD", "国际新闻", "国際", "world news", "국제"),
+    Business("财经", "BUSINESS", "财经", "経済", "business", "경제"),
+    Tech("科技", "TECHNOLOGY", "科技", "テクノロジー", "technology", "기술"),
+    Sports("体育", "SPORTS", "体育", "スポーツ", "sports", "스포츠"),
+    Entertainment("娱乐", "ENTERTAINMENT", "娱乐", "エンタメ", "entertainment", "연예"),
+    Science("科学", "SCIENCE", "科学", "科学", "science", "과학"),
+    Health("健康", "HEALTH", "健康", "健康", "health", "건강"),
     ;
+
+    fun keyword(language: NewsLanguage): String = when (language) {
+        NewsLanguage.Chinese -> zh
+        NewsLanguage.Japanese -> ja
+        NewsLanguage.English -> en
+        NewsLanguage.Korean -> ko
+    }
 
     companion object {
         fun fromName(name: String): NewsCategory = entries.firstOrNull { it.name == name } ?: Top
@@ -81,6 +114,8 @@ data class NewsStory(
     /** 发布时间，epoch 毫秒；拿不到是 null。 */
     val publishedAt: Long? = null,
     val related: List<RelatedCoverage> = emptyList(),
+    /** 外文标题的中文译文，列表上给人看；中文新闻和没译成的为空（D-089）。 */
+    val titleZh: String = "",
 )
 
 data class NewsFeedResult(
@@ -109,6 +144,10 @@ data class NewsSourceRef(
     val name: String,
     val url: String,
     val publishedAt: Long? = null,
+    /** 原文是外文时写「日文」「英文」，阅读页标「译自日文」；中文原文为空。 */
+    val translatedFrom: String = "",
+    /** 外文原标题，出处行里给对照用。 */
+    val originalTitle: String = "",
 )
 
 object NewsText {
@@ -244,17 +283,20 @@ class NewsArticleLoader(
  */
 object NewsCleanup {
 
-    /** 交给 AI 的原文最多这么多段、这么多字。新闻是倒金字塔，砍尾巴损失最小。 */
+    /**
+     * 交给 AI 的原文最多这么多段；字数上限按语言（[NewsLanguage.maxSourceChars]）。
+     * 新闻是倒金字塔，砍尾巴损失最小。
+     */
     const val MAX_SOURCE_PARAGRAPHS = 30
-    const val MAX_SOURCE_CHARS = 4_000
+    val MAX_SOURCE_CHARS = NewsLanguage.Chinese.maxSourceChars
 
     /** 清理后最多留几段。阅读页超过这个数就碎了（`NativeReadingValidation`）。 */
     const val MAX_KEPT = 14
 
-    fun trimSource(paragraphs: List<String>): List<String> {
+    fun trimSource(paragraphs: List<String>, maxChars: Int = MAX_SOURCE_CHARS): List<String> {
         var total = 0
         return paragraphs.take(MAX_SOURCE_PARAGRAPHS).takeWhile { p ->
-            val fits = total == 0 || total + p.length <= MAX_SOURCE_CHARS
+            val fits = total == 0 || total + p.length <= maxChars
             total += p.length
             fits
         }
@@ -292,4 +334,76 @@ object NewsCleanup {
     }
 
     private fun normalize(text: String) = text.filterNot { it.isWhitespace() }
+}
+
+/**
+ * 外文新闻全文翻译的本地校验（D-089，AI_CONTRACTS「母语阅读外文新闻翻译」）。
+ *
+ * 和 [NewsCleanup] 一样，AI 能决定的只有**留哪几段**；留下的每一段必须整段译出来。
+ * 译文核对不了"一字不差"，能核对的是两件最容易出的错：
+ * - **偷偷写成摘要**：译文比原文短太多。按语言给一个最低篇幅比（中文字数 / 原文字符数）。
+ * - **没翻**：还是满屏假名、韩文或英文。
+ */
+object NewsTranslation {
+
+    /** AI 说"第 [index] 段译成 [textZh]"。 */
+    data class Translated(val index: Int, val textZh: String)
+
+    data class Outcome(val paragraphs: List<String>, val notes: List<String>, val failure: String? = null)
+
+    /**
+     * 中文译文字数 / 原文字符数的下限。按常见篇幅比的一半左右定：
+     * 英文 1000 字符通常译成 300~450 个汉字，日文译中文篇幅接近，韩文略短。
+     * 低于这个基本就是摘要了。
+     */
+    internal fun minRatio(language: NewsLanguage): Float = when (language) {
+        NewsLanguage.English -> 0.18f
+        NewsLanguage.Japanese -> 0.45f
+        NewsLanguage.Korean -> 0.3f
+        NewsLanguage.Chinese -> 0.8f
+    }
+
+    fun apply(source: List<String>, translated: List<Translated>, language: NewsLanguage): Outcome {
+        val notes = mutableListOf<String>()
+        val used = mutableSetOf<Int>()
+        val kept = translated
+            .filter { it.index in source.indices && it.textZh.isNotBlank() && used.add(it.index) }
+            .sortedBy { it.index }
+        val untranslated = kept.filter { !looksChinese(it.textZh) }
+        if (untranslated.isNotEmpty()) notes += "${untranslated.size} 段没有翻成中文，已去掉"
+        val good = (kept - untranslated.toSet()).take(NewsCleanup.MAX_KEPT)
+        if (kept.size - untranslated.size > NewsCleanup.MAX_KEPT) notes += "原文段落较多，只保留前 ${NewsCleanup.MAX_KEPT} 段"
+
+        val sourceChars = good.sumOf { source[it.index].length }
+        val zhChars = good.sumOf { it.textZh.trim().length }
+        val failure = when {
+            good.isEmpty() -> "没有拿到可用的中文译文"
+            sourceChars > 0 && zhChars < sourceChars * minRatio(language) ->
+                "译文比原文短太多（$zhChars 字 / 原文 $sourceChars 字符），像是写成了摘要"
+            else -> null
+        }
+        return Outcome(good.map { it.textZh.trim() }, notes, failure)
+    }
+
+    /**
+     * 是不是中文：假名、韩文几乎没有（人名地名偶尔夹一点），拉丁字母不过半（缩写、英文人名会有）。
+     * 日文汉字也是汉字，所以必须看假名，不能只看有没有汉字。
+     */
+    internal fun looksChinese(text: String): Boolean {
+        var han = 0
+        var kana = 0
+        var hangul = 0
+        var latin = 0
+        text.forEach { c ->
+            when {
+                c in '぀'..'ヿ' -> kana++
+                c in '가'..'힯' || c in 'ᄀ'..'ᇿ' -> hangul++
+                Character.UnicodeScript.of(c.code) == Character.UnicodeScript.HAN -> han++
+                c in 'a'..'z' || c in 'A'..'Z' -> latin++
+            }
+        }
+        val letters = han + kana + hangul + latin
+        if (letters == 0 || han == 0) return false
+        return (kana + hangul).toFloat() / letters < 0.05f && latin.toFloat() / letters < 0.5f
+    }
 }

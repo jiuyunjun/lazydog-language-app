@@ -27,7 +27,7 @@ class FallbackNewsFeed(
         val first = primary.headlines(query)
         if (first.failure == null || !brave.isConfigured()) return first
 
-        val q = listOf(query.location.trim(), query.category.keyword).filter { it.isNotBlank() }.joinToString(" ")
+        val q = listOf(query.location.trim(), query.category.keyword(query.edition.language)).filter { it.isNotBlank() }.joinToString(" ")
         val edition = query.edition
         var result = brave.news(q, freshness = WebSearchProvider.FRESH_DAY, country = edition.braveCountry, searchLang = edition.braveLang)
         if (result.failure == null && result.hits.size < MIN_STORIES) {

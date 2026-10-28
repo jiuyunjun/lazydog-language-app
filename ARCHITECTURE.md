@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "2.2"
+version: "2.3"
 updated: "2026-10-29"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -615,7 +615,8 @@ interface ReadingSource {
   Google 失败且配了 Brave 时改用 `WebSearchProvider.news()`。RSS 用平台自带的 `javax.xml` 解析，关掉 DTD。
 - `ArticleFetcher`：`HttpArticleFetcher` 抓报道网页，`ArticleExtractor` 用正则取 `<p>` 正文，不引入 HTML 解析库。
 - `NewsArticleLoader`（domain）串起"Brave 找原文链接 → 逐个抓取"；`NewsCleanup`（domain）校验 AI 清理结果
-  只删不改。出处存在 `NativeReadingDocument.source`（JSON 新增可空字段，不改表）。
+  只删不改；外文媒体（D-089）改由 `NewsTranslation`（domain）校验全文翻译没写成摘要、确实译成了中文。
+  出处存在 `NativeReadingDocument.source`（JSON 新增可空字段，不改表）。
 
 ## 8. 服务和密钥
 

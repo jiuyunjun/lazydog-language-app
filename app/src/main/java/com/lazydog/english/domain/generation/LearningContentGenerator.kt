@@ -144,6 +144,25 @@ interface LearningContentGenerator {
     ): GenerationResult<NativeCanonicalArticle>
 
     /**
+     * 外文新闻（日本、美国…媒体）的第一步（D-089）：挑正文段落、**整段全文**译成中文，标题也译。
+     * 不许摘要、不许加解读；[NewsTranslation] 在本地拦"写成摘要"和"没翻"。
+     * 返回的中文母版接着走同一条英语替换。
+     */
+    suspend fun translateNativeNews(
+        request: NativeNewsRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
+    ): GenerationResult<NativeCanonicalArticle>
+
+    /**
+     * 外文新闻列表的标题译成中文，按原顺序一一对应（D-089）。
+     * 只是给人挑新闻用的；译不出来就显示原文，不算失败。
+     */
+    suspend fun translateNewsTitles(
+        titles: List<String>,
+        language: NewsLanguage,
+    ): GenerationResult<List<String>>
+
+    /**
      * 母语阅读第二步：在写好的中文母版上规划英语替换（§9、§37.3）。
      *
      * 返回前已过 [NativeReadingValidation]：定不了位、挤在一起、超出比例的片段都已退回中文。

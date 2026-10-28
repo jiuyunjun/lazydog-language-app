@@ -228,6 +228,8 @@ data class NativeNewsRequest(
     val source: String,
     val category: String,
     val paragraphs: List<String>,
+    /** 原文语言。不是中文时走全文翻译（D-089），而不是清理。 */
+    val language: NewsLanguage = NewsLanguage.Chinese,
 )
 
 data class NativeCanonicalRequest(

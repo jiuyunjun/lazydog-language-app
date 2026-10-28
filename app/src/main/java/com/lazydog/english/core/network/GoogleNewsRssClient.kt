@@ -75,7 +75,7 @@ class GoogleNewsRssClient(
             location.isEmpty() && topic == null -> "$base/rss?$locale"
             location.isEmpty() -> "$base/rss/headlines/section/topic/$topic?$locale"
             query.category == NewsCategory.Top -> "$base/rss/headlines/section/geo/${encodePath(location)}?$locale"
-            else -> searchUrl(query, "$location ${query.category.keyword} when:2d")
+            else -> searchUrl(query, "$location ${query.category.keyword(query.edition.language)} when:2d")
         }
     }
 

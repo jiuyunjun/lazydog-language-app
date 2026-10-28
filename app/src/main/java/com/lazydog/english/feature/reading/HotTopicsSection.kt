@@ -25,9 +25,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.ask.SuspendAsk
+import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.NewsCategory
 import com.lazydog.english.domain.generation.NewsEdition
 import com.lazydog.english.domain.generation.NewsFeedResult
@@ -61,8 +59,14 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 
-/** 从「今日热点」挑中的一条，连同它是哪个分类下挑的（清理时当作文章类别）。 */
-internal data class PickedNews(val story: NewsStory, val category: NewsCategory)
+/**
+ * 从「今日热点」挑中的一条，连同它是哪个分类下挑的（当作文章类别）、
+ * 哪国媒体的（决定清理还是全文翻译，D-089）。
+ */
+internal data class PickedNews(val story: NewsStory, val category: NewsCategory, val edition: NewsEdition) {
+    /** 给人看的标题：外文新闻用译好的中文标题，没译成就用原文。 */
+    val displayTitle: String get() = story.titleZh.ifBlank { story.title }
+}
 
 /**
  * 母语阅读开篇页的「今日热点」（D-088，`母语阅读DESIGN.md` §6.2 模式 B）。
@@ -82,6 +86,7 @@ internal fun HotTopicsSection(picked: PickedNews?, braveReady: Boolean, onPick: 
     var showRegion by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<NewsFeedResult?>(null) }
     var loading by remember { mutableStateOf(false) }
+    var translating by remember { mutableStateOf(false) }
     /** 「刷新」只是让同一个查询再跑一次，绕过缓存。 */
     var refresh by remember { mutableIntStateOf(0) }
 
@@ -101,7 +106,16 @@ internal fun HotTopicsSection(picked: PickedNews?, braveReady: Boolean, onPick: 
         }
         loading = true
         result = null
-        val fresh = app.newsFeed.headlines(q)
+        var fresh = app.newsFeed.headlines(q)
+        // 外文媒体的标题先译成中文再给人挑（D-089）。译不出来就显示原文，不挡列表。
+        if (q.edition.language.needsTranslation && fresh.stories.isNotEmpty()) {
+            translating = true
+            val zh = app.contentGenerator.translateNewsTitles(fresh.stories.map { it.title }, q.edition.language)
+            if (zh is GenerationResult.Success) {
+                fresh = fresh.copy(stories = fresh.stories.zip(zh.data) { story, title -> story.copy(titleZh = title) })
+            }
+            translating = false
+        }
         NewsListCache.put(q, fresh)
         result = fresh
         loading = false
@@ -139,7 +153,7 @@ internal fun HotTopicsSection(picked: PickedNews?, braveReady: Boolean, onPick: 
             loading || query == null -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 Text(
-                    text = "正在拉最新新闻…",
+                    text = if (translating) "正在把标题译成中文…" else "正在拉最新新闻…",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(start = 8.dp),
                 )
@@ -157,13 +171,16 @@ internal fun HotTopicsSection(picked: PickedNews?, braveReady: Boolean, onPick: 
                 if (!braveReady) {
                     Hint("看列表不用密钥；读新闻原文要用 Brave 搜索找链接，请先在设置里填 Brave 密钥。")
                 }
+                if (query.edition.language.needsTranslation) {
+                    Hint("${query.edition.labelZh}媒体的新闻是${query.edition.language.labelZh}，读的时候全文翻成中文，不做摘要。")
+                }
                 val now = System.currentTimeMillis()
                 current.stories.forEach { story ->
                     StoryRow(
                         story = story,
                         now = now,
                         selected = picked?.story == story,
-                        onClick = { onPick(PickedNews(story, query.category)) },
+                        onClick = { onPick(PickedNews(story, query.category, query.edition)) },
                     )
                 }
             }
@@ -183,8 +200,9 @@ internal fun HotTopicsSection(picked: PickedNews?, braveReady: Boolean, onPick: 
     }
 }
 
+/** 「日本媒体 · 東京」：先说谁报，再说报哪里，免得把"日本"看成地区。 */
 private fun regionLabel(query: NewsQuery): String =
-    listOf(query.edition.labelZh, query.location.trim()).filter { it.isNotBlank() }.joinToString(" · ")
+    listOf("${query.edition.labelZh}媒体", query.location.trim()).filter { it.isNotBlank() }.joinToString(" · ")
 
 @Composable
 private fun Hint(text: String) {
@@ -201,11 +219,21 @@ private fun StoryRow(story: NewsStory, now: Long, selected: Boolean, onClick: ()
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Text(
-                text = story.title,
+                text = story.titleZh.ifBlank { story.title },
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
+            // 译过的标题下面留一行原文，对照着看，也知道是哪国媒体怎么写的。
+            if (story.titleZh.isNotBlank()) {
+                Text(
+                    text = story.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             val meta = listOf(
                 story.source,
                 NewsText.ageZh(story.publishedAt, now),
@@ -222,11 +250,22 @@ private fun StoryRow(story: NewsStory, now: Long, selected: Boolean, onClick: ()
     }
 }
 
-/** 常用地名。只是省得打字，写别的地名一样能用（Google 按名字匹配本地新闻）。 */
-private val PLACE_SUGGESTIONS = listOf(
-    "北京", "上海", "广州", "深圳", "杭州", "成都", "武汉", "南京", "西安", "重庆",
-    "广东", "浙江", "江苏", "日本", "韩国", "美国", "英国", "欧洲",
-)
+/**
+ * 常用地名。只是省得打字，写别的地名一样能用（Google 按名字匹配本地新闻）。
+ * 外文媒体要写当地文字：日本版认「東京」，不一定认「东京」。
+ */
+private fun placeSuggestions(edition: NewsEdition): List<String> = when (edition) {
+    NewsEdition.Mainland -> listOf(
+        "北京", "上海", "广州", "深圳", "杭州", "成都", "武汉", "南京", "西安", "重庆",
+        "广东", "浙江", "江苏", "日本", "韩国", "美国", "英国", "欧洲",
+    )
+    NewsEdition.HongKong -> listOf("香港", "九龍", "新界", "澳門", "深圳", "日本", "美國")
+    NewsEdition.Taiwan -> listOf("台北", "新北", "台中", "高雄", "台南", "日本", "美國")
+    NewsEdition.Japan -> listOf("東京", "大阪", "京都", "横浜", "名古屋", "北海道", "沖縄", "福岡")
+    NewsEdition.UnitedStates -> listOf("New York", "California", "Washington", "Texas", "Chicago", "Florida", "Boston")
+    NewsEdition.UnitedKingdom -> listOf("London", "Manchester", "Scotland", "Wales", "Birmingham")
+    NewsEdition.Korea -> listOf("서울", "부산", "인천", "제주")
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -245,28 +284,44 @@ private fun RegionSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("看哪里的新闻", style = MaterialTheme.typography.titleMedium)
-            Text("版本", style = MaterialTheme.typography.titleSmall)
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                NewsEdition.entries.forEachIndexed { index, option ->
-                    SegmentedButton(
-                        selected = pickedEdition == option,
-                        onClick = { pickedEdition = option },
-                        shape = SegmentedButtonDefaults.itemShape(index, NewsEdition.entries.size),
-                    ) { Text(option.labelZh) }
+            Text("媒体", style = MaterialTheme.typography.titleSmall)
+            Hint("决定谁来报：哪国/地区的媒体、什么口径。")
+            listOf(false, true).forEach { foreign ->
+                Text(
+                    text = if (foreign) "外文媒体（全文翻成中文再读）" else "中文媒体",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NewsEdition.entries.filter { it.language.needsTranslation == foreign }.forEach { option ->
+                        FilterChip(
+                            selected = pickedEdition == option,
+                            onClick = {
+                                // 换媒体后原来写的地名多半对不上（「杭州」拿去搜日本媒体），清掉。
+                                if (option != pickedEdition) place = ""
+                                pickedEdition = option
+                            },
+                            label = { Text(option.labelZh) },
+                        )
+                    }
                 }
             }
-            Hint("版本决定由哪一边的中文媒体来报。想看别的国家，选版本后在下面写国家名。")
             Text("地区", style = MaterialTheme.typography.titleSmall)
             OutlinedTextField(
                 value = place,
                 onValueChange = { place = it },
                 label = { Text("城市、省份或国家，留空不限") },
+                supportingText = if (pickedEdition.language.needsTranslation) {
+                    { Text("外文媒体请写当地文字，比如 東京、New York") }
+                } else {
+                    null
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = place.isBlank(), onClick = { place = "" }, label = { Text("不限") })
-                PLACE_SUGGESTIONS.forEach { name ->
+                placeSuggestions(pickedEdition).forEach { name ->
                     FilterChip(selected = place.trim() == name, onClick = { place = name }, label = { Text(name) })
                 }
             }
@@ -286,13 +341,22 @@ internal fun NewsSourceLine(source: NewsSourceRef) {
     val time = source.publishedAt?.let {
         DateTimeFormatter.ofPattern("M月d日 HH:mm").format(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()))
     }
+    val translated = source.translatedFrom.takeIf { it.isNotBlank() }?.let { "译自$it" }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = listOfNotNull("来源：${source.name}", time).joinToString(" · "),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = listOfNotNull("来源：${source.name}", translated, time).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (source.originalTitle.isNotBlank()) {
+                Text(
+                    text = "原标题：${source.originalTitle}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         if (source.url.isNotBlank()) {
             TextButton(onClick = { runCatching { uriHandler.openUri(source.url) } }) { Text("看原文") }
         }

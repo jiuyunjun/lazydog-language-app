@@ -2,7 +2,7 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "12.2"
+version: "12.3"
 updated: "2026-10-29"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
@@ -73,6 +73,30 @@ interface LearningContentGenerator {
 - 之后的英语替换（`planNativeReadingSpans`）与常识文章完全相同。
 
 提示词版本 `NATIVE_NEWS_PROMPT_VERSION=1`。
+
+### 母语阅读外文新闻翻译调用边界
+
+外文媒体（日本、美国、英国、韩国）的新闻走 `translateNativeNews`，代替 `cleanNativeNews`（D-089）。
+
+输入同上，多一个原文语言；原文按语言截长度（英文约 5000 字符，日文、韩文约 2500 字）。输出：
+
+```json
+{"schemaVersion":1,"titleZh":"...","paragraphs":[{"index":1,"textZh":"..."}],
+ "comprehension":{"promptZh":"...","options":["...","...","..."],"answerIndex":0,"explanationZh":"..."}}
+```
+
+- AI 可跳过整段杂质；其余段落**逐段全文**译成简体中文：不摘要、不删句、不合并拆分、不加评论或译注；
+  人名地名用通行译名，没有的音译并首次附原文；数字、引语照实译。
+- 本地校验（`NewsTranslation.apply`）：序号越界、重复或译文为空的丢弃，按原文顺序；
+  假名/韩文占比 ≥5% 或拉丁字母过半的段落视为没翻，去掉并记说明；最多 14 段。
+  中文字数 / 原文字符数低于语言下限（英 0.18、日 0.45、韩 0.3）视为摘要，整篇失败。
+- `titleZh` 不像中文时用原标题。理解题、类别、`validateCanonical` 与新闻清理相同。
+  调用上限用 `LISTENING_MAX_TOKENS`。
+
+`translateNewsTitles`：外文列表标题按编号批量译成中文，输出 `{"titlesZh":[...]}`，条数必须与输入相同，
+否则整批不用；单条不像中文的置空。只用于列表显示，失败不影响挑选。
+
+两者共用提示词版本 `NATIVE_NEWS_TRANSLATE_PROMPT_VERSION=1`。
 
 ### 配图检索词调用边界
 
@@ -595,6 +619,7 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 | `READING_PROMPT_VERSION` | 3 |
 | `NATIVE_READING_PROMPT_VERSION` | 3 |
 | `NATIVE_NEWS_PROMPT_VERSION` | 1 |
+| `NATIVE_NEWS_TRANSLATE_PROMPT_VERSION` | 1 |
 | `GRAMMAR_PROMPT_VERSION` | 3 |
 | `GRAMMAR_DRILL_PROMPT_VERSION` | 2 |
 | `TRANSLATION_PROMPT_VERSION` | 2 |

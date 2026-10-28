@@ -2385,7 +2385,7 @@
     "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
     "text": "story.title",
     "count": 1,
-    "reason": "供挑选的中文新闻标题，单击是选中这条去读；学习正文在生成后的母语阅读文章里"
+    "reason": "外文新闻译名下方的原文标题（日文、韩文或英文），对照用；学习正文在生成后的母语阅读文章里"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
@@ -2401,8 +2401,38 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
-    "text": "listOfNotNull(\"来源：${source.name}\", time).joinToString(\" · \")",
+    "text": "listOfNotNull(\"来源：${source.name}\", translated, time).joinToString(\" · \")",
     "count": 1,
-    "reason": "新闻出处与发布时间，界面元信息"
+    "reason": "新闻出处、译自哪种语言与发布时间，界面元信息"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "\"原标题：${source.originalTitle}\"",
+    "count": 1,
+    "reason": "外文新闻的原标题（日文、韩文或英文），出处对照信息；学习正文是下面的译文与英语替换"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "if (translating) \"正在把标题译成中文…\" else \"正在拉最新新闻…\"",
+    "count": 1,
+    "reason": "新闻列表加载状态"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "story.titleZh.ifBlank { story.title }",
+    "count": 1,
+    "reason": "供挑选的新闻标题（外文新闻为中文译文），单击是选中这条去读；学习正文在生成后的母语阅读文章里"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "if (foreign) \"外文媒体（全文翻成中文再读）\" else \"中文媒体\"",
+    "count": 1,
+    "reason": "媒体分组标题，界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "\"外文媒体请写当地文字，比如 東京、New York\"",
+    "count": 1,
+    "reason": "地区输入框的填写提示，示例地名不是学习正文"
   }
 ]
