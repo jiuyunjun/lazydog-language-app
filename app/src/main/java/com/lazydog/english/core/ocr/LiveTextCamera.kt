@@ -8,6 +8,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.ZoomState
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.mlkit.vision.MlKitAnalyzer
@@ -19,13 +20,17 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
@@ -38,11 +43,18 @@ import com.lazydog.english.domain.vocabulary.TextBox
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
+import kotlin.math.ln
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** 拍照 + 解码 + 识别的总时限。超时就当没拍到，调用方沿用实时结果，用户不至于干等。 */
 private const val STILL_TIMEOUT_MILLIS = 2_500L
+
+/** 缩放条的上限倍数。 */
+private const val MAX_USEFUL_ZOOM = 8f
 
 /**
  * 取景相机和识别器。由 [rememberLiveTextCameraState] 创建，交给 [LiveTextCamera] 显示；
@@ -54,6 +66,42 @@ class LiveTextCameraState internal constructor(
     internal val recognizer: TextRecognizer,
     internal val stillExecutor: ExecutorService,
 ) {
+    /** 当前放大倍数。双指缩放和 [zoomTo] 都会更新它。 */
+    var zoomRatio by mutableFloatStateOf(1f)
+        private set
+
+    /** 可用的倍数范围，相机打开前是 1..1。 */
+    var zoomRange by mutableStateOf(1f..1f)
+        private set
+
+    /**
+     * 按 0..1 的进度缩放，进度按倍数的对数分布：拖一半大约到最大倍数的平方根，
+     * 低倍段不会挤在一小截里。下限取 1×（不切超广角，近处小字反而更糊），
+     * 上限封顶 [MAX_USEFUL_ZOOM]——再往上是数码放大，字只是变大变糊，认字没好处。
+     */
+    fun zoomTo(progress: Float) {
+        val low = zoomRange.start
+        val high = zoomRange.endInclusive
+        if (high <= low) return
+        val ratio = low * (high / low).pow(progress.coerceIn(0f, 1f))
+        zoomRatio = ratio
+        controller.setZoomRatio(ratio)
+    }
+
+    /** [zoomRatio] 在 [zoomTo] 的进度刻度上的位置。 */
+    val zoomProgress: Float
+        get() {
+            val low = zoomRange.start
+            val high = zoomRange.endInclusive
+            if (high <= low) return 0f
+            return (ln(zoomRatio / low) / ln(high / low)).coerceIn(0f, 1f)
+        }
+
+    internal fun onZoomState(state: ZoomState) {
+        zoomRatio = state.zoomRatio
+        zoomRange = max(1f, state.minZoomRatio)..min(MAX_USEFUL_ZOOM, state.maxZoomRatio)
+    }
+
     /**
      * 拍一张全分辨率照片在本机认字。实时预览帧只有 720p，小字每个字母才几个像素，
      * 照片清楚得多。坐标是照片自己的，和预览视图对不上——调用方只用它的文字。
@@ -175,6 +223,13 @@ fun LiveTextCamera(
             controller.clearImageAnalysisAnalyzer()
             controller.unbind()
         }
+    }
+
+    // 双指缩放是 PreviewView 自己做的，缩放条要跟着它走，只能听相机报上来的倍数。
+    DisposableEffect(controller, lifecycleOwner) {
+        val observer = Observer<ZoomState> { state.onZoomState(it) }
+        controller.zoomState.observe(lifecycleOwner, observer)
+        onDispose { controller.zoomState.removeObserver(observer) }
     }
 
     DisposableEffect(controller, paused) {

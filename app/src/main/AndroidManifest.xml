@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- AI 服务与 Azure Speech 都是在线依赖。 -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -20,9 +21,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LazyDog">
 
+        <!-- 锁竖屏（D-083）：各页只按竖屏排版，扫一扫的取景和准星也按竖屏算。
+             Android 16 起系统在平板等大屏上会忽略这项，那里仍会转。 -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:screenOrientation="portrait"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -13,6 +13,7 @@ import com.lazydog.english.feature.grammar.GrammarLearningContent
 import com.lazydog.english.domain.generation.NewWordsRequest
 import com.lazydog.english.domain.generation.MemoryAssistance
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +22,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.KnowledgeRepository
@@ -193,6 +197,17 @@ fun AddLearningCardScreen(
         }
     }
 
+    // 进这一页就是来打字的：一打开就把光标放进输入框、弹出键盘，省一次点按。
+    // 只在刚打开时做一次；从草稿「改输入」回来不抢焦点，用户可能只想看看。
+    val inputFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        if (!hasDraft && !choosing) {
+            inputFocus.requestFocus()
+            keyboard?.show()
+        }
+    }
+
     BackHandler(enabled = saving) { }
     Scaffold(
         topBar = {
@@ -295,7 +310,7 @@ fun AddLearningCardScreen(
                     OutlinedTextField(value = input, onValueChange = { input = it.take(200); error = null },
                         enabled = !generating,
                         label = { Text(if (isVocab) "英文单词原形，或中文" else "语法名称、英文结构，或中文") },
-                        modifier = Modifier.fillMaxWidth())
+                        modifier = Modifier.fillMaxWidth().focusRequester(inputFocus))
                     // 不知道英文怎么说，正是最该学的时候。要求先自己译成英文，
                     // 等于把最难的一步留给用户，然后才让他开始学。
                     Text(

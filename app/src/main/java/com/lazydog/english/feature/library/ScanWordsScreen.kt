@@ -41,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -69,6 +70,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -87,6 +89,7 @@ import com.lazydog.english.domain.vocabulary.ScanRefine
 import com.lazydog.english.domain.vocabulary.ScanStabilizer
 import com.lazydog.english.domain.vocabulary.ScanTarget
 import com.lazydog.english.domain.vocabulary.TextBox
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 /** 准星离最近的词还有多远就不算对准。比一行字高一点，手抖一下不会丢。 */
@@ -263,6 +266,10 @@ private fun ScanViewfinder(torchOn: Boolean, onCameraError: () -> Unit) {
             mode = mode,
             noTextForAWhile = noTextForAWhile,
             refining = refining,
+            zoomProgress = camera.zoomProgress,
+            zoomRatio = camera.zoomRatio,
+            canZoom = camera.zoomRange.endInclusive > camera.zoomRange.start,
+            onZoom = { camera.zoomTo(it) },
             onModeChange = { mode = it },
             onAdd = {
                 val aimed = target
@@ -301,6 +308,10 @@ private fun ScanBottomPanel(
     mode: ScanMode,
     noTextForAWhile: Boolean,
     refining: Boolean,
+    zoomProgress: Float,
+    zoomRatio: Float,
+    canZoom: Boolean,
+    onZoom: (Float) -> Unit,
     onModeChange: (ScanMode) -> Unit,
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
@@ -368,22 +379,45 @@ private fun ScanBottomPanel(
                 }
             }
 
-            FilledIconButton(
-                onClick = onAdd,
-                enabled = target != null && !refining,
-                shape = CircleShape,
-                modifier = Modifier.size(64.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(),
+            // 加号仍在正中；左边拖动缩放，右边显示倍数、点一下回 1×。两边等宽，加号不偏。
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (refining) {
-                    CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
-                } else {
-                    Icon(
-                        imageVector = Icons.Outlined.Add,
-                        contentDescription = if (mode == ScanMode.Word) "查这个词，看过再放进生词本"
-                        else "讲这句话，看过再摘进表达",
-                        modifier = Modifier.size(32.dp),
-                    )
+                Slider(
+                    value = zoomProgress,
+                    onValueChange = onZoom,
+                    enabled = canZoom,
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { contentDescription = "缩放画面" },
+                )
+                FilledIconButton(
+                    onClick = onAdd,
+                    enabled = target != null && !refining,
+                    shape = CircleShape,
+                    modifier = Modifier.size(64.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(),
+                ) {
+                    if (refining) {
+                        CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.Add,
+                            contentDescription = if (mode == ScanMode.Word) "查这个词，看过再放进生词本"
+                            else "讲这句话，看过再摘进表达",
+                            modifier = Modifier.size(32.dp),
+                        )
+                    }
+                }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    TextButton(onClick = { onZoom(0f) }, enabled = canZoom && zoomProgress > 0f) {
+                        Text(
+                            text = String.format(Locale.ROOT, "%.1f×", zoomRatio),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
                 }
             }
             Text(
