@@ -3,21 +3,16 @@ package com.lazydog.english.domain.vocabulary
 import kotlin.math.max
 import kotlin.math.min
 
-enum class ScanIssue { Unsteady, LowConfidence, NotEnglish, NoisyText, TooLong }
+enum class ScanIssue { NotEnglish, NoisyText, TooLong }
 
-/** 扫描专用的保守质量门槛，不用词典猜原文，也不改变其他学习页面的输入。 */
+/**
+ * 扫描专用的保守质量门槛，不用词典猜原文，也不改变其他学习页面的输入。
+ *
+ * 现在只用来决定语境句挂不挂、文本块怎么分段；按加号前不再拦一道人工核对（D-086）。
+ */
 object ScanQuality {
     const val MIN_CONFIDENCE = 0.65f
     const val MAX_SENTENCE_LENGTH = 600
-
-    fun issue(target: ScanTarget, mode: ScanMode): ScanIssue? {
-        val text = if (mode == ScanMode.Word) target.word else target.sentence
-        textIssue(text, mode)?.let { return it }
-        val confidence = if (mode == ScanMode.Word) target.wordConfidence else target.sentenceConfidence
-        if (confidence != null && (!confidence.isFinite() || confidence < MIN_CONFIDENCE)) return ScanIssue.LowConfidence
-        if (target.confirmedFrames < 2) return ScanIssue.Unsteady
-        return null
-    }
 
     fun textIssue(text: String, mode: ScanMode): ScanIssue? {
         if (text.isBlank() || text.any(::nonLatinLetter)) return ScanIssue.NotEnglish
@@ -34,22 +29,6 @@ object ScanQuality {
             return ScanIssue.NoisyText
         }
         return null
-    }
-
-    /** 人工校对只解除置信度/帧数限制，文字本身仍须通过校验。 */
-    fun corrected(target: ScanTarget, mode: ScanMode, input: String): ScanTarget? {
-        val text = input.trim().replace(Regex("\\s+"), " ").replace('’', '\'')
-        if (textIssue(text, mode) != null) return null
-        return if (mode == ScanMode.Word) {
-            target.copy(word = text, sentence = "", wordIndex = -1, wordConfidence = null, confirmedFrames = 2)
-        } else {
-            val tokens = TokenAlign.tokens(text)
-            val index = tokens.indexOfFirst { ScanAim.englishWordIn(it) != null }
-            target.copy(
-                word = ScanAim.englishWordIn(tokens[index])!!, sentence = text, wordIndex = index,
-                wordConfidence = null, sentenceConfidence = null, confirmedFrames = 2,
-            )
-        }
     }
 
     private fun nonLatinLetter(c: Char) = c.isLetter() && c !in 'A'..'Z' && c !in 'a'..'z'

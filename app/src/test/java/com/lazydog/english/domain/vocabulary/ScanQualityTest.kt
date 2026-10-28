@@ -9,12 +9,10 @@ class ScanQualityTest {
     )
     private fun target(text: String) = ScanTarget("camera", text, emptyList(), emptyList(), confirmedFrames = 3)
 
-    @Test fun `reported mixed screenshot garbage never goes directly to AI`() {
+    @Test fun `reported mixed screenshot garbage is recognised as noisy text`() {
         val bad = "STBE970852c,validate camera scan words and sentence matching (A A09AS7E), FRERSZ EITES, t7, A lint Gt E85 push (R4 T0E970852c)."
-        assertEquals(ScanIssue.NoisyText, ScanQuality.issue(target(bad), ScanMode.Sentence))
-        assertNull(ScanQuality.corrected(target(bad), ScanMode.Sentence, bad))
-        val fixed = ScanQuality.corrected(target(bad), ScanMode.Sentence, "validate camera scan words and sentence matching")!!
-        assertNull(ScanQuality.issue(fixed, ScanMode.Sentence))
+        assertEquals(ScanIssue.NoisyText, ScanQuality.textIssue(bad, ScanMode.Sentence))
+        assertNull(ScanQuality.textIssue("validate camera scan words and sentence matching", ScanMode.Sentence))
     }
 
     @Test fun `Chinese separates English runs instead of joining both sides`() {
@@ -54,13 +52,6 @@ class ScanQualityTest {
         assertTrue(ScanAim.aim(blocks, 20f, 10f, 5f)!!.sentenceBoxes.size <= 12)
     }
 
-    @Test fun `low confidence or unstable English requires review`() {
-        val good = target("The camera works well.")
-        assertEquals(ScanIssue.LowConfidence, ScanQuality.issue(good.copy(sentenceConfidence = 0.3f), ScanMode.Sentence))
-        assertEquals(ScanIssue.Unsteady, ScanQuality.issue(good.copy(confirmedFrames = 1), ScanMode.Sentence))
-        assertNull(ScanQuality.issue(good.copy(sentenceConfidence = 0.95f), ScanMode.Sentence))
-    }
-
     @Test fun `proper nouns abbreviations uncommon words and decimals are allowed`() {
         listOf("NASA studies photosynthesis.", "Dr. Smith paid 3.50 dollars.", "I have 2 cats.", "PLEASE KEEP THIS DOOR CLOSED").forEach {
             assertNull(it, ScanQuality.textIssue(it, ScanMode.Sentence))
@@ -71,15 +62,12 @@ class ScanQualityTest {
 
     @Test fun `bad context is not attached to a valid word lookup`() {
         assertEquals("", target("STBE970852c camera FRERSZ A09AS7E").contextSentence)
-        val corrected = ScanQuality.corrected(target("The camera works."), ScanMode.Word, "lens")!!
-        assertEquals("", corrected.contextSentence)
-        assertEquals("lens", corrected.word)
     }
 
     @Test fun `still recognition preserves quality evidence`() {
         val live = target("The camera works.").copy(wordIndex = 1)
         val still = listOf(ScannedBlock(listOf(ScannedLine(line(0f, "The", "camera", "works.").words.map { it.copy(confidence = 0.2f) }))))
         val refined = ScanRefine.refine(live, still)!!
-        assertEquals(ScanIssue.LowConfidence, ScanQuality.issue(refined, ScanMode.Sentence))
+        assertTrue(refined.sentenceConfidence!! < ScanQuality.MIN_CONFIDENCE)
     }
 }

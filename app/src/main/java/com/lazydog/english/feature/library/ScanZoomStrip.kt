@@ -54,8 +54,9 @@ private val ZOOM_TICKS = listOf(1f, 1.5f, 2f, 3f, 4f, 5f, 6f, 8f)
  * - **居中**：左右手单手握持时，拇指够到屏幕下方正中的距离一样；放在一侧总有一只手要横跨半屏。
  * - **相对拖动**：拇指落在这一条的任何位置左右一抹就缩放，按下处不跳值。普通滑动条要先精确按中
  *   滑块或按哪儿跳哪儿，单手拇指做不准；这里右手在右半边抹、左手在左半边抹都一样。
- *   抹满整条宽度 = 从最小倍数到最大倍数。
- * - **快捷档位**：1× / 2× / 4× 点一下直接到，最常用的操作不用拖。
+ *   抹满整条宽度 = 从最小倍数到最大倍数。**向左抹放大、向右抹缩小**，
+ *   所以档位和刻度尺也是左大右小，拖动时圆点跟着手指走。
+ * - **快捷档位**：4× / 2× / 1× 点一下直接到，最常用的操作不用拖。
  * - **档位轻震**：拖过 1×、2×、4× 时震一下，像拨轮的卡位，眼睛不用离开取景画面。
  */
 @Composable
@@ -99,7 +100,8 @@ internal fun ScanZoomStrip(
                 ) { change, dx ->
                     change.consume()
                     val before = ratioAt(progress)
-                    progress = (progress + dx / size.width).coerceIn(0f, 1f)
+                    // 向左拖是放大：左大右小，和档位、刻度尺的排列一致。
+                    progress = (progress - dx / size.width).coerceIn(0f, 1f)
                     val after = ratioAt(progress)
                     val crossed = presets.any { preset ->
                         (before < preset && after >= preset) || (before > preset && after <= preset)
@@ -117,7 +119,7 @@ internal fun ScanZoomStrip(
             // 当前倍数落在哪一档就点亮哪一档；不在整档上时，亮着的那颗直接显示实际倍数（如 2.6×）。
             val active = presets.lastOrNull { ratio >= it - 0.05f }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                presets.forEach { preset ->
+                presets.asReversed().forEach { preset ->
                     val selected = preset == active
                     // 浮在相机画面上：深色半透明底 + 白字，选中的一档反白，任何画面上都看得清。
                     Surface(
@@ -143,7 +145,7 @@ internal fun ScanZoomStrip(
     }
 }
 
-/** 拖动时的刻度尺：整条宽度就是全部倍数范围，圆点是当前位置，档位刻度更长。 */
+/** 拖动时的刻度尺：整条宽度就是全部倍数范围，左端最大、右端最小，圆点是当前位置，档位刻度更长。 */
 @Composable
 private fun ZoomRuler(progress: Float, tickProgress: List<Float>, presetProgress: List<Float>, readout: String) {
     val tickColor = Color.White.copy(alpha = 0.6f)
@@ -158,14 +160,15 @@ private fun ZoomRuler(progress: Float, tickProgress: List<Float>, presetProgress
             val inset = 12.dp.toPx()
             val usable = size.width - inset * 2
             val y = size.height / 2
+            fun xOf(p: Float) = inset + usable * (1 - p)
             tickProgress.forEach { p ->
-                val x = inset + usable * p
+                val x = xOf(p)
                 val long = presetProgress.any { abs(it - p) < 0.001f }
                 val half = (if (long) 8.dp else 4.dp).toPx()
                 drawLine(if (long) presetColor else tickColor, Offset(x, y - half), Offset(x, y + half),
                     strokeWidth = (if (long) 2.dp else 1.dp).toPx())
             }
-            drawCircle(thumbColor, radius = 7.dp.toPx(), center = Offset(inset + usable * progress, y))
+            drawCircle(thumbColor, radius = 7.dp.toPx(), center = Offset(xOf(progress), y))
         }
     }
 }

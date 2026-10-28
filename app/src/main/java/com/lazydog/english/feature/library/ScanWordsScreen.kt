@@ -35,8 +35,6 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.FlashlightOff
 import androidx.compose.material.icons.outlined.FlashlightOn
 import androidx.compose.material3.Button
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -84,12 +82,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.lazydog.english.core.designsystem.GlobalSentenceSheet
 import com.lazydog.english.core.designsystem.GlobalWordSheet
-import com.lazydog.english.core.ask.SuspendAsk
 import com.lazydog.english.core.ocr.LiveTextCamera
 import com.lazydog.english.core.ocr.rememberLiveTextCameraState
 import com.lazydog.english.domain.vocabulary.ScanMode
-import com.lazydog.english.domain.vocabulary.ScanIssue
-import com.lazydog.english.domain.vocabulary.ScanQuality
 import com.lazydog.english.domain.vocabulary.ScanRefine
 import com.lazydog.english.domain.vocabulary.ScanStabilizer
 import com.lazydog.english.domain.vocabulary.ScanTarget
@@ -207,7 +202,6 @@ private fun ScanViewfinder(topInset: Int, onCameraError: () -> Unit) {
     var mode by rememberSaveable { mutableStateOf(ScanMode.Word) }
     /** 按下加号那一刻对准的目标。面板开着时识别暂停，不让后面的帧把它换掉。 */
     var picked by remember { mutableStateOf<Pair<ScanTarget, ScanMode>?>(null) }
-    var needsReview by remember { mutableStateOf<Pair<ScanTarget, ScanMode>?>(null) }
 
     // 准星 = 上下控件之间那块露出来的画面的中心。识别坐标就是预览视图坐标，直接拿来比。
     val aim = Offset(
@@ -240,7 +234,7 @@ private fun ScanViewfinder(topInset: Int, onCameraError: () -> Unit) {
         LiveTextCamera(
             state = camera,
             modifier = Modifier.fillMaxSize().onSizeChanged { viewSize = it },
-            paused = picked != null || needsReview != null || refining,
+            paused = picked != null || refining,
             torchOn = torchOn,
             onText = { recognized ->
                 val now = System.currentTimeMillis()
@@ -301,12 +295,8 @@ private fun ScanViewfinder(topInset: Int, onCameraError: () -> Unit) {
                         scope.launch {
                             try {
                                 val refined = camera.readStill()?.let { ScanRefine.refine(aimed, it) }
-                                val result = refined ?: aimed
-                                if (ScanQuality.issue(result, pickedMode) == null) {
-                                    picked = result to pickedMode
-                                } else {
-                                    needsReview = result to pickedMode
-                                }
+                                // 直接进讲解，不再先弹核对窗（D-086）：认错了在面板里关掉重扫就行。
+                                picked = (refined ?: aimed) to pickedMode
                             } finally {
                                 refining = false
                             }
@@ -315,22 +305,6 @@ private fun ScanViewfinder(topInset: Int, onCameraError: () -> Unit) {
                 },
             )
         }
-    }
-
-    needsReview?.let { (aimed, pickedMode) ->
-        ScanReviewDialog(
-            target = aimed,
-            mode = pickedMode,
-            onRescan = {
-                needsReview = null
-                stabilizer.clear()
-                target = null
-            },
-            onConfirm = { corrected ->
-                needsReview = null
-                picked = corrected to pickedMode
-            },
-        )
     }
 
     picked?.let { (aimed, pickedMode) ->
@@ -344,47 +318,6 @@ private fun ScanViewfinder(topInset: Int, onCameraError: () -> Unit) {
             ScanMode.Sentence -> GlobalSentenceSheet(aimed.sentence, onDismiss = close)
         }
     }
-}
-
-/** 可疑的识别原文只在可编辑输入框中展示，确认前不请求讲解或保存。 */
-@Composable
-private fun ScanReviewDialog(target: ScanTarget, mode: ScanMode, onRescan: () -> Unit, onConfirm: (ScanTarget) -> Unit) {
-    SuspendAsk("正在校对相机识别原文")
-    var input by remember(target, mode) { mutableStateOf(if (mode == ScanMode.Word) target.word else target.sentence) }
-    val corrected = ScanQuality.corrected(target, mode, input)
-    val issue = ScanQuality.issue(target, mode)
-    AlertDialog(
-        onDismissRequest = onRescan,
-        title = { Text("没看清，请核对原文") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    when (issue) {
-                        ScanIssue.Unsteady -> "画面还没稳定。可以重新对准，或核对下面的原文。"
-                        ScanIssue.LowConfidence -> "文字比较模糊。请靠近、拿稳后重扫，或校正原文。"
-                        else -> "可能混入了中文、代码或乱码。请只保留要学习的英文，确认前不会发送给讲解服务。"
-                    },
-                )
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = {
-                        // 原始识别可能已超长，仍允许逐字删除，不能让长度上限锁死校对框。
-                        if (it.length <= ScanQuality.MAX_SENTENCE_LENGTH || it.length < input.length) input = it
-                    },
-                    label = { Text("核对或修改原文") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 6,
-                    isError = corrected == null,
-                    supportingText = { if (corrected == null) Text("请填写英文原文，取句至少两个词；去掉乱码和代码。") },
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = corrected != null, onClick = { corrected?.let(onConfirm) }) { Text("已核对，继续") }
-        },
-        dismissButton = { TextButton(onClick = onRescan) { Text("重新扫描") } },
-    )
 }
 
 /**
