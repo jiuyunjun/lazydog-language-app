@@ -2317,9 +2317,9 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
-    "text": "target.contextSentence",
+    "text": "if (refining) \"拿稳，正在拍清楚再认一遍\" else sentence",
     "count": 1,
-    "reason": "扫一扫取景的实时识别结果，随相机每帧刷新、准星一挪就换；在这里双击三击会和取景冲突，查词讲句统一由加号打开的查词/讲句面板提供"
+    "reason": "扫一扫取景的实时识别结果（重认时换成状态提示），随相机每帧刷新、准星一挪就换；在这里双击三击会和取景冲突，查词讲句统一由加号打开的查词/讲句面板提供"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
@@ -2344,12 +2344,6 @@
     "text": "readout",
     "count": 1,
     "reason": "拖动缩放时的倍数读数（如 2.6×），是界面状态，不是供查词讲句的学习正文"
-  },
-  {
-    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
-    "text": "when { refining -> \"拿稳，正在拍清楚再认一遍\" mode == ScanMode.Word -> \"按加号先看讲解，再决定放不放进生词本\" else -> \"按加号先看翻译，再决定摘不摘进「表达」\" }",
-    "count": 1,
-    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",

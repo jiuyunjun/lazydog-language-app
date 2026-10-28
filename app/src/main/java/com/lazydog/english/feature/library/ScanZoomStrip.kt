@@ -1,6 +1,10 @@
 package com.lazydog.english.feature.library
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,7 +48,7 @@ private val ZOOM_PRESETS = listOf(1f, 2f, 4f)
 private val ZOOM_TICKS = listOf(1f, 1.5f, 2f, 3f, 4f, 5f, 6f, 8f)
 
 /**
- * 扫一扫的缩放条，放在加号正上方，整条与面板同宽。
+ * 扫一扫的缩放条，浮在画面上、紧挨底部控件上沿，整条与屏幕同宽。
  *
  * 人体工学上的取舍：
  * - **居中**：左右手单手握持时，拇指够到屏幕下方正中的距离一样；放在一侧总有一只手要横跨半屏。
@@ -76,7 +80,7 @@ internal fun ScanZoomStrip(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(56.dp)
             .semantics {
                 contentDescription = "缩放画面，左右滑动调整"
                 stateDescription = readout
@@ -115,13 +119,12 @@ internal fun ScanZoomStrip(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 presets.forEach { preset ->
                     val selected = preset == active
+                    // 浮在相机画面上：深色半透明底 + 白字，选中的一档反白，任何画面上都看得清。
                     Surface(
                         onClick = { onRatio(preset) },
                         shape = CircleShape,
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceContainerHighest,
-                        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (selected) Color.White else Color.Black.copy(alpha = 0.5f),
+                        contentColor = if (selected) Color.Black else Color.White,
                         modifier = Modifier
                             .size(if (selected) 48.dp else 40.dp)
                             .semantics { contentDescription = "缩放到 ${preset.toInt()} 倍" },
@@ -143,12 +146,15 @@ internal fun ScanZoomStrip(
 /** 拖动时的刻度尺：整条宽度就是全部倍数范围，圆点是当前位置，档位刻度更长。 */
 @Composable
 private fun ZoomRuler(progress: Float, tickProgress: List<Float>, presetProgress: List<Float>, readout: String) {
-    val tickColor = MaterialTheme.colorScheme.outline
-    val presetColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val thumbColor = MaterialTheme.colorScheme.primary
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    val tickColor = Color.White.copy(alpha = 0.6f)
+    val presetColor = Color.White
+    val thumbColor = Color.White
+    Column(
+        modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).padding(vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Text(readout, style = MaterialTheme.typography.labelLarge, color = thumbColor)
-        Canvas(Modifier.fillMaxWidth().height(24.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(22.dp)) {
             val inset = 12.dp.toPx()
             val usable = size.width - inset * 2
             val y = size.height / 2
