@@ -37,6 +37,8 @@ class ScanStabilizer(
         stickiness: Float,
         nowMillis: Long,
     ): ScanTarget? {
+        // 即使每帧都有不同的挑战者，旧词也不能无限续命。
+        if (current != null && nowMillis - lastSeenAt > holdMillis) clear()
         val raw = ScanAim.aim(blocks, x, y, tolerance, prefer = currentRaw, stickiness = stickiness)
         val locked = currentRaw
         when {

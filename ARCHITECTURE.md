@@ -2,8 +2,8 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.11"
-updated: "2026-10-28"
+version: "1.12"
+updated: "2026-10-29"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -255,6 +255,9 @@ feature/library/ScanWordsScreen ──► core/ocr/LiveTextCamera ──► doma
   UI 只在两帧识别之间用弹簧插值画框，不做判定。
 - 按加号时 `LiveTextCameraState.readStill` 拍一张高清照片在本机重认（只在内存里），
   `ScanRefine` 按文字在照片里找回同一句纠正错字，找不回就用实时结果（D-082）。
+- D-084 补充校验：完整词匹配、称谓/小数句界与闭引号归属；粘性不扩大容差、旧目标按时过期。
+  高清重认须通过相似度、候选歧义与准星词对齐检查，否则整体保留实时结果。
+  识别失败帧推进过期，暂停后忽略在途回调；高清位图在识别完成后释放。
 - 取景页不写任何记录。入库只走既有查词/讲句面板，规则与双击查词、三击讲句完全一致。
 
 ## 5. 核心数据模型

@@ -6,6 +6,39 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 
 class ScanAimTest {
+    @Test
+    fun `misread alphanumeric words are not silently truncated`() {
+        listOf("wor1d", "1ife", "abc123", "hello/world").forEach {
+            assertNull(it, ScanAim.englishWordIn(it))
+        }
+        assertEquals("well-known", ScanAim.englishWordIn("(well-known),"))
+    }
+
+    @Test
+    fun `stickiness never extends the maximum aiming distance`() {
+        val blocks = listOf(ScannedBlock(listOf(line(0f, "alpha"))))
+        val locked = ScanAim.aim(blocks, 20f, 10f, 10f)!!
+        assertNull(ScanAim.aim(blocks, 55f, 10f, 10f, prefer = locked, stickiness = 12f))
+    }
+
+    @Test
+    fun `sentence boundaries preserve titles initials decimals and closing quotes`() {
+        val text = "Dr. A. Smith paid 3.50 dollars. “Really?!” Yes."
+        fun sentence(word: String) = text.substring(sentenceRange(text, text.indexOf(word))).trim()
+        assertEquals("Dr. A. Smith paid 3.50 dollars.", sentence("Smith"))
+        assertEquals("Dr. A. Smith paid 3.50 dollars.", sentence("dollars"))
+        assertEquals("“Really?!”", sentence("Really"))
+        assertEquals("Yes.", sentence("Yes"))
+        val blocks = listOf(ScannedBlock(listOf(line(0f, "Dr.", "Smith", "left.", "“Really?!”", "Yes."))))
+        assertEquals(listOf("Dr. Smith left.", "“Really?!”", "Yes."), ScanAim.sentencesIn(blocks))
+    }
+
+    @Test
+    fun `dotted abbreviations inside a sentence do not create fragments`() {
+        val text = "Use examples, e.g. a U.S. city. Then stop."
+        assertEquals("Use examples, e.g. a U.S. city.", text.substring(sentenceRange(text, text.indexOf("city"))))
+    }
+
     /** 一行字，每个词 40 宽、20 高，词间隔 10。 */
     private fun line(y: Float, vararg words: String, startX: Float = 0f): ScannedLine {
         var x = startX

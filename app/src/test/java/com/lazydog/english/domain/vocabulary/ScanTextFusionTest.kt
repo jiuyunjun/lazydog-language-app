@@ -7,6 +7,31 @@ import org.junit.Test
 
 class ScanTextFusionTest {
     @Test
+    fun `refine rejects ambiguous similar sentences regardless of block order`() {
+        val live = ScanTarget("cat", "The cat sat here.", listOf(BOX), listOf(BOX), 1)
+        val still = listOf(
+            ScannedBlock(listOf(line("The", "cat", "sat", "here."))),
+            ScannedBlock(listOf(line("The", "cat", "sat", "there."))),
+        )
+        assertNull(ScanRefine.refine(live, still))
+        assertNull(ScanRefine.refine(live, still.reversed()))
+    }
+
+    @Test
+    fun `refine never pairs a missing aimed word with a new sentence`() {
+        val live = ScanTarget("quiet", "The morning was quiet and clear.", listOf(BOX), listOf(BOX), 3)
+        val still = listOf(ScannedBlock(listOf(line("The", "morning", "was", "and", "clear."))))
+        assertNull(ScanRefine.refine(live, still))
+    }
+
+    @Test
+    fun `short isolated labels need exact evidence`() {
+        val live = ScanTarget("cat", "cat", listOf(BOX), listOf(BOX), 0)
+        assertNull(ScanRefine.refine(live, listOf(ScannedBlock(listOf(line("cut"))))))
+        assertEquals("cat", ScanRefine.refine(live, listOf(ScannedBlock(listOf(line("cat")))))!!.word)
+    }
+
+    @Test
     fun `alignment keeps a misread word in its slot`() {
         val result = TokenAlign.align(
             listOf("The", "quick", "brown", "fox."),
@@ -46,7 +71,7 @@ class ScanTextFusionTest {
     @Test
     fun `a word misread at lock time is corrected by later frames`() {
         val fusion = SentenceFusion()
-        assertEquals("wor", fusion.add("Hello wor1d today.", 1).word)
+        assertNull(fusion.add("Hello wor1d today.", 1).word)
         fusion.add("Hello world today.", 1)
 
         assertEquals("world", fusion.add("Hello world today.", 1).word)

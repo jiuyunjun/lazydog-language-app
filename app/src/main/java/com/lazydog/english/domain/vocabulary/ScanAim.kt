@@ -93,6 +93,7 @@ object ScanAim {
             for (token in text.tokens) {
                 val word = token.word ?: continue
                 val raw = token.boxes.minOf { it.distanceTo(x, y) }
+                if (raw > tolerance) continue
                 val distance = if (prefer != null && sameWord(word, token.boxes.first(), prefer)) raw - stickiness else raw
                 if (distance < bestDistance) {
                     bestDistance = distance
@@ -141,8 +142,11 @@ object ScanAim {
     }
 
     /** 词元里真正的英文词："(world," → world，"don't" 保留撇号，纯数字和中文给 null。 */
-    internal fun englishWordIn(raw: String): String? =
-        ENGLISH_WORD.find(raw.replace('’', '\''))?.value
+    internal fun englishWordIn(raw: String): String? {
+        val word = raw.replace('’', '\'').trim { !it.isLetterOrDigit() }
+        // 不把 wor1d / abc123 截成 wor / abc；错误片段会被当成真实词条保存。
+        return word.takeIf { ENGLISH_WORD.matches(it) }
+    }
 
     /** 一个词元在拼好的整段文字里占 [start, end)。 */
     private data class Token(val raw: String, val boxes: List<TextBox>, val start: Int, val end: Int) {
@@ -186,25 +190,39 @@ object ScanAim {
 /**
  * [index] 所在那句话在 [text] 里的范围（含句末标点，可能带首尾空白）。
  *
- * 只认 `. ! ?` 做句界，和双击查词、三击讲句用的是同一套口径。
+ * `. ! ?` 做句界；跳过小数、常见称谓和姓名首字母，句末连续标点与闭引号归前句。
  */
 fun sentenceRange(text: String, index: Int): IntRange {
     if (text.isEmpty()) return IntRange.EMPTY
     val safeIndex = index.coerceIn(0, text.lastIndex)
-    val ends = charArrayOf('.', '!', '?')
     var start = 0
-    for (i in (safeIndex - 1) downTo 0) {
-        if (text[i] in ends) {
-            start = i + 1
-            break
+    var at = 0
+    while (at < text.length) {
+        if (text[at] !in ".!?" || (text[at] == '.' && isInternalPeriod(text, at))) {
+            at++
+            continue
         }
+        var end = at + 1
+        while (end < text.length && text[end] in ".!?\"'”’)]}") end++
+        if (safeIndex < end) return start until end
+        start = end
+        at = end
     }
-    var end = text.length
-    for (i in safeIndex until text.length) {
-        if (text[i] in ends) {
-            end = i + 1
-            break
-        }
-    }
-    return start until end
+    return start until text.length
+}
+
+private val TITLE_ABBREVIATIONS = setOf("mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st")
+
+private fun isInternalPeriod(text: String, at: Int): Boolean {
+    val before = text.getOrNull(at - 1)
+    val after = text.getOrNull(at + 1)
+    if (before?.isDigit() == true && after?.isDigit() == true) return true
+    if (before?.isLetter() == true && after?.isLetter() == true) return true
+    val prefix = text.substring(0, at).takeLastWhile { it.isLetter() || it == '.' }
+    val next = text.drop(at + 1).firstOrNull { !it.isWhitespace() } ?: return false
+    if (prefix.lowercase() in TITLE_ABBREVIATIONS && next.isLetter()) return true
+    if (prefix.length == 1 && prefix[0].isUpperCase() && next.isUpperCase()) return true
+    // e.g. / i.e. 总是引出后文；U.S. 等在小写续文前不截断，在句末仍可结束。
+    return prefix.lowercase() in setOf("e.g", "i.e") ||
+        ('.' in prefix && next.isLowerCase())
 }

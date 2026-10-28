@@ -181,25 +181,32 @@ class SentenceFusion(
  * 和实时那句最像的一句，够像（[minSimilarity]）就用照片里的写法，不够像就当没拍到、沿用实时结果。
  */
 object ScanRefine {
-    fun refine(live: ScanTarget, still: List<ScannedBlock>, minSimilarity: Float = 0.5f): ScanTarget? {
+    fun refine(live: ScanTarget, still: List<ScannedBlock>, minSimilarity: Float = 0.65f): ScanTarget? {
         val liveTokens = TokenAlign.tokens(live.sentence)
-        if (liveTokens.isEmpty()) return null
-        val (sentence, similarity) = ScanAim.sentencesIn(still)
+        if (liveTokens.isEmpty() || live.wordIndex !in liveTokens.indices) return null
+        val candidates = ScanAim.sentencesIn(still).distinct()
             .map { it to TokenAlign.similarity(liveTokens, TokenAlign.tokens(it)) }
-            .maxByOrNull { it.second } ?: return null
+            .sortedByDescending { it.second }
+        val (sentence, similarity) = candidates.firstOrNull() ?: return null
         if (similarity < minSimilarity) return null
+        // 相邻的练习句常只差一个词。无坐标证据时宁可保留实时结果，不能任取第一句。
+        if (candidates.getOrNull(1)?.let { similarity - it.second < 0.08f } == true) return null
 
         val stillTokens = TokenAlign.tokens(sentence)
         val mapped = live.wordIndex.takeIf { it in liveTokens.indices }
             ?.let { TokenAlign.align(liveTokens, stillTokens).aToB[it] }
             ?.takeIf { it >= 0 }
-        // 照片里那个位置的词和实时认的差太多，多半是对齐错了位，词还是用实时的。
+        // 准星词必须仍在句中，不能返回“旧词 + 另一句话”的拼接结果。
+        val wordThreshold = if (liveTokens.size == 1) {
+            if (live.word.length < 4) 1f else 0.75f
+        } else 0.5f
         val word = mapped?.let { ScanAim.englishWordIn(stillTokens[it]) }
-            ?.takeIf { TokenAlign.charSimilarity(TokenAlign.key(it), TokenAlign.key(live.word)) >= 0.5f }
+            ?.takeIf { TokenAlign.charSimilarity(TokenAlign.key(it), TokenAlign.key(live.word)) >= wordThreshold }
+            ?: return null
         return live.copy(
-            word = word ?: live.word,
+            word = word,
             sentence = sentence,
-            wordIndex = if (word != null) mapped!! else -1,
+            wordIndex = mapped!!,
         )
     }
 }

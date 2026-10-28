@@ -8,6 +8,16 @@ import org.junit.Test
 import kotlin.math.abs
 
 class ScanStabilizerTest {
+    @Test
+    fun `alternating challengers cannot keep a vanished word forever`() {
+        val stabilizer = ScanStabilizer(holdMillis = 600)
+        stabilizer.feed(page("original"), 0)
+        for (frame in 1..6) {
+            stabilizer.feed(page(if (frame % 2 == 0) "different" else "another"), frame * 100L)
+        }
+        assertEquals("fresh", stabilizer.feed(page("fresh"), 700)!!.word)
+    }
+
     /** 一行字，每个词 40 宽、20 高，词间隔 10；[dx]/[dy] 是整页的平移（手抖）。 */
     private fun page(vararg words: String, dx: Float = 0f, dy: Float = 0f): List<ScannedBlock> {
         var x = dx

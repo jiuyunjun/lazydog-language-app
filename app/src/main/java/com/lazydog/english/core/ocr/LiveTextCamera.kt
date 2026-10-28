@@ -45,6 +45,7 @@ import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -93,13 +94,27 @@ class LiveTextCameraState internal constructor(
      * 照片清楚得多。坐标是照片自己的，和预览视图对不上——调用方只用它的文字。
      * 拍不到、认不出、超时都返回 null。照片只在内存里过一遍，不落盘。
      */
-    suspend fun readStill(): List<ScannedBlock>? = withTimeoutOrNull(STILL_TIMEOUT_MILLIS) {
-        val (bitmap, rotation) = capture() ?: return@withTimeoutOrNull null
-        suspendCancellableCoroutine { continuation ->
-            recognizer.process(InputImage.fromBitmap(bitmap, rotation))
-                .addOnSuccessListener { continuation.resume(it.toScannedBlocks()) }
-                .addOnFailureListener { continuation.resume(null) }
+    suspend fun readStill(): List<ScannedBlock>? = try {
+        withTimeoutOrNull(STILL_TIMEOUT_MILLIS) {
+            val (bitmap, rotation) = capture() ?: return@withTimeoutOrNull null
+            suspendCancellableCoroutine { continuation ->
+                try {
+                    recognizer.process(InputImage.fromBitmap(bitmap, rotation))
+                        .addOnSuccessListener { continuation.resume(it.toScannedBlocks()) }
+                        .addOnFailureListener { continuation.resume(null) }
+                        // 超时不代表 ML Kit 已停，等识别任务真正结束才释放像素。
+                        .addOnCompleteListener { bitmap.recycle() }
+                } catch (error: Exception) {
+                    bitmap.recycle()
+                    throw error
+                }
+            }
         }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        // 相机未就绪或识别器已关闭也可能同步抛错，和异步失败一样退回实时结果。
+        null
     }
 
     private suspend fun capture(): Pair<Bitmap, Int>? = suspendCancellableCoroutine { continuation ->
@@ -219,6 +234,7 @@ fun LiveTextCamera(
     }
 
     DisposableEffect(controller, paused) {
+        var active = !paused
         if (!paused) {
             val executor = ContextCompat.getMainExecutor(context)
             controller.setImageAnalysisAnalyzer(
@@ -228,12 +244,15 @@ fun LiveTextCamera(
                     CameraController.COORDINATE_SYSTEM_VIEW_REFERENCED,
                     executor,
                 ) { result ->
-                    // 这一帧认失败（模型还在加载、画面糊了）就跳过，下一帧再来。
-                    result.getValue(recognizer)?.let { latestOnText(it.toScannedBlocks()) }
+                    // 失败也推进丢失计时；暂停前在途的回调不能再更新目标。
+                    if (active) latestOnText(result.getValue(recognizer)?.toScannedBlocks().orEmpty())
                 },
             )
         }
-        onDispose { controller.clearImageAnalysisAnalyzer() }
+        onDispose {
+            active = false
+            controller.clearImageAnalysisAnalyzer()
+        }
     }
 
     LaunchedEffect(controller, torchOn) {
