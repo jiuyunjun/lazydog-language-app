@@ -2334,10 +2334,16 @@
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   },
   {
-    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
-    "text": "String.format(Locale.ROOT, \"%.1f×\", zoomRatio)",
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanZoomStrip.kt",
+    "text": "if (selected && abs(ratio - preset) > 0.05f) readout else String.format(Locale.ROOT, \"%d×\", preset.toInt())",
     "count": 1,
-    "reason": "相机缩放倍数读数（如 2.0×），是界面状态，不是供查词讲句的学习正文"
+    "reason": "相机缩放档位与倍数读数（如 2×、2.6×），是界面状态，不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanZoomStrip.kt",
+    "text": "readout",
+    "count": 1,
+    "reason": "拖动缩放时的倍数读数（如 2.6×），是界面状态，不是供查词讲句的学习正文"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",

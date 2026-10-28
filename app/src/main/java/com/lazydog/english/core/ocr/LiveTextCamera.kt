@@ -43,10 +43,8 @@ import com.lazydog.english.domain.vocabulary.TextBox
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
-import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.pow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -66,36 +64,24 @@ class LiveTextCameraState internal constructor(
     internal val recognizer: TextRecognizer,
     internal val stillExecutor: ExecutorService,
 ) {
-    /** 当前放大倍数。双指缩放和 [zoomTo] 都会更新它。 */
+    /** 当前放大倍数。双指缩放和 [zoomToRatio] 都会更新它。 */
     var zoomRatio by mutableFloatStateOf(1f)
         private set
 
-    /** 可用的倍数范围，相机打开前是 1..1。 */
+    /**
+     * 可用的倍数范围，相机打开前是 1..1。下限取 1×（不切超广角，近处小字反而更糊），
+     * 上限封顶 [MAX_USEFUL_ZOOM]——再往上是数码放大，字只是变大变糊，认字没好处。
+     */
     var zoomRange by mutableStateOf(1f..1f)
         private set
 
-    /**
-     * 按 0..1 的进度缩放，进度按倍数的对数分布：拖一半大约到最大倍数的平方根，
-     * 低倍段不会挤在一小截里。下限取 1×（不切超广角，近处小字反而更糊），
-     * 上限封顶 [MAX_USEFUL_ZOOM]——再往上是数码放大，字只是变大变糊，认字没好处。
-     */
-    fun zoomTo(progress: Float) {
-        val low = zoomRange.start
-        val high = zoomRange.endInclusive
-        if (high <= low) return
-        val ratio = low * (high / low).pow(progress.coerceIn(0f, 1f))
-        zoomRatio = ratio
-        controller.setZoomRatio(ratio)
+    /** 缩放到某个倍数，超出 [zoomRange] 的会被夹回范围内。 */
+    fun zoomToRatio(ratio: Float) {
+        if (zoomRange.endInclusive <= zoomRange.start) return
+        val clamped = ratio.coerceIn(zoomRange.start, zoomRange.endInclusive)
+        zoomRatio = clamped
+        controller.setZoomRatio(clamped)
     }
-
-    /** [zoomRatio] 在 [zoomTo] 的进度刻度上的位置。 */
-    val zoomProgress: Float
-        get() {
-            val low = zoomRange.start
-            val high = zoomRange.endInclusive
-            if (high <= low) return 0f
-            return (ln(zoomRatio / low) / ln(high / low)).coerceIn(0f, 1f)
-        }
 
     internal fun onZoomState(state: ZoomState) {
         zoomRatio = state.zoomRatio
