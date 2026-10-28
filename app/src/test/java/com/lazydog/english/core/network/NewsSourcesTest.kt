@@ -73,6 +73,26 @@ class NewsSourcesTest {
         assertEquals("新华网", story.related.single().source)
     }
 
+    /** 本地分区不认国家名：填「日本」拿回空列表，要改检索再拉一次。 */
+    @Test
+    fun `国家名在本地分区为空时改用检索`() = runBlocking {
+        val server = okhttp3.mockwebserver.MockWebServer()
+        server.start()
+        try {
+            server.enqueue(okhttp3.mockwebserver.MockResponse().setBody("""<?xml version="1.0"?><rss><channel><title>日本</title></channel></rss>"""))
+            server.enqueue(okhttp3.mockwebserver.MockResponse().setBody(rss))
+            val client = GoogleNewsRssClient(base = server.url("/").toString().trimEnd('/'))
+            val result = client.headlines(NewsQuery(NewsEdition.Mainland, NewsCategory.Top, "日本"))
+            assertEquals(1, result.stories.size)
+            assertTrue(server.takeRequest().path!!.startsWith("/rss/headlines/section/geo/"))
+            val second = server.takeRequest().requestUrl!!
+            assertEquals("/rss/search", second.encodedPath)
+            assertEquals("日本 when:1d", second.queryParameter("q"))
+        } finally {
+            server.shutdown()
+        }
+    }
+
     @Test
     fun `不是 RSS 时返回 null`() {
         assertNull(google.parse("<html><body>blocked</body></html>")?.takeIf { it.isNotEmpty() })

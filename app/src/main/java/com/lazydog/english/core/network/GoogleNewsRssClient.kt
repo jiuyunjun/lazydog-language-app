@@ -26,7 +26,7 @@ import org.w3c.dom.Element
  * 四种地址，按"有没有地区 × 是不是要闻"选：
  * - 不限地区、要闻：首页 `rss`
  * - 不限地区、分类：分区 `rss/headlines/section/topic/TECHNOLOGY`
- * - 有地区、要闻：本地 `rss/headlines/section/geo/杭州`
+ * - 有地区、要闻：本地 `rss/headlines/section/geo/杭州`；国家名在这里是空的，空了改检索 `日本 when:1d`
  * - 有地区、分类：检索 `rss/search?q=杭州 体育 when:2d`（Google 没有"某城市的体育分区"）
  *
  * 在大陆要代理才连得上，所以连接超时设得短，连不上尽快交给兜底源。
@@ -36,9 +36,20 @@ class GoogleNewsRssClient(
     private val base: String = BASE,
 ) : NewsFeed {
 
-    override suspend fun headlines(query: NewsQuery): NewsFeedResult = withContext(Dispatchers.IO) {
+    override suspend fun headlines(query: NewsQuery): NewsFeedResult {
+        val first = fetch(urlFor(query))
+        // 本地分区只认城市和省份，填「日本」「美国」这种国家名拿回来是空的；
+        // 那就按地名检索一天内的报道——中文媒体讲这个国家的新闻就在这里。
+        if (first.stories.isEmpty() && query.location.isNotBlank() && query.category == NewsCategory.Top) {
+            val searched = fetch(searchUrl(query, "${query.location.trim()} when:1d"))
+            if (searched.stories.isNotEmpty()) return searched
+        }
+        return first
+    }
+
+    private suspend fun fetch(url: String): NewsFeedResult = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url(urlFor(query))
+            .url(url)
             .tag(CallHooks::class.java, CallHooks(op = "新闻列表"))
             .get()
             .build()
@@ -64,8 +75,13 @@ class GoogleNewsRssClient(
             location.isEmpty() && topic == null -> "$base/rss?$locale"
             location.isEmpty() -> "$base/rss/headlines/section/topic/$topic?$locale"
             query.category == NewsCategory.Top -> "$base/rss/headlines/section/geo/${encodePath(location)}?$locale"
-            else -> "$base/rss/search?q=${encode("$location ${query.category.keyword} when:2d")}&$locale"
+            else -> searchUrl(query, "$location ${query.category.keyword} when:2d")
         }
+    }
+
+    private fun searchUrl(query: NewsQuery, q: String): String {
+        val edition = query.edition
+        return "$base/rss/search?q=${encode(q)}&hl=${edition.hl}&gl=${edition.gl}&ceid=${edition.ceid}"
     }
 
     internal fun parse(xml: String): List<NewsStory>? {
