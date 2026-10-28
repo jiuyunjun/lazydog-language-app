@@ -47,6 +47,8 @@ data class ScanTarget(
     val wordBoxes: List<TextBox>,
     /** 这句话里每个词的框，取句模式整句高亮用。 */
     val sentenceBoxes: List<TextBox>,
+    /** [word] 是 [sentence] 按空格切开后的第几个词元，-1 表示不知道。 */
+    val wordIndex: Int = -1,
 ) {
     /**
      * 交给查词当语境的那句话。
@@ -102,14 +104,27 @@ object ScanAim {
         if (bestDistance > tolerance) return null
         val range = sentenceRange(text.joined, token.start)
         val sentence = text.joined.substring(range.first, range.last + 1).trim()
+        val inSentence = text.tokens.filter { it.start <= range.last && it.end > range.first }
         return ScanTarget(
             word = token.word!!,
             sentence = sentence,
             wordBoxes = token.boxes,
-            sentenceBoxes = text.tokens
-                .filter { it.start <= range.last && it.end > range.first }
-                .flatMap { it.boxes },
+            sentenceBoxes = inSentence.flatMap { it.boxes },
+            wordIndex = inSentence.indexOf(token),
         )
+    }
+
+    /** 画面里所有的句子，切法和 [aim] 一样（段内跨行拼、不跨段）。 */
+    fun sentencesIn(blocks: List<ScannedBlock>): List<String> = blocks.flatMap { block ->
+        val joined = BlockText.of(block).joined
+        buildList {
+            var at = 0
+            while (at < joined.length) {
+                val range = sentenceRange(joined, at)
+                joined.substring(range.first, range.last + 1).trim().takeIf { it.isNotEmpty() }?.let(::add)
+                at = range.last + 1
+            }
+        }
     }
 
     /**

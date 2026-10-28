@@ -12,7 +12,8 @@ import kotlin.math.abs
  *    别的词要连续 [confirmFrames] 帧胜出才换；单独一帧把 world 认成 wor1d 也就换不过去。
  * 3. **一两帧认不出字**：目标保留 [holdMillis]，结果卡和加号不跟着一闪一灭。
  *
- * 句子另外去抖：整句里任何一个词认错一帧，句子就变一次。新句子要连续两帧一致才换上。
+ * 句子另外去抖：整句里任何一个词认错一帧，句子就变一次。用 [SentenceFusion] 按词多帧投票，
+ * 准星词也取投票结果——锁定时那一帧把 world 认成 wor，几帧之后会被纠正回来。
  */
 class ScanStabilizer(
     private val holdMillis: Long = 600,
@@ -25,7 +26,7 @@ class ScanStabilizer(
     private var lastSeenAt = 0L
     private var challenger: ScanTarget? = null
     private var challengerFrames = 0
-    private var pendingSentence: String? = null
+    private val fusion = SentenceFusion()
     private val box = BoxFilter()
 
     fun update(
@@ -60,16 +61,14 @@ class ScanStabilizer(
         currentRaw = null
         challenger = null
         challengerFrames = 0
-        pendingSentence = null
+        fusion.reset()
         box.reset()
     }
 
     private fun adopt(raw: ScanTarget, nowMillis: Long, continuing: Boolean) {
         val previous = current
-        if (!continuing) {
-            box.reset()
-            pendingSentence = null
-        }
+        // 换了目标词也不清投票：同一句里挪到隔壁词，句子照样稳；挪到别的句子时 fusion 自己会清。
+        if (!continuing) box.reset()
         challenger = null
         challengerFrames = 0
         currentRaw = raw
@@ -82,25 +81,14 @@ class ScanStabilizer(
         val dx = smooth.centerX - rawBox.centerX
         val dy = smooth.centerY - rawBox.centerY
 
+        val fused = fusion.add(raw.sentence, raw.wordIndex)
         current = raw.copy(
-            word = if (continuing && previous != null) previous.word else raw.word,
-            sentence = stableSentence(previous?.sentence.takeIf { continuing }, raw.sentence),
+            word = fused.word ?: if (continuing && previous != null) previous.word else raw.word,
+            sentence = fused.sentence,
             wordBoxes = listOf(smooth) + raw.wordBoxes.drop(1).map { it.offset(dx, dy) },
             sentenceBoxes = raw.sentenceBoxes.map { it.offset(dx, dy) },
+            wordIndex = fused.wordIndex,
         )
-    }
-
-    private fun stableSentence(shown: String?, incoming: String): String {
-        if (shown == null || shown == incoming) {
-            pendingSentence = null
-            return incoming
-        }
-        if (pendingSentence == incoming) {
-            pendingSentence = null
-            return incoming
-        }
-        pendingSentence = incoming
-        return shown
     }
 }
 

@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.10"
+version: "1.11"
 updated: "2026-10-28"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -250,8 +250,11 @@ feature/library/ScanWordsScreen ──► core/ocr/LiveTextCamera ──► doma
 - 准星命中、跨行拼句、行尾断词、短标签不当语境都在 `domain/vocabulary/ScanAim`，
   可 JVM 单测。句界规则 `sentenceRange` 与三击讲句共用。
 - 帧间稳定在 `domain/vocabulary/ScanStabilizer`：锁定词的框用 One Euro 滤波（句子框随之整体平移）、
-  现任目标有粘性距离且挑战者须连续两帧胜出、短暂丢失保持 600 ms、句子文字两帧一致才更新。
+  现任目标有粘性距离且挑战者须连续两帧胜出、短暂丢失保持 600 ms。
+  句子文字和准星词由 `ScanTextFusion` 的 `SentenceFusion` 按词多帧投票（D-082）。
   UI 只在两帧识别之间用弹簧插值画框，不做判定。
+- 按加号时 `LiveTextCameraState.readStill` 拍一张高清照片在本机重认（只在内存里），
+  `ScanRefine` 按文字在照片里找回同一句纠正错字，找不回就用实时结果（D-082）。
 - 取景页不写任何记录。入库只走既有查词/讲句面板，规则与双击查词、三击讲句完全一致。
 
 ## 5. 核心数据模型

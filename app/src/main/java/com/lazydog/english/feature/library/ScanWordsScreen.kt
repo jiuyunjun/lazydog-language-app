@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.FlashlightOff
 import androidx.compose.material.icons.outlined.FlashlightOn
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,10 +81,13 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.lazydog.english.core.designsystem.GlobalSentenceSheet
 import com.lazydog.english.core.designsystem.GlobalWordSheet
 import com.lazydog.english.core.ocr.LiveTextCamera
+import com.lazydog.english.core.ocr.rememberLiveTextCameraState
 import com.lazydog.english.domain.vocabulary.ScanMode
+import com.lazydog.english.domain.vocabulary.ScanRefine
 import com.lazydog.english.domain.vocabulary.ScanStabilizer
 import com.lazydog.english.domain.vocabulary.ScanTarget
 import com.lazydog.english.domain.vocabulary.TextBox
+import kotlinx.coroutines.launch
 
 /** 准星离最近的词还有多远就不算对准。比一行字高一点，手抖一下不会丢。 */
 private val AIM_TOLERANCE = 28.dp
@@ -187,6 +192,10 @@ private fun ScanViewfinder(torchOn: Boolean, onCameraError: () -> Unit) {
     val tolerance = with(density) { AIM_TOLERANCE.toPx() }
     val stickiness = with(density) { AIM_STICKINESS.toPx() }
     val stabilizer = remember { ScanStabilizer() }
+    val camera = rememberLiveTextCameraState()
+    val scope = rememberCoroutineScope()
+    /** 按了加号、正在拍高清照片重认。这段时间加号转圈，不重复触发。 */
+    var refining by remember { mutableStateOf(false) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     var target by remember { mutableStateOf<ScanTarget?>(null) }
     var lastTextAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -218,8 +227,9 @@ private fun ScanViewfinder(torchOn: Boolean, onCameraError: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         LiveTextCamera(
+            state = camera,
             modifier = Modifier.fillMaxSize().onSizeChanged { viewSize = it },
-            paused = picked != null,
+            paused = picked != null || refining,
             torchOn = torchOn,
             onText = { recognized ->
                 val now = System.currentTimeMillis()
@@ -252,8 +262,22 @@ private fun ScanViewfinder(torchOn: Boolean, onCameraError: () -> Unit) {
             target = target,
             mode = mode,
             noTextForAWhile = noTextForAWhile,
+            refining = refining,
             onModeChange = { mode = it },
-            onAdd = { picked = target?.let { it to mode } },
+            onAdd = {
+                val aimed = target
+                if (aimed != null && !refining) {
+                    val pickedMode = mode
+                    refining = true
+                    // 实时帧只有 720p，按下那一刻再拍一张高清照片重认，按文字找回同一句纠正错字；
+                    // 拍不到或找不回就用实时结果，不让用户白等。
+                    scope.launch {
+                        val refined = camera.readStill()?.let { ScanRefine.refine(aimed, it) }
+                        refining = false
+                        picked = (refined ?: aimed) to pickedMode
+                    }
+                }
+            },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
@@ -276,6 +300,7 @@ private fun ScanBottomPanel(
     target: ScanTarget?,
     mode: ScanMode,
     noTextForAWhile: Boolean,
+    refining: Boolean,
     onModeChange: (ScanMode) -> Unit,
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
@@ -345,21 +370,28 @@ private fun ScanBottomPanel(
 
             FilledIconButton(
                 onClick = onAdd,
-                enabled = target != null,
+                enabled = target != null && !refining,
                 shape = CircleShape,
                 modifier = Modifier.size(64.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(),
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Add,
-                    contentDescription = if (mode == ScanMode.Word) "查这个词，看过再放进生词本"
-                    else "讲这句话，看过再摘进表达",
-                    modifier = Modifier.size(32.dp),
-                )
+                if (refining) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.Add,
+                        contentDescription = if (mode == ScanMode.Word) "查这个词，看过再放进生词本"
+                        else "讲这句话，看过再摘进表达",
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
             }
             Text(
-                text = if (mode == ScanMode.Word) "按加号先看讲解，再决定放不放进生词本"
-                else "按加号先看翻译，再决定摘不摘进「表达」",
+                text = when {
+                    refining -> "拿稳，正在拍清楚再认一遍"
+                    mode == ScanMode.Word -> "按加号先看讲解，再决定放不放进生词本"
+                    else -> "按加号先看翻译，再决定摘不摘进「表达」"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )

@@ -2335,7 +2335,7 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
-    "text": "if (mode == ScanMode.Word) \"按加号先看讲解，再决定放不放进生词本\" else \"按加号先看翻译，再决定摘不摘进「表达」\"",
+    "text": "when { refining -> \"拿稳，正在拍清楚再认一遍\" mode == ScanMode.Word -> \"按加号先看讲解，再决定放不放进生词本\" else -> \"按加号先看翻译，再决定摘不摘进「表达」\" }",
     "count": 1,
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   },
