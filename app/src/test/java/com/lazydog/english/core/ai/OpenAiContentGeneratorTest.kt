@@ -1301,4 +1301,33 @@ class MemoryAssistancePromptTest {
         assertFalse(prompt.contains("反复错在"))
         assertFalse(prompt.contains("已经看过这条记忆钩子"))
     }
+
+    @Test
+    fun `searching again tells the model which queries the learner rejected`() {
+        val prompt = OpenAiContentGenerator.buildVisualQueryPrompt(
+            com.lazydog.english.domain.vocabulary.VisualSearchRequest(
+                term = "bank",
+                meaningZh = "河岸",
+                previousQueries = listOf("grassy river bank beside flowing water"),
+                rejectionZh = "不相关",
+            ),
+        )
+
+        assertTrue(prompt.contains("REJECTED the images found by: grassy river bank beside flowing water"))
+        assertTrue(prompt.contains("不相关"))
+    }
+
+    @Test
+    fun `first search carries chinese context and no rejection section`() {
+        val prompt = OpenAiContentGenerator.buildVisualQueryPrompt(
+            com.lazydog.english.domain.vocabulary.VisualSearchRequest(
+                term = "charged",
+                meaningZh = "指控",
+                contextZh = "他被指控偷了邻居的车。",
+            ),
+        )
+
+        assertTrue(prompt.contains("CONTEXT (Chinese sentence in which this English word was used): 他被指控偷了邻居的车。"))
+        assertFalse(prompt.contains("REJECTED"))
+    }
 }

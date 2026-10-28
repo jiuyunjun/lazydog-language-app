@@ -354,6 +354,7 @@ fun NativeReadingScreen(
                         senseKey = SenseKey.ofDraft(span.renderedEn, "", span.meaningZh),
                         term = span.renderedEn,
                         meaningZh = span.meaningZh,
+                        contextZh = view.document.sentenceZhOf(span),
                     )
                 },
         )

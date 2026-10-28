@@ -2,8 +2,8 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "12.0"
-updated: "2026-10-28"
+version: "12.1"
+updated: "2026-10-29"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -80,8 +80,16 @@ interface LearningContentGenerator {
 - `reason` 和 `visual_target` 用中文；查询、`must_show` 和 `avoid` 用英文，`strategy` 使用现有枚举名称。
   `visual_target` 描述期望找到的画面，不声称已经看过实际图片。
 - 一个词义最多发三次搜索请求（主 + 两个备用）就认了（§29），不许无限扩大搜索。
+- 可选输入（版本 4 起）：`contextZh` 是母语阅读里该词所在的那句中文（span 没有英文例句、词形可能是变形）；
+  `previousQueries` 和 `rejectionZh` 只在用户点「都不合适，重新找」时带上，分别是上一批的检索词和
+  ⋯ 里给的理由。模型须保持同一词义、换物体/场景/主体/视角，不得重复或改写被否的查询；
+  本地再跳过与被否查询完全相同的那条，三条全撞上时照旧搜。
+- 何时用备用查询（版本 4 起）：搜回、过滤、排序后，前 3 张里至少一张标题命中 `must_show`
+  （按实词、去词尾前缀匹配）就停；否则试下一条，三条都不够好时用命中最多的那批，同样多时先搜的优先。
+  模型没给 `must_show` 时第一批非空即用。排序以 Brave 名次为底分（第一名比最后一名高 0.20），
+  本地规则在上面加减。请求次数上限不变。
 
-提示词版本 `VISUAL_QUERY_PROMPT_VERSION=3`（本轮通用输入边界见 §9.1）：
+提示词版本 `VISUAL_QUERY_PROMPT_VERSION=4`（本轮通用输入边界见 §9.1）：
 
 - 先根据词性、中文词义和例句消歧，再选择不靠文字说明也能表达该词义的画面；
   动作用「主体 + 动作 + 对象」，属性用能明显体现该属性的具体对象。不得换成更好配图的另一词义。
@@ -567,7 +575,7 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 | `ASK_PROMPT_VERSION` | 3 |
 | `LISTENING_PROMPT_VERSION` | 3 |
 | `MEMORY_PROMPT_VERSION` | 6 |
-| `VISUAL_QUERY_PROMPT_VERSION` | 3 |
+| `VISUAL_QUERY_PROMPT_VERSION` | 4 |
 | `SUGGEST_PROMPT_VERSION` | 2 |
 
 验证限度：JVM 测试验证拼装、转义、版本与本地契约，不能证明实际模型遵循规则、事实准确、

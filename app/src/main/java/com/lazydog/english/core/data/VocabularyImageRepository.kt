@@ -75,11 +75,13 @@ class VocabularyImageRepository(
         meaningZh: String,
         pos: String = "",
         exampleEn: String = "",
+        contextZh: String = "",
         force: Boolean = false,
     ): SenseVisualState {
         val lock = inFlightGuard.withLock { inFlight.getOrPut(senseKey.value) { Mutex() } }
         return lock.withLock {
-            val cached = dao.get(senseKey.value)?.toDomain()
+            val entity = dao.get(senseKey.value)
+            val cached = entity?.toDomain()
             if (cached != null && !force) {
                 // 只有"这次没搜到"值得重试，"这个词义不该有图"和"用户关掉了"都是结论。
                 if (cached.hiddenByUser || cached.hasImage || cached.failure == ImageFailureReason.NotVisualizable) {
@@ -87,7 +89,18 @@ class VocabularyImageRepository(
                 }
             }
             if (cached?.hiddenByUser == true && !force) return@withLock cached
-            discover(senseKey, term, meaningZh, pos, exampleEn, previous = cached)
+            val request = VisualSearchRequest(
+                term = term,
+                meaningZh = meaningZh,
+                pos = pos,
+                exampleEn = exampleEn,
+                contextZh = contextZh,
+                // 「重新找」要的是另一批图。只有用户真看过上一批（force）才带上，
+                // 自动重试"上次没搜到"时上一条检索词没什么可避开的。
+                previousQueries = if (force) listOfNotNull(entity?.query?.takeIf { it.isNotBlank() }) else emptyList(),
+                rejectionZh = if (force) entity?.feedbackReason.orEmpty() else "",
+            )
+            discover(senseKey, request, previous = cached)
         }
     }
 
@@ -107,6 +120,7 @@ class VocabularyImageRepository(
                 meaningZh = target.meaningZh,
                 pos = target.pos,
                 exampleEn = target.exampleEn,
+                contextZh = target.contextZh,
             )
         }
     }
@@ -199,20 +213,17 @@ class VocabularyImageRepository(
 
     private suspend fun discover(
         senseKey: SenseKey,
-        term: String,
-        meaningZh: String,
-        pos: String,
-        exampleEn: String,
+        request: VisualSearchRequest,
         previous: SenseVisualState?,
     ): SenseVisualState {
+        val term = request.term
+        val meaningZh = request.meaningZh
         // 没有密钥不是错误，是"这个功能这次不参加"——和联网检索同一个口径。
         if (!search.isConfigured()) {
             return previous ?: fail(senseKey, term, meaningZh, ImageFailureReason.NotConfigured, persist = false)
         }
 
-        val planResult = generator.generateVisualSearchPlan(
-            VisualSearchRequest(term = term, meaningZh = meaningZh, pos = pos, exampleEn = exampleEn),
-        )
+        val planResult = generator.generateVisualSearchPlan(request)
         val plan = when (planResult) {
             is GenerationResult.Success -> planResult.data
             is GenerationResult.Failure ->
@@ -226,9 +237,16 @@ class VocabularyImageRepository(
             return fail(senseKey, term, meaningZh, ImageFailureReason.NotVisualizable, model, promptVersion)
         }
 
+        // 「重新找」时模型偶尔还是会把上一条原样交回来；搜同一条只会拿回同一批图，跳过。
+        // 三条全撞上就照旧搜——总比什么都不做强。
+        val avoidQueries = request.previousQueries.map { it.trim().lowercase() }.toSet()
+        val queries = plan.queries.filterNot { it.lowercase() in avoidQueries }.ifEmpty { plan.queries }
+
         var lastFailure = ImageFailureReason.NoResults
+        var best: Batch? = null
         // §29：主查询 → 备用 A → 备用 B，最多三次，之后就认了。
-        for (query in plan.queries) {
+        // 前几张对得上 mustShow 就停；都不够好时用最好的那批，同样好时先搜的优先。
+        for (query in queries) {
             val result = search.search(query)
             if (result.failure != null) {
                 lastFailure = ImageFailureReason.ApiFailure
@@ -244,6 +262,11 @@ class VocabularyImageRepository(
                 lastFailure = ImageFailureReason.LowSemanticMatch
                 continue
             }
+            val batch = Batch(query, ranked, VisualCandidateFilter.confidence(ranked, plan.mustShow))
+            if (best == null || batch.confidence > best.confidence) best = batch
+            if (VisualCandidateFilter.confident(ranked, plan.mustShow)) break
+        }
+        best?.let { batch ->
             // 重搜是覆盖，上一批的本地副本没有记录再指向它们，留着就是垃圾文件。
             previous?.let { deleteLocalCopies(it.assets) }
             val entity = VocabularySenseImageEntity(
@@ -251,9 +274,9 @@ class VocabularyImageRepository(
                 term = term,
                 meaningZh = meaningZh,
                 strategy = plan.strategy.name,
-                query = query,
+                query = batch.query,
                 visualTarget = plan.visualTarget,
-                assetsJson = encodeAssets(downloadSelected(ranked, 0)),
+                assetsJson = encodeAssets(downloadSelected(batch.ranked, 0)),
                 selectedIndex = 0,
                 failureReason = "",
                 hiddenByUser = false,
@@ -367,5 +390,9 @@ class VocabularyImageRepository(
         val meaningZh: String,
         val pos: String = "",
         val exampleEn: String = "",
+        val contextZh: String = "",
     )
+
+    /** 一个检索词搜回来、过滤排好的一批。 */
+    private class Batch(val query: String, val ranked: List<VocabularyImageAsset>, val confidence: Int)
 }

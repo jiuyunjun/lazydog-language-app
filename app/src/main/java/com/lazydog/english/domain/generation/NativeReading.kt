@@ -196,7 +196,25 @@ data class NativeReadingDocument(
     companion object {
         const val SCHEMA_VERSION = 1
     }
+
+    /**
+     * [span] 所在的那一句中文，找不到就是空串。
+     *
+     * 给配图检索词当语境用：span 没有英文例句，`renderedEn` 还可能是变形，
+     * 只有原句能说清这里是哪个意思。取一句而不是整段，整段太长、会把别的意思也带进来。
+     */
+    fun sentenceZhOf(span: LearningSpan): String {
+        val text = paragraphs.firstOrNull { it.id == span.paragraphId }?.textZh ?: return ""
+        val at = text.indexOf(span.sourceZh)
+        if (span.sourceZh.isEmpty() || at < 0) return ""
+        val start = text.lastIndexOfAny(SENTENCE_ENDS, startIndex = at - 1).let { if (it < 0) 0 else it + 1 }
+        val end = text.indexOfAny(SENTENCE_ENDS, startIndex = at + span.sourceZh.length)
+            .let { if (it < 0) text.length else it + 1 }
+        return text.substring(start, end).trim()
+    }
 }
+
+private val SENTENCE_ENDS = charArrayOf('。', '！', '？', '；', '!', '?', ';', '\n')
 
 /** 写中文母版这一步的入参（设计文档 §23 第 7 步）。 */
 data class NativeCanonicalRequest(

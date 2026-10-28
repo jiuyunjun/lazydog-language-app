@@ -2136,7 +2136,7 @@ class OpenAiContentGenerator(
         const val ASK_PROMPT_VERSION = 3
         const val LISTENING_PROMPT_VERSION = 3
         const val MEMORY_PROMPT_VERSION = 6
-        const val VISUAL_QUERY_PROMPT_VERSION = 3
+        const val VISUAL_QUERY_PROMPT_VERSION = 4
         const val SUGGEST_PROMPT_VERSION = 2
 
         /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
@@ -2517,6 +2517,17 @@ class OpenAiContentGenerator(
             if (request.pos.isNotBlank()) appendLine("PART OF SPEECH: ${request.pos}")
             appendLine("SENSE (Chinese, this is the only sense that matters): ${request.meaningZh}")
             if (request.exampleEn.isNotBlank()) appendLine("EXAMPLE: ${request.exampleEn}")
+            if (request.contextZh.isNotBlank()) {
+                appendLine("CONTEXT (Chinese sentence in which this English word was used): ${request.contextZh}")
+            }
+            appendLine("WORD may be an inflected form or a phrase as it appeared in text; search for the sense, not the inflection.")
+            if (request.previousQueries.isNotEmpty()) {
+                appendLine()
+                appendLine("The learner REJECTED the images found by: ${request.previousQueries.joinToString(" | ")}")
+                if (request.rejectionZh.isNotBlank()) appendLine("Learner's reason (Chinese): ${request.rejectionZh}")
+                appendLine("Keep the SAME sense but depict it differently: a different object, setting, actor or viewpoint.")
+                appendLine("None of your three queries may repeat or merely reword a rejected query.")
+            }
             appendLine()
             appendLine("Prefer: concrete objects, visible actions, visible states, clear spatial")
             appendLine("relationships, simple scenes.")

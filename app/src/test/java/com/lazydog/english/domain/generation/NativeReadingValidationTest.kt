@@ -198,4 +198,19 @@ class NativeReadingValidationTest {
         val recall = NativeReadingValidation.recallCandidates(spans, limit = 2)
         assertEquals(listOf("s3", "s2"), recall.map { it.id })
     }
+
+    /** 配图检索词的语境只要 span 所在那一句，不要整段。 */
+    @Test
+    fun `span 的中文语境取所在那一句`() {
+        val doc = NativeReadingDocument(
+            paragraphs = listOf(CanonicalParagraph("p1", "天气很好。他被指控偷了邻居的车！后来证明是误会。")),
+        )
+        fun span(source: String) = LearningSpan(
+            id = "s", paragraphId = "p1", sourceZh = source, renderedEn = "charged",
+            kind = "vocabulary", masteryClass = "target", meaningZh = "指控",
+        )
+        assertEquals("他被指控偷了邻居的车！", doc.sentenceZhOf(span("被指控")))
+        assertEquals("天气很好。", doc.sentenceZhOf(span("天气")))
+        assertEquals("", doc.sentenceZhOf(span("不存在")))
+    }
 }

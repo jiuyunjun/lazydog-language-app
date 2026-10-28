@@ -105,6 +105,18 @@ data class VisualSearchRequest(
     val meaningZh: String,
     val pos: String = "",
     val exampleEn: String = "",
+    /**
+     * 中文语境：这个词替换掉的是哪句中文。母语阅读的 span 没有英文例句，
+     * 词形还可能是变形（`charged`），只有这句话能帮模型确定是哪个意思。
+     */
+    val contextZh: String = "",
+    /**
+     * 用户点了「都不合适，重新找」时，上一批用的检索词。
+     * 不告诉模型的话，同样的输入多半生成同样的查询，搜回同一批图。
+     */
+    val previousQueries: List<String> = emptyList(),
+    /** 用户在 ⋯ 里给上一批图的理由（不相关 / 太抽象…），可空。 */
+    val rejectionZh: String = "",
 )
 
 /** 一个候选图（设计文档 §34）。存的是引用，不是图本身——见 [rightsNoteZh]。 */
@@ -275,6 +287,8 @@ object VisualCandidateFilter {
      *
      * [mustShow] 里的词命中标题会加分，但**不做硬性要求**：Brave 的标题是网页标题，
      * 不是图片内容描述，拿它当准入条件会把大量好图误杀。
+     *
+     * [candidates] 要保持 Brave 返回的顺序，名次本身是一项分（[rankPrior]）。
      */
     fun rank(
         candidates: List<VocabularyImageAsset>,
@@ -284,13 +298,15 @@ object VisualCandidateFilter {
     ): List<VocabularyImageAsset> {
         val hostCounts = mutableMapOf<String, Int>()
         val seenUrls = mutableSetOf<String>()
+        // 名次在过滤之前取：被滤掉的那些也占着 Brave 的名次，后面的不该因此"升位"。
         return candidates
             .asSequence()
-            .filter { it.thumbnailUrl.isNotBlank() }
-            .filter { usableSize(it) }
-            .filter { asset -> BLOCKED_HOSTS.none { it in asset.hostLabel.lowercase() } }
-            .filter { seenUrls.add(it.thumbnailUrl) }
-            .map { it.copy(score = score(it, term, mustShow, avoid)) }
+            .mapIndexed { i, asset -> asset to rankPrior(i, candidates.size) }
+            .filter { (asset) -> asset.thumbnailUrl.isNotBlank() }
+            .filter { (asset) -> usableSize(asset) }
+            .filter { (asset) -> BLOCKED_HOSTS.none { it in asset.hostLabel.lowercase() } }
+            .filter { (asset) -> seenUrls.add(asset.thumbnailUrl) }
+            .map { (asset, prior) -> asset.copy(score = score(asset, prior, term, mustShow, avoid)) }
             .filter { it.score > 0 }
             .sortedByDescending { it.score }
             // 候选全来自同一个页面等于只有一张，所以每个站有上限
@@ -317,18 +333,82 @@ object VisualCandidateFilter {
         return ratio <= MAX_ASPECT && ratio >= 1 / MAX_ASPECT
     }
 
+    /**
+     * 这批候选好到不必再试备用检索词了吗（设计文档 §29）。
+     *
+     * 看的是前 [CONFIDENT_TOP] 张里有没有标题命中 [mustShow] 的。"过滤后还剩几张"说明不了什么：
+     * 只要标题不踩雷，三十条里总能剩下几张，哪怕全是另一个词义的图——
+     * 备用检索词以前几乎轮不到，就是因为只在"一张不剩"时才试。
+     * 模型没给 [mustShow] 时无从判断，按够好处理，不为此多花请求。
+     */
+    fun confident(ranked: List<VocabularyImageAsset>, mustShow: List<String>): Boolean =
+        ranked.isNotEmpty() && (mustShow.none { it.isNotBlank() } || confidence(ranked, mustShow) > 0)
+
+    /** 前 [CONFIDENT_TOP] 张里有几张标题对得上 [mustShow]。几批都不够好时，拿它挑最好的一批。 */
+    fun confidence(ranked: List<VocabularyImageAsset>, mustShow: List<String>): Int =
+        ranked.take(CONFIDENT_TOP).count { mustShowHits(it, mustShow) > 0 }
+
+    const val CONFIDENT_TOP = 3
+
+    private const val BASE_SCORE = 0.45
+
+    /** 第一名比最后一名多出来的分。和两项 [mustShow] 命中差不多重。 */
+    private const val PRIOR_SPAN = 0.20
+
+    /**
+     * Brave 自己的相关性名次换成的先验分：第一名 [PRIOR_SPAN]，最后一名 0。
+     *
+     * 本地能看的只有网页标题，而标题常常和图无关；Brave 的排序至少还看了图周围的文字，
+     * 比"标题里有没有某个词"可靠。所以名次给底分，本地规则只在上面加减。
+     */
+    internal fun rankPrior(index: Int, total: Int): Double =
+        if (total <= 1) PRIOR_SPAN else PRIOR_SPAN * (1 - index.toDouble() / (total - 1))
+
+    /**
+     * [mustShow] 里有几项在标题里出现了。
+     *
+     * 按词比，不按整串比：模型给的是 `gripped object` 这种短语，网页标题里几乎不会原样出现，
+     * 整串匹配等于这一项永远不中。短语里任一实词去掉词尾后作为标题中某个词的开头出现就算
+     * （`hand` 中 `hands`，`gripped` 中 `gripping`），出现在词中间不算（`hand` 不中 `shandy`）。
+     */
+    internal fun mustShowHits(asset: VocabularyImageAsset, mustShow: List<String>): Int {
+        val tokens = WORD.findAll((asset.title + " " + asset.publisher).lowercase()).map { it.value }.toList()
+        return mustShow.count { item ->
+            WORD.findAll(item.lowercase()).map { it.value }
+                .filter { it.length >= 3 && it !in VAGUE_WORDS }
+                .map(::stem)
+                .any { word -> tokens.any { it.startsWith(word) } }
+        }
+    }
+
+    /** 粗糙的去词尾，只为了让同一个词的几种形态能互相前缀匹配上。剩不到三个字母就不去。 */
+    private fun stem(word: String): String =
+        SUFFIXES.firstOrNull { word.endsWith(it) && word.length - it.length >= 3 }
+            ?.let { word.dropLast(it.length) }
+            ?: word
+
+    private val SUFFIXES = listOf("ing", "ed", "es", "s")
+
+    private val WORD = Regex("[a-z]+")
+
+    /** 虚词和"某个东西"这类占位词：标题里到处都是，命中了也说明不了图上有什么。 */
+    private val VAGUE_WORDS = setOf(
+        "the", "and", "with", "for", "from", "into", "onto", "its", "their",
+        "object", "thing", "something", "someone", "person", "people",
+    )
+
     private fun score(
         asset: VocabularyImageAsset,
+        prior: Double,
         term: String,
         mustShow: List<String>,
         avoid: List<String>,
     ): Double {
         val haystack = (asset.title + " " + asset.publisher).lowercase()
-        var score = 0.55
+        var score = BASE_SCORE + prior
 
         // 该看得见的东西出现在标题里，多半真拍了这个东西。
-        val hits = mustShow.count { it.isNotBlank() && it.lowercase() in haystack }
-        score += 0.10 * hits.coerceAtMost(3)
+        score += 0.10 * mustShowHits(asset, mustShow).coerceAtMost(3)
 
         // 标题只是把目标词重复一遍，通常是词典页、单词卡、字体图。
         if (term.isNotBlank() && haystack.trim() == term.lowercase()) score -= 0.20

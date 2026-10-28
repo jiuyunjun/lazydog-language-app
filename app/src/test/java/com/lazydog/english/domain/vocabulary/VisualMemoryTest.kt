@@ -146,6 +146,50 @@ class VisualMemoryTest {
         assertEquals(4, ranked.size)
     }
 
+    /** 本地只看得到标题；标题差不多时，Brave 自己的名次说了算。 */
+    @Test
+    fun `标题同样普通时保留 Brave 的名次`() {
+        val ranked = VisualCandidateFilter.rank(
+            candidates = listOf(
+                asset("river photo", "first.example"),
+                asset("river photo", "second.example", url = "https://second.example/2"),
+            ),
+            term = "bank",
+        )
+        assertEquals("first.example", ranked.first().hostLabel)
+        assertTrue(ranked[0].score > ranked[1].score)
+    }
+
+    /** `gripped object` 这种短语不会原样出现在网页标题里，按实词和词形去比。 */
+    @Test
+    fun `mustShow 短语按实词和词形匹配`() {
+        val asset = asset("Woman gripping a metal handle tightly", "a.example")
+        assertEquals(1, VisualCandidateFilter.mustShowHits(asset, listOf("gripped object")))
+        assertEquals(0, VisualCandidateFilter.mustShowHits(asset("a shandy glass", "b.example"), listOf("hand")))
+        assertEquals(1, VisualCandidateFilter.mustShowHits(asset("two hands", "c.example"), listOf("hand")))
+    }
+
+    /** 过滤后还剩几张不说明什么：前几张都对不上 mustShow，就该试备用检索词。 */
+    @Test
+    fun `前几张都对不上 mustShow 就不算够好`() {
+        val offTopic = VisualCandidateFilter.rank(
+            candidates = (1..5).map { asset("bank building facade $it", "s$it.example") },
+            term = "bank",
+            mustShow = listOf("river", "water"),
+        )
+        assertTrue(offTopic.isNotEmpty())
+        assertTrue(!VisualCandidateFilter.confident(offTopic, listOf("river", "water")))
+
+        val onTopic = VisualCandidateFilter.rank(
+            candidates = listOf(asset("grassy river bank", "r.example")),
+            term = "bank",
+            mustShow = listOf("river", "water"),
+        )
+        assertTrue(VisualCandidateFilter.confident(onTopic, listOf("river", "water")))
+        // 模型没给 mustShow 时无从判断，不为此多搜。
+        assertTrue(VisualCandidateFilter.confident(offTopic, emptyList()))
+    }
+
     @Test
     fun `没有尺寸信息的候选不因此被淘汰`() {
         val ranked = VisualCandidateFilter.rank(
