@@ -29,7 +29,7 @@ data class TextBox(val left: Float, val top: Float, val right: Float, val bottom
 }
 
 /** 识别器给出的一个词（空格隔开的一段，可能带着标点："world,"）。 */
-data class ScannedWord(val text: String, val box: TextBox)
+data class ScannedWord(val text: String, val box: TextBox, val confidence: Float? = null)
 
 data class ScannedLine(val words: List<ScannedWord>)
 
@@ -49,6 +49,9 @@ data class ScanTarget(
     val sentenceBoxes: List<TextBox>,
     /** [word] 是 [sentence] 按空格切开后的第几个词元，-1 表示不知道。 */
     val wordIndex: Int = -1,
+    val wordConfidence: Float? = null,
+    val sentenceConfidence: Float? = null,
+    val confirmedFrames: Int = 1,
 ) {
     /**
      * 交给查词当语境的那句话。
@@ -58,7 +61,8 @@ data class ScanTarget(
      */
     val contextSentence: String
         get() = sentence.takeIf { s ->
-            ENGLISH_WORD.findAll(s).count() >= MIN_CONTEXT_WORDS
+            ENGLISH_WORD.findAll(s).count() >= MIN_CONTEXT_WORDS && ScanQuality.textIssue(s, ScanMode.Sentence) == null &&
+                (sentenceConfidence == null || sentenceConfidence >= ScanQuality.MIN_CONFIDENCE)
         }.orEmpty()
 
     companion object {
@@ -88,7 +92,7 @@ object ScanAim {
     ): ScanTarget? {
         var best: Pair<BlockText, Token>? = null
         var bestDistance = Float.MAX_VALUE
-        for (block in blocks) {
+        for (block in ScanQuality.readingBlocks(blocks)) {
             val text = BlockText.of(block)
             for (token in text.tokens) {
                 val word = token.word ?: continue
@@ -112,21 +116,30 @@ object ScanAim {
             wordBoxes = token.boxes,
             sentenceBoxes = inSentence.flatMap { it.boxes },
             wordIndex = inSentence.indexOf(token),
+            wordConfidence = token.confidence,
+            sentenceConfidence = inSentence.mapNotNull { it.confidence }.minOrNull(),
         )
     }
 
     /** 画面里所有的句子，切法和 [aim] 一样（段内跨行拼、不跨段）。 */
-    fun sentencesIn(blocks: List<ScannedBlock>): List<String> = blocks.flatMap { block ->
-        val joined = BlockText.of(block).joined
-        buildList {
-            var at = 0
-            while (at < joined.length) {
-                val range = sentenceRange(joined, at)
-                joined.substring(range.first, range.last + 1).trim().takeIf { it.isNotEmpty() }?.let(::add)
-                at = range.last + 1
+    fun sentencesIn(blocks: List<ScannedBlock>): List<String> = sentenceReadings(blocks).map { it.first }
+
+    internal fun sentenceReadings(blocks: List<ScannedBlock>): List<Pair<String, Float?>> =
+        ScanQuality.readingBlocks(blocks).flatMap { block ->
+            val text = BlockText.of(block)
+            val joined = text.joined
+            buildList {
+                var at = 0
+                while (at < joined.length) {
+                    val range = sentenceRange(joined, at)
+                    val sentence = joined.substring(range.first, range.last + 1).trim()
+                    val confidence = text.tokens.filter { it.start <= range.last && it.end > range.first }
+                        .mapNotNull { it.confidence }.minOrNull()
+                    if (sentence.isNotEmpty()) add(sentence to confidence)
+                    at = range.last + 1
+                }
             }
         }
-    }
 
     /**
      * 两帧里认到的是不是同一个词：字面相同（不分大小写），而且位置没跳出一个半行高。
@@ -149,7 +162,7 @@ object ScanAim {
     }
 
     /** 一个词元在拼好的整段文字里占 [start, end)。 */
-    private data class Token(val raw: String, val boxes: List<TextBox>, val start: Int, val end: Int) {
+    private data class Token(val raw: String, val boxes: List<TextBox>, val start: Int, val end: Int, val confidence: Float?) {
         val word: String? = englishWordIn(raw)
     }
 
@@ -158,7 +171,7 @@ object ScanAim {
             fun of(block: ScannedBlock): BlockText {
                 // 先把行尾 "beauti-" 和下一行的 "ful" 接成一个词：纸面上断行是排版的事，
                 // 准星对着哪一半，要的都是 beautiful。
-                val merged = mutableListOf<Pair<String, List<TextBox>>>()
+                val merged = mutableListOf<Triple<String, List<TextBox>, Float?>>()
                 block.lines.forEachIndexed { lineIndex, line ->
                     line.words.forEachIndexed { wordIndex, word ->
                         val previous = merged.lastOrNull()
@@ -167,19 +180,21 @@ object ScanAim {
                             previous.first.endsWith("-") && previous.first.length > 1 &&
                             word.text.firstOrNull()?.isLowerCase() == true
                         if (continuesBrokenWord) {
-                            merged[merged.lastIndex] =
-                                previous!!.first.dropLast(1) + word.text to previous.second + word.box
+                            merged[merged.lastIndex] = Triple(
+                                previous!!.first.dropLast(1) + word.text, previous.second + word.box,
+                                listOfNotNull(previous.third, word.confidence).minOrNull(),
+                            )
                         } else {
-                            merged += word.text to listOf(word.box)
+                            merged += Triple(word.text, listOf(word.box), word.confidence)
                         }
                     }
                 }
                 val builder = StringBuilder()
-                val tokens = merged.map { (raw, boxes) ->
+                val tokens = merged.map { (raw, boxes, confidence) ->
                     if (builder.isNotEmpty()) builder.append(' ')
                     val start = builder.length
                     builder.append(raw)
-                    Token(raw, boxes, start, builder.length)
+                    Token(raw, boxes, start, builder.length, confidence)
                 }
                 return BlockText(builder.toString(), tokens)
             }

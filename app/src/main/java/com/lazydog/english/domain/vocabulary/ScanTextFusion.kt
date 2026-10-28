@@ -184,7 +184,8 @@ object ScanRefine {
     fun refine(live: ScanTarget, still: List<ScannedBlock>, minSimilarity: Float = 0.65f): ScanTarget? {
         val liveTokens = TokenAlign.tokens(live.sentence)
         if (liveTokens.isEmpty() || live.wordIndex !in liveTokens.indices) return null
-        val candidates = ScanAim.sentencesIn(still).distinct()
+        val readings = ScanAim.sentenceReadings(still)
+        val candidates = readings.map { it.first }.distinct()
             .map { it to TokenAlign.similarity(liveTokens, TokenAlign.tokens(it)) }
             .sortedByDescending { it.second }
         val (sentence, similarity) = candidates.firstOrNull() ?: return null
@@ -203,10 +204,14 @@ object ScanRefine {
         val word = mapped?.let { ScanAim.englishWordIn(stillTokens[it]) }
             ?.takeIf { TokenAlign.charSimilarity(TokenAlign.key(it), TokenAlign.key(live.word)) >= wordThreshold }
             ?: return null
+        val confidence = readings.filter { it.first == sentence }.mapNotNull { it.second }.minOrNull()
         return live.copy(
             word = word,
             sentence = sentence,
             wordIndex = mapped!!,
+            wordConfidence = confidence,
+            sentenceConfidence = confidence,
+            confirmedFrames = 2,
         )
     }
 }

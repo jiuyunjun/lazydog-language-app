@@ -2356,5 +2356,11 @@
     "count": 1,
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文",
     "text": "if (state == WordEnrichmentWorker.State.Failed) \"再试一次\" else \"补全\""
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
+    "text": "when (issue) { ScanIssue.Unsteady -> \"画面还没稳定。可以重新对准，或核对下面的原文。\" ScanIssue.LowConfidence -> \"文字比较模糊。请靠近、拿稳后重扫，或校正原文。\" else -> \"可能混入了中文、代码或乱码。请只保留要学习的英文，确认前不会发送给讲解服务。\" }",
+    "count": 1,
+    "reason": "扫描校对弹窗的质量状态与操作提示；识别原文在可编辑输入框中，确认前不得触发学习讲解"
   }
 ]

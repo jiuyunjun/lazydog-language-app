@@ -124,7 +124,7 @@ class ScanTextFusionTest {
         )
         val still = listOf(
             ScannedBlock(listOf(line("Nothing", "else", "mattered."))),
-            ScannedBlock(listOf(line("The", "morning", "was", "quiet"), line("and", "clear."))),
+            ScannedBlock(listOf(line("The", "morning", "was", "quiet"), line("and", "clear.", y = 30f))),
         )
 
         val refined = ScanRefine.refine(live, still)!!
@@ -162,9 +162,9 @@ class ScanTextFusionTest {
         assertTrue(target.sentence.split(' ')[target.wordIndex].startsWith(target.word))
     }
 
-    private fun line(vararg words: String): ScannedLine {
+    private fun line(vararg words: String, y: Float = 0f): ScannedLine {
         var x = 0f
-        return ScannedLine(words.map { ScannedWord(it, TextBox(x, 0f, x + 40f, 20f)).also { x += 50f } })
+        return ScannedLine(words.map { ScannedWord(it, TextBox(x, y, x + 40f, y + 20f)).also { x += 50f } })
     }
 
     private companion object {

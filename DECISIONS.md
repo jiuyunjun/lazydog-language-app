@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "6.12"
+version: "7.0"
 updated: "2026-10-29"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -10,6 +10,26 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 ---
 
 # 决策记录
+
+## D-085：中英混排扫描、取句边界与送出前校对
+
+- 状态：已确认（2026-10-29，用户提供中文被认成英文乱码的截图；在解释新增端侧中文模型依赖、
+  取句范围约束与质量拦截方案后，用户明确回复「做」）。本条批准本任务模型依赖替换。
+- 问题：拉丁识别器不能可靠区分中文与伪英文，整块拼句与多帧投票会将稳定乱码送入讲句。
+- 决定：用 bundled `text-recognition-chinese:16.0.1` 替换纯拉丁模型（同样识别 Latin），
+  仍只有一个识别器、仍在本机处理；不提供中文学习入口。部分替代 D-079 的模型选择。
+  在 domain 内按非拉丁文字、大行距、列间距隔开英文片段；实时与高清共用分段规则。
+  送出前检查文字质量和识别置信度，可疑结果暂停扫描并允许重扫或人工校对，确认前不调用 AI。
+- 参数与边界：连续最多六行；最低置信度 0.65、实时至少两帧确认；取句至少两词、最多 600 字符。
+  识别数字字母混串达到两处或占比 15%、英文词不足 65% 或出现代码符号时要求校对。
+  人工校对不自动改写文本，改词后清除旧语境，用户确认才进入既有讲解/保存面板。
+- 依据：[ML Kit 中文识别器同时支持 Latin](https://developers.google.com/android/reference/com/google/mlkit/vision/text/chinese/ChineseTextRecognizerOptions)；
+  [bundled Android 模型](https://developers.google.com/ml-kit/vision/text-recognition/v2/android)。
+- 被否决：双模型同时逐帧运行（额外耗时）；让 AI 清洗乱码（会编造原文）；词典白名单（误伤生词）。
+- 影响：版本目录、core/ocr、domain/vocabulary 和现有 ScanWordsScreen；不新增层、表、全局状态或 AI 契约。
+- 边界：质量规则是保守启发式，不保证检出所有乱码；替换模型的真机速度、弱光表现仍须实测。
+- 漂移自查：依赖方向不变；无新架构模式；复用相机和面板；判定在 domain；SDK 仅在 core；
+  无全局状态；不绕过保存链路；用单模型替换实现，未新增平行管线。
 
 ## D-084：扫一扫识别结果保守校验与句界修正
 
@@ -99,6 +119,8 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 - 漂移自查（§0.6 八条）：依赖方向不变（designsystem / feature → core/data → domain）；后台任务沿用
   `AutoBackupWorker` 的写法，无新模式；生成复用既有接口，无平行抽象；合并规则在 domain；
   Worker 只做调度与调用；无新增全局状态；写库走 repository；只多一个 DAO 更新方法，已是最小改动。
+
+> 模型选择部分由 D-085 替代；原决定保留供追溯。
 
 ## D-079：扫一扫取词：CameraX + ML Kit 端上识别，结果交给既有查词/讲句面板
 

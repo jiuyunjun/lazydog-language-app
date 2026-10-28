@@ -90,6 +90,9 @@ class ScanStabilizer(
             wordBoxes = listOf(smooth) + raw.wordBoxes.drop(1).map { it.offset(dx, dy) },
             sentenceBoxes = raw.sentenceBoxes.map { it.offset(dx, dy) },
             wordIndex = fused.wordIndex,
+            confirmedFrames = if (continuing && previous?.sentence == fused.sentence && previous.word == fused.word) {
+                (previous.confirmedFrames + 1).coerceAtMost(100)
+            } else 1,
         )
     }
 }

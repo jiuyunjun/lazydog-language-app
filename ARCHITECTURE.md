@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "1.12"
+version: "2.0"
 updated: "2026-10-29"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -166,7 +166,7 @@ VoiceManager / AudioEngine / SpeechService
 - Azure Speech SDK
 - Kotlin Serialization
 - Coil（只用于显示外链缩略图，D-071 批准；用 2.x 不用 3.x，后者会把 OkHttp 4 一起拖着换）
-- CameraX + ML Kit 拉丁文字识别 bundled 版（只用于扫一扫取词，D-079 批准；模型打进包里，
+- CameraX + ML Kit 中英文字识别 bundled 版（D-079 批准相机，D-085 批准模型替换；模型打进包里，
   不依赖 Google Play 服务）
 - Hilt（仅在依赖关系复杂到值得引入时）
 
@@ -258,6 +258,14 @@ feature/library/ScanWordsScreen ──► core/ocr/LiveTextCamera ──► doma
 - D-084 补充校验：完整词匹配、称谓/小数句界与闭引号归属；粘性不扩大容差、旧目标按时过期。
   高清重认须通过相似度、候选歧义与准星词对齐检查，否则整体保留实时结果。
   识别失败帧推进过期，暂停后忽略在途回调；高清位图在识别完成后释放。
+- D-085：相机识别器改用 `ChineseTextRecognizerOptions`（bundled 16.0.1，同时识别中英），
+  将词元置信度传入 domain。`ScanQuality` 对非拉丁文字、大行距与列间距分段，连续最多六行，
+  `ScanAim` 的实时与高清路径共用。中文用于界定英文区域，不送入学习面板。
+- 送出前质量检查在 `ScanQuality`：置信度低于 0.65、尚未两帧确认、代码特征、较多字母数字混串、
+  英文词占比不足、句子不足两词或超过 600 字符，转入校对。高清匹配提供第二份证据，但不能跳过质量检查。
+  字符串未知词不按词典否决。取词的语境单独检查，可疑语境不给查词服务。
+- `ScanWordsScreen` 的校对弹窗暂停相机与提问，重扫清空锁定；人工核对只解除帧数/置信度要求，
+  仍须通过文字检查。用户改词时清除旧语境，避免把新词和旧句子拼接。确认前不调用 AI。
 - 取景页不写任何记录。入库只走既有查词/讲句面板，规则与双击查词、三击讲句完全一致。
 
 ## 5. 核心数据模型

@@ -35,7 +35,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import com.lazydog.english.domain.vocabulary.ScannedBlock
 import com.lazydog.english.domain.vocabulary.ScannedLine
 import com.lazydog.english.domain.vocabulary.ScannedWord
@@ -174,7 +174,7 @@ private fun createState(context: Context): LiveTextCameraState {
     }
     return LiveTextCameraState(
         controller = controller,
-        recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS),
+        recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()),
         stillExecutor = Executors.newSingleThreadExecutor(),
     )
 }
@@ -185,7 +185,7 @@ private fun createState(context: Context): LiveTextCameraState {
  * 识别结果直接换算成**这个预览视图的像素坐标**（`COORDINATE_SYSTEM_VIEW_REFERENCED`），
  * 调用方在同样大小的叠层上画框、拿视图中心当准星就行，不用自己处理旋转、裁切和缩放。
  *
- * 识别全在本机做（ML Kit 拉丁文字模型打包在 APK 里），不联网、不存图。
+ * 识别全在本机做（ML Kit 中英文字模型打包在 APK 里），不联网、不存图。
  * 相机和识别器的生命周期跟着 [state] 走：离开页面就解绑相机、关掉识别器，不挂到全局。
  *
  * [paused] 时停掉识别、保留预览——查词面板打开的那段时间不用再烧电认字。
@@ -284,6 +284,7 @@ private fun Text.toScannedBlocks(): List<ScannedBlock> = textBlocks.map { block 
                     element.boundingBox?.let { box ->
                         ScannedWord(
                             text = element.text,
+                            confidence = element.confidence,
                             box = TextBox(
                                 box.left.toFloat(),
                                 box.top.toFloat(),
