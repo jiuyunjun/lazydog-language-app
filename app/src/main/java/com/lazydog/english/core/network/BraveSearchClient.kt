@@ -25,29 +25,49 @@ class BraveSearchClient(
     private val apiKey: suspend () -> String,
     private val okHttpClient: OkHttpClient = defaultOkHttpClient,
     private val endpoint: String = ENDPOINT,
+    private val newsEndpoint: String = NEWS_ENDPOINT,
 ) : WebSearchProvider {
 
     override suspend fun isConfigured(): Boolean = apiKey().isNotBlank()
 
     override suspend fun search(query: String, count: Int, freshness: String): WebSearchResult =
+        get(endpoint, query, count, freshness, op = "搜索", extra = "", parse = ::parse)
+
+    /**
+     * 新闻检索走 Brave 的 news 端点，同一个密钥、同一套限流。
+     * 锁简体中文：「今日热点」喂的是母语阅读，中文报道才能直接当中文母版的事实来源。
+     */
+    override suspend fun news(query: String, count: Int, freshness: String): WebSearchResult =
+        get(newsEndpoint, query, count, freshness, op = "新闻", extra = "&search_lang=zh-hans", parse = ::parseNews)
+
+    private suspend fun get(
+        base: String,
+        query: String,
+        count: Int,
+        freshness: String,
+        op: String,
+        extra: String,
+        parse: (String) -> WebSearchResult,
+    ): WebSearchResult =
         withContext(Dispatchers.IO) {
             val key = apiKey().trim()
             if (key.isBlank()) return@withContext WebSearchResult(failure = "没有配置 Brave 搜索密钥")
             if (query.isBlank()) return@withContext WebSearchResult(failure = "搜索词是空的")
 
             val url = buildString {
-                append(endpoint)
+                append(base)
                 append("?q=").append(URLEncoder.encode(query.trim(), "UTF-8"))
                 append("&count=").append(count.coerceIn(1, 20))
                 if (freshness.isNotBlank()) append("&freshness=").append(freshness)
                 append("&text_decorations=0")
                 append("&safesearch=moderate")
+                append(extra)
             }
             val request = Request.Builder()
                 .url(url)
                 .header("X-Subscription-Token", key)
                 .header("Accept", "application/json")
-                .tag(CallHooks::class.java, CallHooks(op = "搜索"))
+                .tag(CallHooks::class.java, CallHooks(op = op))
                 .get()
                 .build()
             try {
@@ -91,6 +111,29 @@ class BraveSearchClient(
         return if (hits.isEmpty()) WebSearchResult(failure = "没搜到可用结果") else WebSearchResult(hits)
     }
 
+    /** news 端点的结果直接在顶层 `results` 里，不像网页搜索包在 `web` 下面。 */
+    private fun parseNews(body: String): WebSearchResult {
+        val payload = runCatching { json.decodeFromString(NewsPayload.serializer(), body) }.getOrNull()
+            ?: return WebSearchResult(
+                failure = "Brave 返回的不是预期结构：${body.take(60).replace(Regex("\\s+"), " ")}",
+            )
+        val hits = payload.results.mapNotNull { result ->
+            val title = stripTags(result.title)
+            if (title.isBlank()) {
+                null
+            } else {
+                WebSearchHit(
+                    title = title,
+                    summary = stripTags(result.description),
+                    url = result.url.trim(),
+                    age = result.age.ifBlank { result.pageAge }.trim(),
+                    source = result.metaUrl?.hostname.orEmpty().removePrefix("www.").trim(),
+                )
+            }
+        }
+        return if (hits.isEmpty()) WebSearchResult(failure = "没搜到最近的新闻") else WebSearchResult(hits)
+    }
+
     /** 摘要里会带 `<strong>` 高亮；进提示词之前去掉，免得模型把标签当内容。 */
     private fun stripTags(raw: String): String =
         raw.replace(TAG, "").replace("&amp;", "&").replace("&quot;", "\"").trim()
@@ -110,8 +153,25 @@ class BraveSearchClient(
         @SerialName("page_age") val pageAge: String = "",
     )
 
+    @Serializable
+    private data class NewsPayload(val results: List<NewsResult> = emptyList())
+
+    @Serializable
+    private data class NewsResult(
+        val title: String = "",
+        val description: String = "",
+        val url: String = "",
+        val age: String = "",
+        @SerialName("page_age") val pageAge: String = "",
+        @SerialName("meta_url") val metaUrl: MetaUrl? = null,
+    )
+
+    @Serializable
+    private data class MetaUrl(val hostname: String = "")
+
     companion object {
         const val ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
+        const val NEWS_ENDPOINT = "https://api.search.brave.com/res/v1/news/search"
 
         private val TAG = Regex("<[^>]+>")
 

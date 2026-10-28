@@ -123,4 +123,39 @@ class BraveSearchClientTest {
         assertTrue(client().search("x").failure.orEmpty().contains("密钥无效"))
         Unit
     }
+
+    private fun newsClient() = BraveSearchClient(
+        apiKey = { "test-key" },
+        newsEndpoint = server.url("/res/v1/news/search").toString(),
+    )
+
+    @Test
+    fun `新闻结果在顶层 results 里，带来源站点和时间`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"type":"news","results":[{"title":"<strong>台风</strong>今晚登陆","description":"沿海停航",
+                   "url":"https://news.example/a","age":"3 hours ago",
+                   "meta_url":{"hostname":"www.news.example"}}]}""",
+            ),
+        )
+        val result = newsClient().news("今日 新闻")
+        assertNull(result.failure)
+        val hit = result.hits.single()
+        assertEquals("台风今晚登陆", hit.title)
+        assertEquals("news.example", hit.source)
+        assertEquals("3 hours ago", hit.age)
+        val url = server.takeRequest().requestUrl!!
+        assertEquals("/res/v1/news/search", url.encodedPath)
+        // 热点喂的是中文母版，默认只要最近一天的中文报道。
+        assertEquals("zh-hans", url.queryParameter("search_lang"))
+        assertEquals(WebSearchProvider.FRESH_DAY, url.queryParameter("freshness"))
+        Unit
+    }
+
+    @Test
+    fun `新闻一条都没有时如实说`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"type":"news","results":[]}"""))
+        assertNotNull(newsClient().news("科技 新闻").failure)
+        Unit
+    }
 }

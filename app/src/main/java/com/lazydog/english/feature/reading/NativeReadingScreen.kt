@@ -95,6 +95,7 @@ import com.lazydog.english.domain.generation.NativeSpanPlanRequest
 import com.lazydog.english.domain.generation.NewWordAmount
 import com.lazydog.english.domain.generation.ReadingSegment
 import com.lazydog.english.domain.generation.SpanKind
+import com.lazydog.english.domain.generation.WebSearchHit
 import com.lazydog.english.domain.generation.WebSearchProvider
 import com.lazydog.english.domain.generation.factPackLines
 import com.lazydog.english.domain.planning.DailyStep
@@ -219,7 +220,8 @@ fun NativeReadingScreen(
         }
     }
 
-    fun generate(topic: String, amount: EnglishAmount, searchFirst: Boolean) {
+    /** [headline] 是从「今日热点」挑的那条新闻：它本身就是第一条事实，再按标题补检索几条。 */
+    fun generate(topic: String, amount: EnglishAmount, searchFirst: Boolean, headline: WebSearchHit?) {
         phase = NativePhase.Working("正在写这篇中文")
         stage = GenerationStage.Connecting
         preview = ""
@@ -230,7 +232,12 @@ fun NativeReadingScreen(
 
             // 热点先检索再写（§36.7）。搜不到就照常写，只是不带时效事实——
             // 因为搜索失败读不到文章，对用户来说是纯粹的倒退。
-            val facts = if (searchFirst) {
+            val facts = if (headline != null) {
+                // 挑的是一条新闻，补检索就收到最近一周：这件事的来龙去脉都在这几天里。
+                // 补不到也不要紧，挑中的那条本身就是一条带出处的事实。
+                val more = app.webSearch.search(query = topic, freshness = WebSearchProvider.FRESH_WEEK)
+                factPackLines((listOf(headline) + more.hits).distinctBy { it.url.ifBlank { it.title } })
+            } else if (searchFirst) {
                 // 用户点的是「先搜一下最新消息」，那就真的收窗口到最近一个月；
                 // 不点这个开关的主题走的是常识路线，根本不检索。
                 val result = app.webSearch.search(
@@ -546,7 +553,7 @@ private fun NoticeBar(text: String, onDismiss: () -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean) -> Unit) {
+private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, WebSearchHit?) -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val savedTopics by app.userPreferences.topics.collectAsState(initial = emptySet())
@@ -558,6 +565,8 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean) -> Unit
     var customTopic by rememberSaveable { mutableStateOf("") }
     var amountWire by rememberSaveable { mutableStateOf("") }
     var searchFirst by rememberSaveable { mutableStateOf(false) }
+    /** 从「今日热点」挑中的那条。和话题胶囊、自己输入三选一。 */
+    var headline by remember { mutableStateOf<WebSearchHit?>(null) }
     val amount = EnglishAmount.fromWire(amountWire.ifBlank { storedAmount })
     val topics = remember(savedTopics) { TopicCatalog.withPreferred(savedTopics) }
 
@@ -580,6 +589,7 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean) -> Unit
                 onClick = {
                     selectedTopic = TopicCatalog.random(exclude = selectedTopic)
                     customTopic = ""
+                    headline = null
                 },
                 label = { Text("随便给我一个") },
                 leadingIcon = { Icon(Icons.Outlined.Casino, contentDescription = null) },
@@ -594,11 +604,28 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean) -> Unit
                         selected = selectedTopic == topic,
                         onClick = {
                             selectedTopic = if (selectedTopic == topic) "" else topic
-                            if (selectedTopic.isNotBlank()) customTopic = ""
+                            if (selectedTopic.isNotBlank()) {
+                                customTopic = ""
+                                headline = null
+                            }
                         },
                         label = { Text(topic) },
                     )
                 }
+            }
+
+            // 没配密钥就整块不出现，和下面「先搜一下」同一个口径。
+            if (braveReady) {
+                HotTopicsSection(
+                    picked = headline,
+                    onPick = { hit ->
+                        headline = if (headline == hit) null else hit
+                        if (headline != null) {
+                            selectedTopic = ""
+                            customTopic = ""
+                        }
+                    },
+                )
             }
 
             Text("英语量", style = MaterialTheme.typography.titleSmall)
@@ -640,12 +667,15 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean) -> Unit
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                val chosen = customTopic.trim().ifBlank { selectedTopic }
+                val chosen = customTopic.trim().ifBlank { selectedTopic }.ifBlank { headline?.title.orEmpty() }
                 OutlinedTextField(
                     value = customTopic,
                     onValueChange = {
                         customTopic = it
-                        if (it.isNotBlank()) selectedTopic = ""
+                        if (it.isNotBlank()) {
+                            selectedTopic = ""
+                            headline = null
+                        }
                     },
                     label = { Text("想读点什么？中文说就行") },
                     placeholder = { Text(selectedTopic.ifBlank { "比如：为什么日本便利店很少缺货" }) },
@@ -653,7 +683,7 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean) -> Unit
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Button(
-                    onClick = { onGenerate(chosen, amount, searchFirst) },
+                    onClick = { onGenerate(chosen, amount, searchFirst, headline) },
                     enabled = chosen.isNotBlank(),
                     modifier = Modifier
                         .fillMaxWidth()

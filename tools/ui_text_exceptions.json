@@ -2356,5 +2356,29 @@
     "count": 1,
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文",
     "text": "if (state == WordEnrichmentWorker.State.Failed) \"再试一次\" else \"补全\""
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "option.labelZh",
+    "count": 1,
+    "reason": "热点分类标签（综合、科技…），界面标签，不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "failure ?: \"这个分类最近没搜到新闻，换一个试试\"",
+    "count": 1,
+    "reason": "新闻检索失败或无结果的状态提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "hit.title",
+    "count": 1,
+    "reason": "供挑选主题的中文新闻标题，点击是选中这条去写文章；学习正文在生成后的母语阅读文章里"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "meta",
+    "count": 1,
+    "reason": "新闻来源站点与发布时间（如 xinhuanet.com · 3 小时前），界面元信息"
   }
 ]

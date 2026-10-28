@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.1"
+version: "7.2"
 updated: "2026-10-29"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -10,6 +10,17 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 ---
 
 # 决策记录
+
+## D-087：母语阅读加「今日热点」，接 Brave 新闻检索
+
+- 状态：已确认（2026-10-29，用户在"实时新闻"三个方案里选了「今日热点入口：拉一批新闻标题挑一条再写」）。
+- 决定：`WebSearchProvider` 增加 `news()`，`BraveSearchClient` 用同一个密钥调 `/res/v1/news/search`
+  （`search_lang=zh-hans`，默认最近一天）。母语阅读开篇页按分类点了才拉，转载按标题前缀去重后列十条；
+  挑中的那条作为 Fact Pack 第一条，再按标题补一次一周内网页检索。不改提示词和 AI 契约。
+- 只做母语阅读：英文阅读的请求里没有 Fact Pack，挑了热点也只能凭记忆写，等它接上检索再说。
+- 被否决：进页面自动拉（每次打开都花配额）；让模型从标题列表里挑角度（多一次调用，§6.2 的聚类与角度留到后面）。
+- 影响：domain 接口多一个方法、core/network 多一个端点、feature/reading 多一个区块；
+  不新增依赖、层、表或全局状态。一次热点最多三次 Brave 请求（一天 + 放宽一周 + 补检索）。
 
 ## D-086：取消扫一扫按加号后的核对弹窗；缩放条向左拖放大
 
