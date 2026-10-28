@@ -27,15 +27,17 @@ interface WebSearchProvider {
     ): WebSearchResult
 
     /**
-     * 新闻检索：只回新闻站的报道，按时间窗收（`母语阅读DESIGN.md` §6.2 的"实时搜索"那一步）。
+     * 新闻检索：只回新闻站的报道，按时间窗收。
      *
-     * 和 [search] 分开，是因为「今日热点」要的是一批**最近发生的事**给用户挑，
-     * 网页搜索按相关度排，回来的多是百科和旧文章。
+     * 现在只是「今日热点」在 Google 新闻连不上时的兜底（D-088）：Brave 没有新闻分区和城市，
+     * 只能按 [country]、[searchLang] 加查询词筛。两者空表示不限。
      */
     suspend fun news(
         query: String,
         count: Int = NEWS_COUNT,
         freshness: String = FRESH_DAY,
+        country: String = "",
+        searchLang: String = "",
     ): WebSearchResult
 
     companion object {
@@ -71,56 +73,6 @@ data class WebSearchResult(
     val hits: List<WebSearchHit> = emptyList(),
     val failure: String? = null,
 )
-
-/**
- * 「今日热点」里的一个分类：给人看的名字 + 实际发给新闻检索的查询。
- * 新闻检索必须有查询词，没有"今天全部新闻"这种调用。
- */
-enum class HotTopicCategory(val labelZh: String, val query: String) {
-    General("综合", "今日 新闻"),
-    Tech("科技", "科技 新闻"),
-    Business("财经", "财经 新闻"),
-    World("国际", "国际 新闻"),
-    Culture("文娱", "文化 娱乐 新闻"),
-    Health("健康", "健康 医疗 新闻"),
-}
-
-/**
- * 热点列表去重：同一件事常被十几家转载，标题只差几个字。
- *
- * 按标题去掉标点空白后的前 [PREFIX] 个字比——转载改的多是结尾的来源和修饰，开头基本不动。
- * 不做聚类：§6.2 的"候选新闻聚类"是后面的事，这里只保证列表里不出现同一条三遍。
- */
-fun distinctHeadlines(hits: List<WebSearchHit>, limit: Int = HEADLINE_LIMIT): List<WebSearchHit> {
-    val seen = mutableSetOf<String>()
-    return hits.filter { hit ->
-        val key = hit.title.filter { it.isLetterOrDigit() }.lowercase().take(PREFIX)
-        key.isNotEmpty() && seen.add(key)
-    }.take(limit)
-}
-
-private const val PREFIX = 12
-const val HEADLINE_LIMIT = 10
-
-/**
- * Brave 新闻给的时间是英文相对时间（`3 hours ago`）。热点列表是中文界面，翻成「3 小时前」；
- * 认不出的格式（日期之类）原样返回，不硬翻。
- */
-fun ageZh(age: String): String {
-    val match = AGE.matchEntire(age.trim().lowercase()) ?: return age.trim()
-    val (n, unit) = match.destructured
-    val zh = when (unit) {
-        "minute" -> "分钟"
-        "hour" -> "小时"
-        "day" -> "天"
-        "week" -> "周"
-        "month" -> "个月"
-        else -> return age.trim()
-    }
-    return "$n ${zh}前"
-}
-
-private val AGE = Regex("""(\d+)\s+(minute|hour|day|week|month)s?\s+ago""")
 
 /**
  * 把检索结果压成进提示词的 Fact Pack。

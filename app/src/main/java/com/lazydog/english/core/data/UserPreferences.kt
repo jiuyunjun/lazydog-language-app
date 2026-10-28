@@ -44,6 +44,9 @@ class UserPreferences(private val context: Context) {
         val BraveApiKey = stringPreferencesKey("brave_api_key")
         val NativeEnglishAmount = stringPreferencesKey("native_english_amount")
         val NativeNewWordAmount = stringPreferencesKey("native_new_word_amount")
+        val NewsEdition = stringPreferencesKey("news_edition")
+        val NewsLocation = stringPreferencesKey("news_location")
+        val NewsCategory = stringPreferencesKey("news_category")
         val SpeechRegion = stringPreferencesKey("speech_region")
         val SpeechRateName = stringPreferencesKey("speech_rate")
         val AutoReadWords = booleanPreferencesKey("auto_read_words")
@@ -244,6 +247,14 @@ class UserPreferences(private val context: Context) {
     val nativeNewWordAmount: Flow<String> =
         context.dataStore.data.map { it[Keys.NativeNewWordAmount].orEmpty() }
 
+    /**
+     * 母语阅读「今日热点」上次选的版本、地区和分类（D-088）。
+     * 地区是用户写的地名（城市、省、国家），空表示不限；版本和分类存枚举名，解析放在用的地方。
+     */
+    val newsEdition: Flow<String> = context.dataStore.data.map { it[Keys.NewsEdition].orEmpty() }
+    val newsLocation: Flow<String> = context.dataStore.data.map { it[Keys.NewsLocation].orEmpty() }
+    val newsCategory: Flow<String> = context.dataStore.data.map { it[Keys.NewsCategory].orEmpty() }
+
     val speechKey: Flow<String> =
         context.dataStore.data.map { it[Keys.SpeechKey].orDefault(LocalEnv.SPEECH_KEY) }
     val speechRegion: Flow<String> =
@@ -390,6 +401,17 @@ class UserPreferences(private val context: Context) {
 
     suspend fun saveNativeNewWordAmount(wire: String) {
         context.dataStore.edit { it[Keys.NativeNewWordAmount] = wire }
+    }
+
+    suspend fun saveNewsRegion(edition: String, location: String) {
+        context.dataStore.edit {
+            it[Keys.NewsEdition] = edition
+            it[Keys.NewsLocation] = location.trim()
+        }
+    }
+
+    suspend fun saveNewsCategory(category: String) {
+        context.dataStore.edit { it[Keys.NewsCategory] = category }
     }
 
     suspend fun saveBraveApiKey(key: String) {

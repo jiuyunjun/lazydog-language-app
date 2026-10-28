@@ -2,7 +2,7 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "12.1"
+version: "12.2"
 updated: "2026-10-29"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
@@ -47,6 +47,32 @@ interface LearningContentGenerator {
 2. `generateScenarioTurn`：只扮演对手并给下一轮四个选项，不纠错、不评分。
 3. `judgeScenarioTurn`：独立判断本轮命中的目标和是否发生沟通失败，不生成对话。
 4. `summarizeScenario`：结束后固定生成三条表达改进和 1～4 条待复习表达；这些内容保存为“表达”，不得混入单词列表。
+
+### 母语阅读新闻清理调用边界
+
+`cleanNativeNews` 是「今日热点」挑中新闻后的第一步（D-088），替代这条路径上的
+`generateNativeCanonical`：用户要原汁原味的新闻，不要「引人入胜」那套钩子和重写。
+
+输入：原标题、来源、分类，和从报道网页抽出的原文段落（`NewsCleanup.trimSource`：
+最多 30 段、约 4000 字，按段截，第一段总保留）。段落以 `[1]`、`[2]` 编号给出，只作数据。
+
+输出：
+
+```json
+{"schemaVersion":1,"keep":[{"index":1,"text":""},{"index":2,"text":"规定自明年起施行。"}],
+ "comprehension":{"promptZh":"...","options":["...","...","..."],"answerIndex":0,"explanationZh":"..."}}
+```
+
+- AI 只能删：`keep` 列出要保留的段落序号（1 起）；`text` 为空表示整段原样保留，
+  非空时必须是该段里连续的一截，用来切掉段首段尾的署名、「（完）」、编辑署名等杂质。
+- 本地校验（`NewsCleanup.apply`）：序号越界或重复丢弃；按原文顺序重排；
+  `text` 去空白后不是原段落的子串就视为改写，退回原段落并记一条说明；最多保留 14 段。
+- 标题用原标题（本地去掉「 - 来源」），不由 AI 生成；`teaser`、`readerPayoff` 为空，
+  `category` 用所选分类名。理解题问新闻里的关键事实或因果，答案须能在保留正文中找到；
+  不合格只丢题不丢文。清理后仍过 `NativeReadingValidation.validateCanonical`（至少 3 段、200 字）。
+- 之后的英语替换（`planNativeReadingSpans`）与常识文章完全相同。
+
+提示词版本 `NATIVE_NEWS_PROMPT_VERSION=1`。
 
 ### 配图检索词调用边界
 
@@ -568,6 +594,7 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 | `WORD_EXPLANATION_PROMPT_VERSION` | 6 |
 | `READING_PROMPT_VERSION` | 3 |
 | `NATIVE_READING_PROMPT_VERSION` | 3 |
+| `NATIVE_NEWS_PROMPT_VERSION` | 1 |
 | `GRAMMAR_PROMPT_VERSION` | 3 |
 | `GRAMMAR_DRILL_PROMPT_VERSION` | 2 |
 | `TRANSLATION_PROMPT_VERSION` | 2 |

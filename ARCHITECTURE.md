@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "2.1"
+version: "2.2"
 updated: "2026-10-29"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -609,6 +609,13 @@ interface ReadingSource {
 与 `SpeechProvider → AzureSpeechProvider` 同构，不新增抽象层。它是**可选依赖**：
 没配密钥时 `isConfigured()` 为 false，界面藏掉开关；搜索失败退回不带事实的写法。
 密钥同样只存在 `LocalEnv.kt`（gitignore）或 DataStore 里，源码里是占位符。
+
+「今日热点」（D-088）同样是"领域接口 + core/network 实现"，不新增层：
+- `NewsFeed`：`GoogleNewsRssClient`（公开 RSS，不要密钥）包在 `FallbackNewsFeed` 里，
+  Google 失败且配了 Brave 时改用 `WebSearchProvider.news()`。RSS 用平台自带的 `javax.xml` 解析，关掉 DTD。
+- `ArticleFetcher`：`HttpArticleFetcher` 抓报道网页，`ArticleExtractor` 用正则取 `<p>` 正文，不引入 HTML 解析库。
+- `NewsArticleLoader`（domain）串起"Brave 找原文链接 → 逐个抓取"；`NewsCleanup`（domain）校验 AI 清理结果
+  只删不改。出处存在 `NativeReadingDocument.source`（JSON 新增可空字段，不改表）。
 
 ## 8. 服务和密钥
 

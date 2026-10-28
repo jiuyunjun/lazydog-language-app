@@ -138,7 +138,7 @@ class BraveSearchClientTest {
                    "meta_url":{"hostname":"www.news.example"}}]}""",
             ),
         )
-        val result = newsClient().news("今日 新闻")
+        val result = newsClient().news("今日 新闻", country = "CN", searchLang = "zh-hans")
         assertNull(result.failure)
         val hit = result.hits.single()
         assertEquals("台风今晚登陆", hit.title)
@@ -146,7 +146,8 @@ class BraveSearchClientTest {
         assertEquals("3 hours ago", hit.age)
         val url = server.takeRequest().requestUrl!!
         assertEquals("/res/v1/news/search", url.encodedPath)
-        // 热点喂的是中文母版，默认只要最近一天的中文报道。
+        // 兜底时按版本锁国家和语言，默认只要最近一天。
+        assertEquals("CN", url.queryParameter("country"))
         assertEquals("zh-hans", url.queryParameter("search_lang"))
         assertEquals(WebSearchProvider.FRESH_DAY, url.queryParameter("freshness"))
         Unit

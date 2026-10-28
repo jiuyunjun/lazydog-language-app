@@ -192,6 +192,8 @@ data class NativeReadingDocument(
     val englishSurfaceActual: Double = 0.0,
     /** 校验过程中丢掉了什么，排错用。 */
     val notes: List<String> = emptyList(),
+    /** 新闻版的出处（D-088）。常识文章为 null；老材料的 JSON 里没有这个字段，解出来也是 null。 */
+    val source: NewsSourceRef? = null,
 ) {
     companion object {
         const val SCHEMA_VERSION = 1
@@ -217,6 +219,17 @@ data class NativeReadingDocument(
 private val SENTENCE_ENDS = charArrayOf('。', '！', '？', '；', '!', '?', ';', '\n')
 
 /** 写中文母版这一步的入参（设计文档 §23 第 7 步）。 */
+/**
+ * 新闻清理的输入（D-088）。[paragraphs] 是从报道网页上抽出来的原文段落，
+ * 已按 [NewsCleanup.trimSource] 截过长度。
+ */
+data class NativeNewsRequest(
+    val title: String,
+    val source: String,
+    val category: String,
+    val paragraphs: List<String>,
+)
+
 data class NativeCanonicalRequest(
     val topic: String,
     val learnerLevel: String,

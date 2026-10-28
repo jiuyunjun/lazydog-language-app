@@ -33,12 +33,20 @@ class BraveSearchClient(
     override suspend fun search(query: String, count: Int, freshness: String): WebSearchResult =
         get(endpoint, query, count, freshness, op = "搜索", extra = "", parse = ::parse)
 
-    /**
-     * 新闻检索走 Brave 的 news 端点，同一个密钥、同一套限流。
-     * 锁简体中文：「今日热点」喂的是母语阅读，中文报道才能直接当中文母版的事实来源。
-     */
-    override suspend fun news(query: String, count: Int, freshness: String): WebSearchResult =
-        get(newsEndpoint, query, count, freshness, op = "新闻", extra = "&search_lang=zh-hans", parse = ::parseNews)
+    /** 新闻检索走 Brave 的 news 端点，同一个密钥、同一套限流。 */
+    override suspend fun news(
+        query: String,
+        count: Int,
+        freshness: String,
+        country: String,
+        searchLang: String,
+    ): WebSearchResult {
+        val extra = buildString {
+            if (country.isNotBlank()) append("&country=").append(country)
+            if (searchLang.isNotBlank()) append("&search_lang=").append(searchLang)
+        }
+        return get(newsEndpoint, query, count, freshness, op = "新闻", extra = extra, parse = ::parseNews)
+    }
 
     private suspend fun get(
         base: String,
@@ -126,7 +134,8 @@ class BraveSearchClient(
                     title = title,
                     summary = stripTags(result.description),
                     url = result.url.trim(),
-                    age = result.age.ifBlank { result.pageAge }.trim(),
+                    // 新闻优先要 page_age（ISO 时间），列表上要算"几小时前"；没有才退到英文相对时间。
+                    age = result.pageAge.ifBlank { result.age }.trim(),
                     source = result.metaUrl?.hostname.orEmpty().removePrefix("www.").trim(),
                 )
             }

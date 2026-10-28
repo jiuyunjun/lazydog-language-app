@@ -132,6 +132,18 @@ interface LearningContentGenerator {
     ): GenerationResult<NativeCanonicalArticle>
 
     /**
+     * 母语阅读的新闻版第一步（D-088）：不写文章，把抓来的新闻原文**清理**成中文母版。
+     *
+     * 和 [generateNativeCanonical] 分开：那条提示词要钩子、好奇缺口和兑现，
+     * 新闻要的是原汁原味——AI 只能挑段落、切掉段首段尾的杂质，不能改字（[NewsCleanup]）。
+     * 标题用原标题，出处由调用方记下。返回的母版接着走同一条英语替换。
+     */
+    suspend fun cleanNativeNews(
+        request: NativeNewsRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
+    ): GenerationResult<NativeCanonicalArticle>
+
+    /**
      * 母语阅读第二步：在写好的中文母版上规划英语替换（§9、§37.3）。
      *
      * 返回前已过 [NativeReadingValidation]：定不了位、挤在一起、超出比例的片段都已退回中文。

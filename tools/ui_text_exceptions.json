@@ -1123,7 +1123,7 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
-    "text": "if (chosen.isBlank()) \"给我写一篇\" else \"写一篇「$chosen」\"",
+    "text": "when { needsKey -> \"读原文要先在设置里填 Brave 密钥\" headline != null -> \"读这条新闻\" chosen.isBlank() -> \"给我写一篇\" else -> \"写一篇「$chosen」\" }",
     "count": 1,
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   },
@@ -2360,25 +2360,49 @@
   {
     "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
     "text": "option.labelZh",
-    "count": 1,
-    "reason": "热点分类标签（综合、科技…），界面标签，不是供查词讲句的学习正文"
+    "count": 2,
+    "reason": "新闻分类（要闻、体育…）和版本（中国大陆、香港、台湾）标签，界面标签，不是供查词讲句的学习正文"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
-    "text": "failure ?: \"这个分类最近没搜到新闻，换一个试试\"",
+    "text": "regionLabel(q)",
     "count": 1,
-    "reason": "新闻检索失败或无结果的状态提示"
+    "reason": "当前新闻版本与地区（如 中国大陆 · 杭州），界面状态"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
-    "text": "hit.title",
+    "text": "current.failure ?: \"这个地区和分类最近没有新闻\"",
     "count": 1,
-    "reason": "供挑选主题的中文新闻标题，点击是选中这条去写文章；学习正文在生成后的母语阅读文章里"
+    "reason": "新闻列表失败或无结果的状态提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "热点区块的操作提示（兜底源、缺 Brave 密钥），调用处均为固定中文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "story.title",
+    "count": 1,
+    "reason": "供挑选的中文新闻标题，单击是选中这条去读；学习正文在生成后的母语阅读文章里"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
     "text": "meta",
     "count": 1,
-    "reason": "新闻来源站点与发布时间（如 xinhuanet.com · 3 小时前），界面元信息"
+    "reason": "新闻来源、发布时间与同事件报道数（如 澎湃新闻 · 3 小时前 · 另有 4 家报道），界面元信息"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "name",
+    "count": 1,
+    "reason": "地区快捷选项（北京、日本…），界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",
+    "text": "listOfNotNull(\"来源：${source.name}\", time).joinToString(\" · \")",
+    "count": 1,
+    "reason": "新闻出处与发布时间，界面元信息"
   }
 ]

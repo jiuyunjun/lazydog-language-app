@@ -95,7 +95,11 @@ import com.lazydog.english.domain.generation.NativeSpanPlanRequest
 import com.lazydog.english.domain.generation.NewWordAmount
 import com.lazydog.english.domain.generation.ReadingSegment
 import com.lazydog.english.domain.generation.SpanKind
-import com.lazydog.english.domain.generation.WebSearchHit
+import com.lazydog.english.domain.generation.NativeNewsRequest
+import com.lazydog.english.domain.generation.NewsArticleLoader
+import com.lazydog.english.domain.generation.NewsCleanup
+import com.lazydog.english.domain.generation.NewsSourceRef
+import com.lazydog.english.domain.generation.NewsText
 import com.lazydog.english.domain.generation.WebSearchProvider
 import com.lazydog.english.domain.generation.factPackLines
 import com.lazydog.english.domain.planning.DailyStep
@@ -220,9 +224,12 @@ fun NativeReadingScreen(
         }
     }
 
-    /** [headline] 是从「今日热点」挑的那条新闻：它本身就是第一条事实，再按标题补检索几条。 */
-    fun generate(topic: String, amount: EnglishAmount, searchFirst: Boolean, headline: WebSearchHit?) {
-        phase = NativePhase.Working("正在写这篇中文")
+    /**
+     * [news] 非空是从「今日热点」挑的新闻（D-088）：不写文章，抓原文、清理后原样读；
+     * 否则按主题写一篇常识文章，[searchFirst] 决定先不先检索。
+     */
+    fun generate(topic: String, amount: EnglishAmount, searchFirst: Boolean, news: PickedNews?) {
+        phase = NativePhase.Working(if (news != null) "正在找这条新闻的原文" else "正在写这篇中文")
         stage = GenerationStage.Connecting
         preview = ""
         scope.launch {
@@ -230,37 +237,59 @@ fun NativeReadingScreen(
             val newWords = NewWordAmount.fromWire(app.userPreferences.nativeNewWordAmount.first())
             app.userPreferences.saveNativeEnglishAmount(amount.wire)
 
-            // 热点先检索再写（§36.7）。搜不到就照常写，只是不带时效事实——
-            // 因为搜索失败读不到文章，对用户来说是纯粹的倒退。
-            val facts = if (headline != null) {
-                // 挑的是一条新闻，补检索就收到最近一周：这件事的来龙去脉都在这几天里。
-                // 补不到也不要紧，挑中的那条本身就是一条带出处的事实。
-                val more = app.webSearch.search(query = topic, freshness = WebSearchProvider.FRESH_WEEK)
-                factPackLines((listOf(headline) + more.hits).distinctBy { it.url.ifBlank { it.title } })
-            } else if (searchFirst) {
-                // 用户点的是「先搜一下最新消息」，那就真的收窗口到最近一个月；
-                // 不点这个开关的主题走的是常识路线，根本不检索。
-                val result = app.webSearch.search(
-                    query = topic,
-                    freshness = WebSearchProvider.FRESH_MONTH,
+            var source: NewsSourceRef? = null
+            val canonical = if (news != null) {
+                val story = news.story
+                val fetched = when (val loaded = app.newsArticleLoader.load(story)) {
+                    is NewsArticleLoader.Result.Failure -> {
+                        phase = NativePhase.Failed(loaded.reason)
+                        return@launch
+                    }
+                    is NewsArticleLoader.Result.Success -> loaded.article
+                }
+                source = NewsSourceRef(
+                    name = story.source.ifBlank { NewsText.hostOf(fetched.url) },
+                    url = fetched.url,
+                    publishedAt = story.publishedAt,
                 )
-                if (result.failure != null) notice = "没搜到最新消息，这篇按常识写：${result.failure}"
-                factPackLines(result.hits)
+                phase = NativePhase.Working("正在清理新闻原文")
+                stage = GenerationStage.Connecting
+                app.contentGenerator.cleanNativeNews(
+                    NativeNewsRequest(
+                        title = story.title,
+                        source = story.source,
+                        category = news.category.labelZh,
+                        paragraphs = NewsCleanup.trimSource(fetched.paragraphs),
+                    ),
+                    onStage = { stage = it },
+                )
             } else {
-                emptyList()
+                // 热点先检索再写（§36.7）。搜不到就照常写，只是不带时效事实——
+                // 因为搜索失败读不到文章，对用户来说是纯粹的倒退。
+                val facts = if (searchFirst) {
+                    // 用户点的是「先搜一下最新消息」，那就真的收窗口到最近一个月；
+                    // 不点这个开关的主题走的是常识路线，根本不检索。
+                    val result = app.webSearch.search(
+                        query = topic,
+                        freshness = WebSearchProvider.FRESH_MONTH,
+                    )
+                    if (result.failure != null) notice = "没搜到最新消息，这篇按常识写：${result.failure}"
+                    factPackLines(result.hits)
+                } else {
+                    emptyList()
+                }
+                val recent = repo.recentShape()
+                app.contentGenerator.generateNativeCanonical(
+                    NativeCanonicalRequest(
+                        topic = topic,
+                        learnerLevel = level,
+                        factPack = facts,
+                        recentTitles = recent.titles,
+                    ),
+                    onStage = { stage = it },
+                    onPartialText = { preview = it },
+                )
             }
-
-            val recent = repo.recentShape()
-            val canonical = app.contentGenerator.generateNativeCanonical(
-                NativeCanonicalRequest(
-                    topic = topic,
-                    learnerLevel = level,
-                    factPack = facts,
-                    recentTitles = recent.titles,
-                ),
-                onStage = { stage = it },
-                onPartialText = { preview = it },
-            )
             val article = when (canonical) {
                 is GenerationResult.Failure -> {
                     phase = NativePhase.Failed(canonical.reason)
@@ -301,6 +330,7 @@ fun NativeReadingScreen(
                 englishSurfaceActual = surfaceRatio(article.paragraphs, spans),
                 notes = canonical.droppedNotes +
                     (planned as? GenerationResult.Success)?.droppedNotes.orEmpty(),
+                source = source,
             )
             val id = repo.saveNativeReading(
                 article = article,
@@ -553,7 +583,7 @@ private fun NoticeBar(text: String, onDismiss: () -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, WebSearchHit?) -> Unit) {
+private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, PickedNews?) -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val savedTopics by app.userPreferences.topics.collectAsState(initial = emptySet())
@@ -566,7 +596,7 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, WebSear
     var amountWire by rememberSaveable { mutableStateOf("") }
     var searchFirst by rememberSaveable { mutableStateOf(false) }
     /** 从「今日热点」挑中的那条。和话题胶囊、自己输入三选一。 */
-    var headline by remember { mutableStateOf<WebSearchHit?>(null) }
+    var headline by remember { mutableStateOf<PickedNews?>(null) }
     val amount = EnglishAmount.fromWire(amountWire.ifBlank { storedAmount })
     val topics = remember(savedTopics) { TopicCatalog.withPreferred(savedTopics) }
 
@@ -614,19 +644,18 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, WebSear
                 }
             }
 
-            // 没配密钥就整块不出现，和下面「先搜一下」同一个口径。
-            if (braveReady) {
-                HotTopicsSection(
-                    picked = headline,
-                    onPick = { hit ->
-                        headline = if (headline == hit) null else hit
-                        if (headline != null) {
-                            selectedTopic = ""
-                            customTopic = ""
-                        }
-                    },
-                )
-            }
+            // 看列表不要密钥（Google 新闻 RSS），读原文要 Brave 找链接——区块里会说清楚。
+            HotTopicsSection(
+                picked = headline,
+                braveReady = braveReady,
+                onPick = { pick ->
+                    headline = if (headline?.story == pick.story) null else pick
+                    if (headline != null) {
+                        selectedTopic = ""
+                        customTopic = ""
+                    }
+                },
+            )
 
             Text("英语量", style = MaterialTheme.typography.titleSmall)
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -667,7 +696,9 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, WebSear
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                val chosen = customTopic.trim().ifBlank { selectedTopic }.ifBlank { headline?.title.orEmpty() }
+                val chosen = customTopic.trim().ifBlank { selectedTopic }.ifBlank { headline?.story?.title.orEmpty() }
+                // 挑了新闻但没 Brave 密钥：找不到原文，按钮直接说清楚，不让他点了再失败。
+                val needsKey = headline != null && headline?.story?.direct != true && !braveReady
                 OutlinedTextField(
                     value = customTopic,
                     onValueChange = {
@@ -684,14 +715,20 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, WebSear
                 )
                 Button(
                     onClick = { onGenerate(chosen, amount, searchFirst, headline) },
-                    enabled = chosen.isNotBlank(),
+                    enabled = chosen.isNotBlank() && !needsKey,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
                 ) {
                     Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
+                    // 新闻不是"写"出来的，是原文照读，按钮也照实说。
                     Text(
-                        text = if (chosen.isBlank()) "给我写一篇" else "写一篇「$chosen」",
+                        text = when {
+                            needsKey -> "读原文要先在设置里填 Brave 密钥"
+                            headline != null -> "读这条新闻"
+                            chosen.isBlank() -> "给我写一篇"
+                            else -> "写一篇「$chosen」"
+                        },
                         modifier = Modifier.padding(start = 8.dp),
                         maxLines = 1,
                     )
@@ -732,6 +769,7 @@ private fun NativeArticleView(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            view.document.source?.let { NewsSourceLine(it) }
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 EnglishAmount.entries.forEachIndexed { index, option ->
                     SegmentedButton(

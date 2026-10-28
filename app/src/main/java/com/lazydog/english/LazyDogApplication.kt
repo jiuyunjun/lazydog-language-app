@@ -25,6 +25,11 @@ import com.lazydog.english.core.network.BraveImageSearchClient
 import com.lazydog.english.core.network.ImageDownloader
 import com.lazydog.english.core.network.LocalImageDownloader
 import com.lazydog.english.core.network.BraveSearchClient
+import com.lazydog.english.core.network.FallbackNewsFeed
+import com.lazydog.english.core.network.GoogleNewsRssClient
+import com.lazydog.english.core.network.HttpArticleFetcher
+import com.lazydog.english.domain.generation.NewsArticleLoader
+import com.lazydog.english.domain.generation.NewsFeed
 import com.lazydog.english.core.network.ImageSearchProvider
 import com.lazydog.english.domain.generation.WebSearchProvider
 import com.lazydog.english.core.speech.SpeechController
@@ -78,6 +83,12 @@ class LazyDogApplication : Application() {
     val webSearch: WebSearchProvider by lazy {
         BraveSearchClient(apiKey = { userPreferences.braveApiKey.first() })
     }
+
+    /** 母语阅读「今日热点」的新闻列表：Google 新闻 RSS 为主，连不上时用 Brave 新闻检索兜底（D-088）。 */
+    val newsFeed: NewsFeed by lazy { FallbackNewsFeed(primary = GoogleNewsRssClient(), brave = webSearch) }
+
+    /** 挑中的新闻去哪找原文、怎么抽正文（D-088）。 */
+    val newsArticleLoader: NewsArticleLoader by lazy { NewsArticleLoader(search = webSearch, fetcher = HttpArticleFetcher()) }
 
     /**
      * 图片检索用的是和联网检索同一个 Brave 密钥（`单词视觉记忆图片DESIGN.md` §16，D-071）。
