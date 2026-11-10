@@ -87,7 +87,7 @@ class LazyDogApplication : Application() {
         VendorWebSearch(
             vendor = { userPreferences.searchVendor.first() },
             brave = BraveSearchClient(apiKey = { userPreferences.braveApiKey.first() }),
-            deepSeek = DeepSeekSearchClient(apiKey = { userPreferences.deepSeekApiKey.first() }),
+            deepSeek = DeepSeekSearchClient(apiKey = { userPreferences.deepSeekApiKey }),
         )
     }
 

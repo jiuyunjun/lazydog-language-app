@@ -38,9 +38,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,8 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.lazydog.english.LazyDogApplication
@@ -181,7 +177,7 @@ fun SettingsScreen(
     }
     val aiVendor by prefs.aiVendor.collectAsState(initial = AiVendor.OpenAiCompatible)
     val searchVendor by prefs.searchVendor.collectAsState(initial = SearchVendor.Brave)
-    val deepSeekKey by prefs.deepSeekApiKey.collectAsState(initial = "")
+    val deepSeekKey = prefs.deepSeekApiKey
     val aiSummary = "${aiVendor.labelZh} · $aiModel\n" + (aiTestState ?: "点击切换服务商或测试连接")
     val speechSummary = speechTestState ?: "内置本地配置 · $speechRegion · 点击测试连接"
     val braveKey by prefs.braveApiKey.collectAsState(initial = "")
@@ -230,7 +226,7 @@ fun SettingsScreen(
             if (!app.webSearch.isConfigured()) {
                 searchTestState = when (prefs.searchVendor.first()) {
                     SearchVendor.Brave -> "没有配置密钥：填进 LocalEnv.kt 的 BRAVE_API_KEY 再重装"
-                    SearchVendor.DeepSeek -> "没有配置 DeepSeek 密钥：点这里重新选 DeepSeek 并填上"
+                    SearchVendor.DeepSeek -> "没有配置密钥：填进 LocalEnv.kt 的 DEEPSEEK_API_KEY 再重装"
                 }
                 testing = false
                 return@launch
@@ -511,10 +507,9 @@ fun SettingsScreen(
             initialIndex = aiVendor.ordinal,
             deepSeekIndex = AiVendor.DeepSeek.ordinal,
             hasDeepSeekKey = deepSeekKey.isNotBlank(),
-            onConfirm = { index, key ->
+            onConfirm = { index ->
                 dialog = OpenDialog.None
                 scope.launch {
-                    if (key.isNotBlank()) prefs.saveDeepSeekApiKey(key)
                     prefs.setAiVendor(AiVendor.entries[index])
                     // 上一家的模型清单作废，「各功能使用的模型」下次打开时重新拉。
                     app.modelCatalog.invalidate()
@@ -532,10 +527,9 @@ fun SettingsScreen(
             initialIndex = searchVendor.ordinal,
             deepSeekIndex = SearchVendor.DeepSeek.ordinal,
             hasDeepSeekKey = deepSeekKey.isNotBlank(),
-            onConfirm = { index, key ->
+            onConfirm = { index ->
                 dialog = OpenDialog.None
                 scope.launch {
-                    if (key.isNotBlank()) prefs.saveDeepSeekApiKey(key)
                     prefs.setSearchVendor(SearchVendor.entries[index])
                     runSearchConnectionTest()
                 }
@@ -682,8 +676,8 @@ private fun ChoiceDialog(
 }
 
 /**
- * 选服务商（D-090）。选中 DeepSeek 时就地填密钥：对话和搜索共用一个，填过一次另一处不用再填。
- * 已经有密钥时输入框可以留空，表示沿用；没有时必须填才能确定，免得切过去第一下就失败。
+ * 选服务商（D-090）。DeepSeek 密钥只从 LocalEnv 取，App 里不填（D-091）；
+ * 没配就不让切过去，并说清楚去哪配——免得切过去第一下就失败。
  */
 @Composable
 private fun VendorDialog(
@@ -693,12 +687,11 @@ private fun VendorDialog(
     initialIndex: Int,
     deepSeekIndex: Int,
     hasDeepSeekKey: Boolean,
-    onConfirm: (index: Int, deepSeekKey: String) -> Unit,
+    onConfirm: (index: Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selected by rememberSaveable { mutableStateOf(initialIndex) }
-    var key by rememberSaveable { mutableStateOf("") }
-    val needsKey = selected == deepSeekIndex && !hasDeepSeekKey && key.isBlank()
+    val needsKey = selected == deepSeekIndex && !hasDeepSeekKey
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -721,27 +714,17 @@ private fun VendorDialog(
                         Text(option, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
-                if (selected == deepSeekIndex) {
-                    OutlinedTextField(
-                        value = key,
-                        onValueChange = { key = it },
-                        label = { Text("DeepSeek API 密钥") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        supportingText = {
-                            Text(
-                                if (hasDeepSeekKey) "已保存过，留空沿用。只存在本机。"
-                                else "对话和搜索共用。只存在本机，APK 无法彻底保护密钥。",
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
+                if (needsKey) {
+                    Text(
+                        "还没配置 DeepSeek 密钥：填进 LocalEnv.kt 的 DEEPSEEK_API_KEY（CI 用同名 secret）再重装。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selected, key) }, enabled = !needsKey) { Text("保存并测试") }
+            TextButton(onClick = { onConfirm(selected) }, enabled = !needsKey) { Text("保存并测试") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("算了") }

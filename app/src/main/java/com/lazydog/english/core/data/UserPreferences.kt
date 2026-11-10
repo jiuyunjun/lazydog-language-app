@@ -46,7 +46,6 @@ class UserPreferences(private val context: Context) {
         val BraveApiKey = stringPreferencesKey("brave_api_key")
         val AiVendorWire = stringPreferencesKey("ai_vendor")
         val SearchVendorWire = stringPreferencesKey("search_vendor")
-        val DeepSeekApiKey = stringPreferencesKey("deepseek_api_key")
         val NativeEnglishAmount = stringPreferencesKey("native_english_amount")
         val NativeNewWordAmount = stringPreferencesKey("native_new_word_amount")
         val NewsEdition = stringPreferencesKey("news_edition")
@@ -122,13 +121,11 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[Keys.SearchVendorWire] = vendor.wire }
     }
 
-    /** DeepSeek 密钥，对话和检索共用一个。App 里填过的优先于 [LocalEnv]。 */
-    val deepSeekApiKey: Flow<String> =
-        context.dataStore.data.map { it[Keys.DeepSeekApiKey].orDefault(LocalEnv.DEEPSEEK_API_KEY) }
-
-    suspend fun saveDeepSeekApiKey(key: String) {
-        context.dataStore.edit { it[Keys.DeepSeekApiKey] = key.trim() }
-    }
+    /**
+     * DeepSeek 密钥，对话和检索共用一个。**只从 [LocalEnv] 取**（D-091）：
+     * 本地写在 `LocalEnv.kt`，CI 由 secret `DEEPSEEK_API_KEY` 写入；App 里不提供填写。
+     */
+    val deepSeekApiKey: String get() = LocalEnv.DEEPSEEK_API_KEY.trim()
 
     val aiBaseUrl: Flow<String> = context.dataStore.data.map { prefs ->
         prefs.vendor().fixedBaseUrl ?: prefs[Keys.AiBaseUrl].orDefault(LocalEnv.AI_BASE_URL)
@@ -136,7 +133,7 @@ class UserPreferences(private val context: Context) {
     val aiApiKey: Flow<String> = context.dataStore.data.map { prefs ->
         when (prefs.vendor()) {
             AiVendor.OpenAiCompatible -> prefs[Keys.AiApiKey].orDefault(LocalEnv.AI_API_KEY)
-            AiVendor.DeepSeek -> prefs[Keys.DeepSeekApiKey].orDefault(LocalEnv.DEEPSEEK_API_KEY)
+            AiVendor.DeepSeek -> deepSeekApiKey
         }
     }
     val aiModel: Flow<String> = context.dataStore.data.map { it.defaultModel() }

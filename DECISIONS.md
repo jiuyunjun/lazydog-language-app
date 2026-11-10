@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.6"
+version: "7.7"
 updated: "2026-11-10"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -10,6 +10,15 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 ---
 
 # 决策记录
+
+## D-091：DeepSeek 密钥只写在本地配置，App 里不填
+
+- 状态：已确认（2026-11-10，用户要求「DeepSeek 的 api key 直接写环境变量里，别用户设置里配」）。部分替代 D-090 的密钥来源。
+- 决定：DeepSeek 密钥只从 `LocalEnv.DEEPSEEK_API_KEY` 取；本地写在 gitignore 的 `LocalEnv.kt`，CI 由同名可选 secret 写入。
+  设置页的服务商对话框去掉密钥输入框，DataStore 不再存这个密钥；对话与检索仍共用这一个。
+- 没配时选 DeepSeek 不能确定，对话框说明去 `LocalEnv.kt` 填再重装；与 Brave、Azure 的配法一致（D-012）。
+- 被否决：保留 App 内填写作为覆盖（用户明确不要两处来源）。
+- 影响：`UserPreferences`、设置页对话框与文本例外；无新依赖、表、层或依赖方向变化。
 
 ## D-090：AI 与网页搜索可切到 DeepSeek，供国内直连使用
 
@@ -25,7 +34,7 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
   DeepSeek 没有时间窗与国家参数：`pd/pw/pm/py` 换成查询里的 `after:日期`，新闻语言写成 `lang:`，国家丢弃；
   查询 128 字上限内先给运算符留位再截正文。
 - 单词配图**不跟着切**，始终 Brave（DeepSeek 没有图片检索），设置行上单独说明配图状态。
-- 密钥：DeepSeek 一个密钥对话与检索共用。来源依次是 App 内填写（选 DeepSeek 时就地填，存 DataStore）、
+- 密钥（来源部分已由 D-091 替代：只认 `LocalEnv`，App 内不填）：DeepSeek 一个密钥对话与检索共用。来源依次是 App 内填写（选 DeepSeek 时就地填，存 DataStore）、
   `LocalEnv.DEEPSEEK_API_KEY`；CI 新增可选 secret `DEEPSEEK_API_KEY`。界面照 §8 说明 APK 无法彻底保护密钥。
 - 被否决：在 DeepSeek 下共用 OpenAI 的模型设置（切换即坏）；让 AI 用对话模型的内置 `web_search` 工具代替检索
   （只在部分模型、走 Responses API，且检索结果不进我们的 Fact Pack 与原文链路）；

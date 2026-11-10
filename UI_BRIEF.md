@@ -2,7 +2,7 @@
 doc: "UI_BRIEF.md"
 tier: "L2 产品定义"
 status: "生效"
-version: "10.5"
+version: "10.6"
 updated: "2026-11-10"
 authority: "交给设计 agent 的界面任务书：信息架构、必须设计的流程、交付物"
 index: "DOCS.md"
@@ -162,8 +162,8 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 
 - 每日目标时长和新知识数量
 - 学习目标与兴趣
-- AI 服务和密钥：点开选服务商（OpenAI 兼容 / DeepSeek），选 DeepSeek 时就地填密钥（已有可留空），
-  「保存并测试」后行内显示连接结果；行上写「服务商 · 默认模型」（D-090）
+- AI 服务和密钥：点开选服务商（OpenAI 兼容 / DeepSeek），DeepSeek 密钥只在本地配置里，App 内不填；
+  没配时选 DeepSeek 不可确定并说明去哪配（D-091），「保存并测试」后行内显示连接结果；行上写「服务商 · 默认模型」（D-090）
 - 网页搜索：点开选 Brave / DeepSeek，交互同上；行上另写一句单词配图的状态（配图始终 Brave）
 - Azure Speech 配置
 - 主题、音频和录音保留选项

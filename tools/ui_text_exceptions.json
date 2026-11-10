@@ -2443,13 +2443,7 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
-    "text": "\"DeepSeek API 密钥\"",
-    "count": 1,
-    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
-  },
-  {
-    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
-    "text": "if (hasDeepSeekKey) \"已保存过，留空沿用。只存在本机。\" else \"对话和搜索共用。只存在本机，APK 无法彻底保护密钥。\"",
+    "text": "\"还没配置 DeepSeek 密钥：填进 LocalEnv.kt 的 DEEPSEEK_API_KEY（CI 用同名 secret）再重装。\"",
     "count": 1,
     "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
   }

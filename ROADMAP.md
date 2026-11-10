@@ -2,7 +2,7 @@
 doc: "ROADMAP.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "2.20"
+version: "2.21"
 updated: "2026-11-10"
 authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
 index: "DOCS.md"
@@ -815,7 +815,7 @@ Claude Design 稿为准。核心口径三条：**听辨和发音分开记、分�
 
 ## M24：DeepSeek 服务商切换（D-090）
 
-- [x] 设置「AI 服务」切换 OpenAI 兼容 / DeepSeek；DeepSeek 密钥可在 App 内填写，与搜索共用。
+- [x] 设置「AI 服务」切换 OpenAI 兼容 / DeepSeek；DeepSeek 密钥只写在 `LocalEnv` / CI secret，与搜索共用（D-091）。
 - [x] 默认模型与各功能模型按服务商分开存；切换后模型清单从 DeepSeek `/models` 重新拉取并可选。
 - [x] 设置「网页搜索」切换 Brave / DeepSeek（`DeepSeekSearchClient`），联网检索、热点兜底、找原文都跟着切。
 - [ ] 真机验收：DeepSeek 下各类生成的 JSON 稳定性与时延、`deepseek-v4-pro` 与 flash 的取舍、

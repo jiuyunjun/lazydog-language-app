@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "2.4"
+version: "2.5"
 updated: "2026-11-10"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -633,7 +633,7 @@ interface ReadingSource {
   `aiModelFor` 按当前 `AiVendor` 取值，模型按服务商分开存，调用方无感。`webSearch` 是
   `core/network/VendorWebSearch`，每次调用按 `SearchVendor` 转给 `BraveSearchClient` 或
   `DeepSeekSearchClient`；配图的 `imageSearch` 始终 Brave。设置行改名「网页搜索」，配图状态单列一句。
-  DeepSeek 一个密钥对话与检索共用，App 内填写优先于 `LocalEnv.DEEPSEEK_API_KEY`。
+  DeepSeek 一个密钥对话与检索共用，只从 `LocalEnv.DEEPSEEK_API_KEY` 取，App 内不提供填写（D-091）。
 - 网络请求应设置超时、有限重试和可取消机制。
 
 ### 播放状态归 PlaybackController
