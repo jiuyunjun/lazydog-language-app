@@ -25,6 +25,8 @@ import com.lazydog.english.core.network.BraveImageSearchClient
 import com.lazydog.english.core.network.ImageDownloader
 import com.lazydog.english.core.network.LocalImageDownloader
 import com.lazydog.english.core.network.BraveSearchClient
+import com.lazydog.english.core.network.DeepSeekSearchClient
+import com.lazydog.english.core.network.VendorWebSearch
 import com.lazydog.english.core.network.FallbackNewsFeed
 import com.lazydog.english.core.network.GoogleNewsRssClient
 import com.lazydog.english.core.network.HttpArticleFetcher
@@ -81,10 +83,15 @@ class LazyDogApplication : Application() {
      * 但它是可选增强：没配密钥就是"这次不搜"，不是错误，文章照常生成。
      */
     val webSearch: WebSearchProvider by lazy {
-        BraveSearchClient(apiKey = { userPreferences.braveApiKey.first() })
+        // Brave 或 DeepSeek，按设置现选（D-090）。配图不走这里，见 [imageSearch]。
+        VendorWebSearch(
+            vendor = { userPreferences.searchVendor.first() },
+            brave = BraveSearchClient(apiKey = { userPreferences.braveApiKey.first() }),
+            deepSeek = DeepSeekSearchClient(apiKey = { userPreferences.deepSeekApiKey.first() }),
+        )
     }
 
-    /** 母语阅读「今日热点」的新闻列表：Google 新闻 RSS 为主，连不上时用 Brave 新闻检索兜底（D-088）。 */
+    /** 母语阅读「今日热点」的新闻列表：Google 新闻 RSS 为主，连不上时用新闻检索兜底（D-088、D-090）。 */
     val newsFeed: NewsFeed by lazy { FallbackNewsFeed(primary = GoogleNewsRssClient(), brave = webSearch) }
 
     /** 挑中的新闻去哪找原文、怎么抽正文（D-088）。 */

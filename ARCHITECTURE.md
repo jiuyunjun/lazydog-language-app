@@ -2,8 +2,8 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "2.3"
-updated: "2026-10-29"
+version: "2.4"
+updated: "2026-11-10"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -628,6 +628,12 @@ interface ReadingSource {
   （`ImageSearchProvider`）。设置里那一行叫「网页与图片搜索（Brave）」，
   没配时明说这两个功能都不可用。`单词视觉记忆图片DESIGN.md` §38 要求密钥只放后端，
   这里有意偏离（D-071）：本项目没有后端那一层，密钥是用户自己的。
+- 服务商可切（D-090）：`core/config/ServiceVendors.kt` 定义 `AiVendor`（OpenAI 兼容 / DeepSeek）与
+  `SearchVendor`（Brave / DeepSeek）。`UserPreferences` 的 `aiBaseUrl` / `aiApiKey` / `aiModel` /
+  `aiModelFor` 按当前 `AiVendor` 取值，模型按服务商分开存，调用方无感。`webSearch` 是
+  `core/network/VendorWebSearch`，每次调用按 `SearchVendor` 转给 `BraveSearchClient` 或
+  `DeepSeekSearchClient`；配图的 `imageSearch` 始终 Brave。设置行改名「网页搜索」，配图状态单列一句。
+  DeepSeek 一个密钥对话与检索共用，App 内填写优先于 `LocalEnv.DEEPSEEK_API_KEY`。
 - 网络请求应设置超时、有限重试和可取消机制。
 
 ### 播放状态归 PlaybackController

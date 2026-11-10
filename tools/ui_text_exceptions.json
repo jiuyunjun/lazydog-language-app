@@ -1123,7 +1123,7 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/reading/NativeReadingScreen.kt",
-    "text": "when { needsKey -> \"读原文要先在设置里填 Brave 密钥\" headline != null -> \"读这条新闻\" chosen.isBlank() -> \"给我写一篇\" else -> \"写一篇「$chosen」\" }",
+    "text": "when { needsKey -> \"读原文要先在设置里配好网页搜索\" headline != null -> \"读这条新闻\" chosen.isBlank() -> \"给我写一篇\" else -> \"写一篇「$chosen」\" }",
     "count": 1,
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   },
@@ -1526,13 +1526,13 @@
   {
     "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
     "text": "option",
-    "count": 1,
+    "count": 2,
     "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
     "text": "title",
-    "count": 2,
+    "count": 3,
     "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
   },
   {
@@ -2434,5 +2434,23 @@
     "text": "\"外文媒体请写当地文字，比如 東京、New York\"",
     "count": 1,
     "reason": "地区输入框的填写提示，示例地名不是学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "note",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "\"DeepSeek API 密钥\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/settings/SettingsScreen.kt",
+    "text": "if (hasDeepSeekKey) \"已保存过，留空沿用。只存在本机。\" else \"对话和搜索共用。只存在本机，APK 无法彻底保护密钥。\"",
+    "count": 1,
+    "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
   }
 ]

@@ -596,8 +596,8 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, PickedN
     val app = remember { context.applicationContext as LazyDogApplication }
     val savedTopics by app.userPreferences.topics.collectAsState(initial = emptySet())
     val storedAmount by app.userPreferences.nativeEnglishAmount.collectAsState(initial = "")
-    var braveReady by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { braveReady = app.webSearch.isConfigured() }
+    var searchReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { searchReady = app.webSearch.isConfigured() }
 
     var selectedTopic by rememberSaveable { mutableStateOf("") }
     var customTopic by rememberSaveable { mutableStateOf("") }
@@ -655,7 +655,7 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, PickedN
             // 看列表不要密钥（Google 新闻 RSS），读原文要 Brave 找链接——区块里会说清楚。
             HotTopicsSection(
                 picked = headline,
-                braveReady = braveReady,
+                searchReady = searchReady,
                 onPick = { pick ->
                     headline = if (headline?.story == pick.story) null else pick
                     if (headline != null) {
@@ -682,7 +682,7 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, PickedN
             )
 
             // 搜索是可选增强：没配密钥就不摆这个开关，免得点了才发现用不了。
-            if (braveReady) {
+            if (searchReady) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("先搜一下最新消息", style = MaterialTheme.typography.bodyLarge)
@@ -706,7 +706,7 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, PickedN
             ) {
                 val chosen = customTopic.trim().ifBlank { selectedTopic }.ifBlank { headline?.displayTitle.orEmpty() }
                 // 挑了新闻但没 Brave 密钥：找不到原文，按钮直接说清楚，不让他点了再失败。
-                val needsKey = headline != null && headline?.story?.direct != true && !braveReady
+                val needsKey = headline != null && headline?.story?.direct != true && !searchReady
                 OutlinedTextField(
                     value = customTopic,
                     onValueChange = {
@@ -732,7 +732,7 @@ private fun NativeSetupView(onGenerate: (String, EnglishAmount, Boolean, PickedN
                     // 新闻不是"写"出来的，是原文照读，按钮也照实说。
                     Text(
                         text = when {
-                            needsKey -> "读原文要先在设置里填 Brave 密钥"
+                            needsKey -> "读原文要先在设置里配好网页搜索"
                             headline != null -> "读这条新闻"
                             chosen.isBlank() -> "给我写一篇"
                             else -> "写一篇「$chosen」"

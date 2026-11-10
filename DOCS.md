@@ -2,8 +2,8 @@
 doc: "DOCS.md"
 tier: "L0 入口"
 status: "生效"
-version: "1.39"
-updated: "2026-10-29"
+version: "1.40"
+updated: "2026-11-10"
 authority: "文档清单、层级、权威顺序与版本表；本仓库文档元信息的唯一事实来源"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -180,15 +180,15 @@ python tools/check_docs.py
 
 | 文档 | 层级 | 状态 | 版本 | 口径更新于 |
 | --- | --- | --- | --- | --- |
-| `README.md` | L0 入口 | 生效 | 1.3 | 2026-10-28 |
+| `README.md` | L0 入口 | 生效 | 1.4 | 2026-11-10 |
 | `CLAUDE.md` | L0 入口 | 生效 | 1.0 | 2026-09-06 |
-| `DOCS.md` | L0 入口 | 生效 | 1.39 | 2026-10-29 |
+| `DOCS.md` | L0 入口 | 生效 | 1.40 | 2026-11-10 |
 | `AGENTS.md` | L1 工作规则 | 生效 | 2.0 | 2026-10-28 |
 | `HANDOFF.md` | L1 工作规则 | 生效 | 1.1 | 2026-09-06 |
 | `PRODUCT.md` | L2 产品定义 | 生效 | 1.0 | 2026-09-03 |
-| `UI_BRIEF.md` | L2 产品定义 | 生效 | 10.4 | 2026-10-29 |
-| `ARCHITECTURE.md` | L3 技术契约 | 生效 | 2.3 | 2026-10-29 |
-| `AI_CONTRACTS.md` | L3 技术契约 | 生效 | 12.3 | 2026-10-29 |
+| `UI_BRIEF.md` | L2 产品定义 | 生效 | 10.5 | 2026-11-10 |
+| `ARCHITECTURE.md` | L3 技术契约 | 生效 | 2.4 | 2026-11-10 |
+| `AI_CONTRACTS.md` | L3 技术契约 | 生效 | 12.4 | 2026-11-10 |
 | `CEFR_英语能力评测与个性化学习系统设计.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-08-05 |
 | `单词记忆DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-09-02 |
 | `词汇记忆提示DESIGN.md` | L4 专项设计 | 部分落地 | 5.0 | 2026-09-07 |
@@ -200,12 +200,19 @@ python tools/check_docs.py
 | `发音与音标学习DESIGN.md` | L4 专项设计 | 部分落地 | 1.0 | 2026-09-07 |
 | `持续学习DESIGN.md` | L4 专项设计 | 部分落地 | 1.1 | 2026-09-06 |
 | `单词视觉记忆图片DESIGN.md` | L4 专项设计 | 部分落地 | 1.1 | 2026-09-07 |
-| `DECISIONS.md` | L5 过程记录 | 生效 | 7.5 | 2026-10-29 |
-| `ROADMAP.md` | L5 过程记录 | 生效 | 2.19 | 2026-10-29 |
+| `DECISIONS.md` | L5 过程记录 | 生效 | 7.6 | 2026-11-10 |
+| `ROADMAP.md` | L5 过程记录 | 生效 | 2.20 | 2026-11-10 |
 
 设计稿 `懒狗放洋屁 MVP.dc.html` 不参与版本表：它是导出的设计产物，版本由导出时间决定。
 
 ## 7. 文档变更日志
+
+### 2026-11-10（DeepSeek 服务商切换）
+
+- DECISIONS 7.6 追加 D-090：AI 与网页搜索可切到 DeepSeek；模型按服务商分开存；配图仍用 Brave；DeepSeek 密钥对话检索共用。
+- ARCHITECTURE 2.4 §8 记 `AiVendor` / `SearchVendor`、`VendorWebSearch` 与 `DeepSeekSearchClient` 的落点。
+- AI_CONTRACTS 12.4「模型按功能选」补按服务商分开存与 DeepSeek 参数兼容；请求与提示词不变。
+- UI_BRIEF 10.5 设置页两行的切换交互，热点与阅读页「Brave 密钥」文案改为「网页搜索」；ROADMAP 2.20 新增 M24；README 1.4 记可选 secret。
 
 ### 2026-10-29（今日热点：外文媒体全文翻译）
 

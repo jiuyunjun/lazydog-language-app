@@ -2,8 +2,8 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "12.3"
-updated: "2026-10-29"
+version: "12.4"
+updated: "2026-11-10"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -310,6 +310,9 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 - 清单先按 id 里的关键词筛掉不能对话的（生图、嵌入、语音、重排、审核……聚合网关几百个里
   真正能聊天的没几个）。这只是按名字猜，所以界面留「显示全部」的口子，且全被筛光时原样列出。
 - 清单拉一次就缓存在应用层，两级页面共用，翻来翻去不重复发请求。
+- 服务商可切（D-090）：默认模型和各功能模型**按服务商分开存**，清单按当前服务商的地址拉，切换后缓存作废。
+  DeepSeek 接受 `json_object`、`max_tokens` 与 `reasoning_effort`（none/low/high/max，其余取值服务端自行映射），
+  请求与提示词不因服务商分叉；思考力度设置各家共用。
 
 ## 3. 新词生成请求
 

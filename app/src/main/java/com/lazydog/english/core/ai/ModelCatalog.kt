@@ -30,12 +30,17 @@ class ModelCatalog(private val prefs: UserPreferences) {
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state.asStateFlow()
 
-    /** 已经拉到过就不再拉，除非 [force]。 */
+    /** 当前清单是从哪个地址拉的。切了服务商（D-090）地址就变了，旧清单作废。 */
+    private var loadedFrom: String? = null
+
+    /** 已经从当前服务商拉到过就不再拉，除非 [force]。 */
     suspend fun load(force: Boolean = false) = mutex.withLock {
-        if (!force && _state.value is State.Loaded) return@withLock
+        val baseUrl = prefs.aiBaseUrl.first()
+        if (!force && _state.value is State.Loaded && loadedFrom == baseUrl) return@withLock
         _state.value = State.Loading
+        loadedFrom = baseUrl
         val client = OpenAiCompatClient(
-            baseUrl = prefs.aiBaseUrl.first(),
+            baseUrl = baseUrl,
             apiKey = prefs.aiApiKey.first(),
         )
         _state.value = when (val result = client.listModels()) {
@@ -46,5 +51,11 @@ class ModelCatalog(private val prefs: UserPreferences) {
             }
             is OpenAiCompatClient.ModelsResult.Failure -> State.Failed(result.reason)
         }
+    }
+
+    /** 切服务商后调：清单页下次打开时重新拉，不会先闪一下上一家的模型。 */
+    fun invalidate() {
+        _state.value = State.Idle
+        loadedFrom = null
     }
 }

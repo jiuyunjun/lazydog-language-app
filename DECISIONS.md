@@ -2,14 +2,37 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.5"
-updated: "2026-10-29"
+version: "7.6"
+updated: "2026-11-10"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
 ---
 
 # 决策记录
+
+## D-090：AI 与网页搜索可切到 DeepSeek，供国内直连使用
+
+- 状态：已确认（2026-11-10，用户要求「做一个 DeepSeek 模型提供切换以供中国国内使用」：
+  设置页切供应商、拉取并选择模型、搜索也能切到 DeepSeek）。部分落实 D-012「后续开放设置页手动配置」。
+- AI：设置「AI 服务」点开选 OpenAI 兼容（沿用本地配置的地址和密钥）或 DeepSeek（固定 `https://api.deepseek.com`）。
+  DeepSeek 走同一套 OpenAI 兼容 `/chat/completions` 与 `/models`，生成器不改：`json_object` 被支持，
+  `reasoning_effort` 的取值由既有的被拒后退位机制兜住。**默认模型和各功能模型按服务商分开存**
+  （OpenAI 兼容沿用老键，DeepSeek 用 `deepseek_` 前缀的键），切过去不会拿 `gpt-*` 去请求 DeepSeek，
+  切回来原来选的还在；思考力度各家共用。切换后模型清单缓存作废，重新从新地址拉。DeepSeek 默认 `deepseek-flash`。
+- 搜索：设置「网页搜索」点开选 Brave 或 DeepSeek。新增 `DeepSeekSearchClient`（`POST /v1/tools/search`）
+  实现既有 `WebSearchProvider`，`VendorWebSearch` 每次调用按设置转发，联网检索、热点兜底、找新闻原文都跟着切。
+  DeepSeek 没有时间窗与国家参数：`pd/pw/pm/py` 换成查询里的 `after:日期`，新闻语言写成 `lang:`，国家丢弃；
+  查询 128 字上限内先给运算符留位再截正文。
+- 单词配图**不跟着切**，始终 Brave（DeepSeek 没有图片检索），设置行上单独说明配图状态。
+- 密钥：DeepSeek 一个密钥对话与检索共用。来源依次是 App 内填写（选 DeepSeek 时就地填，存 DataStore）、
+  `LocalEnv.DEEPSEEK_API_KEY`；CI 新增可选 secret `DEEPSEEK_API_KEY`。界面照 §8 说明 APK 无法彻底保护密钥。
+- 被否决：在 DeepSeek 下共用 OpenAI 的模型设置（切换即坏）；让 AI 用对话模型的内置 `web_search` 工具代替检索
+  （只在部分模型、走 Responses API，且检索结果不进我们的 Fact Pack 与原文链路）；
+  在热点兜底里为 DeepSeek 另写一套新闻源（`WebSearchProvider` 已有 `news`，换实现即可）。
+- 影响：`core/config/ServiceVendors.kt`（服务商预设）、`UserPreferences`、`ModelCatalog`、两个新网络实现、
+  `LazyDogApplication` 装配、设置页两个对话框、热点与阅读页文案。不新增依赖、表、层或依赖方向；
+  不新增全局单例（检索对象仍是 `webSearch` 那一个）。
 
 ## D-089：今日热点加外文媒体，原文全文翻成中文
 

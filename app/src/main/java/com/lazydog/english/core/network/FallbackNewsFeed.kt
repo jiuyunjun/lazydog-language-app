@@ -13,9 +13,9 @@ import java.time.ZoneOffset
 import kotlinx.coroutines.delay
 
 /**
- * Google 新闻为主、Brave 新闻检索兜底（D-088）。
+ * Google 新闻为主、新闻检索兜底（D-088；兜底走 Brave 还是 DeepSeek 看设置，D-090）。
  *
- * 兜底只在 Google 那边**失败**时启用（大陆没开代理是最常见的情况），并且要用户配了 Brave 密钥。
+ * 兜底只在 Google 那边**失败**时启用（大陆没开代理是最常见的情况），并且要用户配好了搜索服务。
  * Brave 没有分区和城市，只能按国家、语言加"地区 + 分类词"去搜，质量差一截，所以结果要标出来。
  */
 class FallbackNewsFeed(
@@ -37,7 +37,7 @@ class FallbackNewsFeed(
             if (week.failure == null) result = week
         }
         if (result.failure != null) {
-            return NewsFeedResult(failure = "${first.failure}；Brave 兜底也没拿到：${result.failure}")
+            return NewsFeedResult(failure = "${first.failure}；新闻检索兜底也没拿到：${result.failure}")
         }
         val stories = NewsText.distinct(result.hits.map(::toStory)).take(GoogleNewsRssClient.MAX_STORIES)
         return NewsFeedResult(stories = stories, fromFallback = true)

@@ -105,10 +105,10 @@ class HotTopicsTest {
     }
 
     @Test
-    fun `没有 Brave 密钥时说清楚要填密钥`() = runBlocking {
+    fun `没配搜索服务时说清楚要填密钥`() = runBlocking {
         val loader = NewsArticleLoader(FakeSearch(emptyList(), configured = false), FakeFetcher(emptyMap()))
         val result = loader.load(story("某条新闻"))
-        assertTrue((result as NewsArticleLoader.Result.Failure).reason.contains("Brave 密钥"))
+        assertTrue((result as NewsArticleLoader.Result.Failure).reason.contains("搜索服务的密钥"))
     }
 
     // ---- 清理只能删不能改 ----

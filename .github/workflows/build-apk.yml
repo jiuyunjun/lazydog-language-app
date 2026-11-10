@@ -50,6 +50,7 @@ jobs:
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           AI_MODEL: ${{ secrets.AI_MODEL }}
           BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           SPEECH_KEY: ${{ secrets.SPEECH_KEY }}
           SPEECH_REGION: ${{ secrets.SPEECH_REGION }}
         run: |
@@ -79,6 +80,7 @@ jobs:
             printf '    const val AI_API_KEY = %s\n' "$(kotlin_string "$AI_API_KEY")"
             printf '    const val AI_MODEL = %s\n' "$(kotlin_string "$AI_MODEL")"
             printf '    const val BRAVE_API_KEY = %s\n' "$(kotlin_string "$BRAVE_API_KEY")"
+            printf '    const val DEEPSEEK_API_KEY = %s\n' "$(kotlin_string "$DEEPSEEK_API_KEY")"
             printf '    const val SPEECH_KEY = %s\n' "$(kotlin_string "$SPEECH_KEY")"
             printf '    const val SPEECH_REGION = %s\n' "$(kotlin_string "$SPEECH_REGION")"
             printf '%s\n' '}'

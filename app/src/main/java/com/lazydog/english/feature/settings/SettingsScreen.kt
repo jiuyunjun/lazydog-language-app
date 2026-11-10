@@ -38,7 +38,9 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,11 +55,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.ask.ShakeDetector
 import com.lazydog.english.core.backup.AutoBackupWorker
+import com.lazydog.english.core.config.AiVendor
+import com.lazydog.english.core.config.SearchVendor
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.designsystem.CopyTone
 import com.lazydog.english.core.designsystem.TagPicker
@@ -92,7 +98,7 @@ private val themeOptions = listOf("system" to "跟随系统", "light" to "浅色
 
 private enum class OpenDialog {
     None, DailyMinutes, MaxNewWords, Goals, Reminder, Theme, CopyToneChoice, Voice,
-    AskSensitivity, SkillLevels, ConfirmRestore,
+    AskSensitivity, SkillLevels, ConfirmRestore, AiVendorChoice, SearchVendorChoice,
 }
 
 @Composable
@@ -173,14 +179,25 @@ fun SettingsScreen(
             append(topics.take(2).joinToString("、"))
         }
     }
-    val aiSummary = aiTestState ?: "$aiModel · 内置本地配置，点击测试连接"
+    val aiVendor by prefs.aiVendor.collectAsState(initial = AiVendor.OpenAiCompatible)
+    val searchVendor by prefs.searchVendor.collectAsState(initial = SearchVendor.Brave)
+    val deepSeekKey by prefs.deepSeekApiKey.collectAsState(initial = "")
+    val aiSummary = "${aiVendor.labelZh} · $aiModel\n" + (aiTestState ?: "点击切换服务商或测试连接")
     val speechSummary = speechTestState ?: "内置本地配置 · $speechRegion · 点击测试连接"
     val braveKey by prefs.braveApiKey.collectAsState(initial = "")
-    val searchSummary = searchTestState ?: if (braveKey.isBlank()) {
-        "没有配置密钥 · 母语阅读的「先搜一下最新消息」和单词配图都不可用"
-    } else {
-        "内置本地配置 · 点击测试连接"
+    val searchKeyMissing = when (searchVendor) {
+        SearchVendor.Brave -> braveKey.isBlank()
+        SearchVendor.DeepSeek -> deepSeekKey.isBlank()
     }
+    // 配图只有 Brave 一家（DeepSeek 没有图片检索），所以无论选谁都把配图的状态单独说一句。
+    val imageNote = if (braveKey.isBlank()) "单词配图要 Brave 密钥，现在不可用" else "单词配图用 Brave"
+    val searchSummary = "${searchVendor.labelZh} · $imageNote\n" + (
+        searchTestState ?: if (searchKeyMissing) {
+            "没有配置密钥 · 母语阅读的联网检索和找新闻原文都不可用"
+        } else {
+            "点击切换服务商或测试连接"
+        }
+        )
 
     fun runAiConnectionTest() {
         if (testing) return
@@ -206,14 +223,18 @@ fun SettingsScreen(
     /** 母语阅读写时事内容前先检索（`母语阅读DESIGN.md` §6.2）。没配密钥就是不可用，不是错误。 */
     fun runSearchConnectionTest() {
         if (testing) return
-        if (braveKey.isBlank()) {
-            searchTestState = "没有配置密钥：填进 LocalEnv.kt 的 BRAVE_API_KEY 再重装"
-            return
-        }
         testing = true
         searchTestState = "正在测试连接…"
         scope.launch {
             val app = context.applicationContext as LazyDogApplication
+            if (!app.webSearch.isConfigured()) {
+                searchTestState = when (prefs.searchVendor.first()) {
+                    SearchVendor.Brave -> "没有配置密钥：填进 LocalEnv.kt 的 BRAVE_API_KEY 再重装"
+                    SearchVendor.DeepSeek -> "没有配置 DeepSeek 密钥：点这里重新选 DeepSeek 并填上"
+                }
+                testing = false
+                return@launch
+            }
             val result = app.webSearch.search("convenience store logistics", count = 1)
             searchTestState = result.failure?.let { "连接失败：$it" }
                 ?: "连接正常，搜到了 ${result.hits.size} 条"
@@ -350,7 +371,7 @@ fun SettingsScreen(
         )
 
         SettingsGroupTitle("服务")
-        SettingsRow(Icons.Outlined.SmartToy, "AI 服务", aiSummary, onClick = ::runAiConnectionTest)
+        SettingsRow(Icons.Outlined.SmartToy, "AI 服务", aiSummary, onClick = { dialog = OpenDialog.AiVendorChoice })
         SettingsRow(
             Icons.Outlined.Memory,
             "各功能使用的模型",
@@ -364,10 +385,10 @@ fun SettingsScreen(
         SettingsRow(Icons.Outlined.GraphicEq, "Azure Speech", speechSummary, onClick = ::runSpeechConnectionTest)
         SettingsRow(
             Icons.Outlined.TravelExplore,
-            // 同一个密钥两个用途：母语阅读的联网检索，和单词卡的配图（D-071）。
-            "网页与图片搜索（Brave）",
+            // 网页检索可在 Brave / DeepSeek 之间切（D-090）；配图只有 Brave（D-071）。
+            "网页搜索",
             searchSummary,
-            onClick = ::runSearchConnectionTest,
+            onClick = { dialog = OpenDialog.SearchVendorChoice },
         )
 
         SettingsGroupTitle("随时提问")
@@ -481,6 +502,46 @@ fun SettingsScreen(
 
     when (dialog) {
         OpenDialog.None -> Unit
+        OpenDialog.AiVendorChoice -> VendorDialog(
+            title = "AI 服务",
+            note = "两家都走 OpenAI 兼容接口。模型按服务商分开记，切回来还是原来选的那些。",
+            options = AiVendor.entries.map { vendor ->
+                vendor.labelZh + if (vendor == AiVendor.OpenAiCompatible) "（本地配置的地址和密钥）" else "（国内直连）"
+            },
+            initialIndex = aiVendor.ordinal,
+            deepSeekIndex = AiVendor.DeepSeek.ordinal,
+            hasDeepSeekKey = deepSeekKey.isNotBlank(),
+            onConfirm = { index, key ->
+                dialog = OpenDialog.None
+                scope.launch {
+                    if (key.isNotBlank()) prefs.saveDeepSeekApiKey(key)
+                    prefs.setAiVendor(AiVendor.entries[index])
+                    // 上一家的模型清单作废，「各功能使用的模型」下次打开时重新拉。
+                    app.modelCatalog.invalidate()
+                    runAiConnectionTest()
+                }
+            },
+            onDismiss = { dialog = OpenDialog.None },
+        )
+        OpenDialog.SearchVendorChoice -> VendorDialog(
+            title = "网页搜索",
+            note = "用于母语阅读的联网检索和找新闻原文。单词配图始终用 Brave，DeepSeek 没有图片检索。",
+            options = SearchVendor.entries.map { vendor ->
+                vendor.labelZh + if (vendor == SearchVendor.Brave) "（大陆需要代理）" else "（国内直连，和 AI 共用密钥）"
+            },
+            initialIndex = searchVendor.ordinal,
+            deepSeekIndex = SearchVendor.DeepSeek.ordinal,
+            hasDeepSeekKey = deepSeekKey.isNotBlank(),
+            onConfirm = { index, key ->
+                dialog = OpenDialog.None
+                scope.launch {
+                    if (key.isNotBlank()) prefs.saveDeepSeekApiKey(key)
+                    prefs.setSearchVendor(SearchVendor.entries[index])
+                    runSearchConnectionTest()
+                }
+            },
+            onDismiss = { dialog = OpenDialog.None },
+        )
         OpenDialog.DailyMinutes -> ChoiceDialog(
             title = "每日目标时长",
             options = listOf(5, 8, 12, 15, 20).map { "$it 分钟" },
@@ -614,6 +675,74 @@ private fun ChoiceDialog(
             }
         },
         confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("算了") }
+        },
+    )
+}
+
+/**
+ * 选服务商（D-090）。选中 DeepSeek 时就地填密钥：对话和搜索共用一个，填过一次另一处不用再填。
+ * 已经有密钥时输入框可以留空，表示沿用；没有时必须填才能确定，免得切过去第一下就失败。
+ */
+@Composable
+private fun VendorDialog(
+    title: String,
+    note: String,
+    options: List<String>,
+    initialIndex: Int,
+    deepSeekIndex: Int,
+    hasDeepSeekKey: Boolean,
+    onConfirm: (index: Int, deepSeekKey: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selected by rememberSaveable { mutableStateOf(initialIndex) }
+    var key by rememberSaveable { mutableStateOf("") }
+    val needsKey = selected == deepSeekIndex && !hasDeepSeekKey && key.isBlank()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                options.forEachIndexed { index, option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selected = index }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = index == selected, onClick = { selected = index })
+                        Text(option, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                if (selected == deepSeekIndex) {
+                    OutlinedTextField(
+                        value = key,
+                        onValueChange = { key = it },
+                        label = { Text("DeepSeek API 密钥") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        supportingText = {
+                            Text(
+                                if (hasDeepSeekKey) "已保存过，留空沿用。只存在本机。"
+                                else "对话和搜索共用。只存在本机，APK 无法彻底保护密钥。",
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selected, key) }, enabled = !needsKey) { Text("保存并测试") }
+        },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("算了") }
         },

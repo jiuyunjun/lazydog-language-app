@@ -12,7 +12,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.lazydog.english.core.ai.AiTask
+import com.lazydog.english.core.config.AiVendor
 import com.lazydog.english.core.config.LocalEnv
+import com.lazydog.english.core.config.SearchVendor
 import com.lazydog.english.domain.assessment.SkillKind
 import com.lazydog.english.domain.assessment.SkillLevels
 import com.lazydog.english.domain.assessment.labelForScore
@@ -42,6 +44,9 @@ class UserPreferences(private val context: Context) {
         val AiModel = stringPreferencesKey("ai_model")
         val SpeechKey = stringPreferencesKey("speech_key")
         val BraveApiKey = stringPreferencesKey("brave_api_key")
+        val AiVendorWire = stringPreferencesKey("ai_vendor")
+        val SearchVendorWire = stringPreferencesKey("search_vendor")
+        val DeepSeekApiKey = stringPreferencesKey("deepseek_api_key")
         val NativeEnglishAmount = stringPreferencesKey("native_english_amount")
         val NativeNewWordAmount = stringPreferencesKey("native_new_word_amount")
         val NewsEdition = stringPreferencesKey("news_edition")
@@ -98,26 +103,71 @@ class UserPreferences(private val context: Context) {
     val voiceScreeningDone: Flow<Boolean> =
         context.dataStore.data.map { it[Keys.VoiceScreeningDone] ?: false }
 
-    val aiBaseUrl: Flow<String> =
-        context.dataStore.data.map { it[Keys.AiBaseUrl].orDefault(LocalEnv.AI_BASE_URL) }
-    val aiApiKey: Flow<String> =
-        context.dataStore.data.map { it[Keys.AiApiKey].orDefault(LocalEnv.AI_API_KEY) }
-    val aiModel: Flow<String> =
-        context.dataStore.data.map { it[Keys.AiModel].orDefault(LocalEnv.AI_MODEL) }
+    /**
+     * 对话模型用哪家（D-090）。下面的地址、密钥、默认模型、各功能模型都按它取，
+     * 调用方不用管当前是哪家。没选过是 [AiVendor.OpenAiCompatible]，老用户行为不变。
+     */
+    val aiVendor: Flow<AiVendor> =
+        context.dataStore.data.map { AiVendor.fromWire(it[Keys.AiVendorWire]) }
+
+    suspend fun setAiVendor(vendor: AiVendor) {
+        context.dataStore.edit { it[Keys.AiVendorWire] = vendor.wire }
+    }
+
+    /** 网页检索用哪家（D-090）。配图不跟着切，始终 Brave。 */
+    val searchVendor: Flow<SearchVendor> =
+        context.dataStore.data.map { SearchVendor.fromWire(it[Keys.SearchVendorWire]) }
+
+    suspend fun setSearchVendor(vendor: SearchVendor) {
+        context.dataStore.edit { it[Keys.SearchVendorWire] = vendor.wire }
+    }
+
+    /** DeepSeek 密钥，对话和检索共用一个。App 里填过的优先于 [LocalEnv]。 */
+    val deepSeekApiKey: Flow<String> =
+        context.dataStore.data.map { it[Keys.DeepSeekApiKey].orDefault(LocalEnv.DEEPSEEK_API_KEY) }
+
+    suspend fun saveDeepSeekApiKey(key: String) {
+        context.dataStore.edit { it[Keys.DeepSeekApiKey] = key.trim() }
+    }
+
+    val aiBaseUrl: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs.vendor().fixedBaseUrl ?: prefs[Keys.AiBaseUrl].orDefault(LocalEnv.AI_BASE_URL)
+    }
+    val aiApiKey: Flow<String> = context.dataStore.data.map { prefs ->
+        when (prefs.vendor()) {
+            AiVendor.OpenAiCompatible -> prefs[Keys.AiApiKey].orDefault(LocalEnv.AI_API_KEY)
+            AiVendor.DeepSeek -> prefs[Keys.DeepSeekApiKey].orDefault(LocalEnv.DEEPSEEK_API_KEY)
+        }
+    }
+    val aiModel: Flow<String> = context.dataStore.data.map { it.defaultModel() }
 
     /**
      * 某个功能实际用的模型：设过就用设的，没设过跟随默认模型。
-     * 默认模型改了，跟随的功能自动跟着改（[AiTask]）。
+     * 默认模型改了，跟随的功能自动跟着改（[AiTask]）。都按当前服务商取。
      */
     fun aiModelFor(task: AiTask): Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[taskModelKey(task)].orDefault(prefs[Keys.AiModel].orDefault(LocalEnv.AI_MODEL))
+        prefs[taskModelKey(task, prefs.vendor())].orDefault(prefs.defaultModel())
     }
 
     /** 已经单独指定过模型的功能；设置页用它显示"哪几项没跟随默认"。 */
     val aiTaskModels: Flow<Map<AiTask, String>> = context.dataStore.data.map { prefs ->
+        val vendor = prefs.vendor()
         AiTask.entries.mapNotNull { task ->
-            prefs[taskModelKey(task)]?.takeIf { it.isNotBlank() }?.let { task to it }
+            prefs[taskModelKey(task, vendor)]?.takeIf { it.isNotBlank() }?.let { task to it }
         }.toMap()
+    }
+
+    private fun Preferences.vendor(): AiVendor = AiVendor.fromWire(this[Keys.AiVendorWire])
+
+    private fun Preferences.defaultModel(): String {
+        val vendor = vendor()
+        return this[modelKey(vendor)].orDefault(vendor.defaultModel)
+    }
+
+    /** OpenAI 兼容沿用老键，老用户存过的模型原样生效；别家加前缀各存一套。 */
+    private fun modelKey(vendor: AiVendor): Preferences.Key<String> = when (vendor) {
+        AiVendor.OpenAiCompatible -> Keys.AiModel
+        else -> stringPreferencesKey("${vendor.wire}_ai_model")
     }
 
     /**
@@ -217,15 +267,15 @@ class UserPreferences(private val context: Context) {
         }
     }
 
-    /** 只改默认模型，不动地址和密钥。 */
+    /** 只改当前服务商的默认模型，不动地址和密钥。 */
     suspend fun setAiModel(model: String) {
-        context.dataStore.edit { it[Keys.AiModel] = model.trim() }
+        context.dataStore.edit { it[modelKey(it.vendor())] = model.trim() }
     }
 
-    /** [model] 传 null 表示回到"跟随默认"。 */
+    /** [model] 传 null 表示回到"跟随默认"。只动当前服务商那一套。 */
     suspend fun setAiTaskModel(task: AiTask, model: String?) {
         context.dataStore.edit {
-            val key = taskModelKey(task)
+            val key = taskModelKey(task, it.vendor())
             if (model.isNullOrBlank()) it.remove(key) else it[key] = model.trim()
         }
     }
@@ -651,7 +701,10 @@ class UserPreferences(private val context: Context) {
     }
 }
 
-private fun taskModelKey(task: AiTask) = stringPreferencesKey("ai_model_${task.key}")
+private fun taskModelKey(task: AiTask, vendor: AiVendor) = when (vendor) {
+    AiVendor.OpenAiCompatible -> stringPreferencesKey("ai_model_${task.key}")
+    else -> stringPreferencesKey("${vendor.wire}_ai_model_${task.key}")
+}
 
 private fun taskEffortKey(task: AiTask) = stringPreferencesKey("ai_effort_${task.key}")
 

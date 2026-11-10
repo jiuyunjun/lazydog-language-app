@@ -207,7 +207,7 @@ object NewsText {
 }
 
 /**
- * 给挑中的新闻找原文：Brave 搜这个标题 → 按"同站优先、标题够像"挑链接 → 一个个抓，抓到正文就停。
+ * 给挑中的新闻找原文：网页搜索搜这个标题 → 按"同站优先、标题够像"挑链接 → 一个个抓，抓到正文就停。
  *
  * Google 新闻的链接是中转页，打不开原文，所以绕一道检索拿报道本身的地址。
  * 这一步是"写不写得出原汁原味的新闻"的关键，宁可说"没拿到原文"也不拿摘要凑。
@@ -233,7 +233,7 @@ class NewsArticleLoader(
         if (story.direct && story.link.isNotBlank()) attempt(story.link)?.let { return Result.Success(it) }
 
         if (!search.isConfigured()) {
-            return Result.Failure("找原文要用 Brave 搜索，请先在设置里填 Brave 密钥")
+            return Result.Failure("找原文要用网页搜索，请先在设置里配好搜索服务的密钥（Brave 或 DeepSeek）")
         }
         val found = search.search(story.title, count = SEARCH_COUNT, freshness = WebSearchProvider.FRESH_WEEK)
         val candidates = rankCandidates(story, found.hits)

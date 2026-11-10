@@ -2,8 +2,8 @@
 doc: "ROADMAP.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "2.19"
-updated: "2026-10-29"
+version: "2.20"
+updated: "2026-11-10"
 authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -812,6 +812,22 @@ Claude Design 稿为准。核心口径三条：**听辨和发音分开记、分�
 验证：`assembleDebug`、`testDebugUnitTest`、`lintDebug`、`tools/check_ui_capabilities.py`、
 `tools/check_docs.py` 通过。`QuickCardEnrichmentTest` 守住只补缺、不覆盖原句与释义、变形与错拼去重、
 词块校验、换词换词性拒绝；`PromptContractRegressionTest` 守住词义锁定的标签隔离及不传时提示词不变。
+
+## M24：DeepSeek 服务商切换（D-090）
+
+- [x] 设置「AI 服务」切换 OpenAI 兼容 / DeepSeek；DeepSeek 密钥可在 App 内填写，与搜索共用。
+- [x] 默认模型与各功能模型按服务商分开存；切换后模型清单从 DeepSeek `/models` 重新拉取并可选。
+- [x] 设置「网页搜索」切换 Brave / DeepSeek（`DeepSeekSearchClient`），联网检索、热点兜底、找原文都跟着切。
+- [ ] 真机验收：DeepSeek 下各类生成的 JSON 稳定性与时延、`deepseek-v4-pro` 与 flash 的取舍、
+      DeepSeek 检索找新闻原文的命中率（无国家参数、按 `after:` 收时间窗）。
+
+本次没做：单词配图换源（DeepSeek 无图片检索，仍是 Brave）；OpenAI 兼容那一档的地址与密钥仍只能在
+`LocalEnv` 配，App 内不提供编辑；密钥仍明文存 DataStore（Keystore 迁移照旧待办）。
+
+验证：`assembleDebug`、`testDebugUnitTest`、`lintDebug`、`tools/check_ui_capabilities.py`、
+`tools/check_docs.py` 通过；`DeepSeekSearchClientTest` 按官方示例响应守住解析、`after:`/`lang:` 换算、
+128 字截断与错误文案，`VendorWebSearchTest` 守住按设置转发。无密钥探测确认两个端点存在、401 结构与解析一致；
+未用真实密钥跑过生成与检索。
 
 ## 已知限制
 

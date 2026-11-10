@@ -76,7 +76,7 @@ internal data class PickedNews(val story: NewsStory, val category: NewsCategory,
  * 挑中一条后，开篇页去抓原文、只做清理，不再按"引人入胜"那套重写。
  */
 @Composable
-internal fun HotTopicsSection(picked: PickedNews?, braveReady: Boolean, onPick: (PickedNews) -> Unit) {
+internal fun HotTopicsSection(picked: PickedNews?, searchReady: Boolean, onPick: (PickedNews) -> Unit) {
     val app = LocalContext.current.applicationContext as LazyDogApplication
     val scope = rememberCoroutineScope()
     val prefs = app.userPreferences
@@ -166,10 +166,10 @@ internal fun HotTopicsSection(picked: PickedNews?, braveReady: Boolean, onPick: 
             )
             else -> {
                 if (current.fromFallback) {
-                    Hint("Google 新闻连不上（大陆需要代理），这批来自 Brave 新闻检索，分类和地区只能大致匹配。")
+                    Hint("Google 新闻连不上（大陆需要代理），这批来自网页搜索的新闻检索，分类和地区只能大致匹配。")
                 }
-                if (!braveReady) {
-                    Hint("看列表不用密钥；读新闻原文要用 Brave 搜索找链接，请先在设置里填 Brave 密钥。")
+                if (!searchReady) {
+                    Hint("看列表不用密钥；读新闻原文要靠网页搜索找链接，请先在设置里配好搜索服务（Brave 或 DeepSeek）。")
                 }
                 if (query.edition.language.needsTranslation) {
                     Hint("${query.edition.labelZh}媒体的新闻是${query.edition.language.labelZh}，读的时候全文翻成中文，不做摘要。")
