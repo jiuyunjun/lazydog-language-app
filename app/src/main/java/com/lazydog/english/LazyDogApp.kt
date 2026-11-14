@@ -449,7 +449,7 @@ private fun AppNavHost(
         }
 
         appScreen(Routes.ReadingGenerate, ask = AskPagePolicy.Required) {
-            ReadingScreen(mode = ReadingMode.Generate, onExit = { navController.popOnce() })
+            ReadingScreen(mode = ReadingMode.Generate, onExit = { navController.popOnce() }, onNextStep = openNextStep)
         }
 
         appScreen(Routes.NativeReading, ask = AskPagePolicy.Required) {
@@ -474,7 +474,7 @@ private fun AppNavHost(
         }
 
         appScreen(Routes.ReadingPaste, ask = AskPagePolicy.Required) {
-            ReadingScreen(mode = ReadingMode.Paste, onExit = { navController.popOnce() })
+            ReadingScreen(mode = ReadingMode.Paste, onExit = { navController.popOnce() }, onNextStep = openNextStep)
         }
 
         appScreen(
@@ -496,7 +496,7 @@ private fun AppNavHost(
             arguments = listOf(navArgument("materialId") { type = NavType.LongType }),
         ) { entry ->
             val materialId = entry.arguments?.getLong("materialId") ?: 0L
-            ReadingScreen(mode = ReadingMode.Open(materialId), onExit = { navController.popOnce() })
+            ReadingScreen(mode = ReadingMode.Open(materialId), onExit = { navController.popOnce() }, onNextStep = openNextStep)
         }
     }
 }

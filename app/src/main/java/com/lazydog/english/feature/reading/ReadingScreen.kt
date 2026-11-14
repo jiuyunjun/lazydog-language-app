@@ -61,6 +61,7 @@ import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.core.designsystem.rememberLeaveGuard
+import com.lazydog.english.core.designsystem.DailyStepFinishActions
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.ReadingArchetype
@@ -118,6 +119,7 @@ private const val MAX_NEW_WORDS = 4
 fun ReadingScreen(
     mode: ReadingMode,
     onExit: () -> Unit,
+    onNextStep: (DailyStep) -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
@@ -310,6 +312,8 @@ fun ReadingScreen(
                 }
                 is ReadingPhase.Viewing -> MaterialContent(
                     material = p.material,
+                    onNextStep = onNextStep,
+                    onExit = onExit,
                     onQuestionAnswered = { question, selectedIndex ->
                         askQuestionContext = question.toAskContext(selectedIndex, p.material)
                     },
@@ -345,6 +349,16 @@ private fun SetupView(onGenerate: (String) -> Unit) {
     // 勾过的兴趣排最前，后面接全集：今天想读什么和当初勾了什么兴趣不是一回事，
     // 只摆那四个勾过的等于每天在同一小撮词里挑。
     val topics = remember(savedTopics) { TopicCatalog.withPreferred(savedTopics) }
+
+    // 进来就替他从勾过的兴趣里挑一个，按钮直接能按（「打开后不用思考学什么」，PRODUCT.md §1）。
+    // 只挑一次：他自己取消或者改了，就别再塞回去。
+    var preselected by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(savedTopics) {
+        if (!preselected && savedTopics.isNotEmpty() && selectedTopic.isBlank() && customTopic.isBlank()) {
+            selectedTopic = savedTopics.random()
+            preselected = true
+        }
+    }
 
     fun pick(topic: String) {
         selectedTopic = topic
@@ -504,6 +518,8 @@ private fun ReadingQuestion.optionAt(index: Int): String = options.getOrNull(ind
 @Composable
 private fun MaterialContent(
     material: MaterialView,
+    onNextStep: (DailyStep) -> Unit,
+    onExit: () -> Unit,
     onQuestionAnswered: (ReadingQuestion, Int) -> Unit,
     onQuestionsCompleted: () -> Unit,
 ) {
@@ -547,6 +563,7 @@ private fun MaterialContent(
             QuestionList(
                 questions = listOf(firstQuestion),
                 articleBody = material.body,
+                alreadyCompleted = material.completed,
                 onAnswered = { question, selected ->
                     onQuestionAnswered(question, selected)
                     firstCheckAnswered = true
@@ -570,6 +587,7 @@ private fun MaterialContent(
                 QuestionList(
                     questions = laterQuestions,
                     articleBody = material.body,
+                    alreadyCompleted = material.completed,
                     onAnswered = onQuestionAnswered,
                     onAllAnswered = {
                         exercisesCompleted = true
@@ -581,6 +599,17 @@ private fun MaterialContent(
 
         if (material.source == ReadingRepository.SOURCE_AI && exercisesCompleted) {
             ReadingFeedback(material)
+        }
+
+        // 答完题就是这一篇的终点，接着走今天的下一步；原来到这里只有一行小字，然后就是页面底。
+        // 粘贴的材料不出题，也不算今日阅读，不给这一组。
+        if (exercisesCompleted) {
+            DailyStepFinishActions(
+                current = DailyStep.Reading,
+                onNextStep = onNextStep,
+                onFinish = onExit,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
     }
 }
@@ -693,11 +722,23 @@ private fun ReaderPayoffCard(payoff: String) {
 private fun QuestionList(
     questions: List<ReadingQuestion>,
     articleBody: String,
+    /**
+     * 这一篇以前就答完了。当时选了什么没存，所以不假装还原作答——
+     * 直接把正确答案和解析摊开，免得重新打开时一片空白、看着像没做过。
+     */
+    alreadyCompleted: Boolean,
     onAnswered: (ReadingQuestion, Int) -> Unit,
     onAllAnswered: () -> Unit,
 ) {
     val answers = remember { mutableStateMapOf<Int, Int>() }
     val allAnswered = answers.size == questions.size && questions.isNotEmpty()
+    if (alreadyCompleted) {
+        Text(
+            text = "这篇之前答过了，下面直接给出答案。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     LaunchedEffect(allAnswered) {
         if (allAnswered) onAllAnswered()
     }
@@ -745,7 +786,7 @@ private fun QuestionList(
                     }
                 }
                 question.options.forEachIndexed { oIndex, option ->
-                    val answered = selected != null
+                    val answered = selected != null || alreadyCompleted
                     val isAnswer = oIndex == question.answerIndex
                     val isSelected = oIndex == selected
                     val container = when {
@@ -773,9 +814,13 @@ private fun QuestionList(
                         )
                     }
                 }
-                if (selected != null && question.explanationZh.isNotBlank()) {
+                if ((selected != null || alreadyCompleted) && question.explanationZh.isNotBlank()) {
                     InteractiveEnglishText(
-                        text = (if (selected == question.answerIndex) "对了。" else "不对。") + question.explanationZh,
+                        text = when (selected) {
+                            null -> ""
+                            question.answerIndex -> "对了。"
+                            else -> "不对。"
+                        } + question.explanationZh,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
