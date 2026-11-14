@@ -45,6 +45,7 @@ import com.lazydog.english.domain.ask.AskContext
 import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.core.designsystem.AiWaiting
+import com.lazydog.english.core.designsystem.DailyStepFinishActions
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.planning.DailyStep
@@ -92,7 +93,7 @@ private sealed interface ProductionPhase {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProductionScreen(onExit: () -> Unit) {
+fun ProductionScreen(onExit: () -> Unit, onNextStep: (DailyStep) -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
@@ -276,7 +277,7 @@ fun ProductionScreen(onExit: () -> Unit) {
                     isLast = p.index == p.tasks.lastIndex,
                     onNext = { next(p.tasks, p.index) },
                 )
-                is ProductionPhase.Summary -> SummaryView(lines = p.lines, onExit = onExit)
+                is ProductionPhase.Summary -> SummaryView(lines = p.lines, onExit = onExit, onNextStep = onNextStep)
             }
         }
     }
@@ -442,7 +443,7 @@ private fun LabelledSentence(label: String, sentence: String) {
 }
 
 @Composable
-private fun SummaryView(lines: List<WrittenLine>, onExit: () -> Unit) {
+private fun SummaryView(lines: List<WrittenLine>, onExit: () -> Unit, onNextStep: (DailyStep) -> Unit) {
     Column(
         modifier = Modifier.padding(top = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -481,7 +482,12 @@ private fun SummaryView(lines: List<WrittenLine>, onExit: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Button(onClick = onExit, modifier = Modifier.fillMaxWidth()) { Text("收工") }
+        DailyStepFinishActions(
+            current = DailyStep.Production,
+            onNextStep = onNextStep,
+            onFinish = onExit,
+            finishLabel = "收工",
+        )
     }
 }
 

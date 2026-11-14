@@ -62,6 +62,7 @@ import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.core.designsystem.AiWaiting
+import com.lazydog.english.core.designsystem.DailyStepFinishActions
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.GrammarDrillGrading
@@ -118,6 +119,7 @@ private const val DRILL_COUNT = 4
 fun GrammarStudyScreen(
     repository: KnowledgeRepository,
     onExit: () -> Unit,
+    onNextStep: (DailyStep) -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
@@ -440,6 +442,7 @@ fun GrammarStudyScreen(
                     practiced = p.practiced,
                     onLearnNew = ::backToIdle,
                     onExit = onExit,
+                    onNextStep = onNextStep,
                 )
             }
         }
@@ -691,6 +694,7 @@ private fun SummaryView(
     practiced: List<String>,
     onLearnNew: () -> Unit,
     onExit: () -> Unit,
+    onNextStep: (DailyStep) -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(top = 24.dp),
@@ -717,7 +721,12 @@ private fun SummaryView(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Button(onClick = onExit, modifier = Modifier.fillMaxWidth()) { Text("收工") }
+        DailyStepFinishActions(
+            current = DailyStep.Grammar,
+            onNextStep = onNextStep,
+            onFinish = onExit,
+            finishLabel = "收工",
+        )
         TextButton(onClick = onLearnNew, modifier = Modifier.fillMaxWidth()) { Text("再学一个新的") }
     }
 }

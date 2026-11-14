@@ -1842,10 +1842,16 @@
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   },
   {
-    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
-    "text": "copy.wordFinish",
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/DailyFlow.kt",
+    "text": "\"下一步：${next.step.title}\"",
     "count": 1,
-    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
+    "reason": "按钮文字：今日计划里下一步的中文名称，不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/DailyFlow.kt",
+    "text": "finishLabel",
+    "count": 2,
+    "reason": "按钮文字：收尾出口的中文标签，不是供查词讲句的学习正文"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",

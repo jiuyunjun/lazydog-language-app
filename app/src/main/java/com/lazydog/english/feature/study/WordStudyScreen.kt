@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.appCopy
+import com.lazydog.english.core.designsystem.DailyStepFinishActions
 import com.lazydog.english.domain.progress.DifficultyBias
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.designsystem.SpeakButton
@@ -172,6 +173,7 @@ private const val PREFETCH_AFTER_DUE_CARDS = 3
 fun WordStudyScreen(
     repository: KnowledgeRepository,
     onExit: () -> Unit,
+    onNextStep: (DailyStep) -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
@@ -433,6 +435,7 @@ fun WordStudyScreen(
                     reviewedCount = p.reviewedCount,
                     newCount = p.newCount,
                     onExit = onExit,
+                    onNextStep = onNextStep,
                 )
             }
         }
@@ -601,7 +604,12 @@ private fun OfferNewView(
 }
 
 @Composable
-private fun SummaryView(reviewedCount: Int, newCount: Int, onExit: () -> Unit) {
+private fun SummaryView(
+    reviewedCount: Int,
+    newCount: Int,
+    onExit: () -> Unit,
+    onNextStep: (DailyStep) -> Unit,
+) {
     val copy = appCopy
     CenterHint {
         Icon(
@@ -624,7 +632,12 @@ private fun SummaryView(reviewedCount: Int, newCount: Int, onExit: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Button(onClick = onExit) { Text(copy.wordFinish) }
+        DailyStepFinishActions(
+            current = DailyStep.Words,
+            onNextStep = onNextStep,
+            onFinish = onExit,
+            finishLabel = copy.wordFinish,
+        )
     }
 }
 

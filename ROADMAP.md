@@ -2,8 +2,8 @@
 doc: "ROADMAP.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "2.21"
-updated: "2026-11-10"
+version: "2.22"
+updated: "2026-11-14"
 authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -828,6 +828,14 @@ Claude Design 稿为准。核心口径三条：**听辨和发音分开记、分�
 `tools/check_docs.py` 通过；`DeepSeekSearchClientTest` 按官方示例响应守住解析、`after:`/`lang:` 换算、
 128 字截断与错误文案，`VendorWebSearchTest` 守住按设置转发。无密钥探测确认两个端点存在、401 结构与解析一致；
 未用真实密钥跑过生成与检索。
+
+## M25：操作逻辑与交互审查修补（2026-11-14）
+
+施工单见 `design/ux-review-2026-11-14.md`（一次性审查记录，不进版本表）。逐项一个提交。
+
+- [x] 1. 今日流程连续化：单词、语法、表达、母语阅读的收尾页给「下一步：xx」与「先到这里」，
+      进下一步时弹掉刚做完的页，返回栈只留首页。计划状态抽成 `core/designsystem/DailyFlow.kt`，
+      今天页和收尾页共用一份，不再各算一遍。英文阅读与朗读的收尾随第 5、6 项补上。
 
 ## 已知限制
 

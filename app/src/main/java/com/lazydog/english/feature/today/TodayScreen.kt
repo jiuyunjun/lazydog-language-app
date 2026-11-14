@@ -52,15 +52,13 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.TodayReport
 import com.lazydog.english.core.designsystem.appCopy
-import com.lazydog.english.domain.planning.DailyPlanner
+import com.lazydog.english.core.designsystem.rememberTodayPlanState
 import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.progress.LearningActivity
 import com.lazydog.english.domain.progress.LongTermProof
 import com.lazydog.english.domain.progress.MINIMUM_RETRIEVALS
 import com.lazydog.english.domain.progress.Mood
-import com.lazydog.english.domain.progress.mood
 import com.lazydog.english.domain.progress.reachedDailyMinimum
-import java.time.LocalDate
 import kotlinx.coroutines.launch
 
 private val DailyStep.icon: ImageVector
@@ -83,30 +81,24 @@ fun TodayScreen(
     val scope = rememberCoroutineScope()
     val prefs = app.userPreferences
     val copy = appCopy
-    val today = remember { LocalDate.now().toString() }
 
     // 初值用占位符，避免 DataStore 首帧前横幅闪现。
     val learnerLevel by prefs.learnerLevel.collectAsState(initial = "…")
-    val dailyMinutes by prefs.dailyMinutes.collectAsState(initial = 12)
-    val doneSteps by prefs.todayDoneSteps(today).collectAsState(initial = emptySet())
-    val skippedSteps by prefs.todaySkippedSteps(today).collectAsState(initial = emptySet())
-    val dueVocab by app.knowledgeRepository.observeDueVocabularyCount().collectAsState(initial = 0)
-    val dueGrammar by app.knowledgeRepository.observeDueGrammarCount().collectAsState(initial = 0)
-
-    // 进步证据和活跃度都从既有学习事件推，不额外记账（`持续学习DESIGN.md` §14、§7.1）。
-    val reportFlow = remember { app.progressRepository.observeToday() }
-    val activityFlow = remember { app.progressRepository.observeActivity() }
-    val report by reportFlow.collectAsState(initial = TodayReport.Empty)
-    val activity by activityFlow.collectAsState(initial = LearningActivity.None)
+    // 计划、心情、进度和各步骤收尾页看的是同一份（[rememberTodayPlanState]）。
+    val state = rememberTodayPlanState()
+    val today = state.today
+    val doneSteps = state.doneSteps
+    val skippedSteps = state.skippedSteps
+    val dueVocab = state.dueVocab
+    val dueGrammar = state.dueGrammar
+    val report = state.report
+    val activity = state.activity
+    val mood = state.mood
+    val plan = state.plan
     val wrappedUp by prefs.wrappedUpToday(today).collectAsState(initial = false)
 
-    // 中断回来、或者今天已经做累了，今天就只排一步（§26、§25）。
-    val mood = mood(daysAway = activity.daysAway, fatigue = report.fatigue)
-    val plan = remember(dailyMinutes, dueVocab, dueGrammar, mood) {
-        DailyPlanner.plan(dailyMinutes, dueVocabCount = dueVocab, dueGrammarCount = dueGrammar, mood = mood)
-    }
-    val allDone = plan.isNotEmpty() && plan.all { it.step.id in doneSteps }
-    val nextStep = DailyPlanner.nextStep(plan, doneSteps, skippedSteps)
+    val allDone = state.allDone
+    val nextStep = state.nextStep
     val minimumDone = reachedDailyMinimum(report.progress, doneSteps.size)
 
     Column(

@@ -72,6 +72,7 @@ import com.lazydog.english.core.data.VocabularyImageRepository
 import com.lazydog.english.domain.vocabulary.SenseKey
 import com.lazydog.english.feature.vocabulary.CachedSenseImage
 import com.lazydog.english.core.designsystem.AiWaiting
+import com.lazydog.english.core.designsystem.DailyStepFinishActions
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.model.KnowledgeStage
@@ -151,6 +152,7 @@ private const val RESCUE_THRESHOLD = 3
 fun NativeReadingScreen(
     mode: NativeReadingMode,
     onExit: () -> Unit,
+    onNextStep: (DailyStep) -> Unit,
 ) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
@@ -470,7 +472,9 @@ fun NativeReadingScreen(
                 )
                 is NativePhase.WrapUp -> NativeWrapUpView(
                     view = p.view,
-                    onDone = {
+                    onNextStep = onNextStep,
+                    // 落库、打勾、记遇见都做完了才离开：先走的话 scope 一取消，这一篇就白读了。
+                    onDone = { then ->
                         scope.launch {
                             repo.markCompleted(p.view.id)
                             app.userPreferences.markTodayStepDone(
@@ -485,9 +489,10 @@ fun NativeReadingScreen(
                                     vocab.firstOrNull { it.detail.term.equals(span.renderedEn, true) }
                                         ?.let { app.knowledgeRepository.recordExposure(it.item.id, "native_reading") }
                                 }
-                            onExit()
+                            then()
                         }
                     },
+                    onExit = onExit,
                     onFeedback = { feedback ->
                         scope.launch {
                             val next = when (feedback) {
@@ -1020,7 +1025,10 @@ private fun SpanSheet(
 @Composable
 private fun NativeWrapUpView(
     view: NativeView,
-    onDone: () -> Unit,
+    onNextStep: (DailyStep) -> Unit,
+    /** 收尾落库，做完再执行传进来的那一步（去下一步或者退出）。 */
+    onDone: (then: () -> Unit) -> Unit,
+    onExit: () -> Unit,
     onFeedback: (Feedback) -> Unit,
 ) {
     val question = view.document.comprehension
@@ -1073,13 +1081,24 @@ private fun NativeWrapUpView(
             Spacer(Modifier.height(8.dp))
         }
         Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
-            Button(
-                onClick = onDone,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .height(56.dp),
-            ) { Text("今天到这里") }
+            // 防连点：落库是异步的，第二下会把同一篇再收一次尾。
+            var leaving by remember { mutableStateOf(false) }
+            DailyStepFinishActions(
+                current = DailyStep.Reading,
+                onNextStep = { step ->
+                    if (!leaving) {
+                        leaving = true
+                        onDone { onNextStep(step) }
+                    }
+                },
+                onFinish = {
+                    if (!leaving) {
+                        leaving = true
+                        onDone(onExit)
+                    }
+                },
+                modifier = Modifier.padding(16.dp),
+            )
         }
     }
 }

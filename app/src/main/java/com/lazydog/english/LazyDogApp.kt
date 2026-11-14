@@ -30,6 +30,7 @@ import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.ask.AskPagePolicy
 import com.lazydog.english.core.speech.SpeechController
+import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.feature.main.MainScreen
 import com.lazydog.english.feature.production.ProductionScreen
 import com.lazydog.english.feature.pronunciation.AllSoundsScreen
@@ -108,6 +109,15 @@ object Routes {
     fun pronunciationSound(phonemeId: String) = "pronunciation/sound/$phonemeId"
     fun pronunciationPerceive(contrastId: String) = "pronunciation/perceive/$contrastId"
     fun pronunciationProduce(phonemeId: String) = "pronunciation/produce/$phonemeId"
+
+    /** 今日计划里每一步对应的页面。首页和各步骤收尾页的「下一步」共用这一份。 */
+    fun dailyStep(step: DailyStep) = when (step) {
+        DailyStep.Words -> WordStudy
+        DailyStep.Grammar -> GrammarStudy
+        DailyStep.Production -> Production
+        DailyStep.Reading -> ReadingGenerate
+        DailyStep.Speaking -> Speaking
+    }
 }
 
 @Composable
@@ -174,6 +184,18 @@ private fun AppNavHost(
         val listener = NavController.OnDestinationChangedListener { _, _, _ -> speech.stop() }
         navController.addOnDestinationChangedListener(listener)
         onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
+
+    /**
+     * 从一步的收尾页直接进今天的下一步。
+     *
+     * 刚做完的那一页一起弹掉，返回栈里只留首页：做完三步再按返回，应该一下回到今天，
+     * 而不是倒着把语法、单词再走一遍。
+     */
+    val openNextStep: (DailyStep) -> Unit = { step ->
+        navController.navigate(Routes.dailyStep(step)) {
+            popUpTo(Routes.Main)
+        }
     }
 
     NavHost(
@@ -300,6 +322,7 @@ private fun AppNavHost(
             WordStudyScreen(
                 repository = knowledgeRepository,
                 onExit = { navController.popOnce() },
+                onNextStep = openNextStep,
             )
         }
 
@@ -412,6 +435,7 @@ private fun AppNavHost(
             GrammarStudyScreen(
                 repository = knowledgeRepository,
                 onExit = { navController.popOnce() },
+                onNextStep = openNextStep,
             )
         }
 
@@ -420,7 +444,7 @@ private fun AppNavHost(
         }
 
         appScreen(Routes.Production, ask = AskPagePolicy.Required) {
-            ProductionScreen(onExit = { navController.popOnce() })
+            ProductionScreen(onExit = { navController.popOnce() }, onNextStep = openNextStep)
         }
 
         appScreen(Routes.ReadingGenerate, ask = AskPagePolicy.Required) {
@@ -428,7 +452,11 @@ private fun AppNavHost(
         }
 
         appScreen(Routes.NativeReading, ask = AskPagePolicy.Required) {
-            NativeReadingScreen(mode = NativeReadingMode.New, onExit = { navController.popOnce() })
+            NativeReadingScreen(
+                mode = NativeReadingMode.New,
+                onExit = { navController.popOnce() },
+                onNextStep = openNextStep,
+            )
         }
 
         appScreen(
@@ -440,6 +468,7 @@ private fun AppNavHost(
             NativeReadingScreen(
                 mode = NativeReadingMode.Open(materialId),
                 onExit = { navController.popOnce() },
+                onNextStep = openNextStep,
             )
         }
 
