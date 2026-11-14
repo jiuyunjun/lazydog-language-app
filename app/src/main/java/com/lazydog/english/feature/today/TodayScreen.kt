@@ -260,8 +260,15 @@ fun TodayScreen(
                 plan.forEach { planned ->
                     val done = planned.step.id in doneSteps
                     val skipped = !done && planned.step.id in skippedSteps
+                    // 做完了也还能点进去：单词那一步打了勾，到期词可能还剩一大截，
+                    // 不能逼人绕到「学习」Tab 才找得到入口。跳过的行要先「恢复」。
+                    val stillDue = when (planned.step) {
+                        DailyStep.Words -> dueVocab
+                        DailyStep.Grammar -> dueGrammar
+                        else -> 0
+                    }
                     Surface(
-                        onClick = { if (!done && !skipped) onStartStep(planned.step) },
+                        onClick = { if (!skipped) onStartStep(planned.step) },
                         // 待办那几行原来用的是 `surface`，和页面背景一模一样，看上去不像能点。
                         // 只有还要做的事给容器底色；做完和跳过的退成透明，让底色本身成为"轮到你了"的信号。
                         color = if (done || skipped) Color.Transparent
@@ -299,7 +306,9 @@ fun TodayScreen(
                                     },
                                 )
                                 Text(
-                                    text = if (done) "完成了" else if (skipped) "今天已跳过 · 不计入完成"
+                                    text = if (done && stillDue > 0) "完成了 · 还有 $stillDue 个可复习"
+                                    else if (done) "完成了"
+                                    else if (skipped) "今天已跳过 · 不计入完成"
                                     else "${planned.note} · 约 ${planned.step.minutes} 分钟",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.outline,

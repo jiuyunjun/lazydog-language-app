@@ -166,6 +166,9 @@ private sealed interface WordStudyPhase {
 }
 
 
+/** 一轮到期复习最多这么多张。积压更多时，做完这一轮再接着来，不一口气摊开。 */
+private const val DUE_PER_ROUND = 20
+
 /** 到期复习到了这么多张，才值得提前把新词写好——复习几张就退出的话那一次生成就白花了。 */
 private const val PREFETCH_AFTER_DUE_CARDS = 3
 
@@ -203,13 +206,21 @@ fun WordStudyScreen(
         }
     }
 
-    // 进来先取到期复习；没有就直接进入“要不要新词”。
-    LaunchedEffect(Unit) {
+    /** 现在到期、还能再来一轮的词数。积压时它决定"再复习"还是"学新词"排在前面。 */
+    var moreDue by remember { mutableStateOf(0) }
+
+    suspend fun countDue(): Int {
+        val now = System.currentTimeMillis()
+        return repository.vocabulary.first().count { (it.item.nextReviewAt ?: Long.MAX_VALUE) <= now }
+    }
+
+    // 一轮最多发这么多张；积压的部分做完这一轮可以接着来（「再复习一轮」）。
+    suspend fun loadDueCards(): List<StudyCard> {
         val now = System.currentTimeMillis()
         val spellingByItem = repository.spellingProgressByItem()
-        val due = repository.vocabulary.first()
+        return repository.vocabulary.first()
             .filter { (it.item.nextReviewAt ?: Long.MAX_VALUE) <= now }
-            .take(20)
+            .take(DUE_PER_ROUND)
             .map {
                 StudyCard(
                     itemId = it.item.id,
@@ -228,7 +239,26 @@ fun WordStudyScreen(
                     facts = it.detail.spellingFacts(),
                 )
             }
+    }
+
+    // 进来先取到期复习；没有就直接进入“要不要新词”。
+    LaunchedEffect(Unit) {
+        val due = loadDueCards()
         phase = if (due.isEmpty()) WordStudyPhase.OfferNew(0) else WordStudyPhase.Cards(due, 0, revealed = false)
+    }
+
+    // 每次走到"要不要新词"都重数一遍：刚才那一轮之后还剩多少到期。
+    LaunchedEffect(phase is WordStudyPhase.OfferNew) {
+        if (phase is WordStudyPhase.OfferNew) moreDue = countDue()
+    }
+
+    fun reviewMore() {
+        phase = WordStudyPhase.Loading
+        scope.launch {
+            val due = loadDueCards()
+            phase = if (due.isEmpty()) WordStudyPhase.OfferNew(reviewedCount)
+            else WordStudyPhase.Cards(due, 0, revealed = false)
+        }
     }
 
     suspend fun requestNewWords(): GenerationResult<List<GeneratedWord>> {
@@ -426,6 +456,8 @@ fun WordStudyScreen(
                 is WordStudyPhase.OfferNew -> OfferNewView(
                     reviewedCount = p.reviewedCount,
                     newWordCount = maxNewWords,
+                    moreDue = moreDue,
+                    onReviewMore = ::reviewMore,
                     onGenerate = ::generateNewWords,
                     onDone = {
                         if (p.reviewedCount > 0) {
@@ -443,7 +475,16 @@ fun WordStudyScreen(
                         textAlign = TextAlign.Center,
                     )
                     Button(onClick = ::generateNewWords) { Text("再试一次") }
-                    TextButton(onClick = onExit) { Text("先退出") }
+                    // 新词没拿到不等于今天白学：前面复习过的照样算完成这一步、给总结。
+                    TextButton(
+                        onClick = {
+                            if (p.reviewedCount > 0) {
+                                phase = WordStudyPhase.Summary(p.reviewedCount, newLearnedCount)
+                            } else {
+                                onExit()
+                            }
+                        },
+                    ) { Text(if (p.reviewedCount > 0) "不学新词了，看看这轮" else "先退出") }
                 }
                 is WordStudyPhase.Summary -> SummaryView(
                     reviewedCount = p.reviewedCount,
@@ -594,6 +635,8 @@ private fun StudyCardView(
 private fun OfferNewView(
     reviewedCount: Int,
     newWordCount: Int,
+    moreDue: Int,
+    onReviewMore: () -> Unit,
     onGenerate: () -> Unit,
     onDone: () -> Unit,
 ) {
@@ -609,9 +652,21 @@ private fun OfferNewView(
         } else {
             Text(copy.wordNothingDue, style = MaterialTheme.typography.titleMedium)
         }
-        Button(onClick = onGenerate) {
-            Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
-            Text(copy.wordAskForNew(newWordCount), modifier = Modifier.padding(start = 8.dp))
+        // 复习积压时优先复习（PRODUCT.md §5）：还有到期的就把"再复习"放在前面，学新词退成次选。
+        // 只给数字、不说"欠了"——这一轮做完是成绩，剩下的是可以接着做的，不是债（D-048）。
+        if (moreDue > 0) {
+            Button(onClick = onReviewMore) {
+                Text("再复习 ${minOf(moreDue, DUE_PER_ROUND)} 个")
+            }
+            OutlinedButton(onClick = onGenerate) {
+                Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
+                Text(copy.wordAskForNew(newWordCount), modifier = Modifier.padding(start = 8.dp))
+            }
+        } else {
+            Button(onClick = onGenerate) {
+                Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
+                Text(copy.wordAskForNew(newWordCount), modifier = Modifier.padding(start = 8.dp))
+            }
         }
         TextButton(onClick = onDone) { Text(copy.wordStopToday) }
     }
