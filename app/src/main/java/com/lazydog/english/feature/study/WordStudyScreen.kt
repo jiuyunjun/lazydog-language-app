@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.appCopy
 import com.lazydog.english.core.designsystem.DailyStepFinishActions
+import com.lazydog.english.core.designsystem.rememberLeaveGuard
 import com.lazydog.english.domain.progress.DifficultyBias
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.designsystem.SpeakButton
@@ -333,6 +334,19 @@ fun WordStudyScreen(
         prefetch = scope.async { requestNewWords() }
     }
 
+    // 复习卡每张答完就落库了，丢不了；会丢的只有还在写的新词和还没学的新词卡。
+    val requestExit = rememberLeaveGuard(
+        warning = when (val p = phase) {
+            WordStudyPhase.Generating -> "新词还在写，现在退出就白等了。"
+            is WordStudyPhase.Cards -> p.cards.drop(p.index).count { it.isNew }
+                .takeIf { it > 0 }
+                ?.let { "还有 $it 个新词没学，现在退出，这几个词不会记下来。" }
+            else -> null
+        },
+        onLeave = onExit,
+        stayLabel = "接着学",
+    )
+
     // 只有正翻着卡片时才能提问；生成中、总结页摇了也不弹。
     ProvideAskContext(
         (phase as? WordStudyPhase.Cards)?.let { it.cards[it.index].toAskContext(it.revealed) },
@@ -344,7 +358,7 @@ fun WordStudyScreen(
             TopAppBar(
                 title = { Text("单词") },
                 navigationIcon = {
-                    IconButton(onClick = onExit) {
+                    IconButton(onClick = requestExit) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                     }
                 },

@@ -1848,6 +1848,18 @@
     "reason": "按钮文字：今日计划里下一步的中文名称，不是供查词讲句的学习正文"
   },
   {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/LeaveGuard.kt",
+    "text": "shown",
+    "count": 1,
+    "reason": "退出确认框的中文说明（这次离开会丢掉什么），不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/core/designsystem/LeaveGuard.kt",
+    "text": "stayLabel",
+    "count": 1,
+    "reason": "退出确认框的按钮文字，不是供查词讲句的学习正文"
+  },
+  {
     "file": "app/src/main/java/com/lazydog/english/core/designsystem/DailyFlow.kt",
     "text": "finishLabel",
     "count": 2,

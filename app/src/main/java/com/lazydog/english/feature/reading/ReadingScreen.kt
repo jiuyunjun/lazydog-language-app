@@ -60,6 +60,7 @@ import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.feature.ask.AskTopBarAction
 import com.lazydog.english.core.designsystem.AiWaiting
+import com.lazydog.english.core.designsystem.rememberLeaveGuard
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.ReadingArchetype
@@ -266,12 +267,17 @@ fun ReadingScreen(
         unavailableReason = "尚未载入阅读材料",
     )
 
+    val requestExit = rememberLeaveGuard(
+        warning = if (phase == ReadingPhase.Generating) "文章还在写，现在退出就白等了。" else null,
+        onLeave = onExit,
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("阅读") },
                 navigationIcon = {
-                    IconButton(onClick = onExit) {
+                    IconButton(onClick = requestExit) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                     }
                 },

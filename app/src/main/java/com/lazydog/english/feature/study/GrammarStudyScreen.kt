@@ -63,6 +63,7 @@ import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.domain.generation.GeneratedGrammarLesson
 import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.core.designsystem.DailyStepFinishActions
+import com.lazydog.english.core.designsystem.rememberLeaveGuard
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.generation.GrammarDrillGrading
@@ -296,6 +297,18 @@ fun GrammarStudyScreen(
         phase = GrammarPhase.Idle
     }
 
+    val requestExit = rememberLeaveGuard(
+        warning = when (val p = phase) {
+            GrammarPhase.Generating -> "讲解还在写，现在退出就白等了。"
+            is GrammarPhase.Showing ->
+                if (p.saving) null else "这条讲解还没记进知识库，现在退出就没了。"
+            is GrammarPhase.DrillLoading -> "题还在出，现在退出，这组题不算数。"
+            is GrammarPhase.Drilling -> "这组题还没做完，现在退出，这组题不算数。"
+            else -> null
+        },
+        onLeave = onExit,
+    )
+
     ProvideAskContext(
         when (val p = phase) {
             is GrammarPhase.Showing -> p.lesson.toAskContext()
@@ -310,7 +323,7 @@ fun GrammarStudyScreen(
             TopAppBar(
                 title = { Text("语法") },
                 navigationIcon = {
-                    IconButton(onClick = onExit) {
+                    IconButton(onClick = requestExit) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                     }
                 },

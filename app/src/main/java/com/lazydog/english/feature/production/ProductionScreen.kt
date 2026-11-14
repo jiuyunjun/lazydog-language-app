@@ -46,6 +46,7 @@ import com.lazydog.english.domain.ask.AskContextKind
 import com.lazydog.english.domain.ask.AskDetail
 import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.core.designsystem.DailyStepFinishActions
+import com.lazydog.english.core.designsystem.rememberLeaveGuard
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
 import com.lazydog.english.domain.planning.DailyStep
@@ -192,6 +193,17 @@ fun ProductionScreen(onExit: () -> Unit, onNextStep: (DailyStep) -> Unit) {
         }
     }
 
+    val requestExit = rememberLeaveGuard(
+        warning = when (phase) {
+            ProductionPhase.Generating -> "句子还在出，现在退出就白等了。"
+            is ProductionPhase.Checking -> "正在判你这句，现在退出，这句不算数。"
+            is ProductionPhase.Writing ->
+                if (input.isBlank()) null else "写的这句还没交，现在退出不会保存。"
+            else -> null
+        },
+        onLeave = onExit,
+    )
+
     ProvideAskContext(
         when (val p = phase) {
             is ProductionPhase.Writing -> p.tasks[p.index].toAskContext(written = null, feedback = null)
@@ -206,7 +218,7 @@ fun ProductionScreen(onExit: () -> Unit, onNextStep: (DailyStep) -> Unit) {
             TopAppBar(
                 title = { Text("自己写一句") },
                 navigationIcon = {
-                    IconButton(onClick = onExit) {
+                    IconButton(onClick = requestExit) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                     }
                 },

@@ -73,6 +73,7 @@ import com.lazydog.english.domain.vocabulary.SenseKey
 import com.lazydog.english.feature.vocabulary.CachedSenseImage
 import com.lazydog.english.core.designsystem.AiWaiting
 import com.lazydog.english.core.designsystem.DailyStepFinishActions
+import com.lazydog.english.core.designsystem.rememberLeaveGuard
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.model.KnowledgeStage
@@ -407,12 +408,17 @@ fun NativeReadingScreen(
         )
     }
 
+    val requestExit = rememberLeaveGuard(
+        warning = if (phase is NativePhase.Working) "文章还在写，现在退出就白等了。" else null,
+        onLeave = onExit,
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("母语阅读") },
                 navigationIcon = {
-                    IconButton(onClick = onExit) {
+                    IconButton(onClick = requestExit) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                     }
                 },
