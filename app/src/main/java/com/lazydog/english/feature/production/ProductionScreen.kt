@@ -53,6 +53,7 @@ import com.lazydog.english.domain.planning.DailyStep
 import com.lazydog.english.domain.practice.GrammarErrorTag
 import com.lazydog.english.domain.production.TranslationFeedback
 import com.lazydog.english.domain.production.TranslationRequest
+import com.lazydog.english.domain.production.TranslationSituation
 import com.lazydog.english.domain.production.TranslationTask
 import com.lazydog.english.domain.production.TranslationValidation
 import com.lazydog.english.domain.production.TranslationVerdict
@@ -129,6 +130,8 @@ fun ProductionScreen(onExit: () -> Unit, onNextStep: (DailyStep) -> Unit) {
                     targetGrammar = recentGrammar,
                     targetVocabulary = recentWords,
                     weakSpots = app.mistakeRepository.weakSpots(now),
+                    situations = TranslationSituation.pick(TASK_COUNT),
+                    topics = prefs.topics.first().toList(),
                 ),
                 onStage = { stage = it },
                 onPartialText = { preview = it },

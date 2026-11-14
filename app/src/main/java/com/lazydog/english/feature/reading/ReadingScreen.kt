@@ -64,7 +64,9 @@ import com.lazydog.english.core.designsystem.rememberLeaveGuard
 import com.lazydog.english.core.designsystem.DailyStepFinishActions
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
+import com.lazydog.english.domain.generation.ReadingAngle
 import com.lazydog.english.domain.generation.ReadingArchetype
+import com.lazydog.english.domain.generation.ReadingVoice
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
 import com.lazydog.english.domain.generation.ReadingQuestionKind
@@ -197,6 +199,10 @@ fun ReadingScreen(
                 maxNewWords = MAX_NEW_WORDS,
                 archetype = archetype,
                 recentTitles = recent.titles,
+                // 角度和语气每篇现抽，不存库：它们没有"轮完一圈"的说法，
+                // 重复靠池子够大和标题去重来压，不值得为此加列。
+                angles = ReadingAngle.pick(),
+                voice = ReadingVoice.pick(),
             )
             val generated = app.contentGenerator.generateReading(
                 request,

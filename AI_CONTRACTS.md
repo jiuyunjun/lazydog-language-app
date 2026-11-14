@@ -2,8 +2,8 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "12.4"
-updated: "2026-11-10"
+version: "12.5"
+updated: "2026-11-14"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -217,7 +217,8 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
   保留模型、提示词版本、schema、过滤备注和保存时间。只刷新或退出不创建知识项和复习记录。
 - 首次生成与详情页刷新复用面板，失败保留旧内容；切到另一个词取消旧面板任务，不能串词。
 - 流式预览读取实际 snake_case 字段 `memory_hook` / `core_meaning`，不等待整个 JSON 才显示。
-- 新词与点词提示版本分别为 `WORDS_PROMPT_VERSION=8`（D-080 加入可选的已确认词义）、`WORD_EXPLANATION_PROMPT_VERSION=6`，
+- 新词与点词提示版本分别为 `WORDS_PROMPT_VERSION=9`（D-080 加入可选的已确认词义；D-092 要求一批三个以上的例句
+  错开「哪种话」：对白、第一人称吐槽、通知或短信、新闻口吻、建议、叙述，至少三种）、`WORD_EXPLANATION_PROMPT_VERSION=6`，
   独立记忆提示为 `MEMORY_PROMPT_VERSION=6`；输出 schema 仍为 1，旧数据不自动重写。
   本次收紧模型生成与自检规则，本地字符校验不具备音系相似度判断能力；
   旧谐音仍可能显示，用户可用已有「换个记法」重新生成。没有自动读音评分或真实模型效果保证。
@@ -387,6 +388,7 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 母语阅读不复用上面的阅读请求，而是拆成两次调用，**中间隔着本地校验**：
 
 1. `generateNativeCanonical`：入参 `topic` / `learnerLevel` / `factPack` / `recentTitles`，
+   以及可选的 `archetype` / `angles` / `voice`（D-092，含义同「阅读材料要值得读」，说明用中文那一份），
    输出 `schemaVersion` / `title` / `teaser` / `category` / `readerPayoff` /
    `paragraphs[{id,textZh}]` / `comprehension`。**提示词里不出现任何学习目标**——
    母版的质量要能单独评价，也免得模型自作主张往中文里掺英文。
@@ -407,8 +409,12 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
   不是这一篇要教的东西。
 - **退回中文永远是合法结果**：以上任何一条不满足都只丢那一条，整篇仍然可读。
 
-提示词版本 `NATIVE_READING_PROMPT_VERSION=3`（两次调用共用，schema 仍为 1；本轮通用输入边界见 §9.1）：
+提示词版本 `NATIVE_READING_PROMPT_VERSION=4`（两次调用共用，schema 仍为 1；本轮通用输入边界见 §9.1）：
 
+- 写法与英文阅读共用一套轮换：两边存在同一张表，母语阅读保存时也记下 `archetype`。
+  今日热点的新闻原文不是写出来的，没有写法，不参与轮换。
+- 带了 `factPack` 时，写法只决定怎么组织，不得为了凑写法虚构人物经历、对话或细节，合不上以资料为准；
+  没带时，叙事类写法里的人物一律虚构、用普通名字，`category` 标「小品」。
 - 中文母版围绕一个具体问题，用机制、情境和证据逐步兑现，不靠卖关子拖延答案。
   标题与正文采用中文表达，允许中文惯用缩写（GPS、AI），不夹入英文词句。
 - 检索摘录是参考材料，不自动视为已核实事实；冲突时收窄结论或删去争议细节。
@@ -480,6 +486,9 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 `generateTranslationTasks` 出题、`gradeTranslation` 判定，分两次调用：
 
 - 出题带上最近错得最多的形式、最近学过的语法点和刚复习过的词；`errorTag` 同样只能取 `GrammarErrorTag` 里的值。
+- 出题还带上 `situations`（本地从 20 个场合里随机抽，一句一个：吐槽、道歉、拒绝邀请、退换东西 …）和 `topics`
+  （学习者的兴趣）。形式难点由错题画像定，场合由本地抽，两者正交；合不上时换贴近的场合，不写别扭的句子（D-092）。
+  `TRANSLATION_PROMPT_VERSION=3`，输出 schema 不变。
 - `hintZh` 只能点结构或关键词，不得把整句参考答案塞进提示。
 - 判定返回 `verdict`（ok / minor / wrong）、在用户原句基础上改出的 `correctedEn`、一句 `noteZh` 和最多两个 `errorTags`。判定器不布置新任务、不重写成参考答案。
 - 用户写的句子是不可信输入，用 `<user_answer>` 包住。
@@ -506,8 +515,22 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 
 `引人入胜的阅读材料DESIGN.md` 的原则 1：把英语学习功能全删掉之后文章还值不值得读，不值得就不该发。所以提示词里写作要求排在词汇要求前面，词汇那段明写"会破坏自然度就换说法"。
 
-- **archetype**：每篇指定一种写法（解释怪现象 / 隐藏系统 / 小案例 / 反直觉 …共 10 种），按最近用过的轮换。只做主题去重挡不住"十篇一个样"——腻的是结构和句式。
-- **结构**：Hook → 好奇缺口 → 逐步揭示 → 兑现 → 带得走的东西。开头 1~3 句必须给出继续读的理由；每 80~150 词至少一个新信息点；结尾兑现好奇而不是总结。
+- **archetype**：每篇指定一种写法，共 19 种，按最近用过的轮换。只做主题去重挡不住"十篇一个样"——腻的是结构和句式。
+  前 10 种是讲道理的结构（解释怪现象 / 隐藏系统 / 小案例 / 反直觉 …）；后 9 种换的是体裁（一件东西的身世 /
+  某个行当的一天 / 两个人的争论 / 来信与回信 / 小悬案 / 假如 / 上手指南 / 排个座次 / 第一人称小事，D-092）。
+  提示词明写"体裁听写法的，不要把每种写法都写回成一篇说明文"。写法数量必须多于去重窗口（12 篇），有单测守着。
+- **角度（angles）**：本地从 14 个切入角度里随机抽 2 个（钱 / 一次失误 / 第一次 / 没人明说的规矩 …），
+  模型挑和主题更搭的一个，把宽主题收窄到一件具体的事上。给两个是留退路：一个对不上时不必硬写。
+  刻意不收"一个惊人的数字""一个词的来历"这类角度——没有检索资料时它们最容易逼出编造。
+- **语气（voice）**：本地从 6 种里随机抽 1 种（冷幽默 / 朋友聊天 / 干净利落 / 好奇追问 / 有点怀疑 / 讲故事）。
+  语气只影响措辞和节奏，不放宽事实边界，也不抬高用词难度。
+- 角度和语气不存库、不轮换：它们没有"轮完一圈"的说法，重复靠池子大小和标题去重压，不为此加列。
+- **结构**：Hook → 好奇缺口 → 逐步揭示 → 兑现 → 带得走的东西，对所有写法都成立。开头 1~3 句必须给出继续读的理由；每 80~150 词至少一个新信息点；结尾兑现好奇而不是总结。
+  另加三条：具体胜过概括（人有名字、地方有看得见的东西）；全文至少一句读者会想转述的话；不说教（指南类写法除外）。
+- **虚构边界**：故事、对话、来信、第一人称里的人物一律虚构、用普通名字，不借真实名人或可查证事件，
+  `category` 标 `Fiction`，让读者一眼看得出是写出来的小品而不是报道。事实边界不因体裁放宽。
+- Critic 的提示词带上本篇写法，要求按该体裁评分，修改意见不得要求改回说明文。
+- 提示词版本 `READING_PROMPT_VERSION=4`，输出 schema 不变，本地校验不变。
 - **readerPayoff**：一句话说清这篇留给读者的**那一个**收获。本地硬校验：不能为空、不能超长、不能是标题的复述、不能是"原因有很多"这类套话——读完页面上显示的「值得记住的一件事」就是它。
 - **标题**和**开头**有黑名单：`You Won't Believe` / `This Changes Everything` 这类标题党直接拒绝；正文以 `In today's world` / `Have you ever wondered` 开头同样拒绝。这两条是硬拒绝不是警告：骗到的点击会连着损伤对后面每一篇的信任。
 - **去重**：最近 12 篇的标题进提示词，明确要求标题、开头方式和结构都不要雷同。
@@ -617,15 +640,15 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 | 常量 | 版本 |
 | --- | --- |
 | `PROMPT_VERSION` | 2 |
-| `WORDS_PROMPT_VERSION` | 8 |
+| `WORDS_PROMPT_VERSION` | 9 |
 | `WORD_EXPLANATION_PROMPT_VERSION` | 6 |
-| `READING_PROMPT_VERSION` | 3 |
-| `NATIVE_READING_PROMPT_VERSION` | 3 |
+| `READING_PROMPT_VERSION` | 4 |
+| `NATIVE_READING_PROMPT_VERSION` | 4 |
 | `NATIVE_NEWS_PROMPT_VERSION` | 1 |
 | `NATIVE_NEWS_TRANSLATE_PROMPT_VERSION` | 1 |
 | `GRAMMAR_PROMPT_VERSION` | 3 |
 | `GRAMMAR_DRILL_PROMPT_VERSION` | 2 |
-| `TRANSLATION_PROMPT_VERSION` | 2 |
+| `TRANSLATION_PROMPT_VERSION` | 3 |
 | `SCENARIO_PROMPT_VERSION` | 2 |
 | `ASK_PROMPT_VERSION` | 3 |
 | `LISTENING_PROMPT_VERSION` | 3 |

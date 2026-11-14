@@ -20,6 +20,10 @@ data class ReadingGenerationRequest(
     val archetype: ReadingArchetype = ReadingArchetype.HiddenSystem,
     /** 最近几篇的标题，进提示词避免重复；越靠前越新（§20）。 */
     val recentTitles: List<String> = emptyList(),
+    /** 可选的切入角度，模型挑更合适的一个；空表示不限定（[ReadingAngle]）。 */
+    val angles: List<ReadingAngle> = emptyList(),
+    /** 这篇的语气；null 表示不限定（[ReadingVoice]）。 */
+    val voice: ReadingVoice? = null,
 )
 
 @Serializable

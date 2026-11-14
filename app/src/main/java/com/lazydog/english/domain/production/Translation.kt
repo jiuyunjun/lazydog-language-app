@@ -2,6 +2,7 @@ package com.lazydog.english.domain.production
 
 import com.lazydog.english.domain.practice.GrammarErrorTag
 import com.lazydog.english.domain.practice.MistakeSummary
+import kotlin.random.Random
 
 /**
  * 中译英产出练习。
@@ -18,7 +19,47 @@ data class TranslationRequest(
     val targetVocabulary: List<String> = emptyList(),
     /** 最近错得最多的形式，优先设计成必须用上这些形式的句子。 */
     val weakSpots: List<MistakeSummary> = emptyList(),
+    /** 这一批句子各自落在什么场合（[TranslationSituation.pick]）；空表示不限定。 */
+    val situations: List<String> = emptyList(),
+    /** 学习者的兴趣，场合里的具体内容可以往这边靠。 */
+    val topics: List<String> = emptyList(),
 )
+
+/**
+ * 中译英句子的场合。
+ *
+ * 不给场合的话，模型每天出的都是同一类句子："我在这里住了三年""他昨天去了超市"。
+ * 形式难点由错题画像定，场合由这里随机抽——两者正交，同一个时态可以落在道歉里，
+ * 也可以落在吐槽里，而后者才是人真会想说出口的话。
+ */
+object TranslationSituation {
+    val all = listOf(
+        "跟朋友吐槽一件小事",
+        "给同事发消息说明进度",
+        "向陌生人问路或求助",
+        "委婉地拒绝一个邀请",
+        "为迟到或失误道歉并解释",
+        "在店里退换东西或投诉",
+        "向别人推荐一样东西并说理由",
+        "讲一件自己刚搞砸的事",
+        "约时间、改时间",
+        "提醒家人或室友做一件事",
+        "讲一个自己坚持了很久的习惯",
+        "对一部电影、一顿饭或一次旅行下评语",
+        "跟别人解释一个东西怎么用",
+        "回忆小时候的一件事",
+        "说一个还没实现的打算",
+        "替别人转述一句话",
+        "面试或自我介绍里的一句",
+        "安慰一个心情不好的朋友",
+        "讨价还价或商量条件",
+        "发一条朋友圈式的感慨",
+    )
+
+    /** 抽 [count] 个互不相同的场合，一句一个。 */
+    fun pick(count: Int, random: Random = Random.Default): List<String> =
+        all.shuffled(random).take(count.coerceIn(0, all.size))
+}
 
 data class TranslationTask(
     /** 要表达的中文。 */

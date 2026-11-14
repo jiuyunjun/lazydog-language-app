@@ -242,6 +242,12 @@ data class NativeCanonicalRequest(
     val factPack: List<String> = emptyList(),
     /** 最近读过的标题，避免雷同。 */
     val recentTitles: List<String> = emptyList(),
+    /** 这篇用哪种写法；null 表示不限定。和英文阅读共用一套轮换（[ReadingArchetype]）。 */
+    val archetype: ReadingArchetype? = null,
+    /** 可选的切入角度，模型挑更合适的一个；空表示不限定。 */
+    val angles: List<ReadingAngle> = emptyList(),
+    /** 这篇的语气；null 表示不限定。 */
+    val voice: ReadingVoice? = null,
 )
 
 /** 规划英语替换这一步的入参（设计文档 §9.1）。换档位时只重跑这一步。 */

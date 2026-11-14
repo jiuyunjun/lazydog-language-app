@@ -95,7 +95,10 @@ import com.lazydog.english.domain.generation.NativeReadingDocument
 import com.lazydog.english.domain.generation.NativeReadingValidation
 import com.lazydog.english.domain.generation.NativeSpanPlanRequest
 import com.lazydog.english.domain.generation.NewWordAmount
+import com.lazydog.english.domain.generation.ReadingAngle
+import com.lazydog.english.domain.generation.ReadingArchetype
 import com.lazydog.english.domain.generation.ReadingSegment
+import com.lazydog.english.domain.generation.ReadingVoice
 import com.lazydog.english.domain.generation.SpanKind
 import com.lazydog.english.domain.generation.NativeNewsRequest
 import com.lazydog.english.domain.generation.NewsArticleLoader
@@ -241,6 +244,8 @@ fun NativeReadingScreen(
             app.userPreferences.saveNativeEnglishAmount(amount.wire)
 
             var source: NewsSourceRef? = null
+            // 新闻原文不是写出来的，没有写法；只有按主题写的文章才参与轮换。
+            var usedArchetype = ""
             val canonical = if (news != null) {
                 val story = news.story
                 val fetched = when (val loaded = app.newsArticleLoader.load(story)) {
@@ -290,12 +295,18 @@ fun NativeReadingScreen(
                     emptyList()
                 }
                 val recent = repo.recentShape()
+                // 写法和英文阅读共用一套轮换：两边存在同一张表里，读的人也是同一个。
+                val archetype = ReadingArchetype.pick(recent.archetypes)
+                usedArchetype = archetype.wire
                 app.contentGenerator.generateNativeCanonical(
                     NativeCanonicalRequest(
                         topic = topic,
                         learnerLevel = level,
                         factPack = facts,
                         recentTitles = recent.titles,
+                        archetype = archetype,
+                        angles = ReadingAngle.pick(),
+                        voice = ReadingVoice.pick(),
                     ),
                     onStage = { stage = it },
                     onPartialText = { preview = it },
@@ -351,6 +362,7 @@ fun NativeReadingScreen(
                 model = canonical.model,
                 promptVersion = canonical.promptVersion,
                 validationNotes = document.notes,
+                archetype = usedArchetype,
             )
             phase = NativePhase.Reading(NativeView(id, topic, article, document))
         }

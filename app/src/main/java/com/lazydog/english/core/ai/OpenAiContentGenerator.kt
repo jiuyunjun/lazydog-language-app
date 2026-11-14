@@ -2283,15 +2283,15 @@ class OpenAiContentGenerator(
     companion object {
         const val SCHEMA_VERSION = 1
         const val PROMPT_VERSION = 2
-        const val WORDS_PROMPT_VERSION = 8
+        const val WORDS_PROMPT_VERSION = 9
         const val WORD_EXPLANATION_PROMPT_VERSION = 6
-        const val READING_PROMPT_VERSION = 3
-        const val NATIVE_READING_PROMPT_VERSION = 3
+        const val READING_PROMPT_VERSION = 4
+        const val NATIVE_READING_PROMPT_VERSION = 4
         const val NATIVE_NEWS_PROMPT_VERSION = 1
         const val NATIVE_NEWS_TRANSLATE_PROMPT_VERSION = 1
         const val GRAMMAR_PROMPT_VERSION = 3
         const val GRAMMAR_DRILL_PROMPT_VERSION = 2
-        const val TRANSLATION_PROMPT_VERSION = 2
+        const val TRANSLATION_PROMPT_VERSION = 3
         const val SCENARIO_PROMPT_VERSION = 2
         const val ASK_PROMPT_VERSION = 3
         const val LISTENING_PROMPT_VERSION = 3
@@ -2504,6 +2504,18 @@ class OpenAiContentGenerator(
             if (request.targetVocabulary.isNotEmpty()) {
                 appendLine("最近复习过的词，能自然用上就用上：${request.targetVocabulary.joinToString(", ")}。")
             }
+            if (request.situations.isNotEmpty()) {
+                appendLine("这一批句子按顺序各落在一个场合里，一句一个，不要都写成陈述自己近况：")
+                request.situations.forEachIndexed { index, situation ->
+                    appendLine("${index + 1}. ${promptText(situation)}")
+                }
+                appendLine("场合只定这句话是在什么情形下说的；要练的形式仍按上面的来。两者实在合不上时，换一个贴近的场合，不要写别扭的句子。")
+            }
+            if (request.topics.isNotEmpty()) {
+                appendLine("他关心这些领域：${request.topics.joinToString("、")}。场合里的具体内容能往这边靠就靠，靠不上不硬凑。")
+            }
+            appendLine("promptZh 要是一句人真会想说出口的话：有具体的人、事或东西，带一点情绪或态度更好；" +
+                "不要「他每天早上六点起床」这种谁的生活里都没有的课本句。同一批句子的句式和开头不要雷同。")
             appendLine("每句：promptZh 是要表达的中文（一句话，日常场景，别写成翻译考题）；" +
                 "referenceEn 是自然的英文参考答案；hintZh 是卡壳时的提示，" +
                 "只点结构或关键词（如\"用完成进行时\"），不能把整句给出来。")
@@ -2902,6 +2914,13 @@ class OpenAiContentGenerator(
             appendLine("meaningZh 是这个具体词义的简洁中文释义；exampleEn 是包含该词的自然英文例句，exampleZh 是它的翻译。")
             append(exampleSentenceRules(request.learnerLevel, request.topics))
             appendLine("同一批例句之间场景和句型要有明显区别，不能只换个人名或地点。")
+            if (request.count >= 3) {
+                // 只说"要有区别"，模型给的是五句主语不同的陈述句。把"句子是什么样的话"点名列出来，
+                // 它才会真的换：一句对白、一句吐槽、一句通知，读起来才不像同一页练习册。
+                appendLine("这一批里，例句是「哪种话」也要错开，至少用上其中三种，别全是第三人称陈述句：" +
+                    "对话里的一句（带问句或回应的口气）、第一人称的吐槽或感慨、通知/标语/短信、" +
+                    "新闻或解说的口吻、对别人的建议或提醒、讲故事的一句叙述。")
+            }
             append(memoryHintRules())
             append(spellingFactRules())
             appendLine("输出 JSON schema：")
@@ -3018,25 +3037,54 @@ class OpenAiContentGenerator(
             appendLine("要求它本身就值得读：读者是成年中文母语者，不是学生。不要写成科普作业，")
             appendLine("不要写成新闻通稿，不要出现「本文将介绍」这类交代。")
             appendLine("从主题里选一个能在短文内讲透的具体问题；用可解释的机制和具体情境推进，不罗列百科知识。")
+            request.archetype?.let { archetype ->
+                appendLine()
+                appendLine("这一篇的写法是「${archetype.labelZh}」：${archetype.briefZh}")
+                appendLine("体裁听写法的：它要对话就写对话，要来信就写来信，要第一人称就用「我」。不要把每种写法都写回成一篇说明文。")
+                if (request.factPack.isNotEmpty()) {
+                    appendLine("这次带了检索资料：写法只决定怎么组织，不得为了凑写法虚构人物经历、对话或细节；" +
+                        "写法和资料实在合不上时，以资料为准，改用最贴近的讲法。")
+                } else {
+                    appendLine("故事、对话、来信、第一人称里的人物一律是虚构的：用普通的名字，不借用真实名人或可查证的事件，" +
+                        "让读者一眼看得出这是写出来的小品，不是报道。")
+                }
+            }
+            if (request.angles.isNotEmpty()) {
+                appendLine()
+                appendLine("切入角度：这个主题很宽，不要写它最先让人想到的那一面。从下面的角度里挑和主题更搭的一个，")
+                appendLine("把全文收窄到一件具体的事上；都别扭就自己找一个同样具体的角度，但不许退回泛泛而谈。")
+                request.angles.forEach { appendLine("- ${it.briefZh}") }
+            }
+            request.voice?.let { voice ->
+                appendLine()
+                appendLine("语气：${voice.briefZh}。语气只影响措辞和节奏，不放宽下面的事实边界。")
+            }
             appendLine()
-            appendLine("结构按 Hook → 好奇缺口 → 逐步揭示 → 兑现：")
+            appendLine("不管哪种写法，下面几条不变（Hook → 好奇缺口 → 逐步揭示 → 兑现）：")
             appendLine("- 开头 1~2 句给出继续读下去的具体理由：一个反常的事实、一个小谜团或一个具体场景。")
             appendLine("  禁止用「在当今社会」「随着……的发展」「你有没有想过」这类开头。")
             appendLine("- 前两段交代问题和必要背景，随后逐步给出证据或解释；不要靠故意藏信息、卖关子拖到结尾。")
             appendLine("- 每一段都要有新东西：新事实、新线索、更深一层的解释或一个小反转。")
             appendLine("- 结尾兑现开头制造的好奇，不要总结全文。")
+            appendLine("- 具体胜过概括：写到人就给他一个名字和一件正在做的事，写到地方就给一样看得见的东西；")
+            appendLine("  「很多人」「有些时候」「各种各样」这类说法能换成具体的就换掉。")
+            appendLine("- 全文至少有一句读者会想转述给别人的话：一个意外的事实、一个贴切的比方，或一句利落的判断。")
+            appendLine("- 不说教、不升华：结尾不要落在「这提醒我们」「或许这就是」「生活本就如此」上。")
             appendLine()
             appendLine("篇幅：正文 400~700 个汉字，分 5~8 段，每段 60~150 字，各承担一个明确功能。")
+            appendLine("对话为主的写法里，几轮对白可以并成一段，说话人用名字标清；总段数不要超过 12。")
             appendLine("paragraphs 按顺序给出，每段一个对象，id 用 p1、p2……，textZh 是这一段的纯中文正文。")
             appendLine()
             appendLine("title：纯中文，具体、可信、让人想点开，不超过 24 字，禁止标题党。")
+            appendLine("标题的样子也要换着来：最近几篇如果都是「为什么……」式的问句，这篇就换成陈述、一个场景或一句话。")
             appendLine("teaser：一句中文，制造具体的信息缺口，不复述标题也不提前给答案。")
-            appendLine("category：一个简短中文类别，如 日本社会、科技、心理、历史。")
+            appendLine("category：一个简短中文类别，按这篇实际写的内容定，如 日本社会、科技、心理、历史、职场、吃喝、钱、人物；")
+            appendLine("虚构的故事、对话和来信标「小品」。")
             appendLine("readerPayoff：一句中文，写出这篇要留给读者的**那一个**收获。")
             appendLine("它必须被正文支撑，不能是标题的复述，也不能是「原因有很多」这种废话。")
             appendLine()
             appendLine("comprehension：一道中文单选理解题，问文章本身的关键推理（不是问细节记忆、")
-            appendLine("更不是问某个词的意思），3~4 个选项、互不重复，answerIndex 从 0 开始，")
+            appendLine("更不是问某个词的意思；故事、对话类问人物为什么这么做或转折因何而起），3~4 个选项、互不重复，answerIndex 从 0 开始，")
             appendLine("explanationZh 用一句话说清为什么是它。")
             appendLine("只能有一个被正文支持的正确选项；干扰项来自对本文因果或条件的合理误读，不能靠常识就排除。")
             appendLine("不要用「以上都对」，不要让正确项因长度、措辞或复述标题而显眼。")
@@ -3050,7 +3098,7 @@ class OpenAiContentGenerator(
                 appendLine("本次没有检索资料：只写不依赖最新消息的机制、背景或日常情境。")
                 appendLine("即使主题提到今天、最近或热点，也不凭记忆编写新闻进展、最新数字或排名。")
             }
-            appendLine("不虚构研究、引语、机构背书、精确数字或真实人物经历；假设场景明确用「比如」「假设」引入。")
+            appendLine("不虚构研究、引语、机构背书、精确数字或真实人物经历；说明性的文章里，假设场景明确用「比如」「假设」引入。")
             appendLine("资料冲突或信息不足时删去争议细节、收窄结论；区分事实、推断与假设，不把相关性写成因果。")
             if (request.recentTitles.isNotEmpty()) {
                 appendLine()
@@ -3149,8 +3197,19 @@ class OpenAiContentGenerator(
             appendLine("它仍然应该是一篇有人愿意读完的文章。不要写成教材，不要在正文里提到这是给学习者读的。")
             appendLine()
             appendLine("这一篇的写法（archetype）是「${request.archetype.labelZh}」：${request.archetype.briefEn}")
+            appendLine("体裁听写法的：它要对话就写对话，要来信就写来信，要第一人称就用 I。不要把每种写法都写回成一篇说明文。")
+            if (request.angles.isNotEmpty()) {
+                appendLine()
+                appendLine("切入角度：这个主题很宽，不要写它最先让人想到的那一面。从下面的角度里挑和主题更搭的一个，")
+                appendLine("把全文收窄到一件具体的事上；都别扭就自己找一个同样具体的角度，但不许退回泛泛而谈。")
+                request.angles.forEach { appendLine("- ${it.briefEn}") }
+            }
+            request.voice?.let { voice ->
+                appendLine()
+                appendLine("语气：${voice.briefEn}。语气只影响措辞和节奏，不放宽事实边界，也不抬高用词难度。")
+            }
             appendLine()
-            appendLine("结构按 Hook → 好奇缺口 → 逐步揭示 → 兑现 → 带得走的东西：")
+            appendLine("不管哪种写法，下面几条不变（Hook → 好奇缺口 → 逐步揭示 → 兑现）：")
             appendLine("- 开头 1~3 句必须给出继续读下去的具体理由：一个反常的事实、一个小谜团、")
             appendLine("  一个具体场景，或者一句矛盾。**禁止**用 In today's world / English is very important /")
             appendLine("  There are many reasons / Have you ever wondered 这类开头。")
@@ -3158,6 +3217,11 @@ class OpenAiContentGenerator(
             appendLine("- 每 80~150 词至少出现一个新东西：新事实、新线索、新例子、更深一层的解释或一个小反转。")
             appendLine("  同一个意思换个说法再说一遍，等于把读者赶走。")
             appendLine("- 结尾必须兑现开头制造的好奇，而不是总结全文。「So there are many reasons」是最差的结尾。")
+            appendLine("- 具体胜过概括：写到人就给他一个名字和一件正在做的事，写到地方就给一样看得见的东西；")
+            appendLine("  一个具体例子顶三句概括。people / many things / in some cases 这类说法能换成具体的就换掉。")
+            appendLine("- 全文至少有一句读者会想转述给别人的话：一个意外的事实、一个贴切的比方，或一句利落的判断。")
+            appendLine("  把它写好就行，不要加粗，也不要在文中夸它有趣。")
+            appendLine("- 不说教：除非写法本身是指南，否则不出现 we should / it is important to / remember that 这类劝告。")
             appendLine()
             appendLine("readerPayoff：用一句英文写出这篇要留给读者的**那一个**收获（§4）。")
             appendLine("它必须能被正文里的证据或故事支撑，不能是标题的复述，也不能是「原因有很多」这种套话。")
@@ -3166,13 +3230,18 @@ class OpenAiContentGenerator(
             appendLine("标题：具体、可信、让人想点开。可以是问句、藏着解释、或者一个具体的意外。")
             appendLine("**禁止**标题党（You Won't Believe / This Changes Everything / 他们不想让你知道的秘密）。")
             appendLine("teaser：用一句英文制造具体的信息缺口，不复述标题、不提前泄露答案，控制在 120 字符内。")
-            appendLine("category：只给一个简短英文类别，如 Technology、Psychology、Daily Life 或 History。")
+            appendLine("标题的样子也要换着来：最近几篇如果都是 Why / How 开头的问句，这篇就换成陈述、一个场景或一句引语。")
+            appendLine("category：只给一个简短英文类别，按这篇实际写的内容定，如 Technology、Psychology、Daily Life、")
+            appendLine("History、Work、Food、Money、Culture、Science、People 或 Fiction；虚构的故事、对话和来信标 Fiction。")
             appendLine()
             appendLine("篇幅和节奏：正文约 ${request.targetLength} 个英文单词；通常分 5~9 段，每段 30~80 词，")
             appendLine("目标总词数优先于建议段数；短文可减少段数，不为凑段落扩写。body 用空行分段。")
             appendLine("每段承担一个明确功能。不要写成四个巨长的段落。")
+            appendLine("对话为主的写法里，一轮对白可以单独成段，不受每段词数下限约束；说话人用名字标清，别让读者猜是谁在说。")
             appendLine("本次没有检索资料：不凭记忆补新闻进展、最新数字、排名、研究或名人引语。" +
                 "写稳定的背景机制；虚构故事或假设情境要明确标示，不包装成真实人物经历或实证结论。")
+            appendLine("故事、对话、来信、第一人称这几种写法里的人物一律是虚构的：用普通的名字，不借用真实名人、" +
+                "真实公司内幕或可查证的事件；读者应当一眼看得出这是一篇写出来的小品，而不是报道。")
             if (request.recentTitles.isNotEmpty()) {
                 appendLine()
                 appendLine("这几篇是他最近读过的，**标题、开头方式和结构都不要和它们雷同**：")
@@ -3243,6 +3312,9 @@ class OpenAiContentGenerator(
             reading: GeneratedReading,
         ): String = buildString {
             appendLine("从真实读者体验评价下面这篇 ${request.learnerLevel} 英文短文。")
+            appendLine("它的写法是「${request.archetype.labelZh}」（${request.archetype.briefEn}）。" +
+                "按这种体裁该有的样子来评：对话、来信、故事、指南不因为不像说明文而扣分，" +
+                "修改意见也不得要求把它改回说明文。")
             appendLine("不要重写文章。每项 0.0~1.0；低分时给 1~3 条具体、可执行的英文 rewriteInstructions。")
             appendLine("评分：hook、curiosity、informationGain、pacing、payoff、naturalness、overall。")
             appendLine("评分锚点：0=缺失或严重失败，0.5=有尝试但明显不足，0.8=基本有效且有具体支撑，1=完整而自然地做到。")

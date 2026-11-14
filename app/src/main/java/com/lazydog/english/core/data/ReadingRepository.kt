@@ -70,6 +70,8 @@ class ReadingRepository(
         model: String,
         promptVersion: Int,
         validationNotes: List<String>,
+        /** 这篇用的写法 wire；新闻原文没有写法，传空。存下来是为了和英文阅读一起轮换。 */
+        archetype: String = "",
     ): Long = dao.insert(
         ReadingMaterialEntity(
             title = article.title,
@@ -77,7 +79,7 @@ class ReadingRepository(
             source = SOURCE_NATIVE,
             topic = topic,
             readerPayoff = article.readerPayoff,
-            archetype = "",
+            archetype = archetype,
             teaser = article.teaser,
             category = article.category.ifBlank { topic },
             nativeJson = NativeReadingJson.encode(document),
