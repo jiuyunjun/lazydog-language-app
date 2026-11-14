@@ -16,6 +16,14 @@ import androidx.compose.foundation.layout.paddingFromBaseline
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lightbulb
@@ -370,14 +378,35 @@ private fun QuestionView(
             }
 
             if (card.questionType.needsPlainTextField()) {
+                val focus = remember(card) { FocusRequester() }
+                // 换卡就把光标放进去：每张都要先点一下输入框，一轮 12 张就是 12 次白点。
+                LaunchedEffect(card) { runCatching { focus.requestFocus() } }
                 OutlinedTextField(
                     value = answer.typed,
-                    onValueChange = onTypedChange,
-                    enabled = !answer.resolved,
+                    onValueChange = { if (!answer.resolved) onTypedChange(it) },
+                    // 判完用只读而不是禁用：禁用会丢焦点、收键盘，下一张又得重新弹一次；
+                    // 只读留着键盘，回车就能接着进下一张。
+                    readOnly = answer.resolved,
                     singleLine = true,
                     label = { Text(inputLabel(card.questionType)) },
                     isError = answer.lastResult?.correct == false,
-                    modifier = Modifier.fillMaxWidth(),
+                    // 输入法的候选栏会直接把正确拼写摆出来，拼写题就白考了。
+                    // 只关自动更正不够，大多数输入法照样出候选；按密码类键盘请求，
+                    // 输入法才会收起候选和联想。字照常显示，不打点。
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        capitalization = KeyboardCapitalization.None,
+                        autoCorrectEnabled = false,
+                        imeAction = if (answer.resolved) ImeAction.Next else ImeAction.Done,
+                    ),
+                    visualTransformation = VisualTransformation.None,
+                    keyboardActions = KeyboardActions(
+                        onDone = { if (!answer.resolved && answer.typed.isNotBlank()) onSubmit() },
+                        onNext = { if (answer.resolved) onNext() },
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focus),
                 )
             }
 
