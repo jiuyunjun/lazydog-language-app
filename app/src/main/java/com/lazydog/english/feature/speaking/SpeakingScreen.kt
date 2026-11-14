@@ -67,6 +67,9 @@ import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.rememberWaitedSeconds
+import com.lazydog.english.core.designsystem.DailyStepFinishActions
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.outlined.TaskAlt
 import com.lazydog.english.core.designsystem.stageDetail
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.GenerationStage
@@ -108,6 +111,7 @@ fun SpeakingScreen(
     prefs: UserPreferences,
     repository: KnowledgeRepository,
     onExit: () -> Unit,
+    onNextStep: (DailyStep) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -137,11 +141,25 @@ fun SpeakingScreen(
         uiState is SpeakingUiState.Listening ||
         uiState is SpeakingUiState.GeneratingTips
 
-    // 拿到过一次发音反馈就算完成今日朗读步骤。
-    LaunchedEffect(uiState is SpeakingUiState.Feedback) {
-        if (uiState is SpeakingUiState.Feedback) {
+    // 一轮读几句。今天页写的是「朗读几句」，不给个数，人就不知道读到哪儿算完。
+    /** 这一轮里拿到过反馈的句子数。同一句读多遍只算一句，「换一句」跳过的不算。 */
+    var readSentences by rememberSaveable { mutableIntStateOf(0) }
+    /** 眼前这一句是不是已经算进 [readSentences] 了。 */
+    var countedThisSentence by rememberSaveable { mutableStateOf(false) }
+    var roundDone by rememberSaveable { mutableStateOf(false) }
+    val currentNumber = (readSentences + if (countedThisSentence) 0 else 1).coerceAtMost(ROUND_SIZE)
+
+    // 读完一轮才算完成今日朗读步骤；原来是拿到第一句反馈就打勾，读一句和读几句分不出来。
+    LaunchedEffect(roundDone) {
+        if (roundDone) {
             app.userPreferences.markTodayStepDone(LocalDate.now().toString(), DailyStep.Speaking.id)
         }
+    }
+
+    fun nextSentence() {
+        sentenceIndex += 1
+        countedThisSentence = false
+        uiState = SpeakingUiState.Idle
     }
 
     fun startAssessment() {
@@ -149,6 +167,10 @@ fun SpeakingScreen(
         scope.launch {
             when (val result = speech.assessReading(sentence.text)) {
                 is AssessmentResult.Done -> {
+                    if (!countedThisSentence) {
+                        countedThisSentence = true
+                        readSentences += 1
+                    }
                     uiState = SpeakingUiState.GeneratingTips
                     stage = GenerationStage.Connecting
                     val tipsResult = app.contentGenerator.explainPronunciation(
@@ -200,7 +222,17 @@ fun SpeakingScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                actions = { AskTopBarAction() },
+                actions = {
+                    if (!roundDone) {
+                        Text(
+                            text = "第 $currentNumber / $ROUND_SIZE 句",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    }
+                    AskTopBarAction()
+                },
                 title = { Text("朗读") },
                 navigationIcon = {
                     IconButton(onClick = onExit) {
@@ -210,6 +242,20 @@ fun SpeakingScreen(
             )
         },
     ) { padding ->
+        if (roundDone) {
+            RoundDoneView(
+                count = readSentences,
+                modifier = Modifier.padding(padding),
+                onNextStep = onNextStep,
+                onExit = onExit,
+                onAgain = {
+                    readSentences = 0
+                    roundDone = false
+                    nextSentence()
+                },
+            )
+            return@Scaffold
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -276,7 +322,10 @@ fun SpeakingScreen(
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(Icons.Outlined.Mic, contentDescription = null)
-                    Text("我来读", modifier = Modifier.padding(start = 8.dp))
+                    Text(
+                        text = if (uiState is SpeakingUiState.Feedback) "再读一次" else "我来读",
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
             }
 
@@ -308,11 +357,23 @@ fun SpeakingScreen(
                 }
             }
 
+            // 拿到反馈之后往前走：「下一句」，读满一轮就是「这轮读完了」。
+            if (uiState is SpeakingUiState.Feedback) {
+                val last = readSentences >= ROUND_SIZE
+                Button(
+                    onClick = { if (last) roundDone = true else nextSentence() },
+                    enabled = !busy,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                ) {
+                    Text(if (last) "这轮读完了" else "下一句")
+                }
+            }
+
+            // 跳过不会读的句子；不计入这一轮的句数。
             TextButton(
-                onClick = {
-                    sentenceIndex += 1
-                    uiState = SpeakingUiState.Idle
-                },
+                onClick = ::nextSentence,
                 enabled = !busy,
             ) {
                 Icon(Icons.Outlined.Refresh, contentDescription = null)
@@ -341,6 +402,45 @@ fun SpeakingScreen(
                 TextButton(onClick = { showPermissionRationale = false }) { Text("不用了") }
             },
         )
+    }
+}
+
+/** 一轮读几句。和今日计划给朗读的两分钟大致对得上。 */
+private const val ROUND_SIZE = 3
+
+@Composable
+private fun RoundDoneView(
+    count: Int,
+    modifier: Modifier,
+    onNextStep: (DailyStep) -> Unit,
+    onExit: () -> Unit,
+    onAgain: () -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.TaskAlt,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text("这轮朗读读完了", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            text = "读了 $count 句。录音只用来评这几次，没有保存。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        DailyStepFinishActions(
+            current = DailyStep.Speaking,
+            onNextStep = onNextStep,
+            onFinish = onExit,
+            finishLabel = "收工",
+        )
+        TextButton(onClick = onAgain) { Text("再读一轮") }
     }
 }
 

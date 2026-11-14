@@ -292,6 +292,7 @@ private fun AppNavHost(
                 prefs = prefs,
                 repository = knowledgeRepository,
                 onExit = { navController.popOnce() },
+                onNextStep = openNextStep,
             )
         }
 

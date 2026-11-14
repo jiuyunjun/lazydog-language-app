@@ -1860,6 +1860,30 @@
     "reason": "按钮文字：今日计划里下一步的中文名称，不是供查词讲句的学习正文"
   },
   {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "\"第 $currentNumber / $ROUND_SIZE 句\"",
+    "count": 1,
+    "reason": "顶栏进度，不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "if (uiState is SpeakingUiState.Feedback) \"再读一次\" else \"我来读\"",
+    "count": 1,
+    "reason": "按钮文字，不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "if (last) \"这轮读完了\" else \"下一句\"",
+    "count": 1,
+    "reason": "按钮文字，不是供查词讲句的学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/speaking/SpeakingScreen.kt",
+    "text": "\"读了 $count 句。录音只用来评这几次，没有保存。\"",
+    "count": 1,
+    "reason": "一轮朗读的收尾说明，不是供查词讲句的学习正文"
+  },
+  {
     "file": "app/src/main/java/com/lazydog/english/core/designsystem/LeaveGuard.kt",
     "text": "shown",
     "count": 1,
