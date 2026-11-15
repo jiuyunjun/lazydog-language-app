@@ -751,12 +751,6 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
-    "text": "\"再听 ${question.correctOption.label}\"",
-    "count": 1,
-    "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
-  },
-  {
-    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
     "text": "\"才练了 ${after.sampleCount} 次，这个数还不作数。\"",
     "count": 1,
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
@@ -769,7 +763,7 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
-    "text": "\"第 ${hint.level} 级 / 共 ${PronunciationHint.RevealAnswer.level} 级\"",
+    "text": "\"第 ${hint.level} 级 / 共 ${maxHint.level} 级\"",
     "count": 1,
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   },
@@ -812,8 +806,20 @@
   {
     "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
     "text": "option.label",
-    "count": 2,
-    "reason": "尚未揭晓的答案选择，或重听选项的按钮标签；揭晓后的词已使用交互文本"
+    "count": 1,
+    "reason": "尚未揭晓的答案选择：单击即作答，揭晓前不提供查词；揭晓后的词已使用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "if (symbol) \"/${option.label}/\" else option.label",
+    "count": 1,
+    "reason": "答题前提示里的试听按钮标签：单击即朗读该选项，且此时尚未揭晓，不提供查词"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",
+    "text": "if (symbol) \"挨个听听每个符号是什么声，再回去比。\" else \"挨个听一遍，再回去比。\"",
+    "count": 1,
+    "reason": "纯中文操作提示，两个分支都不含英文学习对象"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/pronunciation/PerceptionScreen.kt",

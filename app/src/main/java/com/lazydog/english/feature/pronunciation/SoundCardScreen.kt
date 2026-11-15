@@ -36,7 +36,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import com.lazydog.english.domain.pronunciation.MinimalPair
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -82,6 +88,8 @@ fun SoundCardScreen(
             ?: PronunciationProgress(targetId = targetId)
     }
     val playback by app.speechController.playback.collectAsState()
+    val scope = rememberCoroutineScope()
+    var comparing by remember { mutableStateOf<Job?>(null) }
 
     // 打开卡片就算「认识了」：这一步只推进阶段，不写任何作答，看一眼不是一次练习。
     LaunchedEffect(targetId) { app.pronunciationRepository.markCardSeen(targetId) }
@@ -197,7 +205,17 @@ fun SoundCardScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SectionTitle("和它最容易混的")
                     contrasts.forEach { contrast ->
-                        ContrastCard(contrast, catalog.phoneme(contrast.leftPhonemeId), catalog.phoneme(contrast.rightPhonemeId))
+                        ContrastCard(
+                            contrast = contrast,
+                            left = catalog.phoneme(contrast.leftPhonemeId),
+                            right = catalog.phoneme(contrast.rightPhonemeId),
+                            onCompare = { pair ->
+                                comparing?.cancel()
+                                comparing = scope.launch {
+                                    app.speechController.playInTurn(listOf(pair.leftWord, pair.rightWord))
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -344,7 +362,12 @@ private fun CommonErrors(errors: List<CommonError>) {
 }
 
 @Composable
-private fun ContrastCard(contrast: PhonemeContrast, left: Phoneme?, right: Phoneme?) {
+private fun ContrastCard(
+    contrast: PhonemeContrast,
+    left: Phoneme?,
+    right: Phoneme?,
+    onCompare: (MinimalPair) -> Unit,
+) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.medium,
@@ -358,12 +381,24 @@ private fun ContrastCard(contrast: PhonemeContrast, left: Phoneme?, right: Phone
                 text = contrastLabel(left, right),
                 style = MaterialTheme.typography.titleMedium,
             )
+            // 这两个音差在哪，看字看不出来：每一对都能连着放一遍。
             contrast.minimalPairs.take(3).forEach { pair ->
-                InteractiveEnglishText(
-                    text = "${pair.leftWord} / ${pair.rightWord}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    InteractiveEnglishText(
+                        text = "${pair.leftWord} / ${pair.rightWord}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    androidx.compose.material3.TextButton(onClick = { onCompare(pair) }) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.VolumeUp,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text("对比着听", modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
             }
         }
     }

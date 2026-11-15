@@ -15,7 +15,9 @@ import androidx.compose.material.icons.outlined.CircleNotifications
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.VolumeUp
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +32,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.core.designsystem.LazyDogTheme
+import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.speech.PlaybackState
+import com.lazydog.english.core.speech.PlaybackStatus
+import com.lazydog.english.core.speech.SpeechController
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import com.lazydog.english.domain.pronunciation.Phoneme
 import com.lazydog.english.domain.pronunciation.PronunciationStage
 import com.lazydog.english.domain.pronunciation.SkillEstimate
@@ -189,6 +198,56 @@ fun IpaText(
             contentDescription = spokenName?.let { "音标 $it" } ?: "音标 $ipa"
         },
     )
+}
+
+/**
+ * 连着放几个词，一个放完再放下一个。
+ *
+ * 播放器本身不排队（`语音服务DESIGN.md` §12：点别的 = 顶掉当前这段），而「对比着听」
+ * 要的恰恰是两个词挨着出来。所以排队放在这里：盯着全局播放状态，等上一个落回空闲再放下一个。
+ *
+ * **被别的播放顶掉、或者放失败了，就整串停下**——用户中途点了别的词，后面那个不该再冒出来
+ * 盖掉他刚点的。调用方换题或离开时取消这个协程即可。
+ */
+suspend fun SpeechController.playInTurn(words: List<String>, gapMillis: Long = 350L) {
+    words.filter { it.isNotBlank() }.forEachIndexed { index, word ->
+        if (index > 0) delay(gapMillis)
+        val source = PlaybackSource.word(word)
+        play(source)
+        withTimeoutOrNull(8_000L) {
+            playback.first { it.sourceId == source.id && it.status != PlaybackStatus.Error }
+        } ?: return
+        val end = withTimeoutOrNull(15_000L) {
+            playback.first { it.sourceId != source.id || it.status == PlaybackStatus.Error }
+        } ?: return
+        if (end.sourceId != null) return
+    }
+}
+
+/**
+ * 「听这个词」的小喇叭。状态一律来自全局播放状态，按钮自己不存 `isPlaying`
+ * （`语音服务DESIGN.md` §23）；连播时轮到哪个词，哪个喇叭亮，用户才知道现在响的是哪一个。
+ */
+@Composable
+fun WordPlayButton(
+    word: String,
+    playback: PlaybackState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    val status = playback.statusOf(PlaybackSource.word(word).id)
+    IconButton(onClick = onClick, modifier = modifier) {
+        if (status == PlaybackStatus.Loading) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.VolumeUp,
+                contentDescription = "听 $word",
+                tint = if (status == PlaybackStatus.Playing) MaterialTheme.colorScheme.primary else tint,
+            )
+        }
+    }
 }
 
 /** 一个音位对的显示名，`/ɪ/ ↔ /iː/`。 */

@@ -38,6 +38,11 @@ data class PerceptionOption(
     val label: String,
     val ipa: String,
     val correct: Boolean,
+    /**
+     * 答完之后点这个选项时念的词。词选项就是它自己；符号选项念这个音位的代表例词——
+     * 孤立音位的合成不可靠，音标串更不能直接交给 TTS。空串表示这个选项没有可念的词。
+     */
+    val speakWord: String = label,
 )
 
 /**
@@ -55,18 +60,28 @@ class PerceptionQuestionFactory(
      *
      * [recentVariants] 是最近几题用过的词对 id，用来避免连着出同一对——不是硬性去重，
      * 词对用完了还是要回头用的，只是不连着用。
+     *
+     * [retryVariants] 是这一轮答错过、还没答对回来的词对。隔开几题之后优先回到它们：
+     * 错过的那一对只听一遍解释就翻篇，等于没练。仍然服从「不连着出」——
+     * 紧接着重出，考的是短时记忆，不是听辨。
      */
     fun next(
         contrast: PhonemeContrast,
         difficulty: PerceptionDifficulty,
         recentVariants: Collection<String> = emptyList(),
+        retryVariants: Collection<String> = emptyList(),
     ): PerceptionQuestion? {
         val pairs = contrast.minimalPairs
         if (pairs.isEmpty()) return null
         val pool = when (difficulty) {
             // 固定词对是给「刚退回来、先站稳」用的：永远是这一组里最有代表性的第一对。
             PerceptionDifficulty.FixedPair -> listOf(pairs.first())
-            else -> pairs.filterNot { variantId(contrast, it) in recentVariants }.ifEmpty { pairs }
+            else -> {
+                val fresh = pairs.filterNot { variantId(contrast, it) in recentVariants }
+                fresh.filter { variantId(contrast, it) in retryVariants }
+                    .ifEmpty { fresh }
+                    .ifEmpty { pairs }
+            }
         }
         val pair = pool[random.nextInt(pool.size)]
         val playLeft = random.nextBoolean()
@@ -135,8 +150,16 @@ class PerceptionQuestionFactory(
             .take(2)
         if (distractors.size < 2) return null
         val options = (
-            listOf(PerceptionOption(target.ipa, target.ipa, correct = true)) +
-                distractors.map { PerceptionOption(it.ipa, it.ipa, correct = false) }
+            // 正确符号复盘时念的就是刚才放的那个词；干扰符号念各自的代表例词。
+            listOf(PerceptionOption(target.ipa, target.ipa, correct = true, speakWord = pair.wordFor(side))) +
+                distractors.map {
+                    PerceptionOption(
+                        label = it.ipa,
+                        ipa = it.ipa,
+                        correct = false,
+                        speakWord = it.exampleWords.firstOrNull()?.word.orEmpty(),
+                    )
+                }
             ).shuffled(random)
         return PerceptionQuestion(
             targetId = PronunciationTarget.ofContrast(contrast.id),
@@ -153,8 +176,15 @@ class PerceptionQuestionFactory(
     }
 
     private fun variantId(contrast: PhonemeContrast, pair: MinimalPair): String =
-        "${contrast.id}:${pair.leftWord}"
+        contrast.variantIdOf(pair)
 }
+
+/** 一对词在作答记录里的 id。出题和复盘用同一个口径，才能从记录找回词对。 */
+fun PhonemeContrast.variantIdOf(pair: MinimalPair): String = "$id:${pair.leftWord}"
+
+/** 由 [PerceptionQuestion.variantId] 找回那一对词。 */
+fun PhonemeContrast.pairOf(variantId: String): MinimalPair? =
+    minimalPairs.firstOrNull { variantIdOf(it) == variantId }
 
 private fun PairSide.opposite(): PairSide =
     if (this == PairSide.Left) PairSide.Right else PairSide.Left

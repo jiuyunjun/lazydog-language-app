@@ -86,6 +86,42 @@ class PronunciationPracticeTest {
         )
     }
 
+    @Test
+    fun `固定词对站住了就换词，不等几乎全对`() {
+        assertEquals(
+            "75% 的人被锁在同一对词上，记住的是那道题，不是这两个音",
+            PerceptionDifficulty.RotatingPair,
+            DifficultyPolicy.adjust(PerceptionDifficulty.FixedPair, recentAccuracy = 0.75f, sampleCount = 6),
+        )
+        assertEquals(
+            PerceptionDifficulty.FixedPair,
+            DifficultyPolicy.adjust(PerceptionDifficulty.FixedPair, recentAccuracy = 0.5f, sampleCount = 6),
+        )
+    }
+
+    @Test
+    fun `没怎么练过的一组先热身，从固定词对起步`() {
+        assertTrue(DifficultyPolicy.needsWarmUp(sampleCount = 0))
+        assertTrue("摸底只留下两题，也还算没练过", DifficultyPolicy.needsWarmUp(sampleCount = 2))
+        assertEquals(
+            PerceptionDifficulty.FixedPair,
+            DifficultyPolicy.start(recentAccuracy = 1f, sampleCount = 2),
+        )
+    }
+
+    @Test
+    fun `练过的人按最近表现定起步档，不再热身`() {
+        assertFalse(DifficultyPolicy.needsWarmUp(sampleCount = DifficultyPolicy.MIN_SAMPLES))
+        assertEquals(
+            PerceptionDifficulty.ThreeWay,
+            DifficultyPolicy.start(recentAccuracy = 1f, sampleCount = 8),
+        )
+        assertEquals(
+            PerceptionDifficulty.FixedPair,
+            DifficultyPolicy.start(recentAccuracy = 0.4f, sampleCount = 8),
+        )
+    }
+
     // ---- 推荐排序 ----
 
     private fun progress(

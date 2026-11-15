@@ -53,7 +53,13 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.LazyDogTheme
 import com.lazydog.english.core.speech.PlaybackSource
+import com.lazydog.english.core.speech.PlaybackState
 import com.lazydog.english.core.speech.PlaybackStatus
+import com.lazydog.english.domain.pronunciation.PhonemeCatalog
+import com.lazydog.english.domain.pronunciation.pairOf
+import kotlinx.coroutines.Job
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import com.lazydog.english.domain.pronunciation.DifficultyPolicy
 import com.lazydog.english.domain.pronunciation.PerceptionAttempt
 import com.lazydog.english.domain.pronunciation.PerceptionDifficulty
@@ -78,14 +84,34 @@ import kotlinx.coroutines.launch
  * - **顺序是先答 → 再给正确答案 → 再给解释**，答题前不泄露任何一半。
  * - **答错的主按钮是「再听一次这两个」，不是「下一题」**：错的那一刻是这组对比最值得听的
  *   时候，直接推进等于把这次错误浪费掉。
+ *
+ * 复盘的三处（D-093）：
+ *
+ * - **答完之后每个选项都能点着听**；答错那一刻自动把「正确的 → 你选的」连着放一遍。
+ *   答题前选项不出声——那是提示阶梯第 2 级的事，会记进这一题用了几级提示。
+ * - **错过的词对隔两题再回来**，答对了才算过；一轮结束把没分清的列出来，能对比着听。
+ * - **没怎么练过的一组先听后考**：进来先把两个音摆出来听一遍，前几题只用同一对词。
  */
 private const val SESSION_QUESTIONS = 6
 
 private sealed interface Phase {
+    /** 先听一遍这两个音，不计分。 */
+    data object WarmUp : Phase
     data object Asking : Phase
     data class Answered(val chosen: PerceptionOption) : Phase
     data object Finished : Phase
 }
+
+/** 这一轮里的一次作答，只活在内存里，给结束页复盘用；计分仍然以落库的记录为准。 */
+private data class RoundEntry(val question: PerceptionQuestion, val chosen: PerceptionOption)
+
+/** 结束页上一条「没分清」。[words] 是对比着听时依次放的词：先正确的，再选错的。 */
+private data class ReviewItem(
+    val played: String,
+    val playedIpa: String,
+    val chosen: String,
+    val words: List<String>,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,7 +135,10 @@ fun PerceptionScreen(
     var question by remember { mutableStateOf<PerceptionQuestion?>(null) }
     var phase by remember { mutableStateOf<Phase>(Phase.Asking) }
     var index by remember { mutableStateOf(0) }
-    var correctCount by remember { mutableStateOf(0) }
+    var roundLog by remember { mutableStateOf(listOf<RoundEntry>()) }
+    // 答错过、还没答对回来的词对。跨轮保留：「再练 2 分钟」先从它们开始。
+    var missed by remember { mutableStateOf(setOf<String>()) }
+    var sequence by remember { mutableStateOf<Job?>(null) }
     var hint by remember { mutableStateOf(PronunciationHint.None) }
     var replays by remember { mutableStateOf(0) }
     var askedAt by remember { mutableStateOf(0L) }
@@ -119,9 +148,38 @@ fun PerceptionScreen(
     var beforeEstimate by remember { mutableStateOf(SkillEstimate.Unknown) }
     var afterEstimate by remember { mutableStateOf(SkillEstimate.Unknown) }
     var streak by remember { mutableStateOf(0) }
-    var provenWords by remember { mutableStateOf(listOf<String>()) }
 
     fun promptSource(q: PerceptionQuestion) = PlaybackSource.word(q.promptWord)
+
+    /** 用户点了某一个词。先把还在排队的连播撤掉，不然后面那个词会冒出来盖掉他刚点的。 */
+    fun playWord(word: String) {
+        if (word.isBlank()) return
+        sequence?.cancel()
+        app.speechController.onPlayClicked(PlaybackSource.word(word))
+    }
+
+    fun playInTurn(words: List<String>) {
+        sequence?.cancel()
+        sequence = scope.launch { app.speechController.playInTurn(words) }
+    }
+
+    fun silence() {
+        sequence?.cancel()
+        app.speechController.stop()
+    }
+
+    /**
+     * 「这两个」里的另一个：选错了就是他选的那个，选对了就是这对词里没放的那个。
+     * 三选一里借来的第三个词不算——要对比的始终是这组对比的两个音。
+     */
+    fun counterpart(q: PerceptionQuestion, chosen: PerceptionOption): String {
+        if (!chosen.correct && chosen.speakWord.isNotBlank()) return chosen.speakWord
+        val pair = contrast?.pairOf(q.variantId) ?: return ""
+        return if (pair.leftWord == q.promptWord) pair.rightWord else pair.leftWord
+    }
+
+    fun contrastWords(q: PerceptionQuestion, chosen: PerceptionOption): List<String> =
+        listOf(q.promptWord, counterpart(q, chosen))
 
     fun ask(next: PerceptionQuestion) {
         question = next
@@ -130,23 +188,18 @@ fun PerceptionScreen(
         replays = 0
         askedAt = System.currentTimeMillis()
         recentVariants = (recentVariants + next.variantId).takeLast(2)
+        sequence?.cancel()
         // 进来就自动播一次：这一题的题面是声音，让用户自己去点等于多一步。
         app.speechController.play(promptSource(next))
     }
 
     fun finish() {
         phase = Phase.Finished
-        app.speechController.stop()
+        silence()
         scope.launch {
             val attempts = repository.recentPerception(targetId)
             afterEstimate = PerceptionScoring.estimate(attempts)
             streak = PerceptionScoring.currentStreak(attempts)
-            // 「这一轮分清了 ship / sheep」靠的是它：本轮答对过的词对，去重。
-            provenWords = attempts.sortedBy { it.occurredAt }
-                .takeLast(SESSION_QUESTIONS)
-                .filter { it.correct }
-                .map { it.variantId.substringAfterLast(':') }
-                .distinct()
         }
     }
 
@@ -156,7 +209,7 @@ fun PerceptionScreen(
             finish()
             return
         }
-        val next = factory.next(current, difficulty, recentVariants)
+        val next = factory.next(current, difficulty, recentVariants, retryVariants = missed)
         if (next == null) {
             finish()
             return
@@ -171,19 +224,32 @@ fun PerceptionScreen(
         val recent = repository.recentPerception(targetId)
         beforeEstimate = progress.perception
         val accuracy = PerceptionScoring.recentAccuracy(recent)
-        var start = DifficultyPolicy.adjust(PerceptionDifficulty.RotatingPair, accuracy, recent.size)
+        var start = DifficultyPolicy.start(accuracy, recent.size)
         // Sound → IPA 只在这个音已经能听辨之后才出（§11.6）。
         if (start == PerceptionDifficulty.SymbolRecall && !progress.allowsSymbolRecall()) {
             start = PerceptionDifficulty.ThreeWay
         }
         difficulty = start
         ready = true
-        advance()
+        val firstPair = contrast?.minimalPairs?.firstOrNull()
+        if (DifficultyPolicy.needsWarmUp(recent.size) && firstPair != null) {
+            // 没怎么练过：先把两个音摆出来听一遍。上来就考，分不清的人连自己在分什么都不知道。
+            phase = Phase.WarmUp
+            playInTurn(listOf(firstPair.leftWord, firstPair.rightWord))
+        } else {
+            advance()
+        }
     }
 
     fun answer(option: PerceptionOption) {
         val q = question ?: return
         phase = Phase.Answered(option)
+        roundLog = roundLog + RoundEntry(q, option)
+        // 看了答案才选对的不算过，这一对还要回来。
+        val passed = option.correct && hint != PronunciationHint.RevealAnswer
+        missed = if (passed) missed - q.variantId else missed + q.variantId
+        // 错的那一刻最值得听：不等他去点，直接把「正确的 → 你选的」连着放一遍。
+        if (!option.correct) playInTurn(contrastWords(q, option))
         val attempt = PerceptionAttempt(
             targetId = q.targetId,
             exercise = q.exercise,
@@ -194,7 +260,6 @@ fun PerceptionScreen(
             variantId = q.variantId,
             occurredAt = System.currentTimeMillis(),
         )
-        if (option.correct) correctCount += 1
         scope.launch {
             repository.recordPerception(attempt, expected = q.correctOption.label, answer = option.label)
             val recent = repository.recentPerception(q.targetId)
@@ -228,13 +293,13 @@ fun PerceptionScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { app.speechController.stop(); onExit() }) {
+                    IconButton(onClick = { silence(); onExit() }) {
                         Icon(Icons.Outlined.Close, contentDescription = "退出")
                     }
                 },
                 actions = {
                     AskTopBarAction()
-                    if (phase != Phase.Finished) {
+                    if (phase != Phase.Finished && phase != Phase.WarmUp) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -267,45 +332,85 @@ fun PerceptionScreen(
             return@Scaffold
         }
         when (val state = phase) {
-            Phase.Finished -> SessionSummary(
-                label = contrastLabel(
-                    catalog.phoneme(current.leftPhonemeId),
-                    catalog.phoneme(current.rightPhonemeId),
-                ),
-                correct = correctCount,
-                total = index,
-                before = beforeEstimate,
-                after = afterEstimate,
-                streak = streak,
-                provenWords = provenWords,
-                onAgain = {
-                    index = 0
-                    correctCount = 0
-                    advance()
-                },
-                onExit = onExit,
+            Phase.WarmUp -> WarmUp(
+                contrast = current,
+                catalog = catalog,
+                playback = playback,
+                onPlayWord = ::playWord,
+                onPlayBoth = { playInTurn(it) },
+                onStart = { advance() },
                 modifier = Modifier.padding(padding),
             )
 
+            Phase.Finished -> {
+                // 没分清的：这一轮答错过的题，同一道只留一条。
+                val review = roundLog.filterNot { it.chosen.correct }
+                    .distinctBy { Triple(it.question.variantId, it.question.promptWord, it.chosen.label) }
+                    .map { entry ->
+                        val symbol = entry.question.exercise == PerceptionExercise.SoundToIpa
+                        ReviewItem(
+                            played = entry.question.promptWord,
+                            playedIpa = entry.question.promptIpa,
+                            chosen = if (symbol) "/${entry.chosen.label}/" else entry.chosen.label,
+                            words = contrastWords(entry.question, entry.chosen),
+                        )
+                    }
+                // 分清了的：这一轮答对过、而且一次没错的词对。错过又答对的那几对留在上面，不两头算。
+                val failed = roundLog.filterNot { it.chosen.correct }.map { it.question.variantId }.toSet()
+                val proven = roundLog.filter { it.chosen.correct && it.question.variantId !in failed }
+                    .mapNotNull { current.pairOf(it.question.variantId) }
+                    .distinct()
+                    .map { "${it.leftWord} / ${it.rightWord}" }
+                SessionSummary(
+                    label = contrastLabel(
+                        catalog.phoneme(current.leftPhonemeId),
+                        catalog.phoneme(current.rightPhonemeId),
+                    ),
+                    before = beforeEstimate,
+                    after = afterEstimate,
+                    streak = streak,
+                    proven = proven,
+                    review = review,
+                    playback = playback,
+                    onCompare = { playInTurn(it) },
+                    onAgain = {
+                        silence()
+                        index = 0
+                        roundLog = emptyList()
+                        beforeEstimate = afterEstimate
+                        advance()
+                    },
+                    onExit = { silence(); onExit() },
+                    modifier = Modifier.padding(padding),
+                )
+            }
+
             else -> {
                 val q = question ?: return@Scaffold
+                val maxHint = DifficultyPolicy.maxHint(q.difficulty)
                 QuestionBody(
                     question = q,
                     answered = state as? Phase.Answered,
                     hint = hint,
+                    maxHint = maxHint,
                     contrast = current,
                     catalog = catalog,
-                    playbackStatus = playback.statusOf(promptSource(q).id),
+                    playback = playback,
                     onReplay = {
                         replays += 1
+                        sequence?.cancel()
                         app.speechController.play(promptSource(q))
                     },
-                    onPlayWord = { app.speechController.onPlayClicked(PlaybackSource.word(it)) },
+                    onPlayWord = ::playWord,
+                    onPlayPair = { chosen -> playInTurn(contrastWords(q, chosen)) },
                     onHint = {
-                        hint = hint.next()
-                        if (hint == PronunciationHint.Replay) {
-                            replays += 1
-                            app.speechController.play(promptSource(q))
+                        if (hint.level < maxHint.level) {
+                            hint = hint.next()
+                            if (hint == PronunciationHint.Replay) {
+                                replays += 1
+                                sequence?.cancel()
+                                app.speechController.play(promptSource(q))
+                            }
                         }
                     },
                     onAnswer = ::answer,
@@ -322,16 +427,19 @@ private fun QuestionBody(
     question: PerceptionQuestion,
     answered: Phase.Answered?,
     hint: PronunciationHint,
+    maxHint: PronunciationHint,
     contrast: PhonemeContrast,
-    catalog: com.lazydog.english.domain.pronunciation.PhonemeCatalog,
-    playbackStatus: PlaybackStatus,
+    catalog: PhonemeCatalog,
+    playback: PlaybackState,
     onReplay: () -> Unit,
     onPlayWord: (String) -> Unit,
+    onPlayPair: (PerceptionOption) -> Unit,
     onHint: () -> Unit,
     onAnswer: (PerceptionOption) -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val playbackStatus = playback.statusOf(PlaybackSource.word(question.promptWord).id)
     Column(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -379,7 +487,9 @@ private fun QuestionBody(
                         option = option,
                         answered = answered,
                         symbol = question.exercise == PerceptionExercise.SoundToIpa,
+                        playback = playback,
                         onClick = { if (answered == null) onAnswer(option) },
+                        onPlay = { onPlayWord(option.speakWord) },
                     )
                 }
             }
@@ -391,10 +501,15 @@ private fun QuestionBody(
                     chosen = answered.chosen,
                     contrast = contrast,
                     catalog = catalog,
-                    onPlayWord = onPlayWord,
                 )
             } else if (hint != PronunciationHint.None) {
-                HintPanel(question = question, hint = hint, catalog = catalog, onPlayWord = onPlayWord)
+                HintPanel(
+                    question = question,
+                    hint = hint,
+                    maxHint = maxHint,
+                    catalog = catalog,
+                    onPlayWord = onPlayWord,
+                )
             }
 
             Spacer(Modifier.height(8.dp))
@@ -417,7 +532,7 @@ private fun QuestionBody(
                         }
                         TextButton(
                             onClick = onHint,
-                            enabled = !hint.isFinal,
+                            enabled = hint.level < maxHint.level,
                             modifier = Modifier.weight(1f),
                         ) {
                             Icon(Icons.Outlined.HelpOutline, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -428,13 +543,13 @@ private fun QuestionBody(
                 } else if (answered.chosen.correct) {
                     Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) { Text("下一题") }
                     TextButton(
-                        onClick = { onPlayWord(question.correctOption.label) },
+                        onClick = { onPlayPair(answered.chosen) },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("再听一次这两个") }
                 } else {
                     // 错的那一刻是这组对比最值得听的时候，所以主按钮是重听，不是推进。
                     Button(
-                        onClick = { onPlayWord(question.correctOption.label) },
+                        onClick = { onPlayPair(answered.chosen) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -453,7 +568,9 @@ private fun OptionCard(
     option: PerceptionOption,
     answered: Phase.Answered?,
     symbol: Boolean,
+    playback: PlaybackState,
     onClick: () -> Unit,
+    onPlay: () -> Unit,
 ) {
     val extended = LazyDogTheme.extendedColors
     val chosen = answered?.chosen?.label == option.label
@@ -524,6 +641,22 @@ private fun OptionCard(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
+            // 揭晓之后每个选项都能点着听：光看到「选错了」不够，得听得出错在哪。
+            // 符号没法直接念，念的是它的代表例词，所以把那个词写出来。
+            if (reveal && option.speakWord.isNotBlank()) {
+                if (symbol) {
+                    InteractiveEnglishText(
+                        text = option.speakWord,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                WordPlayButton(
+                    word = option.speakWord,
+                    playback = playback,
+                    onClick = onPlay,
+                    tint = content,
+                )
+            }
         }
     }
 }
@@ -533,14 +666,19 @@ private fun OptionCard(
  *
  * 是页面内的一块 `Surface`，**不是 BottomSheet**：题目必须一直看得见，
  * 遮住题目再给提示没有意义。
+ *
+ * 能给到第几级由 [maxHint] 封顶（`DifficultyPolicy.maxHint`）：符号题不给到「看答案」。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HintPanel(
     question: PerceptionQuestion,
     hint: PronunciationHint,
-    catalog: com.lazydog.english.domain.pronunciation.PhonemeCatalog,
+    maxHint: PronunciationHint,
+    catalog: PhonemeCatalog,
     onPlayWord: (String) -> Unit,
 ) {
+    val symbol = question.exercise == PerceptionExercise.SoundToIpa
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.medium,
@@ -553,22 +691,46 @@ private fun HintPanel(
             Row {
                 Text("提示", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 Text(
-                    text = "第 ${hint.level} 级 / 共 ${PronunciationHint.RevealAnswer.level} 级",
+                    text = "第 ${hint.level} 级 / 共 ${maxHint.level} 级",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
             }
             if (hint.level >= PronunciationHint.ContrastPlay.level) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    question.options.filter { it.correct || question.options.size == 2 }.forEach { option ->
-                        OutlinedButton(onClick = { onPlayWord(option.label) }) { Text(option.label) }
+                // 每个选项都给一个按钮。只给其中一个，等于直接把答案指出来。
+                Text(
+                    text = if (symbol) "挨个听听每个符号是什么声，再回去比。" else "挨个听一遍，再回去比。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    question.options.filter { it.speakWord.isNotBlank() }.forEach { option ->
+                        OutlinedButton(onClick = { onPlayWord(option.speakWord) }) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.VolumeUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text(if (symbol) "/${option.label}/" else option.label)
+                        }
                     }
                 }
             }
             if (hint.level >= PronunciationHint.ShowIpa.level) {
                 question.options.forEach { option ->
+                    // 符号题的选项本身就是音标，这一级给的是「这个符号是什么声」。
+                    val described = catalog.phonemes.firstOrNull { it.ipa == option.label }
+                        ?.shortDescriptionZh
                     InteractiveEnglishText(
-                        text = "${option.label}  ${option.ipa}",
+                        text = if (symbol) {
+                            "/${option.label}/：${described ?: "见音位卡"}"
+                        } else {
+                            "${option.label}  ${option.ipa}"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -604,8 +766,7 @@ private fun Explanation(
     question: PerceptionQuestion,
     chosen: PerceptionOption,
     contrast: PhonemeContrast,
-    catalog: com.lazydog.english.domain.pronunciation.PhonemeCatalog,
-    onPlayWord: (String) -> Unit,
+    catalog: PhonemeCatalog,
 ) {
     val left = catalog.phoneme(contrast.leftPhonemeId)
     val right = catalog.phoneme(contrast.rightPhonemeId)
@@ -622,6 +783,15 @@ private fun Explanation(
                 text = if (chosen.correct) "为什么是它" else "差在哪",
                 style = MaterialTheme.typography.titleSmall,
             )
+            if (!chosen.correct && chosen.speakWord.isNotBlank()) {
+                // 自动连播了两个词，得说清谁先谁后，不然听完也对不上号。
+                InteractiveEnglishText(
+                    text = "刚才连着放的：先是正确的 ${question.promptWord}，再是你选的 ${chosen.speakWord}。" +
+                        "上面每个选项都能点着再听。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOfNotNull(left, right).forEach { phoneme ->
                     Surface(
@@ -647,17 +817,118 @@ private fun Explanation(
                     }
                 }
             }
-            val pairNote = contrast.minimalPairs
-                .firstOrNull { it.leftWord == question.correctOption.label || it.rightWord == question.correctOption.label }
-                ?.noteZh
-                .orEmpty()
+            // 按词对 id 找，不按正确选项的字面找：符号题的正确选项是音标，字面对不上任何词。
+            val pairNote = contrast.pairOf(question.variantId)?.noteZh.orEmpty()
             if (pairNote.isNotBlank()) {
                 InteractiveEnglishText(text = pairNote, style = MaterialTheme.typography.bodyMedium)
             }
-            OutlinedButton(onClick = { onPlayWord(question.correctOption.label) }) {
-                Icon(Icons.AutoMirrored.Outlined.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
-                Text("再听 ${question.correctOption.label}")
+        }
+    }
+}
+
+/**
+ * 先听一遍（设计文档 §21.2 的 Warm-up，D-093）。
+ *
+ * 只在这一组还没怎么练过时出现，**不计分、不写作答**。它不违反「答题前不泄露答案」：
+ * 这里摆的是两个音各自什么声，不是哪一题选哪个；真正的题面仍然只有一段音频。
+ */
+@Composable
+private fun WarmUp(
+    contrast: PhonemeContrast,
+    catalog: PhonemeCatalog,
+    playback: PlaybackState,
+    onPlayWord: (String) -> Unit,
+    onPlayBoth: (List<String>) -> Unit,
+    onStart: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val pair = contrast.minimalPairs.firstOrNull() ?: return
+    val sides = listOf(
+        catalog.phoneme(contrast.leftPhonemeId) to pair.leftWord,
+        catalog.phoneme(contrast.rightPhonemeId) to pair.rightWord,
+    )
+    Column(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = "先听一遍这两个音",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            Text(
+                text = "待会儿每题只放其中一个词，你来分是哪一个。现在随便听，不计分。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            sides.forEach { (phoneme, word) ->
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                InteractiveEnglishText(
+                                    text = word,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    onSingleTap = { onPlayWord(word) },
+                                )
+                                if (phoneme != null) {
+                                    IpaText(
+                                        ipa = phoneme.ipa,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        spokenName = phoneme.shortDescriptionZh,
+                                    )
+                                }
+                            }
+                            if (phoneme != null) {
+                                InteractiveEnglishText(
+                                    text = "${phoneme.shortDescriptionZh}。${phoneme.articulation.keyActionZh}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        WordPlayButton(word = word, playback = playback, onClick = { onPlayWord(word) })
+                    }
+                }
+            }
+            if (pair.noteZh.isNotBlank()) {
+                InteractiveEnglishText(text = pair.noteZh, style = MaterialTheme.typography.bodyMedium)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("开始听辨") }
+                TextButton(
+                    onClick = { onPlayBoth(listOf(pair.leftWord, pair.rightWord)) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("连着再听一遍") }
             }
         }
     }
@@ -675,12 +946,13 @@ private fun Explanation(
 @Composable
 private fun SessionSummary(
     label: String,
-    correct: Int,
-    total: Int,
     before: SkillEstimate,
     after: SkillEstimate,
     streak: Int,
-    provenWords: List<String>,
+    proven: List<String>,
+    review: List<ReviewItem>,
+    playback: PlaybackState,
+    onCompare: (List<String>) -> Unit,
     onAgain: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
@@ -761,23 +1033,88 @@ private fun SessionSummary(
                 positive = true,
             )
         }
-        if (provenWords.isNotEmpty()) {
+        if (proven.isNotEmpty()) {
             Evidence(
-                title = "这一轮分清了：${provenWords.joinToString("、")}",
-                note = "这些是本轮答对的那几对词。",
+                title = "这一轮分清了：${proven.joinToString("、")}",
+                note = "这几对词本轮一次都没答错。",
                 positive = true,
             )
         }
-        if (correct < total) {
-            Evidence(
-                title = "还有 ${total - correct} 题没过",
-                note = "同一对音，换个词就又混了。下次从它开始。",
-                positive = false,
-            )
+        if (review.isNotEmpty()) {
+            MissedReview(review = review, playback = playback, onCompare = onCompare)
         }
 
         Button(onClick = onAgain, modifier = Modifier.fillMaxWidth()) { Text("再练 2 分钟") }
         TextButton(onClick = onExit, modifier = Modifier.fillMaxWidth()) { Text("今天到这里") }
+    }
+}
+
+/**
+ * 这一轮没分清的题（设计文档 §22 的「还需要练」）。
+ *
+ * 只说「还有 2 题没过」等于没说：是哪两题、放的是什么、他选成了什么，得摆出来，
+ * 而且得能当场对比着听——复盘的对象是声音，光看字复不了盘。
+ */
+@Composable
+private fun MissedReview(
+    review: List<ReviewItem>,
+    playback: PlaybackState,
+    onCompare: (List<String>) -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("这一轮没分清的", style = MaterialTheme.typography.titleSmall)
+            review.forEach { item ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        InteractiveEnglishText(
+                            text = "放的是 ${item.played}  ${item.playedIpa}",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        InteractiveEnglishText(
+                            text = "你选了 ${item.chosen}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    val sounding = item.words.any {
+                        playback.statusOf(PlaybackSource.word(it).id) != PlaybackStatus.Idle
+                    }
+                    TextButton(onClick = { onCompare(item.words) }) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.VolumeUp,
+                            contentDescription = null,
+                            tint = if (sounding) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.size(6.dp))
+                        Text("对比着听")
+                    }
+                }
+            }
+            Text(
+                text = "对比着听是先放正确的，再放你选的。再练的话，会先回到这几对。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
     }
 }
 

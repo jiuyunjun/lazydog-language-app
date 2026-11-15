@@ -81,10 +81,30 @@ object DifficultyPolicy {
         sampleCount: Int,
     ): PerceptionDifficulty = when {
         recentAccuracy == null || sampleCount < MIN_SAMPLES -> current
+        // 固定词对只是落脚点：站住了就换词，不等「几乎全对」。否则 65%～90% 的人会被
+        // 锁在同一对词上，最后记住的是那一道题，不是这两个音（设计文档 §10.3）。
+        current == PerceptionDifficulty.FixedPair && recentAccuracy >= TOO_HARD ->
+            PerceptionDifficulty.RotatingPair
         recentAccuracy > TOO_EASY -> current.harder()
         recentAccuracy < TOO_HARD -> current.easier()
         else -> current
     }
+
+    /**
+     * 进一组对比时从哪一档开始。
+     *
+     * 证据不到 [MIN_SAMPLES] 次的人从固定词对起步：第一次听这两个音就换着词考，
+     * 分不清的时候连「到底是音不同还是词不同」都判断不了。练过的人按最近表现定。
+     */
+    fun start(recentAccuracy: Float?, sampleCount: Int): PerceptionDifficulty =
+        if (needsWarmUp(sampleCount)) {
+            PerceptionDifficulty.FixedPair
+        } else {
+            adjust(PerceptionDifficulty.RotatingPair, recentAccuracy, sampleCount)
+        }
+
+    /** 还没怎么练过这一组：先把两个音摆出来听一遍再考（设计文档 §21.2 的 Warm-up）。 */
+    fun needsWarmUp(sampleCount: Int): Boolean = sampleCount < MIN_SAMPLES
 
     /**
      * 这个档位下，一道题最多能给到第几级提示。

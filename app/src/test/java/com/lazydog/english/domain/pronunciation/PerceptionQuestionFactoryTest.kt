@@ -156,6 +156,56 @@ class PerceptionQuestionFactoryTest {
     }
 
     @Test
+    fun `答错过的词对隔开之后优先回来`() {
+        val f = factory()
+        val missed = listOf(contrast.variantIdOf(contrast.minimalPairs[2]))
+
+        repeat(10) {
+            val q = f.next(contrast, PerceptionDifficulty.RotatingPair, retryVariants = missed)!!
+            assertEquals("错过的那一对只听一遍解释就翻篇，等于没练", missed.single(), q.variantId)
+        }
+    }
+
+    @Test
+    fun `刚答错的词对不紧接着重出`() {
+        val f = factory()
+        val missed = listOf(contrast.variantIdOf(contrast.minimalPairs[2]))
+
+        repeat(10) {
+            val q = f.next(contrast, PerceptionDifficulty.RotatingPair, recentVariants = missed, retryVariants = missed)!!
+            assertFalse("紧接着重出考的是短时记忆，不是听辨", q.variantId in missed)
+        }
+    }
+
+    @Test
+    fun `由作答记录里的词对 id 找得回那一对词`() {
+        val pair = contrast.minimalPairs[1]
+
+        assertEquals(pair, contrast.pairOf(contrast.variantIdOf(pair)))
+        assertNull(contrast.pairOf("别的对比:sit"))
+    }
+
+    @Test
+    fun `词选项念它自己，符号选项念例词而不是音标串`() {
+        val word = factory().next(contrast, PerceptionDifficulty.RotatingPair)!!
+        word.options.forEach { assertEquals(it.label, it.speakWord) }
+
+        val withExamples = object : PhonemeCatalog {
+            override val accent = AccentProfile.GeneralAmerican
+            override val phonemes = listOf(leftPhoneme, rightPhoneme) +
+                spare.map { it.copy(exampleWords = listOf(ExampleWord("bed-${it.id}", "/bed/"))) }
+            override val contrasts = listOf(contrast)
+        }
+        val symbol = PerceptionQuestionFactory(withExamples, Random(3))
+            .next(contrast, PerceptionDifficulty.SymbolRecall)!!
+
+        assertEquals("正确符号复盘时念的就是刚才放的那个词", symbol.promptWord, symbol.correctOption.speakWord)
+        symbol.options.filterNot { it.correct }.forEach {
+            assertTrue("音标串不能直接交给 TTS", it.speakWord.startsWith("bed-"))
+        }
+    }
+
+    @Test
     fun `没有词对的对比组出不了题`() {
         val empty = contrast.copy(id = "empty", minimalPairs = emptyList())
 

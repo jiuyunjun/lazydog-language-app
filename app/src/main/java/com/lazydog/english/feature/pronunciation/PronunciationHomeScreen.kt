@@ -235,7 +235,7 @@ private fun Recommendation(
                 if (!progress.perception.confident) LowConfidenceNote(progress.perception)
             } else {
                 Text(
-                    text = "还没练过这一组。先听六道题，看看你现在分不分得清。",
+                    text = "还没练过这一组。先把两个音听一遍，再做六道题。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
