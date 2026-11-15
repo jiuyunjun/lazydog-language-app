@@ -21,12 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.DocumentScanner
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
@@ -83,11 +79,8 @@ fun LibraryScreen(
     /** 单词和表达点开的是整页词卡（[com.lazydog.english.feature.vocabulary.WordDetailScreen]）。 */
     onOpenWord: (Long) -> Unit,
     onAddCard: (Boolean) -> Unit,
-    /** 扫一扫取词（[ScanWordsScreen]）。 */
-    onScanWords: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    var addWordMenuOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val speech = app.speechController
@@ -167,32 +160,9 @@ fun LibraryScreen(
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
             ) {
-                FloatingActionButton(
-                    // 单词有两条路：自己打字，或者对着书页扫。语法没有可扫的东西，照旧直达。
-                    onClick = { if (tabIndex == 0) addWordMenuOpen = true else onAddCard(false) },
-                ) {
+                // 扫一扫搬到了底栏正中（D-094），这里不再有二选一，单词和语法都直达手动添加。
+                FloatingActionButton(onClick = { onAddCard(tabIndex == 0) }) {
                     Icon(Icons.Outlined.Add, contentDescription = "添加${if (tabIndex == 0) "单词" else "语法点"}")
-                }
-                DropdownMenu(
-                    expanded = addWordMenuOpen && tabIndex == 0,
-                    onDismissRequest = { addWordMenuOpen = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("手动添加") },
-                        leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
-                        onClick = {
-                            addWordMenuOpen = false
-                            onAddCard(true)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("扫一扫") },
-                        leadingIcon = { Icon(Icons.Outlined.DocumentScanner, contentDescription = null) },
-                        onClick = {
-                            addWordMenuOpen = false
-                            onScanWords()
-                        },
-                    )
                 }
             }
         }

@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.designsystem.GlobalSentenceSheet
 import com.lazydog.english.core.designsystem.GlobalWordSheet
 import com.lazydog.english.core.ocr.LiveTextCamera
@@ -89,6 +90,7 @@ import com.lazydog.english.domain.vocabulary.ScanRefine
 import com.lazydog.english.domain.vocabulary.ScanStabilizer
 import com.lazydog.english.domain.vocabulary.ScanTarget
 import com.lazydog.english.domain.vocabulary.TextBox
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** 准星离最近的词还有多远就不算对准。比一行字高一点，手抖一下不会丢。 */
@@ -99,6 +101,10 @@ private val AIM_STICKINESS = 12.dp
 
 /** 这么久一个字都没认出来，就提示用户靠近、拿稳或者开手电。 */
 private const val NO_TEXT_HINT_MILLIS = 2_000L
+
+/** [ScanMode] 在偏好里的存法。 */
+private const val WORD_WIRE = "word"
+private const val SENTENCE_WIRE = "sentence"
 
 /** 取景页上所有控件共用的深色半透明底：压在任何画面上白字都看得清，又不把画面整块盖死。 */
 private val SCRIM = Color.Black.copy(alpha = 0.55f)
@@ -142,6 +148,13 @@ fun ScanWordsScreen(onExit: () -> Unit) {
 
     var cameraError by remember { mutableStateOf(false) }
     var topBarHeight by remember { mutableIntStateOf(0) }
+    // 上次停在取词还是取句（D-094）。读出来之前不开取景，免得先显示取词再跳到取句。
+    val app = remember { context.applicationContext as LazyDogApplication }
+    var savedMode by remember { mutableStateOf<ScanMode?>(null) }
+    LaunchedEffect(Unit) {
+        savedMode = if (app.userPreferences.scanMode.first() == SENTENCE_WIRE) ScanMode.Sentence else ScanMode.Word
+    }
+    val modeScope = rememberCoroutineScope()
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
@@ -161,7 +174,17 @@ fun ScanWordsScreen(onExit: () -> Unit) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.align(Alignment.Center).padding(32.dp),
             )
-            else -> ScanViewfinder(topInset = topBarHeight, onCameraError = { cameraError = true })
+            savedMode == null -> Unit
+            else -> ScanViewfinder(
+                topInset = topBarHeight,
+                initialMode = savedMode ?: ScanMode.Word,
+                onModeSaved = { picked ->
+                    modeScope.launch {
+                        app.userPreferences.saveScanMode(if (picked == ScanMode.Sentence) SENTENCE_WIRE else WORD_WIRE)
+                    }
+                },
+                onCameraError = { cameraError = true },
+            )
         }
 
         Row(
@@ -174,7 +197,7 @@ fun ScanWordsScreen(onExit: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onExit) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回记录", tint = Color.White)
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", tint = Color.White)
             }
             Text(text = "扫一扫", style = MaterialTheme.typography.titleMedium, color = Color.White)
         }
@@ -183,7 +206,12 @@ fun ScanWordsScreen(onExit: () -> Unit) {
 
 /** [topInset]：顶栏压住的画面高度（像素），准星要避开它居中。 */
 @Composable
-private fun ScanViewfinder(topInset: Int, onCameraError: () -> Unit) {
+private fun ScanViewfinder(
+    topInset: Int,
+    initialMode: ScanMode,
+    onModeSaved: (ScanMode) -> Unit,
+    onCameraError: () -> Unit,
+) {
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val tolerance = with(density) { AIM_TOLERANCE.toPx() }
@@ -199,7 +227,7 @@ private fun ScanViewfinder(topInset: Int, onCameraError: () -> Unit) {
     var target by remember { mutableStateOf<ScanTarget?>(null) }
     var lastTextAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var noTextForAWhile by remember { mutableStateOf(false) }
-    var mode by rememberSaveable { mutableStateOf(ScanMode.Word) }
+    var mode by rememberSaveable { mutableStateOf(initialMode) }
     /** 按下加号那一刻对准的目标。面板开着时识别暂停，不让后面的帧把它换掉。 */
     var picked by remember { mutableStateOf<Pair<ScanTarget, ScanMode>?>(null) }
 
@@ -284,12 +312,17 @@ private fun ScanViewfinder(topInset: Int, onCameraError: () -> Unit) {
                 refining = refining,
                 torchOn = torchOn,
                 onTorchChange = { torchOn = it },
-                onModeChange = { mode = it },
+                onModeChange = {
+                    mode = it
+                    onModeSaved(it)
+                },
                 onAdd = {
                     val aimed = target
                     if (aimed != null && !refining) {
                         val pickedMode = mode
                         refining = true
+                        // 快门要有手感：拍照要等一两秒，没有反馈的话用户会以为没按上、再按一次。
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         // 实时帧只有 720p，按下那一刻再拍一张高清照片重认，按文字找回同一句纠正错字；
                         // 拍不到或找不回就用实时结果，不让用户白等。
                         scope.launch {

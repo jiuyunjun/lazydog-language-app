@@ -84,6 +84,7 @@ class UserPreferences(private val context: Context) {
 
         /** 发音模块的声音摸底做完没有（D-077）。只记做没做过，画像本身在三张表里。 */
         val VoiceScreeningDone = booleanPreferencesKey("voice_screening_done")
+        val ScanMode = stringPreferencesKey("scan_mode")
         val CompletionTokenModels = stringSetPreferencesKey("models_need_completion_tokens")
         val NoReasoningEffortModels = stringSetPreferencesKey("models_reject_reasoning_effort")
         val RejectedEfforts = stringSetPreferencesKey("model_rejected_reasoning_efforts")
@@ -101,6 +102,13 @@ class UserPreferences(private val context: Context) {
      */
     val voiceScreeningDone: Flow<Boolean> =
         context.dataStore.data.map { it[Keys.VoiceScreeningDone] ?: false }
+
+    /**
+     * 扫一扫上次停在取词还是取句（D-094）。存 wire 字符串（`word` / `sentence`），空串表示没选过；
+     * 解析放在用的地方，和 `nativeEnglishAmount` 同一个写法。
+     */
+    val scanMode: Flow<String> =
+        context.dataStore.data.map { it[Keys.ScanMode].orEmpty() }
 
     /**
      * 对话模型用哪家（D-090）。下面的地址、密钥、默认模型、各功能模型都按它取，
@@ -490,6 +498,10 @@ class UserPreferences(private val context: Context) {
 
     suspend fun setOnboardingCompleted() {
         context.dataStore.edit { it[Keys.OnboardingCompleted] = true }
+    }
+
+    suspend fun saveScanMode(wire: String) {
+        context.dataStore.edit { it[Keys.ScanMode] = wire }
     }
 
     suspend fun setVoiceScreeningDone() {

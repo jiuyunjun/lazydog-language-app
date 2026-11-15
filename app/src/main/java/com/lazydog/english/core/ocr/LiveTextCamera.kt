@@ -269,6 +269,8 @@ fun LiveTextCamera(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
                 scaleType = PreviewView.ScaleType.FILL_CENTER
+                // 举着手机对书页时手指不碰屏幕，系统会在半分钟左右熄屏，取景一黑就得重来。
+                keepScreenOn = true
                 // 点按对焦、双指缩放由 PreviewView 自带，凑近看小字时用得上。
                 this.controller = controller
             }
