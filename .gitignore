@@ -27,6 +27,8 @@ secrets.properties
 *.db
 *.db-shm
 *.db-wal
+# 例外：随包分发的只读词典，由 tools/build_dictionary.py 生成（D-095）
+!app/src/main/assets/dictionary_en_zh.db
 *.wav
 *.mp3
 
