@@ -40,6 +40,12 @@ class DictionaryAlignmentTest {
     }
 
     @Test
+    fun `summary groups by pos in dictionary order and truncates`() {
+        assertEquals(listOf("名词 跑", "动词 跑…", "形容词 熔化的"), run.summaryLines(perPos = 1))
+        assertEquals("动词 跑；经营", run.summaryLines()[1])
+    }
+
+    @Test
     fun `ecdict ipa only fills a blank`() {
         val uk = run.copy(ipa = "/rʌn/", ipaSource = "ecdict")
         assertEquals("/rən/", DictionaryAlignment.align("/rən/", emptyList(), run.senses[1], uk).ipa)

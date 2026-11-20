@@ -59,11 +59,14 @@ import com.lazydog.english.core.data.WordEnrichmentWorker
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.domain.generation.GenerationResult
 import com.lazydog.english.domain.generation.WordExplanation
+import com.lazydog.english.domain.vocabulary.DictionaryEntry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** 多击窗口：这段时间内再点一下就升级成双击/三击。 */
 private const val MULTI_TAP_WINDOW_MILLIS = 280L
@@ -403,6 +406,17 @@ fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Unit) {
     var streamedJson by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
+    /**
+     * 内置词典里查到的词条（D-095/D-096）：本地查，面板一打开就有，不等 AI。
+     * 点到的是变形就按候选原型查；saw 这种两可的两个都列，不替用户选。
+     */
+    var dictionaryEntries by remember { mutableStateOf<List<DictionaryEntry>>(emptyList()) }
+
+    LaunchedEffect(word) {
+        dictionaryEntries = withContext(Dispatchers.IO) {
+            app.dictionary.lemmaCandidates(word).take(MAX_DICTIONARY_HEADWORDS).mapNotNull { app.dictionary.entry(it) }
+        }
+    }
 
     // 面板关掉就别再念了。
     DisposableEffect(Unit) {
@@ -495,6 +509,10 @@ fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            // 库里已有的词摊开的是库里那份，本来就是即时的，不再叠一份词典。
+            if (inLibrary == null && dictionaryEntries.isNotEmpty()) {
+                DictionarySenses(dictionaryEntries, showHeadwords = dictionaryEntries.size > 1)
             }
             when {
                 inLibrary != null -> {
@@ -610,6 +628,28 @@ fun GlobalWordSheet(word: String, sentence: String, onDismiss: () -> Unit) {
             // 扫一扫对准的是标题或招牌时没有原句，空着就别摆一对空引号。
             if (sentence.isNotBlank()) {
                 InteractiveEnglishText("「$sentence」", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            }
+        }
+    }
+}
+
+/** 同时列出的候选原型最多几个（saw → saw / see）。 */
+private const val MAX_DICTIONARY_HEADWORDS = 2
+
+/**
+ * 词典义项：一个词性一行。这是"这个词有哪些意思"，AI 讲解给的是"这句里是哪个意思"，
+ * 两者都留着：讲解回来之前它让面板马上有内容，回来之后它是对照。
+ */
+@Composable
+private fun DictionarySenses(entries: List<DictionaryEntry>, showHeadwords: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        entries.forEach { entry ->
+            entry.summaryLines().forEach { line ->
+                InteractiveEnglishText(
+                    text = if (showHeadwords) "${entry.lemma}：$line" else line,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

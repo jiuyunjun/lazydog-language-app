@@ -41,6 +41,16 @@ data class DictionaryEntry(
     val irregularForms: List<String>,
 ) {
     fun sensesOf(pos: PartOfSpeech): List<DictionarySense> = senses.filter { it.pos == pos }
+
+    /**
+     * 查词面板上的一行一个词性：「动词 跑；经营；运行」。每个词性最多 [perPos] 项——
+     * `run` 的动词有十八项，全摊开就不是"马上看到意思"，是在读词典。
+     */
+    fun summaryLines(perPos: Int = 6): List<String> =
+        senses.groupBy { it.pos }.map { (pos, items) ->
+            val shown = items.take(perPos).joinToString("；") { it.meaningZh }
+            "${pos.labelZh} $shown${if (items.size > perPos) "…" else ""}"
+        }
 }
 
 data class DictionarySense(
