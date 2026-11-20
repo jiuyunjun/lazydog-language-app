@@ -114,7 +114,8 @@ object WordEnrichmentWorker {
                 model = card.model,
                 promptVersion = card.promptVersion,
                 generatedAt = System.currentTimeMillis(),
-                origin = "quick-lookup",
+                // 身份来自词典的卡（每日新词没来得及补全就学了），补全后仍记作词典来的。
+                origin = if (repository.dictionarySenseOf(itemId) != null) "dictionary" else "quick-lookup",
             )
             repository.applyEnrichment(itemId, merged, Json.encodeToString(metadata))
             return Result.success()

@@ -32,6 +32,7 @@ import com.lazydog.english.domain.spelling.SpellingStage
 import com.lazydog.english.domain.spelling.WeakSegment
 import com.lazydog.english.domain.grammar.GrammarCategory
 import com.lazydog.english.domain.grammar.grammarPointKey
+import com.lazydog.english.domain.vocabulary.DictionaryAlignment
 import com.lazydog.english.domain.vocabulary.EnrichedWord
 import com.lazydog.english.domain.vocabulary.PartOfSpeech
 import com.lazydog.english.domain.vocabulary.QuickCard
@@ -100,6 +101,11 @@ class KnowledgeRepository(
         /** 新词学习时选中的提示，与词卡在同一事务保存。 */
         memoryAssistance: GenerationResult.Success<MemoryAssistance>? = null,
         generationMetadataJson: String = "",
+        /**
+         * 词典义项序号（D-095）：从词典来的卡，义项序号就是词典里的序号。
+         * null 时按老口径接在同词条已有义项后面。
+         */
+        senseOrder: Int? = null,
     ): Long? {
         // 存进来的必须已经是原型：双击查词那条路由 AI 结合句子还原（`WordExplanation.headword`），
         // 生成新词那条由提示词要求词典形式。本地不做词形还原——saw / left / found 这类
@@ -134,7 +140,7 @@ class KnowledgeRepository(
                             .filter { it.isNotBlank() && !it.equals(cleanTerm, ignoreCase = true) }
                             .distinctBy { it.lowercase() },
                     ),
-                    senseOrder = (siblings.maxOfOrNull { it.senseOrder } ?: -1) + 1,
+                    senseOrder = senseOrder ?: ((siblings.maxOfOrNull { it.senseOrder } ?: -1) + 1),
                 ),
             )
             memoryAssistance?.let { hint ->
@@ -206,9 +212,52 @@ class KnowledgeRepository(
                     misspellingsJson = VocabularyJson.encodeList(word.misspellings),
                 ),
             )
-            dao.updateItem(item.copy(generationMetadataJson = generationMetadataJson))
+            // 对齐信息（D-095）和生成信息住在同一段 JSON 里，整段替换时要带过去。
+            dao.updateItem(
+                item.copy(
+                    generationMetadataJson = GenerationMetadata.carryDictionarySense(
+                        item.generationMetadataJson,
+                        generationMetadataJson,
+                    ),
+                ),
+            )
             true
         }
+
+    /** 这张卡的词典对齐信息（D-095）；没对齐过返回 null。 */
+    suspend fun dictionarySenseOf(itemId: Long): DictionarySenseTag? =
+        dao.getItem(itemId)?.let { GenerationMetadata.dictionarySenseOf(it.generationMetadataJson) }
+
+    /**
+     * 把一张卡和词典义项对齐（D-095 老卡回填）。[fields] 为 null 表示这一版词典里对不上，
+     * 只记一个未对齐标记。释义、词性、义项序号、音标、变形按 [fields] 改，
+     * 例句、搭配、记忆提示、拼写材料和复习进度一概不动。
+     *
+     * @return 卡已经不在了返回 false。
+     */
+    suspend fun alignToDictionary(
+        itemId: Long,
+        tag: DictionarySenseTag,
+        fields: DictionaryAlignment.AlignedFields?,
+    ): Boolean = database.withTransaction {
+        val item = dao.getItem(itemId) ?: return@withTransaction false
+        val detail = dao.getVocabularyDetail(itemId) ?: return@withTransaction false
+        if (fields != null) {
+            dao.updateVocabularyDetail(
+                detail.copy(
+                    pos = fields.pos,
+                    meaningZh = fields.meaningZh,
+                    senseOrder = fields.senseOrder,
+                    ipa = fields.ipa,
+                    formsJson = VocabularyJson.encodeList(fields.forms),
+                ),
+            )
+        }
+        dao.updateItem(
+            item.copy(generationMetadataJson = GenerationMetadata.withDictionarySense(item.generationMetadataJson, tag)),
+        )
+        true
+    }
 
     /** @return 新知识项 id；同名语法点已存在时返回 null。 */
     suspend fun addGrammar(
@@ -639,10 +688,28 @@ private fun VocabularyDetailEntity.isExpression(): Boolean =
  */
 fun VocabularyRecord.isQuickCard(): Boolean =
     !detail.isExpression() &&
-        item.generationMetadataJson.isBlank() &&
+        // 不看"非空"而看"有没有模型生成过"：回填会给速记卡写上对齐信息（D-095）。
+        !GenerationMetadata.hasGenerationInfo(item.generationMetadataJson) &&
         VocabularyJson.decodeList(detail.chunksJson).isEmpty() &&
         VocabularyJson.decodeList(detail.misspellingsJson).isEmpty() &&
         VocabularyJson.decodeCollocations(detail.collocationsJson).isEmpty()
+
+/**
+ * 库里另外还有几张卡和 [record] 对上了同一个词典义项（D-095「不拆也不合」）。
+ *
+ * 回填不合并这种卡——合并就得决定两份复习历史留哪份——只在详情页提一句，让用户自己决定删不删。
+ * 没对齐或未对齐的卡不和谁算重复。
+ */
+fun List<VocabularyRecord>.countSameDictionarySense(record: VocabularyRecord): Int {
+    val tag = GenerationMetadata.dictionarySenseOf(record.item.generationMetadataJson)
+        ?.takeIf { it.matched } ?: return 0
+    return count { other ->
+        other.item.id != record.item.id &&
+            other.detail.term.equals(record.detail.term, ignoreCase = true) &&
+            GenerationMetadata.dictionarySenseOf(other.item.generationMetadataJson)
+                ?.let { it.matched && it.pack == tag.pack && it.pos == tag.pos && it.order == tag.order } == true
+    }
+}
 
 /** 新数据直接读分层字段；旧数据尽量从混合标题和说明中提取一个可读回退。 */
 fun GrammarDetailEntity.displayPattern(): String {

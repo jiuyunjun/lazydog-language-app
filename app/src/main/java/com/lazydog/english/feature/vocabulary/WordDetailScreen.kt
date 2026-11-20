@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.designsystem.SpeakButton
+import com.lazydog.english.core.data.GenerationMetadata
+import com.lazydog.english.core.data.countSameDictionarySense
 import com.lazydog.english.core.data.KnowledgeRepository
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.VocabularyJson
@@ -188,7 +190,20 @@ fun WordDetailScreen(
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
-                if (!isExpression && record.isQuickCard()) QuickCardBanner(record.item.id)
+                if (!isExpression && record.isQuickCard()) {
+                    QuickCardBanner(
+                        itemId = record.item.id,
+                        fromDictionary = GenerationMetadata.dictionarySenseOf(record.item.generationMetadataJson) != null,
+                    )
+                }
+                val sameSense = remember(words, record) { words.countSameDictionarySense(record) }
+                if (sameSense > 0) {
+                    Text(
+                        text = "还有 $sameSense 张卡和这张是词典里的同一个意思，不需要的话可以删掉一张。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 // 详情页永远显示图：这是查阅，不是复习，不受"复习时逐渐撤图"影响
                 // （`单词视觉记忆图片DESIGN.md` §46）。整句表达不配图，它没有单一词义可言。
                 if (!isExpression) {
@@ -357,7 +372,7 @@ private fun VocabularyRecord.toAskContext(isExpression: Boolean): AskContext {
  * 补全成功后这张卡不再是速记卡，这一条随记录刷新自己消失。
  */
 @Composable
-private fun QuickCardBanner(itemId: Long) {
+private fun QuickCardBanner(itemId: Long, fromDictionary: Boolean) {
     val context = LocalContext.current
     val state by remember(itemId) { WordEnrichmentWorker.observe(context, itemId) }
         .collectAsState(initial = WordEnrichmentWorker.State.Idle)
@@ -378,7 +393,8 @@ private fun QuickCardBanner(itemId: Long) {
                     WordEnrichmentWorker.State.Running -> "正在补全搭配、词块拆分和常见拼错…"
                     WordEnrichmentWorker.State.Waiting -> "排队补全中，没网的话联网后自动继续"
                     WordEnrichmentWorker.State.Failed -> "补全没成功，这张卡还只有释义和原句"
-                    WordEnrichmentWorker.State.Idle -> "这张卡是查词时速记的，只有释义和原句"
+                    WordEnrichmentWorker.State.Idle ->
+                        if (fromDictionary) "释义来自词典，例句和搭配还没补上" else "这张卡是查词时速记的，只有释义和原句"
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

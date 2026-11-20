@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.backup.AutoBackupWorker
+import com.lazydog.english.core.data.DictionaryBackfillWorker
 import kotlinx.coroutines.launch
 
 @Composable
@@ -63,6 +64,8 @@ fun WelcomeScreen(onStart: () -> Unit, onRestored: () -> Unit) {
                     app.backupRepository.restore(payload)
                     app.userPreferences.setBackupFolderUri(uri.toString())
                     AutoBackupWorker.schedule(context)
+                    // 恢复进来的是另一批卡，对齐要从头做（D-095）。
+                    DictionaryBackfillWorker.restart(context)
                     restoring = false
                     onRestored()
                 },

@@ -19,7 +19,10 @@ data class LearningCardMetadata(
     val generatedAt: Long,
     val schemaVersion: Int = 1,
     val validationStatus: String = "validated",
-    /** 这张卡怎么来的：`card` 是记录页完整学习卡，`quick-lookup` 是查词速记卡后台补全的。 */
+    /**
+     * 这张卡怎么来的：`card` 是记录页完整学习卡，`quick-lookup` 是查词速记卡后台补全的，
+     * `dictionary` 是身份取自内置词典、教学材料由模型补的（D-095）。
+     */
     val origin: String = "card",
 )
 

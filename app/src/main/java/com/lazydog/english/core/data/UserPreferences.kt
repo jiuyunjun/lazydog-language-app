@@ -70,6 +70,8 @@ class UserPreferences(private val context: Context) {
         val TodaySkippedSteps = stringSetPreferencesKey("today_skipped_steps")
         val WrappedUpDate = stringPreferencesKey("wrapped_up_date")
         val MaxNewWords = intPreferencesKey("max_new_words")
+        /** 老卡回填做完的词典版本（D-095）。设备上的进度，不进备份。 */
+        val DictionaryBackfillVersion = intPreferencesKey("dictionary_backfill_version")
         val ReminderTime = stringPreferencesKey("reminder_time")
         val ThemeMode = stringPreferencesKey("theme_mode")
         val CopyTone = stringPreferencesKey("copy_tone")
@@ -573,6 +575,13 @@ class UserPreferences(private val context: Context) {
             it[Keys.LearningGoal] = goal
             it[Keys.Topics] = topics
         }
+    }
+
+    val dictionaryBackfillVersion: Flow<Int> =
+        context.dataStore.data.map { it[Keys.DictionaryBackfillVersion] ?: 0 }
+
+    suspend fun setDictionaryBackfillVersion(version: Int) {
+        context.dataStore.edit { it[Keys.DictionaryBackfillVersion] = version }
     }
 
     suspend fun setMaxNewWords(count: Int) {

@@ -58,6 +58,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.ask.ShakeDetector
 import com.lazydog.english.core.backup.AutoBackupWorker
+import com.lazydog.english.core.data.DictionaryBackfillWorker
 import com.lazydog.english.core.config.AiVendor
 import com.lazydog.english.core.config.SearchVendor
 import com.lazydog.english.core.data.UserPreferences
@@ -304,6 +305,8 @@ fun SettingsScreen(
             app.backupFileStore.read(backupFolderUri).fold(
                 onSuccess = { payload ->
                     app.backupRepository.restore(payload)
+                    // 恢复进来的是另一批卡，对齐要从头做（D-095）。
+                    DictionaryBackfillWorker.restart(context)
                     backupStatus = "已恢复 · ${payload.knowledgeItems.size} 条知识记录"
                 },
                 onFailure = { backupStatus = "恢复失败：${it.message}" },

@@ -2409,13 +2409,19 @@
     "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
     "count": 1,
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文",
-    "text": "when (state) { WordEnrichmentWorker.State.Running -> \"正在补全搭配、词块拆分和常见拼错…\" WordEnrichmentWorker.State.Waiting -> \"排队补全中，没网的话联网后自动继续\" WordEnrichmentWorker.State.Failed -> \"补全没成功，这张卡还只有释义和原句\" WordEnrichmentWorker.State.Idle -> \"这张卡是查词时速记的，只有释义和原句\" }"
+    "text": "when (state) { WordEnrichmentWorker.State.Running -> \"正在补全搭配、词块拆分和常见拼错…\" WordEnrichmentWorker.State.Waiting -> \"排队补全中，没网的话联网后自动继续\" WordEnrichmentWorker.State.Failed -> \"补全没成功，这张卡还只有释义和原句\" WordEnrichmentWorker.State.Idle -> if (fromDictionary) \"释义来自词典，例句和搭配还没补上\" else \"这张卡是查词时速记的，只有释义和原句\" }"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
     "count": 1,
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文",
     "text": "if (state == WordEnrichmentWorker.State.Failed) \"再试一次\" else \"补全\""
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
+    "text": "\"还有 $sameSense 张卡和这张是词典里的同一个意思，不需要的话可以删掉一张。\"",
+    "count": 1,
+    "reason": "界面状态提示（D-095 同义项重复）；不是供查词讲句的学习正文"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/reading/HotTopicsSection.kt",

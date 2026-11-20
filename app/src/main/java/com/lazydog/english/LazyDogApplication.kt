@@ -8,6 +8,7 @@ import com.lazydog.english.core.ai.OpenAiContentGenerator
 import com.lazydog.english.core.backup.BackupFileStore
 import com.lazydog.english.core.backup.BackupRepository
 import com.lazydog.english.core.data.AssetDictionary
+import com.lazydog.english.core.data.DictionaryBackfillWorker
 import com.lazydog.english.core.data.AssetPhonemeCatalog
 import com.lazydog.english.core.data.AssetWordFrequencyIndex
 import com.lazydog.english.core.data.KnowledgeRepository
@@ -46,6 +47,12 @@ import com.lazydog.english.domain.vocabulary.WordFrequencyIndex
  * 手工组装的应用级单例。依赖关系还很浅，先不上 Hilt（ARCHITECTURE.md §2）。
  */
 class LazyDogApplication : Application() {
+
+    override fun onCreate() {
+        super.onCreate()
+        // 词典换了新版本（随 App 更新），老卡要重新和它对齐；已经做完就是一次空跑（D-095）。
+        DictionaryBackfillWorker.enqueueIfNeeded(this)
+    }
 
     val database: AppDatabase by lazy { AppDatabase.create(this) }
 
