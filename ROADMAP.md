@@ -2,7 +2,7 @@
 doc: "ROADMAP.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "2.34"
+version: "2.35"
 updated: "2026-11-20"
 authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
 index: "DOCS.md"
@@ -922,6 +922,16 @@ CMUdict 没收的约 12% 词条用 ECDICT 原音标（偏英式），这种音�
 `SenseChoiceTest` / `OpenAiContentGeneratorTest` 守住只认范围内序号、JSON `null` 与字段缺失的区别；
 `DictionaryAlignmentTest` 守住按词性找候选、不跨词性、音标与变形的覆盖规则；
 `GenerationMetadataTest` / `DictionaryRecordRulesTest` 守住对齐信息不让速记卡变成完整卡、补全时带过去、重复义项计数。
+
+## M28：读书与网络阅读（D-098 待确认，`读书与网络阅读DESIGN.md`）
+
+- [ ] R1 日常阅读改从网上取：VOA 慢速英语、新闻原文、简明维基百科；本地难度估计；理解题按需出；「让 AI 写一篇」降为次要入口。
+- [ ] R2 读书核心：书架、本地导入 EPUB/TXT、阅读器（左右翻页 / 上下滚动、排版设置、目录、进度、书签）、查词讲句提问存词。
+- [ ] R3 在线书库：Project Gutenberg、维基文库、AO3。
+- [ ] R4 中文书母语阅读：书级词表、生词跨章复现、支架逐步撤掉、密度控制。
+- [ ] R5 朗读、书内搜索、阅读统计、「标出我在学的词」。
+
+明确不做：商业网文站与盗版站抓取、自定义书源引擎、DRM 电子书、PDF、云同步、英文书整本 AI 翻译。
 
 ## 已知限制
 
