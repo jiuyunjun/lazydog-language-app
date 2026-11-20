@@ -2,8 +2,8 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "12.5"
-updated: "2026-11-14"
+version: "12.6"
+updated: "2026-11-20"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -364,6 +364,35 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 
 分成两次调用而不是一次到底，是因为两者的失败方式不一样：候选给歪了是"再说一遍就行"，
 学习卡写坏了是"这一张不要"。混在一次里用户只能整体重来。
+
+### 从词典义项里选（D-095）
+
+内置词典（`DictionaryLookup`）给出单词卡的身份：词形、词性、释义、音标。下面两次调用里，
+**模型只回义项序号，不写一个字的释义**——答错了也只是选错一项，本地能一眼校验；
+不会出现一个词典里没有、谁也没审过的新释义。两次都走 `AiTask.Explain`（要快）。
+
+候选义项在提示词里一行一个：`  序号. 词性 释义`，序号就是 `DictionarySense` 在列表里的下标。
+
+**老卡回填**：`chooseDictionarySenses(SenseChoiceRequest)`
+
+- 每项 `SenseChoiceItem`：`key`（调用方的键，回填用 itemId，原样带回）、`term`、`options`、
+  `meaningHintZh`（卡上原来的释义）、`exampleEn`（卡上的例句）。一次最多
+  `MAX_SENSE_CHOICES_PER_REQUEST` = 12 项。
+- 输出：`{"choices":[{"key":"...","index":0}]}`。`index` 为 JSON `null` 表示词典里没有对得上的。
+- 本地校验（`validateSenseChoices`）：键不认识、序号越界的丢掉，同一个键取第一次。
+  **字段缺失或不是整数算"没答好"，不在结果里；只有明写的 `null` 才算"都不对"**——
+  后者会把卡标成未对齐、同一版词典下不再问，前者下次还会再问。
+
+**每日新词挑词**：`pickNewWords(NewWordPickRequest)`
+
+- 字段：`count`、`learnerLevel`、`topics`、`candidates`（`SenseChoiceItem`，`key` 就是词本身，
+  按常用程度从高到低）。
+- 输出：`{"picks":[{"term":"...","index":0}]}`。要求选这个词最常用、对这个水平最有用的义项，
+  跳过功能词、人名地名、明显不符合水平的词；有话题时同样常用的优先话题相关的。
+- 本地校验（`validateNewWordPicks`）：只认候选里的词和范围内的序号，同一个词只取第一条合法回答，
+  最多 `count` 个。一个都不剩时整次失败。
+- 挑定之后，每个词单独走 §3 的 `targetTerm` + `confirmedSenseZh`（「动词 经营」）补全例句、
+  搭配、记忆提示和拼写材料；卡片的词性、释义、音标用词典的，补全不覆盖。
 
 ## 4. 阅读生成请求
 

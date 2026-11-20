@@ -389,6 +389,67 @@ class OpenAiContentGeneratorTest {
         assertEquals(3, server.requestCount)
     }
 
+    private val senseRun = com.lazydog.english.domain.generation.SenseChoiceItem(
+        key = "7",
+        term = "run",
+        options = listOf(
+            com.lazydog.english.domain.vocabulary.DictionarySense(com.lazydog.english.domain.vocabulary.PartOfSpeech.Verb, 0, "跑"),
+            com.lazydog.english.domain.vocabulary.DictionarySense(com.lazydog.english.domain.vocabulary.PartOfSpeech.Verb, 1, "经营"),
+        ),
+        meaningHintZh = "经营（一家店、一个机构）",
+        exampleEn = "She runs a small bakery.",
+    )
+
+    @Test
+    fun `sense choice separates explicit none from missing answers`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody("""{"choices":[{"key":"7","index":1},{"key":"8","index":null},{"key":"9"},{"key":"10","index":"x"}]}"""),
+            ),
+        )
+        val request = com.lazydog.english.domain.generation.SenseChoiceRequest(
+            listOf(senseRun, senseRun.copy(key = "8"), senseRun.copy(key = "9"), senseRun.copy(key = "10")),
+        )
+
+        val result = generator().chooseDictionarySenses(request) as GenerationResult.Success
+
+        // 9 没给 index、10 给的不是整数：都是没答好，不在结果里；只有 8 是明说都不对。
+        assertEquals(mapOf("7" to 1, "8" to null), result.data)
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body.contains("She runs a small bakery."))
+        assertTrue(body.contains("1. 动词 经营"))
+    }
+
+    @Test
+    fun `new word picks keep only candidate senses`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody("""{"picks":[{"term":"run","index":1},{"term":"walk","index":0},{"term":"run","index":0}]}"""),
+            ),
+        )
+        val request = com.lazydog.english.domain.generation.NewWordPickRequest(
+            count = 3,
+            learnerLevel = "B1",
+            topics = listOf("工作"),
+            candidates = listOf(senseRun.copy(key = "run")),
+        )
+
+        val result = generator().pickNewWords(request) as GenerationResult.Success
+
+        assertEquals(listOf("经营"), result.data.map { it.sense.meaningZh })
+        assertEquals(listOf("2 个挑选没通过校验"), result.droppedNotes)
+    }
+
+    @Test
+    fun `new word picks fail when nothing is usable`() = runBlocking {
+        server.enqueue(MockResponse().setBody(chatBody("""{"picks":[{"term":"walk","index":0}]}""")))
+        val request = com.lazydog.english.domain.generation.NewWordPickRequest(
+            count = 1, learnerLevel = "B1", topics = emptyList(), candidates = listOf(senseRun.copy(key = "run")),
+        )
+
+        assertTrue(generator().pickNewWords(request) is GenerationResult.Failure)
+    }
+
     @Test
     fun `word explanation parses`() = runBlocking {
         server.enqueue(

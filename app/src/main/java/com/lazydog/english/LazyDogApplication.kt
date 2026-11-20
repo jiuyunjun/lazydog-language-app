@@ -7,6 +7,7 @@ import com.lazydog.english.core.ai.ModelCatalog
 import com.lazydog.english.core.ai.OpenAiContentGenerator
 import com.lazydog.english.core.backup.BackupFileStore
 import com.lazydog.english.core.backup.BackupRepository
+import com.lazydog.english.core.data.AssetDictionary
 import com.lazydog.english.core.data.AssetPhonemeCatalog
 import com.lazydog.english.core.data.AssetWordFrequencyIndex
 import com.lazydog.english.core.data.KnowledgeRepository
@@ -38,6 +39,7 @@ import com.lazydog.english.core.speech.SpeechController
 import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.scheduling.FsrsScheduler
 import com.lazydog.english.domain.pronunciation.PhonemeCatalog
+import com.lazydog.english.domain.vocabulary.DictionaryLookup
 import com.lazydog.english.domain.vocabulary.WordFrequencyIndex
 
 /**
@@ -57,6 +59,9 @@ class LazyDogApplication : Application() {
 
     /** 词频表：给"下一批学什么"排优先级，读 assets，失败退化成空索引。 */
     val wordFrequencyIndex: WordFrequencyIndex by lazy { AssetWordFrequencyIndex(this) }
+
+    /** 内置离线词典：单词卡的词形、词性、释义、音标从这里来（D-095）。打不开退化成查不到。 */
+    val dictionary: DictionaryLookup by lazy { AssetDictionary(this) }
 
     /** 进步证据：不存新数据，从既有学习事件里推（`持续学习DESIGN.md` §14）。 */
     val progressRepository: ProgressRepository by lazy { ProgressRepository(database) }

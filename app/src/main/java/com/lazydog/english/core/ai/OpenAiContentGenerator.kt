@@ -49,6 +49,12 @@ import com.lazydog.english.domain.production.TranslationValidation
 import com.lazydog.english.domain.production.TranslationVerdict
 import com.lazydog.english.domain.generation.LearningContentGenerator
 import com.lazydog.english.domain.generation.LearningTargetRequest
+import com.lazydog.english.domain.generation.NewWordPick
+import com.lazydog.english.domain.generation.NewWordPickRequest
+import com.lazydog.english.domain.generation.SenseChoiceItem
+import com.lazydog.english.domain.generation.SenseChoiceRequest
+import com.lazydog.english.domain.generation.validateNewWordPicks
+import com.lazydog.english.domain.generation.validateSenseChoices
 import com.lazydog.english.domain.generation.LearningTargetSuggestion
 import com.lazydog.english.domain.generation.MAX_LEARNING_TARGETS
 import com.lazydog.english.domain.generation.filterLearningTargets
@@ -120,9 +126,11 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.intOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -810,6 +818,62 @@ class OpenAiContentGenerator(
             content.model,
             SUGGEST_PROMPT_VERSION,
             if (dropped > 0) listOf("$dropped 条候选没通过校验") else emptyList(),
+        )
+    }
+
+    override suspend fun chooseDictionarySenses(
+        request: SenseChoiceRequest,
+    ): GenerationResult<Map<String, Int?>> {
+        if (request.items.isEmpty()) return GenerationResult.Success(emptyMap(), "", SENSE_CHOICE_PROMPT_VERSION)
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildSenseChoicePrompt(request),
+            // 只回几个序号，用快模型就够；回填跑在后台，但一次批里卡多，慢模型会把整批拖很久。
+            task = AiTask.Explain,
+            op = "选义项",
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<SenseChoicesPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val choices = validateSenseChoices(
+            request,
+            payload.choices.mapNotNull { it.answer() }.map { it.key to it.index },
+        )
+        return GenerationResult.Success(choices, content.model, SENSE_CHOICE_PROMPT_VERSION)
+    }
+
+    override suspend fun pickNewWords(
+        request: NewWordPickRequest,
+        onStage: ((GenerationStage) -> Unit)?,
+    ): GenerationResult<List<NewWordPick>> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildNewWordPicksPrompt(request),
+            // 用户正盯着"挑词中"，这一步是新词出卡前唯一要等的，要快。
+            task = AiTask.Explain,
+            onStage = onStage,
+            op = "挑词",
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<NewWordPicksPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val picks = validateNewWordPicks(
+            request,
+            payload.picks.mapNotNull { pick -> pick.index?.let { pick.term to it } },
+        )
+        if (picks.isEmpty()) return GenerationResult.Failure("AI 挑的词都不在候选里，再试一次。")
+        val dropped = payload.picks.size - picks.size
+        return GenerationResult.Success(
+            picks,
+            content.model,
+            NEW_WORD_PICKS_PROMPT_VERSION,
+            if (dropped > 0) listOf("$dropped 个挑选没通过校验") else emptyList(),
         )
     }
 
@@ -2213,6 +2277,37 @@ class OpenAiContentGenerator(
     }
 
     @Serializable
+    private data class SenseChoicesPayload(val choices: List<SenseChoicePayload> = emptyList())
+
+    /**
+     * [index] 要分清三种情况：JSON `null` 是模型明说都不对；字段缺失或不是整数是没答好，
+     * 不能当成"都不对"——那会把这张卡标成未对齐，同一版词典下不再问第二次。
+     */
+    @Serializable
+    private data class SenseChoicePayload(
+        val key: String = "",
+        // 不能声明成可空：可空字段收到 JSON null 和字段缺失都会变成 Kotlin null，分不开。
+        // 非空的 JsonElement 收到 null 是 JsonNull，缺失才落到这个默认值。
+        val index: JsonElement = MISSING_INDEX,
+    ) {
+        /** 没答好返回 null，交给调用方丢掉；答了就是 [Answer]。 */
+        fun answer(): Answer? = when (val value = index) {
+            MISSING_INDEX -> null
+            is JsonNull -> Answer(key.trim(), null)
+            is JsonPrimitive -> value.intOrNull?.let { Answer(key.trim(), it) }
+            else -> null
+        }
+    }
+
+    private data class Answer(val key: String, val index: Int?)
+
+    @Serializable
+    private data class NewWordPicksPayload(val picks: List<NewWordPickPayload> = emptyList())
+
+    @Serializable
+    private data class NewWordPickPayload(val term: String = "", val index: Int? = null)
+
+    @Serializable
     private data class LearningTargetsPayload(
         val targets: List<LearningTargetPayload> = emptyList(),
     )
@@ -2298,6 +2393,8 @@ class OpenAiContentGenerator(
         const val MEMORY_PROMPT_VERSION = 6
         const val VISUAL_QUERY_PROMPT_VERSION = 4
         const val SUGGEST_PROMPT_VERSION = 2
+        const val SENSE_CHOICE_PROMPT_VERSION = 1
+        const val NEW_WORD_PICKS_PROMPT_VERSION = 1
 
         /** 少于这个数就别开局了：题目太少，一轮训练的统计也没意义。 */
         const val MIN_LISTENING_ITEMS = 5
@@ -3486,6 +3583,48 @@ class OpenAiContentGenerator(
             appendLine("""输出 JSON schema：{"sentenceEn":"...","sentenceZh":"..."}""")
         }
 
+        /** 候选义项按 `序号. 词性 释义` 一行一个列出来；序号就是模型要回的 index。 */
+        private fun StringBuilder.appendOptions(item: SenseChoiceItem) {
+            item.options.forEachIndexed { index, sense ->
+                appendLine("  $index. ${promptText(sense.labelZh)}")
+            }
+        }
+
+        internal fun buildSenseChoicePrompt(request: SenseChoiceRequest): String = buildString {
+            appendLine("下面每张单词卡都写着学习者当初学到的意思。请在这个词的词典义项里，选出和卡上意思相同的那一项。")
+            appendLine("只能回序号，不要改写释义，不要自己加义项。")
+            appendLine("卡上的意思如果同时覆盖了好几项，选最主要的那一项；词典里确实没有对得上的，index 回 null。")
+            appendLine("不要因为字面相近就选：判断的是意思是不是同一个，例句是最重要的依据。")
+            request.items.forEach { item ->
+                appendLine("<card key=\"${promptText(item.key)}\">")
+                appendLine("词：${promptText(item.term)}")
+                if (item.meaningHintZh.isNotBlank()) appendLine("卡上的意思：${promptText(item.meaningHintZh)}")
+                if (item.exampleEn.isNotBlank()) appendLine("例句：${promptText(item.exampleEn)}")
+                appendLine("词典义项：")
+                appendOptions(item)
+                appendLine("</card>")
+            }
+            appendLine("每张卡都要回答，key 原样带回。")
+            appendLine("""输出 JSON schema：{"choices":[{"key":"...","index":0}]}""")
+        }
+
+        internal fun buildNewWordPicksPrompt(request: NewWordPickRequest): String = buildString {
+            appendLine("给一位水平 ${request.learnerLevel} 的中文母语英语学习者挑 ${request.count} 个今天学的新词。")
+            appendLine("只能从下面的候选里挑，候选按常用程度从高到低排。每个词同时选定今天要教的那一个义项：")
+            appendLine("选这个词最常用、对这个水平最有用的意思，不要选生僻、专业或过时的义项。")
+            appendLine("跳过功能词、人名地名、和他水平明显不符的词。")
+            if (request.topics.isNotEmpty()) {
+                appendLine("他关心的话题：${request.topics.joinToString("、") { promptText(it) }}；同样常用时优先这些场景里用得上的词。")
+            }
+            request.candidates.forEach { item ->
+                appendLine("<word term=\"${promptText(item.term)}\">")
+                appendOptions(item)
+                appendLine("</word>")
+            }
+            appendLine("term 原样抄候选里的词，index 是义项序号。")
+            appendLine("""输出 JSON schema：{"picks":[{"term":"...","index":0}]}""")
+        }
+
         internal fun buildSuggestTargetsPrompt(request: LearningTargetRequest): String = buildString {
             val what = if (request.isVocab) "英语单词或短语" else "英语语法点"
             appendLine("一位水平 ${request.learnerLevel} 的中文母语学习者说，他想学这个：")
@@ -3785,3 +3924,6 @@ internal fun extractJson(content: String): String {
 
 internal fun chatCompletionsUrl(baseUrl: String): String =
     baseUrl.trim().trimEnd('/') + "/chat/completions"
+
+/** 选义项回答里 index 字段缺失时的占位，见 SenseChoicePayload。 */
+private val MISSING_INDEX: JsonElement = JsonPrimitive("__missing__")

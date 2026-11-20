@@ -49,6 +49,21 @@ interface LearningContentGenerator {
     ): GenerationResult<List<LearningTargetSuggestion>>
 
     /**
+     * 老卡回填：每张卡从词典候选义项里选一项，或者说都不对（D-095）。模型只回序号，
+     * 结果按 [SenseChoiceItem.key] 对回，没回答的键不在结果里。
+     */
+    suspend fun chooseDictionarySenses(request: SenseChoiceRequest): GenerationResult<Map<String, Int?>>
+
+    /**
+     * 每日新词第一步：从候选里挑词并选定要教的义项（D-095）。要快——卡片等它回来就用词典内容先显示，
+     * 例句等再分别走 [generateNewWords] 的指定词补全。
+     */
+    suspend fun pickNewWords(
+        request: NewWordPickRequest,
+        onStage: ((GenerationStage) -> Unit)? = null,
+    ): GenerationResult<List<NewWordPick>>
+
+    /**
      * [onStage] 报"现在卡在哪一步"（还没接通 / 模型在想 / 正在写），实现应流式请求。
      * 只报字符数的话，推理模型开口前的那段思考里界面完全静止，看着像卡死。
      */
