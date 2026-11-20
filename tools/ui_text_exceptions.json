@@ -1950,6 +1950,12 @@
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   },
   {
+    "file": "app/src/main/java/com/lazydog/english/feature/study/WordStudyScreen.kt",
+    "text": "if (fillPending) \"例句和搭配还在写，先看释义\" else \"例句没写出来，学完会在后台补上\"",
+    "count": 1,
+    "reason": "界面状态提示（D-095 词典新词补全进度）；不是供查词讲句的学习正文"
+  },
+  {
     "file": "app/src/main/java/com/lazydog/english/feature/today/TodayScreen.kt",
     "text": "\"再学几分钟：${nextStep.step.title}\"",
     "count": 1,

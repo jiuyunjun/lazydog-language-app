@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.11"
+version: "7.12"
 updated: "2026-11-20"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -100,6 +100,23 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
   - 文档：`ARCHITECTURE.md` 补一节「只读参考数据」。
   - 用户库的表结构不变，没有迁移，没有新的 Gradle 依赖。APK 会变大。
 - 许可：ECDICT 是 MIT 许可，CMUdict 是 BSD 2-Clause，都可以打包分发。在构建脚本和 db 的 `meta` 里写明出处和许可。
+- 实现中追加的决定（2026-11-20）：
+  - **每日新词由 AI 先挑词选义项**（用户选定）：ECDICT 这份 CSV 没有词性使用比例，词性顺序也靠不住
+    （`run` 第一行是名词「跑」），本地选不准要教哪一项。所以先发一次只回序号的小调用 `pickNewWords`，
+    卡片随即用词典内容显示，例句等逐词走指定词补全。保留按话题挑词。
+  - **没网时每日新词提示需要联网**（用户选定），不做离线手选义项。
+  - 速记卡判定从"生成信息为空"改成"生成信息里没有 `model`"：回填会给没补全的速记卡写上对齐信息，
+    按旧判据它会被当成完整卡、再也不补全。补全写回生成信息时把对齐信息带过去。
+  - 音标覆盖规则细化：词典音标来自 CMUdict（美式）才覆盖卡上已有的；来自 ECDICT 的只在卡上为空时补。
+  - 构建时去掉「（男子名）」「（姓氏）」这类人名义项和没有汉字的英文释义：小写拼写的人名靠词频混进来过约 950 项。
+  - 选义项回答里 JSON `null`（都不对）和字段缺失（没答好）分开处理：前者记未对齐、同一版本不再问，
+    后者下次再问。
+  - 生成的 db 要进 Git，给 `.gitignore` 的 `*.db` 开一条单独例外。
+  - 漂移自查（§0.6 八条）：依赖方向不变（feature → core/data → domain）；新增的是本请求已确认的
+    只读参考数据源，没有别的新模式；词典接口照 `WordFrequencyIndex` 的路子，补全复用 `generateNewWords`
+    和 `WordEnrichmentWorker`、合并复用 `QuickCardEnrichment`，无平行抽象；对齐与校验规则在 domain，
+    页面只持有状态；单例挂在 `LazyDogApplication`；写库全走 `KnowledgeRepository`；
+    用户库表结构不变、无迁移、无新 Gradle 依赖。
 
 ## D-094：扫一扫搬到底栏正中，作为动作而不是第五个页签
 

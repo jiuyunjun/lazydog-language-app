@@ -2,8 +2,8 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "2.5"
-updated: "2026-11-10"
+version: "2.6"
+updated: "2026-11-20"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -365,6 +365,30 @@ feature/library/ScanWordsScreen ──► core/ocr/LiveTextCamera ──► doma
   生成退回"让模型自己按等级选词"。词频是让选词更准，不是学习流程的前置条件。
 - 对外只给"档"不给排名数字：第 2870 名和第 3050 名之间的差别对"这个词值不值得学"
   没有意义，报出去是假精确。
+
+### 内置词典（DictionaryLookup，D-095）
+
+单词卡的**身份**（词形、词性、释义、音标、不规则变形）从这里来；例句、搭配、记忆提示、
+拼写材料仍由模型写。和词频表一样是只读参考数据，**不是用户状态**：不进 Room 用户库、不进备份、
+不走迁移。
+
+- 资源：`app/src/main/assets/dictionary_en_zh.db`，只读 SQLite，由 `tools/build_dictionary.py`
+  从 ECDICT（MIT）和 CMUdict（BSD-2-Clause）生成，**不要手改**。约 3 万词条、9.5 万义项；
+  APK 里压缩后约 5.5 MB，设备上解开约 12 MB。`.gitignore` 的 `*.db` 对它单独开了例外。
+- 表：`meta`（包 id、版本、来源）、`words`（原型、音标及来源、词频排名、考试标签）、
+  `senses`（原型、词性、义项序号、中文释义）、`forms`（变形、原型、类别、是否不规则）。
+- 义项颗粒度和词典对齐：一个 (原型, 词性) 下的每一项就是一个义项，序号即卡片的 `senseOrder`。
+- 分层落点：`domain/vocabulary/Dictionary.kt` 定义 `DictionaryLookup` 接口与词条类型；
+  `core/data/AssetDictionary` 用系统自带的 `android.database.sqlite` 只读打开（不用 Room：
+  预置库要过 Room 的 schema 校验，只读查询也用不上 Room 的能力）。SQLite 打不开 assets 里的压缩文件，
+  第一次用时拷到 `noBackupFilesDir/dictionary/`，App 更新后重拷。
+- 单例挂在 `LazyDogApplication.dictionary`；**打不开不算错误**，退化成查不到，
+  每日新词退回"模型直接写整张卡"的老路。
+- 增量：一个包一个 db 文件，`meta` 带包 id 与版本。现在只有基础包 `base`。
+- 和卡片的关系：卡片对上了哪个义项记在 `knowledge_items.generationMetadataJson` 的
+  `dictionarySense` 键（`core/data/GenerationMetadata`），不加列。速记卡判定因此改看
+  "有没有 `model`"，不再看生成信息是否为空。老卡回填见 `core/data/DictionaryBackfillWorker`，
+  对齐规则在 `domain/vocabulary/DictionaryAlignment`。
 
 ### 文案语气（AppCopy）
 

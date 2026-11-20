@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -50,7 +51,9 @@ import com.lazydog.english.core.designsystem.rememberLeaveGuard
 import com.lazydog.english.domain.progress.DifficultyBias
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.designsystem.SpeakButton
+import com.lazydog.english.core.data.DictionaryNewWords
 import com.lazydog.english.core.data.KnowledgeRepository
+import com.lazydog.english.core.data.WordEnrichmentWorker
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.VocabularyJson
 import com.lazydog.english.core.data.spellingFacts
@@ -109,7 +112,30 @@ private data class StudyCard(
     /** 熟词产出卡按这个阶段出题；新词和生词用不到。 */
     val spelling: SpellingProgress? = null,
     val facts: SpellingFacts = SpellingFacts.None,
+    /** 身份取自内置词典的新词卡（D-095）；例句等由 [CardFill] 后到。 */
+    val dictionary: DictionaryNewWords.Draft? = null,
 ) {
+    /** 补全结果按这个键对回卡片。 */
+    val fillKey: String get() = term.lowercase()
+
+    /** 补全到了就把教学材料并进来；词性、释义、身份不变。 */
+    fun filledWith(fill: CardFill?): StudyCard = when (fill) {
+        is CardFill.Done -> copy(
+            ipa = fill.filled.word.ipa,
+            exampleEn = fill.filled.word.exampleEn,
+            exampleZh = fill.filled.word.exampleZh,
+            memoryHintZh = fill.filled.word.memoryHintZh,
+            forms = fill.filled.word.forms,
+            collocations = fill.filled.word.collocations,
+            facts = SpellingFacts(
+                chunks = fill.filled.word.chunks,
+                trickyPart = fill.filled.word.trickyPart,
+                misspellings = fill.filled.word.misspellings,
+            ),
+        )
+        else -> this
+    }
+
     /**
      * 复习一个词就是考它的拼写：给中文，自己写出英文，程序判分。
      *
@@ -150,6 +176,14 @@ private data class StudyCard(
         // 单词页只发到期的卡，所以这里一定推动复习时间。
         dueForReview = true,
     )
+}
+
+/** 词典新词卡的教学材料补到哪一步了。 */
+private sealed interface CardFill {
+    data object Pending : CardFill
+    data class Done(val filled: DictionaryNewWords.Filled) : CardFill
+    /** 没补成：照样能学，入库后交给后台补全。 */
+    data object Failed : CardFill
 }
 
 private sealed interface WordStudyPhase {
@@ -197,7 +231,9 @@ fun WordStudyScreen(
      * 正在后台先生成的新词。复习到期卡片要花上一两分钟，而这段时间正好够把新词写完——
      * 等用户点"学新词"时内容已经在手上了，不用再对着进度条等一次。
      */
-    var prefetch by remember { mutableStateOf<Deferred<GenerationResult<List<GeneratedWord>>>?>(null) }
+    var prefetch by remember { mutableStateOf<Deferred<GenerationResult<List<StudyCard>>>?>(null) }
+    /** 词典新词卡的教学材料，按 [StudyCard.fillKey]。卡片先用词典内容显示，这里到了再并进去。 */
+    val fills = remember { mutableStateMapOf<String, CardFill>() }
 
     // 走到总结页就算完成了今日的单词步骤。
     LaunchedEffect(phase is WordStudyPhase.Summary) {
@@ -261,10 +297,22 @@ fun WordStudyScreen(
         }
     }
 
-    suspend fun requestNewWords(): GenerationResult<List<GeneratedWord>> {
+    /** 后台补一个词典新词的例句、搭配、记忆提示；补完并进卡片。 */
+    fun startFill(draft: DictionaryNewWords.Draft, level: String, topics: List<String>) {
+        val key = draft.term.lowercase()
+        if (fills[key] != null) return
+        fills[key] = CardFill.Pending
+        scope.launch {
+            val filled = app.dictionaryNewWords.enrich(draft, level, topics)
+            fills[key] = if (filled != null) CardFill.Done(filled) else CardFill.Failed
+        }
+    }
+
+    suspend fun requestNewWords(): GenerationResult<List<StudyCard>> {
         val prefs = app.userPreferences
         val level = prefs.vocabLevelDescription.first()
         val count = prefs.maxNewWords.first()
+        val topics = prefs.topics.first().toList()
         // 全部已学词只在本地用：候选词过滤不花钱，漏过滤的代价是把他早会的词再推一遍。
         // 发给模型的仍然只截前 200 条——那一段是"别重复这些"，不需要也不该是全量。
         val allKnown = repository.vocabulary.first().map { it.detail.term }
@@ -275,11 +323,27 @@ fun WordStudyScreen(
             // 给足富余：模型会跳过功能词和它写不好例句的词，只给 count 个必然凑不满。
             count = count * 6,
         )
-        return app.contentGenerator.generateNewWords(
+        // 有词典：模型只挑词、选义项（一次小调用），卡片马上用词典内容出来，例句等在后台补（D-095）。
+        app.dictionaryNewWords.pick(candidates, count, level, topics, onStage = { stage = it })?.let { picked ->
+            return when (picked) {
+                is GenerationResult.Failure -> picked
+                is GenerationResult.Success -> {
+                    picked.data.forEach { startFill(it, level, topics) }
+                    GenerationResult.Success(
+                        picked.data.map { it.toCard() },
+                        picked.model,
+                        picked.promptVersion,
+                        picked.droppedNotes,
+                    )
+                }
+            }
+        }
+        // 词典不可用：原来那条路，模型直接写整张卡。
+        val result = app.contentGenerator.generateNewWords(
             NewWordsRequest(
                 count = count,
                 learnerLevel = level,
-                topics = prefs.topics.first().toList(),
+                topics = topics,
                 knownTerms = allKnown.take(200),
                 preferredCandidates = candidates,
             ),
@@ -287,6 +351,15 @@ fun WordStudyScreen(
             // 词一个个冒出来的时候，等待就不再是干等——他已经在看今天要学的东西了。
             onPartialText = { preview = it },
         )
+        return when (result) {
+            is GenerationResult.Failure -> result
+            is GenerationResult.Success -> GenerationResult.Success(
+                result.data.map { it.toCard() },
+                result.model,
+                result.promptVersion,
+                result.droppedNotes,
+            )
+        }
     }
 
     fun generateNewWords() {
@@ -301,7 +374,7 @@ fun WordStudyScreen(
             prefetch = null
             phase = when (result) {
                 is GenerationResult.Success -> WordStudyPhase.Cards(
-                    cards = result.data.map { it.toCard() },
+                    cards = result.data,
                     index = 0,
                     revealed = false,
                 )
@@ -311,9 +384,46 @@ fun WordStudyScreen(
         }
     }
 
+    /**
+     * 词典新词入库：补全到了就存完整卡；没到（还在写或没写成）就先存词典底稿，
+     * 交给后台补全——卡上已经有词性、释义、音标，学的这一下不白学。
+     */
+    suspend fun saveDictionaryCard(card: StudyCard): Long? {
+        val draft = card.dictionary ?: return null
+        val prefs = app.userPreferences
+        val level = prefs.vocabLevelDescription.first()
+        val topics = prefs.topics.first().toList()
+        val filled = (fills[card.fillKey] as? CardFill.Done)?.filled
+        val shown = card.filledWith(fills[card.fillKey])
+        val id = repository.addVocabulary(
+            term = shown.term,
+            meaningZh = shown.meaningZh,
+            ipa = shown.ipa,
+            exampleEn = shown.exampleEn,
+            exampleZh = shown.exampleZh,
+            pos = shown.pos,
+            collocations = shown.collocations,
+            memoryHintZh = shown.memoryHintZh,
+            memoryAssistance = shown.memoryAssistance,
+            facts = shown.facts,
+            forms = shown.forms,
+            generationMetadataJson = app.dictionaryNewWords.metadataJson(draft, filled, level, topics),
+            senseOrder = draft.sense.order,
+        )
+        if (id != null && filled == null) WordEnrichmentWorker.enqueue(context, id)
+        return id
+    }
+
     fun onGrade(card: StudyCard, grade: ReviewGrade, cards: List<StudyCard>, index: Int) {
         scope.launch {
-            if (card.isNew) {
+            if (card.isNew && card.dictionary != null) {
+                val id = saveDictionaryCard(card)
+                if (id != null) {
+                    app.vocabularyImageRepository.adoptDraft(SenseKey.ofDraft(card.term, card.pos, card.meaningZh), id)
+                    repository.recordReview(id, grade, source = "card")
+                    newLearnedCount += 1
+                }
+            } else if (card.isNew) {
                 val id = repository.addVocabulary(
                     term = card.term,
                     meaningZh = card.meaningZh,
@@ -379,7 +489,10 @@ fun WordStudyScreen(
 
     // 只有正翻着卡片时才能提问；生成中、总结页摇了也不弹。
     ProvideAskContext(
-        (phase as? WordStudyPhase.Cards)?.let { it.cards[it.index].toAskContext(it.revealed) },
+        (phase as? WordStudyPhase.Cards)?.let {
+            val card = it.cards[it.index]
+            card.filledWith(fills[card.fillKey]).toAskContext(it.revealed)
+        },
         unavailableReason = "选词、生成或本轮已结束，当前没有词卡",
     )
 
@@ -417,6 +530,7 @@ fun WordStudyScreen(
                 WordStudyPhase.Generating -> AiWaiting("AI 正在挑词…", stage, preview = preview)
                 is WordStudyPhase.Cards -> {
                     val card = p.cards[p.index]
+                    val fill = fills[card.fillKey]
                     if (card.isSpellingCard) {
                         // 复习就是拼写：出题、提示梯度、判分、写复习时间全在这张共用卡里，
                         // 所以这里不再调 onGrade——再调一次会把同一次复习记成两次。
@@ -435,7 +549,9 @@ fun WordStudyScreen(
                     } else {
                         key(card.term, card.pos, card.meaningZh) {
                             StudyCardView(
-                                card = card,
+                                card = card.filledWith(fill),
+                                fillPending = card.dictionary != null && fill == CardFill.Pending,
+                                fillFailed = card.dictionary != null && fill == CardFill.Failed,
                                 revealed = p.revealed,
                                 onReveal = { phase = p.copy(revealed = true) },
                                 onGrade = { grade -> onGrade(card, grade, p.cards, p.index) },
@@ -539,6 +655,20 @@ private fun StudyCard.toAskContext(revealed: Boolean): AskContext {
     )
 }
 
+/** 词典新词卡：先只有身份，教学材料等 [CardFill]。 */
+private fun DictionaryNewWords.Draft.toCard() = StudyCard(
+    itemId = null,
+    term = term,
+    ipa = ipa,
+    meaningZh = sense.meaningZh,
+    exampleEn = "",
+    exampleZh = "",
+    isNew = true,
+    pos = pos,
+    forms = entry.irregularForms,
+    dictionary = this,
+)
+
 private fun GeneratedWord.toCard() = StudyCard(
     itemId = null,
     term = term,
@@ -558,6 +688,9 @@ private fun GeneratedWord.toCard() = StudyCard(
 @Composable
 private fun StudyCardView(
     card: StudyCard,
+    /** 词典新词卡的例句、搭配还在写。 */
+    fillPending: Boolean,
+    fillFailed: Boolean,
     revealed: Boolean,
     onReveal: () -> Unit,
     onGrade: (ReviewGrade) -> Unit,
@@ -589,6 +722,16 @@ private fun StudyCardView(
                 revealed = revealed, isNew = card.isNew, itemId = card.itemId, facts = card.facts,
                 memoryAssistance = card.memoryAssistance, onMemoryHint = onMemoryHint,
             )
+            if (revealed && (fillPending || fillFailed)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (fillPending) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text(
+                        text = if (fillPending) "例句和搭配还在写，先看释义" else "例句没写出来，学完会在后台补上",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
         Column(
             modifier = Modifier.padding(16.dp),

@@ -9,6 +9,7 @@ import com.lazydog.english.core.backup.BackupFileStore
 import com.lazydog.english.core.backup.BackupRepository
 import com.lazydog.english.core.data.AssetDictionary
 import com.lazydog.english.core.data.DictionaryBackfillWorker
+import com.lazydog.english.core.data.DictionaryNewWords
 import com.lazydog.english.core.data.AssetPhonemeCatalog
 import com.lazydog.english.core.data.AssetWordFrequencyIndex
 import com.lazydog.english.core.data.KnowledgeRepository
@@ -69,6 +70,9 @@ class LazyDogApplication : Application() {
 
     /** 内置离线词典：单词卡的词形、词性、释义、音标从这里来（D-095）。打不开退化成查不到。 */
     val dictionary: DictionaryLookup by lazy { AssetDictionary(this) }
+
+    /** 每日新词走词典：挑词选义项、补教学材料、写生成信息（D-095）。 */
+    val dictionaryNewWords: DictionaryNewWords by lazy { DictionaryNewWords(dictionary, contentGenerator) }
 
     /** 进步证据：不存新数据，从既有学习事件里推（`持续学习DESIGN.md` §14）。 */
     val progressRepository: ProgressRepository by lazy { ProgressRepository(database) }

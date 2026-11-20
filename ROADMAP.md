@@ -2,8 +2,8 @@
 doc: "ROADMAP.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "2.30"
-updated: "2026-11-15"
+version: "2.31"
+updated: "2026-11-20"
 authority: "里程碑顺序与逐条落地状态；判断现在做到哪儿以本文为准"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -891,6 +891,33 @@ Claude Design 稿为准。核心口径三条：**听辨和发音分开记、分�
 验证：`testDebugUnitTest`、`lintDebug`、`tools/check_ui_capabilities.py`、`tools/check_docs.py` 通过。
 `ReadingVarietyPromptTest` 守住三根轴各进各的语言、不传时提示词不留空段、带检索资料时写法不成为虚构理由；
 `ReadingArchetypeTest` 守住写法数量多于去重窗口、wire 与中文名不重复。
+
+## M27：内置离线词典作为单词卡底稿（D-095，2026-11-20）
+
+- [x] `tools/build_dictionary.py`：ECDICT 裁剪（考试标签 / 牛津 / 柯林斯 / 词频前 30000）+ CMUdict 美式音标，
+      生成只读 SQLite；人名义项、纯英文释义、领域行、说明行不收。15 条脚本单测。
+- [x] `DictionaryLookup` / `AssetDictionary`：按原型查义项、按变形查候选原型；打不开退化成查不到。
+- [x] AI 只回义项序号的两次调用：`chooseDictionarySenses`（老卡回填）、`pickNewWords`（每日新词）。
+- [x] 每日新词：模型挑词选义项后卡片立刻用词典内容显示，例句、搭配、记忆提示逐词后台补；
+      没补到就学完的，入库后交给 `WordEnrichmentWorker`。没网时挑词失败，提示需要联网。
+- [x] 老卡回填：启动时、恢复备份后跑；单候选本地对上，多候选成批问模型，对不上的记未对齐；
+      释义换成词典的、旧释义丢弃；复习进度不动；同一义项的重复卡在详情页提示。
+- [ ] 真机验收：首次打开拷词典的耗时、每日新词从点击到出卡的等待、真实模型的挑词与选义项质量、
+      老卡回填的选择准确率与费用、离线时的提示。**本次没有在真机或真实模型上跑过。**
+- [ ] 观察 ECDICT 义项质量：近义项挤在一起（「记录」「记载」各算一项）、个别词性顺序别扭，
+      是对齐词典口径的已知代价；如果学起来别扭，再考虑在构建脚本里合并。
+
+本次没做：查词面板接词典（二期，另提）；用词典的词频和标签替换 `word_frequency_en.txt`；
+按考试标签选词；第二个词典包；用户自己导入词典。
+
+已知限制：CMUdict 不分词性，同形异读词只取第一个读音（`record` 名词也给了动词读音）；
+CMUdict 没收的约 12% 词条用 ECDICT 原音标（偏英式），这种音标不覆盖卡上已有的。
+
+验证：`testDebugUnitTest`、`lintDebug`、`assembleDebug`、`tools/check_ui_capabilities.py`、
+`tools/test_ui_capabilities.py`、`tools/test_build_dictionary.py`、`tools/check_docs.py` 通过。
+`SenseChoiceTest` / `OpenAiContentGeneratorTest` 守住只认范围内序号、JSON `null` 与字段缺失的区别；
+`DictionaryAlignmentTest` 守住按词性找候选、不跨词性、音标与变形的覆盖规则；
+`GenerationMetadataTest` / `DictionaryRecordRulesTest` 守住对齐信息不让速记卡变成完整卡、补全时带过去、重复义项计数。
 
 ## 已知限制
 
