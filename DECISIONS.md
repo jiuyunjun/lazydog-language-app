@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.15"
+version: "7.16"
 updated: "2026-11-20"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -10,6 +10,23 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 ---
 
 # 决策记录
+
+## D-097：单词页列出这个词性的全部变形，取自内置词典
+
+- 状态：已确认（2026-11-20，用户要求「单词页加上该词的各种变形」）。
+- 问题：单词详情页只显示卡上存的不规则变形（`变形：went · gone`），规则变形不存（ARCHITECTURE §6.1），
+  想查 `studying` 怎么拼、`tight` 的比较级是什么都看不到。
+- 决定：详情页从内置词典（D-095）读这个词的变形，按卡片词性挑：名词给复数，动词给三单、过去式、过去分词、
+  现在分词，形容词和副词给比较级、最高级；一类一格「过去式 went」，不规则的加粗。词性认不出来时全给。
+  词典里没有的，退回原来那行卡上存的不规则变形。卡片存储不变——规则变形照旧不存进卡里，现查即可。
+- 构建脚本顺带修正：原来丢掉了和原形同形的变形（`run` 的过去分词 `run`、`cut` 的过去式 `cut`），
+  变形表会缺一格。现在收进来、标为不规则；`DictionaryEntry.irregularForms` 仍排除和原形同形的，
+  卡片的 forms 字段口径不变。义项未变，词典包版本不升，老卡回填不重跑。
+- 已知限制：变形来自 ECDICT，个别有错（`sheep` 的复数给成 `sheeps`），脚本无法自动识别。
+- 影响：`tools/build_dictionary.py`（重新生成 db）、`DictionaryLookup.formsOf`、`FormKind` / `WordForm` / `forPos`、
+  `AssetDictionary`、`WordDetailScreen`。无新依赖、表、迁移、AI 调用变化。
+- 漂移自查：依赖方向不变；按词性挑变形的规则在 domain；页面只查询和展示；无新模式。
+- 已验证（小米 25128PNA1C）：`tight` 详情页显示「比较级 tighter · 最高级 tightest」。动词、名词未在真机上逐个看。
 
 ## D-096：查词面板先用内置词典显示义项，再等 AI 讲解
 

@@ -7,6 +7,8 @@ import com.lazydog.english.domain.vocabulary.DictionaryEntry
 import com.lazydog.english.domain.vocabulary.DictionaryLookup
 import com.lazydog.english.domain.vocabulary.DictionaryPack
 import com.lazydog.english.domain.vocabulary.DictionarySense
+import com.lazydog.english.domain.vocabulary.FormKind
+import com.lazydog.english.domain.vocabulary.WordForm
 import com.lazydog.english.domain.vocabulary.PartOfSpeech
 import java.io.File
 
@@ -52,8 +54,9 @@ class AssetDictionary(
             ).use { c ->
                 buildList { while (c.moveToNext()) add(SenseRow(c.getString(0), c.getInt(1), c.getString(2))) }
             }
+            // 和原形同形的（run 的过去分词 run）在变形表里，但不算"要额外记的形态"。
             val forms = database.rawQuery(
-                "SELECT form FROM forms WHERE lemma = ? AND irregular = 1 ORDER BY rowid",
+                "SELECT form FROM forms WHERE lemma = ? AND irregular = 1 AND form <> lemma COLLATE NOCASE ORDER BY rowid",
                 arrayOf(head.first),
             ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
             assembleEntry(head.first, head.second, head.third, senses, forms)
@@ -75,6 +78,28 @@ class AssetDictionary(
                 "SELECT DISTINCT lemma FROM forms WHERE form = ? COLLATE NOCASE ORDER BY rowid", arrayOf(clean),
             ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
             (listOfNotNull(self) + lemmas).distinctBy { it.lowercase() }
+        } catch (e: Exception) {
+            Log.w(TAG, "词典变形查询失败：$clean", e)
+            emptyList()
+        }
+    }
+
+    override fun formsOf(lemma: String): List<WordForm> {
+        val database = db ?: return emptyList()
+        val clean = lemma.trim()
+        if (clean.isEmpty()) return emptyList()
+        return try {
+            database.rawQuery(
+                "SELECT kind, form, irregular FROM forms WHERE lemma = ? COLLATE NOCASE ORDER BY rowid",
+                arrayOf(clean),
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) {
+                        val kind = FormKind.fromCode(c.getString(0)) ?: continue
+                        add(WordForm(kind, c.getString(1), c.getInt(2) == 1))
+                    }
+                }
+            }
         } catch (e: Exception) {
             Log.w(TAG, "词典变形查询失败：$clean", e)
             emptyList()

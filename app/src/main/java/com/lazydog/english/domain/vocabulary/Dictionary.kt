@@ -25,6 +25,38 @@ interface DictionaryLookup {
      * [form] 本身就是收录的原型时也算一个候选。
      */
     fun lemmaCandidates(form: String): List<String>
+
+    /** [lemma] 的全部变形（规则的和不规则的），按词典顺序；查不到返回空。 */
+    fun formsOf(lemma: String): List<WordForm>
+}
+
+/** 一种变形。[code] 是 ECDICT exchange 的类别字母，存在词典的 `forms.kind` 里。 */
+enum class FormKind(val code: String, val labelZh: String, val pos: Set<PartOfSpeech>) {
+    Plural("s", "复数", setOf(PartOfSpeech.Noun)),
+    ThirdPerson("3", "三单", setOf(PartOfSpeech.Verb)),
+    Past("p", "过去式", setOf(PartOfSpeech.Verb)),
+    PastParticiple("d", "过去分词", setOf(PartOfSpeech.Verb)),
+    PresentParticiple("i", "现在分词", setOf(PartOfSpeech.Verb)),
+    Comparative("r", "比较级", setOf(PartOfSpeech.Adjective, PartOfSpeech.Adverb)),
+    Superlative("t", "最高级", setOf(PartOfSpeech.Adjective, PartOfSpeech.Adverb)),
+    ;
+
+    companion object {
+        fun fromCode(code: String): FormKind? = entries.firstOrNull { it.code == code }
+    }
+}
+
+data class WordForm(val kind: FormKind, val form: String, val irregular: Boolean)
+
+/**
+ * 单词页要摆的变形：只摆这张卡这个词性的（`record` 名词只给复数，动词才给过去式那一串），
+ * 按 [FormKind] 的固定顺序，同一类只留一个。词性认不出来时全给——宁可多，不让人以为没有。
+ */
+fun List<WordForm>.forPos(pos: String): List<WordForm> {
+    val known = PartOfSpeech.parse(pos)
+    return filter { known == null || known in it.kind.pos }
+        .distinctBy { it.kind }
+        .sortedBy { it.kind.ordinal }
 }
 
 data class DictionaryPack(val id: String, val version: Int)
@@ -68,4 +100,5 @@ object EmptyDictionary : DictionaryLookup {
     override val pack = DictionaryPack(id = "", version = 0)
     override fun entry(lemma: String): DictionaryEntry? = null
     override fun lemmaCandidates(form: String): List<String> = emptyList()
+    override fun formsOf(lemma: String): List<WordForm> = emptyList()
 }

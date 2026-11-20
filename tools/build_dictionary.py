@@ -289,14 +289,18 @@ def regular_forms(lemma, kind):
 
 
 def parse_exchange(lemma, exchange):
-    """ECDICT exchange → [(变形, 类别, 是否不规则)]，只收这个原型自己的变形。"""
+    """ECDICT exchange → [(变形, 类别, 是否不规则)]，只收这个原型自己的变形。
+
+    和原形同形的也收：run 的过去分词是 run、cut 的过去式是 cut、sheep 的复数是 sheep。
+    丢掉的话单词页的变形表会缺一格，看着像是没有这个形式。它们都推不出来，算不规则。
+    """
     out = []
     for item in exchange.split("/"):
         if ":" not in item:
             continue
         kind, form = item.split(":", 1)
         form = form.strip()
-        if kind not in EXCHANGE_KINDS or not form or form.lower() == lemma.lower():
+        if kind not in EXCHANGE_KINDS or not form:
             continue
         irregular = form.lower() not in regular_forms(lemma, kind)
         out.append((form, kind, irregular))

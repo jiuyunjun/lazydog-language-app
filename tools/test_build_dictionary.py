@@ -80,6 +80,10 @@ class FormsTest(unittest.TestCase):
             for form, kind, irregular in b.parse_exchange(lemma, exchange):
                 self.assertFalse(irregular, (lemma, form))
 
+    def test_forms_identical_to_lemma_are_kept_as_irregular(self):
+        forms = {(f, k): irr for f, k, irr in b.parse_exchange("run", "p:ran/d:run/i:running")}
+        self.assertEqual(forms, {("ran", "p"): True, ("run", "d"): True, ("running", "i"): False})
+
     def test_lemma_entries_are_skipped(self):
         self.assertEqual(b.parse_exchange("went", "0:go/1:p"), [])
 

@@ -46,6 +46,21 @@ class DictionaryAlignmentTest {
     }
 
     @Test
+    fun `forms follow the card pos in a fixed order`() {
+        val forms = listOf(
+            WordForm(FormKind.Plural, "records", false),
+            WordForm(FormKind.PresentParticiple, "recording", false),
+            WordForm(FormKind.Past, "recorded", false),
+            WordForm(FormKind.ThirdPerson, "records", false),
+            WordForm(FormKind.Past, "recorded2", false),
+        )
+        assertEquals(listOf("records"), forms.forPos("NOUN").map { it.form })
+        assertEquals(listOf("records", "recorded", "recording"), forms.forPos("v.").map { it.form })
+        assertEquals(emptyList<WordForm>(), forms.forPos("ADJ"))
+        assertEquals(4, forms.forPos("").size)
+    }
+
+    @Test
     fun `ecdict ipa only fills a blank`() {
         val uk = run.copy(ipa = "/rʌn/", ipaSource = "ecdict")
         assertEquals("/rən/", DictionaryAlignment.align("/rən/", emptyList(), run.senses[1], uk).ipa)

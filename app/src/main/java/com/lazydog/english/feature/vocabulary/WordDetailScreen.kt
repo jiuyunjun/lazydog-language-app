@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -60,6 +63,8 @@ import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.InteractiveTextHint
 import com.lazydog.english.core.model.ReviewGrade
 import com.lazydog.english.domain.vocabulary.SenseKey
+import com.lazydog.english.domain.vocabulary.WordForm
+import com.lazydog.english.domain.vocabulary.forPos
 import com.lazydog.english.domain.vocabulary.posLabelZh
 import com.lazydog.english.feature.library.dueLabel
 import kotlinx.coroutines.flow.first
@@ -153,6 +158,14 @@ fun WordDetailScreen(
             detail.spellingFacts()
         }
         val forms = remember(detail.formsJson) { VocabularyJson.decodeList(detail.formsJson) }
+        // 全部变形从内置词典来（卡上只存了推不出来的那几个），按这张卡的词性挑（D-097）。
+        var dictionaryForms by remember(detail.term, detail.pos) { mutableStateOf(emptyList<WordForm>()) }
+        LaunchedEffect(detail.term, detail.pos, isExpression) {
+            val found = withContext(Dispatchers.IO) {
+                if (isExpression) emptyList() else app.dictionary.formsOf(detail.term)
+            }
+            dictionaryForms = found.forPos(detail.pos)
+        }
 
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             Column(
@@ -225,7 +238,10 @@ fun WordDetailScreen(
                 }
                 // 词块拆分和学习页那张 S0 接触卡是同一份东西。整句表达拆不出词块，跳过。
                 if (!isExpression) SpellingChunks(detail.term, facts)
-                if (forms.isNotEmpty()) {
+                if (dictionaryForms.isNotEmpty()) {
+                    WordFormList(dictionaryForms)
+                } else if (forms.isNotEmpty()) {
+                    // 词典里没有这个词（或没有这个词性的变形）时，退回卡上存的不规则变形。
                     InteractiveEnglishText(
                         text = "变形：${forms.joinToString(" · ")}",
                         style = MaterialTheme.typography.bodyMedium,
@@ -405,6 +421,31 @@ private fun QuickCardBanner(itemId: Long, fromDictionary: Boolean) {
                     Text(if (state == WordEnrichmentWorker.State.Failed) "再试一次" else "补全")
                 }
             }
+        }
+    }
+}
+
+/**
+ * 变形一类一格：「过去式 went」。不规则的加粗，那几个才是要专门记的；规则的摆出来是为了查得全。
+ * 每格都是交互文本，双击能查、能听。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WordFormList(forms: List<WordForm>) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        forms.forEach { form ->
+            InteractiveEnglishText(
+                text = "${form.kind.labelZh} ${form.form}",
+                style = if (form.irregular) {
+                    MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                } else {
+                    MaterialTheme.typography.bodyMedium
+                },
+                color = if (form.irregular) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
