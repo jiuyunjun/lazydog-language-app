@@ -113,6 +113,12 @@ private const val SENTENCE_WIRE = "sentence"
 private val SCRIM = Color.Black.copy(alpha = 0.55f)
 
 /**
+ * 结果区的固定高度：取词时最多是词（28）+ 原型与音标（16）+ 两行意思（40）+ 一行原句（16）+ 间距，
+ * 取句时最多三行句子加一行提示，都装得下。按 Material 3 默认字号算。
+ */
+private val RESULT_AREA_HEIGHT = 108.dp
+
+/**
  * 扫一扫：后置相机全屏取景，十字准星，实时认字。
  *
  * 准星对准一个词，底部结果行跟着显示这个词和它所在的那句话；按正下方的加号，
@@ -399,11 +405,13 @@ private fun ScanControls(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 实时结果。高度先占住，词出现、消失时控件不跟着上下跳，准星也就不跟着挪。
+        // 实时结果。高度按最多的内容一次占满，不随内容变：准星是按底部控件的高度算出来的，
+        // 结果区一变高准星就被顶走，瞄到的词一换内容又变，会来回跳（D-096 加词典意思后出过这个问题）。
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 52.dp)
+                // 用 heightIn 而不是 height：系统字体放得很大时宁可让准星挪一次，也不把字截掉。
+                .heightIn(min = RESULT_AREA_HEIGHT)
                 .semantics { liveRegion = LiveRegionMode.Polite },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
