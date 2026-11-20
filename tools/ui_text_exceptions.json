@@ -2400,6 +2400,18 @@
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   },
   {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
+    "text": "head",
+    "count": 1,
+    "reason": "取景结果行的原型提示与音标（D-096）；IPA 不作为英语单词，完整讲解在加号面板里"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/ScanWordsScreen.kt",
+    "text": "gloss.lines.joinToString(\"\\n\")",
+    "count": 1,
+    "reason": "取景结果行的词典意思速览（D-096）；画面上覆盖的状态行，点不到，完整可交互的义项在加号面板里"
+  },
+  {
     "file": "app/src/main/java/com/lazydog/english/feature/library/ScanZoomStrip.kt",
     "text": "if (selected && abs(ratio - preset) > 0.05f) readout else String.format(Locale.ROOT, \"%d×\", preset.toInt())",
     "count": 1,

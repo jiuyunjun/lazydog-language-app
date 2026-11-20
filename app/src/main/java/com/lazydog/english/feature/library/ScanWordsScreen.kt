@@ -85,13 +85,16 @@ import com.lazydog.english.core.designsystem.GlobalSentenceSheet
 import com.lazydog.english.core.designsystem.GlobalWordSheet
 import com.lazydog.english.core.ocr.LiveTextCamera
 import com.lazydog.english.core.ocr.rememberLiveTextCameraState
+import com.lazydog.english.domain.vocabulary.DictionaryLookup
 import com.lazydog.english.domain.vocabulary.ScanMode
 import com.lazydog.english.domain.vocabulary.ScanRefine
 import com.lazydog.english.domain.vocabulary.ScanStabilizer
 import com.lazydog.english.domain.vocabulary.ScanTarget
 import com.lazydog.english.domain.vocabulary.TextBox
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** 准星离最近的词还有多远就不算对准。比一行字高一点，手抖一下不会丢。 */
 private val AIM_TOLERANCE = 28.dp
@@ -218,6 +221,7 @@ private fun ScanViewfinder(
     val stickiness = with(density) { AIM_STICKINESS.toPx() }
     val stabilizer = remember { ScanStabilizer() }
     val camera = rememberLiveTextCameraState()
+    val app = LocalContext.current.applicationContext as LazyDogApplication
     val scope = rememberCoroutineScope()
     /** 按了加号、正在拍高清照片重认。这段时间加号转圈，不重复触发。 */
     var refining by remember { mutableStateOf(false) }
@@ -236,6 +240,18 @@ private fun ScanViewfinder(
         viewSize.width / 2f,
         topInset + (viewSize.height - topInset - bottomInset).coerceAtLeast(0) / 2f,
     )
+
+    /**
+     * 对准的词在内置词典里的意思（D-096）：本地查，锁上就出，不用按加号、不用等 AI。
+     * 换一个词就重查；查不到（生词、人名、识别错字）就不显示，按加号仍可以问 AI。
+     */
+    var gloss by remember { mutableStateOf<ScanGloss?>(null) }
+    val glossWord = target?.word?.takeIf { mode == ScanMode.Word }
+    LaunchedEffect(glossWord) {
+        gloss = glossWord?.let { word ->
+            withContext(Dispatchers.IO) { lookupGloss(app.dictionary, word) }
+        }
+    }
 
     // 对准一个新词时轻轻震一下：眼睛盯着书页时，不用低头看结果也知道锁上了。
     val lockKey = target?.let { if (mode == ScanMode.Word) it.word else it.sentence }
@@ -307,6 +323,7 @@ private fun ScanViewfinder(
             }
             ScanControls(
                 target = target,
+                gloss = gloss?.takeIf { it.word == target?.word },
                 mode = mode,
                 noTextForAWhile = noTextForAWhile,
                 refining = refining,
@@ -363,6 +380,8 @@ private fun ScanViewfinder(
 @Composable
 private fun ScanControls(
     target: ScanTarget?,
+    /** 对准的词的词典意思；查不到或还没查完为 null。 */
+    gloss: ScanGloss?,
     mode: ScanMode,
     noTextForAWhile: Boolean,
     refining: Boolean,
@@ -400,13 +419,32 @@ private fun ScanControls(
                 )
                 mode == ScanMode.Word -> {
                     Text(target.word, style = MaterialTheme.typography.titleLarge, color = Color.White)
+                    if (gloss != null) {
+                        // 变形要说清对应哪个原型，不然 went 底下出来 go 的意思像是认错了。
+                        val head = listOfNotNull(
+                            gloss.headword.takeIf { !it.equals(target.word, ignoreCase = true) }?.let { "→ $it" },
+                            gloss.ipa.takeIf { it.isNotBlank() },
+                        ).joinToString("  ")
+                        if (head.isNotBlank()) {
+                            Text(head, style = MaterialTheme.typography.bodySmall, color = secondary)
+                        }
+                        Text(
+                            text = gloss.lines.joinToString("\n"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            maxLines = SCAN_GLOSS_MAX_LINES,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                     val sentence = target.contextSentence
                     if (refining || sentence.isNotBlank()) {
                         Text(
                             text = if (refining) "拿稳，正在拍清楚再认一遍" else sentence,
                             style = MaterialTheme.typography.bodySmall,
                             color = secondary,
-                            maxLines = 2,
+                            // 有词典意思时原句让一行出来：取景框要留得住，结果区不能越长越高。
+                            maxLines = if (gloss != null) 1 else 2,
                             overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center,
                         )
@@ -458,6 +496,25 @@ private fun ScanControls(
             }
         }
     }
+}
+
+/** 取景时结果行显示的词典意思。[word] 是查的那个识别结果，用来丢掉换词前的旧结果。 */
+private data class ScanGloss(val word: String, val headword: String, val ipa: String, val lines: List<String>)
+
+/** 结果行最多显示几行意思：一个词性一行，多了就挡取景框。 */
+private const val SCAN_GLOSS_MAX_LINES = 2
+
+/** 取景时每个词性最多列几项：只是扫一眼，完整的在加号打开的面板里。 */
+private const val SCAN_GLOSS_PER_POS = 4
+
+/**
+ * 按识别到的词形查词典：先认原型（went → go），有两个候选（saw → saw / see）时取它自己——
+ * 结果行只放得下一个词，两可的完整列在面板里。
+ */
+private fun lookupGloss(dictionary: DictionaryLookup, word: String): ScanGloss? {
+    val lemma = dictionary.lemmaCandidates(word).firstOrNull() ?: return null
+    val entry = dictionary.entry(lemma) ?: return null
+    return ScanGloss(word = word, headword = entry.lemma, ipa = entry.ipa, lines = entry.summaryLines(SCAN_GLOSS_PER_POS))
 }
 
 /** 取词 / 取句：一颗胶囊里两格，选中的那格白底黑字。 */
