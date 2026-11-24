@@ -113,8 +113,8 @@ class NativeBookReadingTest {
             "后悔" to GlossaryWord("后悔", "regret", PartOfSpeech.Verb, 1, introducedChapter = 0),
         )
         val rendered = NativeChapterRenderer.render(source, segmenter.segment(source), glossary, chapterIndex = 0)
-        assertTrue(rendered.text.startsWith("他非常 regret（后悔）了。"))
-        assertTrue(rendered.text.endsWith("他 regret（后悔）。没有后悔药。"))
+        assertTrue(rendered.text.startsWith("他非常 regret 了。"))
+        assertTrue(rendered.text.endsWith("他 regret。没有后悔药。"))
         assertEquals(2, rendered.replacements.size)
         // 替换前后的位置能互相换算：「了」在原文第 5 个字。
         val le = rendered.text.indexOf("了")

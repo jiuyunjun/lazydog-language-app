@@ -2824,5 +2824,29 @@
     "text": "if (word.disabled) \"恢复\" else \"停用\"",
     "count": 1,
     "reason": "停用或恢复按钮文字"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "\"熟词 ${knownWords.size}\"",
+    "count": 1,
+    "reason": "熟词页签名称与数量；界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "if (word.itemId != null) \"从生词本移来 · 复习已暂停\" else \"在书里标的\"",
+    "count": 1,
+    "reason": "熟词来源说明；界面元信息"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
+    "text": "if (word.itemId != null) \"移回生词本\" else \"移出\"",
+    "count": 1,
+    "reason": "移出熟词本按钮文字"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/vocabulary/WordDetailScreen.kt",
+    "text": "\"「${record.detail.term}」已经会了？\"",
+    "count": 1,
+    "reason": "归档到熟词本的确认框标题"
   }
 ]

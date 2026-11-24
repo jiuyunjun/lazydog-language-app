@@ -34,7 +34,7 @@ data class GlossaryWord(
     val excluded: Set<Pair<Int, Int>> = emptySet(),
 )
 
-/** 支架阶段：引入（英文加中文括注）→ 提示（英文，点一下看中文）→ 独立（和正文一样）。 */
+/** 支架阶段：引入（强调色加下划线）→ 提示（强调色）→ 独立（和正文一样）。任何阶段点一下都能看中文。 */
 enum class ScaffoldStage(val labelZh: String) {
     Introduced("引入"),
     Hinted("提示"),
@@ -236,12 +236,8 @@ object NativeChapterRenderer {
             val englishStart = out.length
             out.append(word.lemma)
             val englishEnd = out.length
-            if (word.stage == ScaffoldStage.Introduced) {
-                // 括注本身就隔开了后面的汉字，不再补空格。
-                out.append('（').append(word.zh).append('）')
-            } else if (token.end < source.length && ChineseSegmenter.isHan(source[token.end])) {
-                out.append(' ')
-            }
+            // 不加中文括注（用户 2026-11-24 要求）：引入阶段靠样式标出来，点一下看中文。
+            if (token.end < source.length && ChineseSegmenter.isHan(source[token.end])) out.append(' ')
             pieces += intArrayOf(token.start, token.end, renderedStart, out.length)
             replacements += RenderedReplacement(
                 renderedStart, out.length, englishStart, englishEnd, word.zh, word.lemma, word.stage, token.start,

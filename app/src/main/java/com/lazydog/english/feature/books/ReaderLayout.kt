@@ -93,8 +93,8 @@ internal fun ReaderTheme.accent(): Color = when (this) {
 }
 
 /**
- * 母语阅读的章节样式（设计文档 §5.7）：标题之外，替换上去的英文用强调色，
- * 提示阶段加下划线（"点一下看中文"），引入阶段的中文括注缩小变淡。
+ * 母语阅读的章节样式（设计文档 §5.7）：引入阶段强调色加下划线（新词，点一下看中文），
+ * 提示阶段只用强调色，独立阶段和正文一样。
  */
 internal fun nativeAnnotated(
     text: String,
@@ -104,22 +104,15 @@ internal fun nativeAnnotated(
 ): AnnotatedString {
     if (replacements.isEmpty()) return chapterAnnotated(text, titleLength)
     val accent = theme.accent()
-    val muted = theme.colors().secondary
     val spans = ArrayList<AnnotatedString.Range<SpanStyle>>()
     if (titleLength > 0) spans += AnnotatedString.Range(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 1.25.em), 0, titleLength)
     replacements.forEach { r ->
-        spans += AnnotatedString.Range(
-            SpanStyle(
-                color = accent,
-                fontWeight = FontWeight.Medium,
-                textDecoration = if (r.stage == ScaffoldStage.Hinted) TextDecoration.Underline else null,
-            ),
-            r.englishStart,
-            r.englishEnd,
-        )
-        if (r.englishEnd < r.end) {
-            spans += AnnotatedString.Range(SpanStyle(color = muted, fontSize = 0.8.em), r.englishEnd, r.end)
+        val style = when (r.stage) {
+            ScaffoldStage.Introduced -> SpanStyle(color = accent, fontWeight = FontWeight.Medium, textDecoration = TextDecoration.Underline)
+            ScaffoldStage.Hinted -> SpanStyle(color = accent, fontWeight = FontWeight.Medium)
+            ScaffoldStage.Independent -> null
         }
+        if (style != null) spans += AnnotatedString.Range(style, r.englishStart, r.englishEnd)
     }
     return AnnotatedString(text, spanStyles = spans)
 }

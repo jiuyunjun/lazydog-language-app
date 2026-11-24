@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -99,6 +100,7 @@ fun WordDetailScreen(
     val isExpression = record != null && expressions.any { it.item.id == itemId }
 
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmArchive by remember { mutableStateOf(false) }
 
     // 详情页摊开的内容和学习时翻开的词卡一样多，看词时想问"它和谁容易混"很自然（D-081）。
     // 这里没有未揭晓的答案，整张卡都可以交给提问。
@@ -125,6 +127,11 @@ fun WordDetailScreen(
                 },
                 actions = {
                     AskTopBarAction()
+                    if (record != null && !isExpression) {
+                        IconButton(onClick = { confirmArchive = true }) {
+                            Icon(Icons.Outlined.Inventory2, contentDescription = "我已经会了，移到熟词本")
+                        }
+                    }
                     if (record != null) {
                         IconButton(onClick = { confirmDelete = true }) {
                             Icon(
@@ -331,6 +338,25 @@ fun WordDetailScreen(
                 }
             }
         }
+    }
+
+    if (confirmArchive && record != null) {
+        com.lazydog.english.core.ask.SuspendAsk("归档确认框已打开")
+        AlertDialog(
+            onDismissRequest = { confirmArchive = false },
+            title = { Text("「${record.detail.term}」已经会了？") },
+            text = { Text("移到熟词本：不再复习，书里也不再拿它替换。卡片和学习记录都留着，在「记录 → 熟词」里可以移回来。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmArchive = false
+                    scope.launch {
+                        repository.archiveToKnown(record.item.id)
+                        onExit()
+                    }
+                }) { Text("移到熟词本") }
+            },
+            dismissButton = { TextButton(onClick = { confirmArchive = false }) { Text("还没会") } },
+        )
     }
 
     if (confirmDelete && record != null) {

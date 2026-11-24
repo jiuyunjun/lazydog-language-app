@@ -105,6 +105,16 @@ internal fun ReplacementSheet(
                     },
                     enabled = row != null,
                 ) { Text("加入生词本") }
+                OutlinedButton(onClick = {
+                    app.applicationScope.launch {
+                        service.markKnown(replacement.lemma)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "已加入熟词本，以后不再换它", Toast.LENGTH_SHORT).show()
+                            onChanged()
+                        }
+                    }
+                    onDismiss()
+                }) { Text("我认识") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = {
@@ -220,6 +230,10 @@ private fun GlossaryRow(bookId: Long, word: BookGlossaryEntity) {
                 }
             }
         }) { Text("加入生词本") }
+        TextButton(onClick = {
+            app.applicationScope.launch { app.nativeBookService.markKnown(word.lemma) }
+            Toast.makeText(context, "已加入熟词本", Toast.LENGTH_SHORT).show()
+        }) { Text("认识") }
         TextButton(onClick = {
             app.applicationScope.launch { app.nativeBookService.setDisabled(bookId, word.zh, !word.disabled) }
         }) { Text(if (word.disabled) "恢复" else "停用") }

@@ -88,7 +88,8 @@ fun LibraryScreen(
     val grammar by repository.grammar.collectAsState(initial = emptyList())
     val expressions by repository.expressions.collectAsState(initial = emptyList())
 
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    val pagerState = rememberPagerState(pageCount = { 4 })
+    val knownWords by repository.knownWords.collectAsState(initial = emptyList())
     val tabIndex = pagerState.currentPage
     var dueTodayOnly by rememberSaveable { mutableStateOf(false) }
     /** 只剩语法还是半屏卡片：它没有词卡那套内容，一页专门讲一个语法点太空。 */
@@ -125,6 +126,11 @@ fun LibraryScreen(
                     onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
                     text = { Text("表达 ${expressions.size}") },
                 )
+                Tab(
+                    selected = tabIndex == 3,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(3) } },
+                    text = { Text("熟词 ${knownWords.size}") },
+                )
             }
             HorizontalPager(
                 state = pagerState,
@@ -145,10 +151,14 @@ fun LibraryScreen(
                         now = now,
                         onSelect = { selectedGrammarId = it },
                     )
-                    else -> ExpressionRecords(
+                    2 -> ExpressionRecords(
                         records = expressions,
                         now = now,
                         onSelect = onOpenWord,
+                    )
+                    else -> KnownWordRecords(
+                        words = knownWords,
+                        onRemove = { lemma -> scope.launch { repository.removeKnown(lemma) } },
                     )
                 }
             }
@@ -235,6 +245,42 @@ private fun WordRecords(
                         onClick = { onSelect(record.item.id) },
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 熟词本（D-099）：书里点了「我认识」的词，和从生词本归档进来的卡。
+ * 移出后：归档的卡回到复习（马上到期），只是一个熟词的就从此又会被推荐、被替换。
+ */
+@Composable
+private fun KnownWordRecords(words: List<com.lazydog.english.core.database.KnownWordEntity>, onRemove: (String) -> Unit) {
+    if (words.isEmpty()) {
+        Text(
+            text = "还没有熟词。书里点替换词选「我认识」，或者在单词详情页右上角把会了的词移进来。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(24.dp),
+        )
+        return
+    }
+    androidx.compose.foundation.lazy.LazyColumn(
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        items(words.size, key = { words[it].lemma }) { index ->
+            val word = words[index]
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    com.lazydog.english.core.designsystem.InteractiveEnglishText(word.lemma, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = if (word.itemId != null) "从生词本移来 · 复习已暂停" else "在书里标的",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = { onRemove(word.lemma) }) { Text(if (word.itemId != null) "移回生词本" else "移出") }
             }
         }
     }

@@ -120,7 +120,7 @@ class WebReadingService(
     suspend fun estimate(text: String): ReadingDifficulty.Estimate? = withContext(Dispatchers.IO) {
         val window = VocabularyCandidates.rankWindow(preferences.vocabLevelScore.first())
         val comfortable = (window.first + window.last) / 2
-        val known = knowledge.vocabulary.first().mapTo(HashSet()) { it.detail.term.trim().lowercase() }
+        val known = knowledge.vocabulary.first().mapTo(HashSet()) { it.detail.term.trim().lowercase() } + knowledge.knownLemmas()
         val lemmaCache = HashMap<String, String?>()
         val rankCache = HashMap<String, Int?>()
         ReadingDifficulty.estimate(

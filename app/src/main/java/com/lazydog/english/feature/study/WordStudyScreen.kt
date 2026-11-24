@@ -315,7 +315,8 @@ fun WordStudyScreen(
         val topics = prefs.topics.first().toList()
         // 全部已学词只在本地用：候选词过滤不花钱，漏过滤的代价是把他早会的词再推一遍。
         // 发给模型的仍然只截前 200 条——那一段是"别重复这些"，不需要也不该是全量。
-        val allKnown = repository.vocabulary.first().map { it.detail.term }
+        // 熟词本里的词也算会了（D-099），不再推给他。
+        val allKnown = repository.vocabulary.first().map { it.detail.term } + repository.knownLemmas()
         val candidates = VocabularyCandidates.select(
             index = app.wordFrequencyIndex,
             cefrScore = prefs.vocabLevelScore.first(),

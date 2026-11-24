@@ -10,6 +10,7 @@ import com.lazydog.english.core.database.BookBookmarkEntity
 import com.lazydog.english.core.database.BookChapterEntity
 import com.lazydog.english.core.database.BookEntity
 import com.lazydog.english.core.database.BookGlossaryEntity
+import com.lazydog.english.core.database.KnownWordEntity
 import com.lazydog.english.core.database.ReadingMaterialEntity
 import com.lazydog.english.core.database.ScenarioSessionEntity
 import com.lazydog.english.core.database.SpellingAttemptEntity
@@ -271,6 +272,8 @@ data class BackupPayload(
     val bookmarks: List<BackupBookmark> = emptyList(),
     /** 书级词表（D-098 R4）。旧备份没有，恢复成空，母语阅读从头引入。 */
     val bookGlossary: List<BackupBookGlossary> = emptyList(),
+    /** 熟词本（D-099）。旧备份没有，恢复成空。 */
+    val knownWords: List<BackupKnownWord> = emptyList(),
     val preferences: BackupPreferences = BackupPreferences(),
 )
 
@@ -295,6 +298,12 @@ data class BackupBook(
     val nativeEnabled: Boolean = false,
     val englishDose: Int = 1,
 )
+
+/** [itemId] 是备份时的知识项 id，恢复时按新 id 重新对上。 */
+@Serializable
+data class BackupKnownWord(val lemma: String, val itemId: Long? = null, val source: String = "other", val addedAt: Long = 0)
+
+fun KnownWordEntity.toBackup() = BackupKnownWord(lemma, itemId, source, addedAt)
 
 @Serializable
 data class BackupBookGlossary(

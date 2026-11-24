@@ -102,7 +102,11 @@ class NativeBookService(
                     )
                     savePlanned(book.id, planned + chapterIndex)
                 }
-                books.glossary(book.id).associate { it.zh to it.toDomain() }
+                // 熟词本里的词不再换（D-099），即使它之前已经进了这本书的词表。
+                val known = knowledge.knownLemmas()
+                books.glossary(book.id).associate { row ->
+                    row.zh to row.toDomain().let { if (it.lemma.lowercase() in known) it.copy(disabled = true) else it }
+                }
             }
             withContext(Dispatchers.Default) { NativeChapterRenderer.render(source, tokens, glossary, chapterIndex) }
         } catch (e: Exception) {
@@ -132,6 +136,9 @@ class NativeBookService(
         }
     }
 
+    /** 「我认识」：进熟词本，这本书和以后的书都不再换它（D-099）。 */
+    suspend fun markKnown(lemma: String) = knowledge.markKnown(lemma, KnowledgeRepository.SOURCE_BOOK)
+
     /** 把书里的这个词加进生词本：身份取内置词典，和每日新词同一个口径（D-095），之后后台补全。 */
     suspend fun addToVocabulary(row: BookGlossaryEntity): Long? = withContext(Dispatchers.IO) {
         val entry = dictionary.entry(row.lemma) ?: return@withContext null
@@ -155,7 +162,8 @@ class NativeBookService(
         val familiarStages = setOf(KnowledgeStage.Familiar.name, KnowledgeStage.Mastered.name)
         return LearnerVocabulary(
             window = window,
-            familiar = vocab.filter { it.item.stage in familiarStages }.mapTo(HashSet()) { it.detail.term.lowercase() },
+            familiar = vocab.filter { it.item.stage in familiarStages }.mapTo(HashSet()) { it.detail.term.lowercase() } +
+                knowledge.knownLemmas(),
             learning = vocab.filter { it.item.stage !in familiarStages }.mapTo(HashSet()) { it.detail.term.lowercase() },
         )
     }

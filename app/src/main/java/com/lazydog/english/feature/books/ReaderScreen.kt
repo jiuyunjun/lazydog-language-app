@@ -343,11 +343,9 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
     }
 
     tapped?.let { replacement ->
-        // 点开就看到了中文：提示、独立阶段算一次"没认出来"，退回上一阶段（§5.7）。引入阶段本来就写着中文，不算。
+        // 点开就看到了中文：算一次"没认出来"，退回上一阶段（§5.7）；已经在引入阶段的停在原地、重新计数。
         LaunchedEffect(replacement) {
-            if (replacement.stage != ScaffoldStage.Introduced) {
-                app.applicationScope.launch { nativeService.recordReveal(bookId, replacement.zh) }
-            }
+            app.applicationScope.launch { nativeService.recordReveal(bookId, replacement.zh) }
         }
         ReplacementSheet(
             bookId = bookId,

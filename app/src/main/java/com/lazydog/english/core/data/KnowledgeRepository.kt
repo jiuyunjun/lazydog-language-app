@@ -2,6 +2,7 @@ package com.lazydog.english.core.data
 
 import androidx.room.withTransaction
 import com.lazydog.english.core.database.AppDatabase
+import com.lazydog.english.core.database.KnownWordEntity
 import com.lazydog.english.core.database.GrammarRecord
 import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
@@ -39,6 +40,7 @@ import com.lazydog.english.domain.vocabulary.QuickCard
 import com.lazydog.english.domain.vocabulary.normalizePos
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
@@ -59,9 +61,56 @@ class KnowledgeRepository(
     private val spellingDao = database.spellingDao()
 
     private val vocabularyRecords: Flow<List<VocabularyRecord>> = dao.observeVocabulary()
-    /** 真正的单词；完整短语和句子单独显示在“表达”里。 */
-    val vocabulary: Flow<List<VocabularyRecord>> = vocabularyRecords.map { records ->
-        records.filterNot { it.detail.isExpression() }
+    private val knownWordDao = database.knownWordDao()
+
+    /** 熟词本（D-099）：书里标的「我认识」和从生词本归档的卡。 */
+    val knownWords: Flow<List<KnownWordEntity>> = knownWordDao.observeAll()
+
+    /**
+     * 真正的单词；完整短语和句子单独显示在“表达”里。归档到熟词本的卡不在这里——
+     * 复习、拼写、阅读挑复习词都从这个列表取，所以从这里拿掉就等于暂停了它的所有练习。
+     */
+    val vocabulary: Flow<List<VocabularyRecord>> = combine(vocabularyRecords, knownWords) { records, known ->
+        val archived = known.mapNotNullTo(HashSet()) { it.itemId }
+        records.filterNot { it.detail.isExpression() || it.item.id in archived }
+    }
+
+    /** 归档到熟词本的卡（熟词页用）。 */
+    val archivedVocabulary: Flow<List<VocabularyRecord>> = combine(vocabularyRecords, knownWords) { records, known ->
+        val archived = known.mapNotNullTo(HashSet()) { it.itemId }
+        records.filter { it.item.id in archived }
+    }
+
+    /** 熟词本里的词（原型，小写）。挑新词、书里替换、估难度都把它们当成认识。 */
+    suspend fun knownLemmas(): Set<String> = knownWordDao.getAll().mapTo(HashSet()) { it.lemma }
+
+    /** 标一个词为熟词（不建词卡）。已经在熟词本里的不动。 */
+    suspend fun markKnown(lemma: String, source: String) {
+        val key = lemma.trim().lowercase()
+        if (key.isEmpty() || knownWordDao.get(key) != null) return
+        knownWordDao.insert(KnownWordEntity(key, itemId = null, source = source, addedAt = now().toEpochMilli()))
+    }
+
+    /**
+     * 把生词本里的一张卡归档到熟词本：卡和学习记录都留着，复习暂停（`nextReviewAt` 置空，
+     * 到期统计的 SQL 也就不再数它）。
+     */
+    suspend fun archiveToKnown(itemId: Long) = database.withTransaction {
+        val item = dao.getItem(itemId) ?: return@withTransaction
+        val detail = dao.getVocabularyDetail(itemId) ?: return@withTransaction
+        knownWordDao.insert(
+            KnownWordEntity(detail.term.trim().lowercase(), itemId = itemId, source = SOURCE_VOCABULARY, addedAt = now().toEpochMilli()),
+        )
+        dao.updateItem(item.copy(nextReviewAt = null, updatedAt = now().toEpochMilli()))
+    }
+
+    /** 移出熟词本。归档的卡回到复习里，马上到期——放了一段时间，先复习一次看看还记不记得。 */
+    suspend fun removeKnown(lemma: String) = database.withTransaction {
+        val row = knownWordDao.get(lemma) ?: return@withTransaction
+        row.itemId?.let { id ->
+            dao.getItem(id)?.let { item -> dao.updateItem(item.copy(nextReviewAt = now().toEpochMilli(), updatedAt = now().toEpochMilli())) }
+        }
+        knownWordDao.delete(lemma)
     }
     val expressions: Flow<List<VocabularyRecord>> = vocabularyRecords.map { records ->
         records.filter { it.detail.isExpression() }
@@ -632,6 +681,9 @@ class KnowledgeRepository(
     }
 
     companion object {
+        const val SOURCE_VOCABULARY = "vocabulary"
+        const val SOURCE_BOOK = "book"
+
         /** 表达和固定短语在词性这一列上的取值。 */
         private val EXPRESSION_POS = PartOfSpeech.Phrase.wire
         private const val MILLIS_PER_DAY = 24.0 * 60 * 60 * 1000

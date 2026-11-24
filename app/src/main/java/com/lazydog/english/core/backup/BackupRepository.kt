@@ -40,6 +40,7 @@ class BackupRepository(
             bookChapters = database.bookDao().allChapters().map { it.toBackup() },
             bookmarks = database.bookDao().allBookmarks().map { it.toBackup() },
             bookGlossary = database.bookDao().allGlossary().map { it.toBackup() },
+            knownWords = database.knownWordDao().getAll().map { it.toBackup() },
             preferences = BackupPreferences(
                 learningGoal = prefs.learningGoal.first(),
                 topics = prefs.topics.first(),
@@ -129,6 +130,19 @@ class BackupRepository(
             bookDao.insertChapters(payload.bookChapters.filter { it.bookId in bookIds }.map { it.toEntity() })
             bookDao.insertBookmarks(payload.bookmarks.filter { it.bookId in bookIds }.map { it.toEntity() })
             bookDao.upsertGlossary(payload.bookGlossary.filter { it.bookId in bookIds }.map { it.toEntity() })
+            // 熟词本：归档的卡按新 id 对上；对不上的（那张卡没恢复出来）退成只是一个熟词。
+            val knownDao = database.knownWordDao()
+            knownDao.clearAll()
+            knownDao.insertAll(
+                payload.knownWords.map { word ->
+                    com.lazydog.english.core.database.KnownWordEntity(
+                        lemma = word.lemma,
+                        itemId = word.itemId?.let { idMap[it] },
+                        source = word.source,
+                        addedAt = word.addedAt,
+                    )
+                },
+            )
         }
 
         val p = payload.preferences

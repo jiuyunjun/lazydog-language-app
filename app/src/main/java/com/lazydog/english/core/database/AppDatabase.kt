@@ -30,8 +30,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BookChapterEntity::class,
         BookBookmarkEntity::class,
         BookGlossaryEntity::class,
+        KnownWordEntity::class,
     ],
-    version = 26,
+    version = 27,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -69,6 +70,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 24, to = 25),
         // v26 新增书级词表，books 加母语阅读开关和英文量两列（都有默认值，D-098 R4）。
         AutoMigration(from = 25, to = 26),
+        // v27 只新增熟词本一张表（D-099）。
+        AutoMigration(from = 26, to = 27),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -92,6 +95,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pronunciationDao(): PronunciationDao
 
     abstract fun bookDao(): BookDao
+
+    abstract fun knownWordDao(): KnownWordDao
 
     companion object {
         fun create(context: Context): AppDatabase =
