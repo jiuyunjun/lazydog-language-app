@@ -75,6 +75,12 @@ class UserPreferences(private val context: Context) {
         val DictionaryBackfillVersion = intPreferencesKey("dictionary_backfill_version")
         /** 阅读器排版设置，整份存 JSON（D-098 R2）。 */
         val ReaderSettingsJson = stringPreferencesKey("reader_settings")
+        /** 渐进学词设置，整份存 JSON（D-100）。 */
+        val ProgressiveSettingsJson = stringPreferencesKey("progressive_settings")
+        /** 渐进学词：已攒的新词机会字数（§12.3.2 第 2 条）。设备上的进度，不进备份。 */
+        val ProgressiveCredit = intPreferencesKey("progressive_credit")
+        /** 渐进学词：书级词表迁到义项进度做完的版本（§12.6）。 */
+        val ProgressiveMigration = intPreferencesKey("progressive_migration")
         val ReminderTime = stringPreferencesKey("reminder_time")
         val ThemeMode = stringPreferencesKey("theme_mode")
         val CopyTone = stringPreferencesKey("copy_tone")
@@ -591,6 +597,31 @@ class UserPreferences(private val context: Context) {
     }
 
     private val readerJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+    val progressiveSettings: Flow<com.lazydog.english.domain.books.ProgressiveSettings> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ProgressiveSettingsJson]
+            ?.let { runCatching { readerJson.decodeFromString(com.lazydog.english.domain.books.ProgressiveSettings.serializer(), it) }.getOrNull() }
+            ?: com.lazydog.english.domain.books.ProgressiveSettings()
+    }
+
+    suspend fun saveProgressiveSettings(settings: com.lazydog.english.domain.books.ProgressiveSettings) {
+        context.dataStore.edit {
+            it[Keys.ProgressiveSettingsJson] = readerJson.encodeToString(com.lazydog.english.domain.books.ProgressiveSettings.serializer(), settings)
+        }
+    }
+
+    val progressiveCredit: Flow<Int> = context.dataStore.data.map { it[Keys.ProgressiveCredit] ?: 0 }
+
+    /** 原子地改已攒的机会字数，结果夹在 [min]..[max]。 */
+    suspend fun updateProgressiveCredit(min: Int, max: Int, change: (Int) -> Int) {
+        context.dataStore.edit { it[Keys.ProgressiveCredit] = change(it[Keys.ProgressiveCredit] ?: 0).coerceIn(min, max) }
+    }
+
+    val progressiveMigration: Flow<Int> = context.dataStore.data.map { it[Keys.ProgressiveMigration] ?: 0 }
+
+    suspend fun setProgressiveMigration(version: Int) {
+        context.dataStore.edit { it[Keys.ProgressiveMigration] = version }
+    }
 
     val dictionaryBackfillVersion: Flow<Int> =
         context.dataStore.data.map { it[Keys.DictionaryBackfillVersion] ?: 0 }

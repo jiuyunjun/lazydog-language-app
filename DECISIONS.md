@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.29"
+version: "7.30"
 updated: "2026-11-24"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -30,6 +30,10 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
   新方案把「见过」和「证明过」分开，按位置控制密度，默认更保守。
 - 影响范围：新表一张与迁移；`NativeBookService`、`domain/books` 选词与渲染规则重写；阅读器设置与词卡；
   P2 加章末卡片。无新依赖、无层级变化。
+- P1 落地（2026-11-24）：实际是两张表——`reading_words`（义项进度）和 `reading_exposures`（展示实例，去重与"回到这章原样放回"）；
+  books 加 `progressivePaused`。旧的 `nativeEnabled`、`englishDose`、书级词表的阶段列保留作迁移来源，不再读写。
+  按章挑词（`NativeWordPicker.pick`）、支架阶段（`Scaffold`）、英文量（`EnglishDose`）删除，规划集中在 `ProgressivePlanner`。
+  入池、扣额度、推进复现计划在 `ReadingWordDao.recordShown` 一个事务里。
 
 ## D-099：熟词本——手动标「我认识」，生词本里会了的词可以归档进来
 

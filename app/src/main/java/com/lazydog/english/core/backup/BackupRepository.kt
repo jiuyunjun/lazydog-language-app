@@ -41,6 +41,7 @@ class BackupRepository(
             bookmarks = database.bookDao().allBookmarks().map { it.toBackup() },
             bookGlossary = database.bookDao().allGlossary().map { it.toBackup() },
             knownWords = database.knownWordDao().getAll().map { it.toBackup() },
+            readingWords = database.readingWordDao().all().map { it.toBackup() },
             preferences = BackupPreferences(
                 learningGoal = prefs.learningGoal.first(),
                 topics = prefs.topics.first(),
@@ -143,6 +144,10 @@ class BackupRepository(
                     )
                 },
             )
+            // 渐进学词的义项进度（D-100）：转生词本的按新 id 对上，对不上的只是断了关联。
+            val readingDao = database.readingWordDao()
+            readingDao.clearAll()
+            readingDao.upsertAll(payload.readingWords.map { it.toEntity(it.vocabularyItemId?.let { id -> idMap[id] }) })
         }
 
         val p = payload.preferences

@@ -115,9 +115,9 @@ class LazyDogApplication : Application() {
     /** 读书：导入、书架、章节正文、进度、书签（D-098 R2）。 */
     val bookRepository: BookRepository by lazy { BookRepository(this, database) }
 
-    /** 中文书的母语阅读：本地分词、选词、全书替换（D-098 R4）。 */
+    /** 中文书里的渐进学词：本地分词、义项级进度、按额度和密度替换（D-100）。 */
     val nativeBookService: NativeBookService by lazy {
-        NativeBookService(this, bookRepository, knowledgeRepository, userPreferences, dictionary)
+        NativeBookService(this, bookRepository, knowledgeRepository, userPreferences, dictionary, database.readingWordDao())
     }
 
     /** 在线书库：古腾堡、维基文库、AO3（D-098 R3）。 */

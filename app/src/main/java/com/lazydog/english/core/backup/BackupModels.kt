@@ -11,6 +11,7 @@ import com.lazydog.english.core.database.BookChapterEntity
 import com.lazydog.english.core.database.BookEntity
 import com.lazydog.english.core.database.BookGlossaryEntity
 import com.lazydog.english.core.database.KnownWordEntity
+import com.lazydog.english.core.database.ReadingWordEntity
 import com.lazydog.english.core.database.ReadingMaterialEntity
 import com.lazydog.english.core.database.ScenarioSessionEntity
 import com.lazydog.english.core.database.SpellingAttemptEntity
@@ -274,6 +275,7 @@ data class BackupPayload(
     val bookGlossary: List<BackupBookGlossary> = emptyList(),
     /** 熟词本（D-099）。旧备份没有，恢复成空。 */
     val knownWords: List<BackupKnownWord> = emptyList(),
+    val readingWords: List<BackupReadingWord> = emptyList(),
     val preferences: BackupPreferences = BackupPreferences(),
 )
 
@@ -297,6 +299,7 @@ data class BackupBook(
     val lastOpenedAt: Long = 0,
     val nativeEnabled: Boolean = false,
     val englishDose: Int = 1,
+    val progressivePaused: Boolean = false,
 )
 
 /** [itemId] 是备份时的知识项 id，恢复时按新 id 重新对上。 */
@@ -344,12 +347,50 @@ data class BackupBookmark(
 
 fun BookEntity.toBackup() = BackupBook(
     id, title, author, language, source, sourceId, coverFile, chapterCount, totalChars,
-    chapterIndex, chapterOffset, progress, readingMillis, addedAt, lastOpenedAt, nativeEnabled, englishDose,
+    chapterIndex, chapterOffset, progress, readingMillis, addedAt, lastOpenedAt, nativeEnabled, englishDose, progressivePaused,
 )
 
 fun BackupBook.toEntity() = BookEntity(
     id, title, author, language, source, sourceId, coverFile, chapterCount, totalChars,
-    chapterIndex, chapterOffset, progress, readingMillis, addedAt, lastOpenedAt, nativeEnabled, englishDose,
+    chapterIndex, chapterOffset, progress, readingMillis, addedAt, lastOpenedAt, nativeEnabled, englishDose, progressivePaused,
+)
+
+/**
+ * 渐进学词的义项进度（D-100）。转生词本的 [vocabularyItemId] 是备份时的 id，恢复时按新 id 重新对上。
+ * 展示实例表（`reading_exposures`）只是去重缓存，不进备份。
+ */
+@Serializable
+data class BackupReadingWord(
+    val senseId: String,
+    val lemma: String,
+    val pos: String,
+    val senseOrder: Int,
+    val zh: String,
+    val state: Int,
+    val firstShownAt: Long,
+    val lastEffectiveAt: Long,
+    val nextDueAt: Long,
+    val step: Int,
+    val effectiveCount: Int,
+    val lookups: Int,
+    val lastSignalAt: Long,
+    val introducedDay: Long,
+    val pausedAt: Long = 0,
+    val recallSuccesses: Int = 0,
+    val recallFailures: Int = 0,
+    val lastRecallAt: Long = 0,
+    val vocabularyItemId: Long? = null,
+    val origin: String = "",
+)
+
+fun ReadingWordEntity.toBackup() = BackupReadingWord(
+    senseId, lemma, pos, senseOrder, zh, state, firstShownAt, lastEffectiveAt, nextDueAt, step, effectiveCount, lookups,
+    lastSignalAt, introducedDay, pausedAt, recallSuccesses, recallFailures, lastRecallAt, vocabularyItemId, origin,
+)
+
+fun BackupReadingWord.toEntity(itemId: Long?) = ReadingWordEntity(
+    senseId, lemma, pos, senseOrder, zh, state, firstShownAt, lastEffectiveAt, nextDueAt, step, effectiveCount, lookups,
+    lastSignalAt, introducedDay, pausedAt, recallSuccesses, recallFailures, lastRecallAt, itemId, origin,
 )
 
 fun BookChapterEntity.toBackup() = BackupBookChapter(bookId, chapterIndex, title, charCount)

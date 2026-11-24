@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextDecoration
 import com.lazydog.english.domain.books.ReaderSettings
 import com.lazydog.english.domain.books.RenderedReplacement
-import com.lazydog.english.domain.books.ScaffoldStage
 import com.lazydog.english.domain.books.ReaderTheme
 
 /** 一页：章节显示文本里的 [start]..[end)。 */
@@ -107,12 +106,9 @@ internal fun nativeAnnotated(
     val spans = ArrayList<AnnotatedString.Range<SpanStyle>>()
     if (titleLength > 0) spans += AnnotatedString.Range(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 1.25.em), 0, titleLength)
     replacements.forEach { r ->
-        val style = when (r.stage) {
-            ScaffoldStage.Introduced -> SpanStyle(color = accent, fontWeight = FontWeight.Medium, textDecoration = TextDecoration.Underline)
-            ScaffoldStage.Hinted -> SpanStyle(color = accent, fontWeight = FontWeight.Medium)
-            ScaffoldStage.Independent -> null
-        }
-        if (style != null) spans += AnnotatedString.Range(style, r.englishStart, r.englishEnd)
+        // 沿用正文字号字重，只换颜色作轻微标记（§12.2）；第一次引入的义项再加下划线。
+        val style = if (r.introduces) SpanStyle(color = accent, textDecoration = TextDecoration.Underline) else SpanStyle(color = accent)
+        spans += AnnotatedString.Range(style, r.englishStart, r.englishEnd)
     }
     return AnnotatedString(text, spanStyles = spans)
 }

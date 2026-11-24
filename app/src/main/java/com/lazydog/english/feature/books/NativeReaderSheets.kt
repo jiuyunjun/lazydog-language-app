@@ -3,6 +3,7 @@ package com.lazydog.english.feature.books
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -32,23 +33,26 @@ import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.WordEnrichmentWorker
 import com.lazydog.english.core.database.BookEntity
 import com.lazydog.english.core.database.BookGlossaryEntity
+import com.lazydog.english.core.database.ReadingWordEntity
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.speech.PlaybackSource
-import com.lazydog.english.domain.books.EnglishDose
-import com.lazydog.english.domain.books.NativeWordPicker
+import com.lazydog.english.domain.books.ProgressiveRules
+import com.lazydog.english.domain.books.ProgressiveSettings
+import com.lazydog.english.domain.books.ReadingWordState
 import com.lazydog.english.domain.books.RenderedReplacement
-import com.lazydog.english.domain.books.ScaffoldStage
+import com.lazydog.english.domain.books.ReplacementDensity
+import com.lazydog.english.domain.vocabulary.PartOfSpeech
 import com.lazydog.english.domain.vocabulary.posLabelZh
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 点了一处替换（设计文档 §5.7、§5.8）：看中文、听发音、加进生词本、纠错。
- * [onChanged] 在纠错之后调，阅读器重新渲染这一章。
+ * 点了一处替换（设计文档 §12.2）：看原文和此处释义、听发音，以及「本书不换这个词」「我认识这个意思」
+ * 「加入生词本」「这里换得不对」。[onChanged] 在改动之后调，阅读器重新渲染这一章。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun ReplacementSheet(
     bookId: Long,
@@ -60,15 +64,24 @@ internal fun ReplacementSheet(
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val service = app.nativeBookService
-    val glossary by remember(bookId) { app.bookRepository.observeGlossary(bookId) }.collectAsState(initial = emptyList())
-    val row = glossary.firstOrNull { it.zh == replacement.zh }
+    val words by remember { service.observeWords() }.collectAsState(initial = emptyList())
+    val word = words.firstOrNull { it.senseId == replacement.senseId }
     var meaning by remember { mutableStateOf("") }
     var ipa by remember { mutableStateOf("") }
-    LaunchedEffect(replacement.lemma) {
-        withContext(Dispatchers.IO) { app.dictionary.entry(replacement.lemma) }?.let { entry ->
-            ipa = entry.ipa
-            meaning = entry.summaryLines(perPos = 4).joinToString("\n")
+    LaunchedEffect(replacement.senseId) {
+        meaning = service.meaningOf(replacement.lemma, replacement.pos, replacement.senseOrder).orEmpty()
+        ipa = withContext(Dispatchers.IO) { app.dictionary.entry(replacement.lemma) }?.ipa.orEmpty()
+    }
+
+    fun act(message: String?, block: suspend () -> Unit) {
+        app.applicationScope.launch {
+            block()
+            withContext(Dispatchers.Main) {
+                if (message != null) Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                onChanged()
+            }
         }
+        onDismiss()
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -81,181 +94,198 @@ internal fun ReplacementSheet(
                 if (ipa.isNotBlank()) Text(ipa, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 SpeakButton(PlaybackSource.word(replacement.lemma), contentDescription = "朗读 ${replacement.lemma}")
             }
-            Text("这里是「${replacement.zh}」", style = MaterialTheme.typography.titleMedium)
+            Text("原文「${replacement.zh}」", style = MaterialTheme.typography.titleMedium)
             if (meaning.isNotBlank()) {
-                Text(meaning, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            row?.let {
                 Text(
-                    text = "在这本书里见过 ${it.totalExposures} 次 · 当前${ScaffoldStage.entries.getOrElse(it.stage) { ScaffoldStage.Introduced }.labelZh}阶段",
+                    text = "此处释义：${posLabelZh(replacement.pos.wire)} $meaning",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            word?.let {
+                Text(
+                    text = "${ReadingWordState.fromOrdinal(it.state).labelZh} · 有效复现 ${it.effectiveCount} 次 · 查过 ${it.lookups} 次",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.outline,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = {
-                        val target = row ?: return@OutlinedButton
-                        app.applicationScope.launch {
-                            val id = service.addToVocabulary(target)
-                            withContext(Dispatchers.Main) {
-                                if (id != null) WordEnrichmentWorker.enqueue(context, id)
-                                Toast.makeText(context, if (id != null) "已加入生词本" else "生词本里已经有这个词了", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    },
-                    enabled = row != null,
-                ) { Text("加入生词本") }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    act("这本书里不再换「${replacement.zh}」") {
+                        service.setIgnoredInBook(bookId, replacement.zh, replacement.lemma, replacement.pos, replacement.senseOrder, chapterIndex, true)
+                    }
+                }) { Text("本书不换这个词") }
+                OutlinedButton(onClick = {
+                    act("记下了，这个意思不再当新词教") { service.markKnownSense(replacement) }
+                }) { Text("我认识这个意思") }
                 OutlinedButton(onClick = {
                     app.applicationScope.launch {
-                        service.markKnown(replacement.lemma)
+                        val id = service.addToVocabulary(replacement.lemma, replacement.pos, replacement.senseOrder, replacement.zh)
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "已加入熟词本，以后不再换它", Toast.LENGTH_SHORT).show()
+                            if (id != null) WordEnrichmentWorker.enqueue(context, id)
+                            Toast.makeText(context, if (id != null) "已加入生词本" else "生词本里已经有这个词了", Toast.LENGTH_SHORT).show()
                             onChanged()
                         }
                     }
                     onDismiss()
-                }) { Text("我认识") }
+                }) { Text("加入生词本") }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = {
-                    app.applicationScope.launch {
-                        service.excludeHere(bookId, replacement.zh, chapterIndex, replacement.sourceStart)
-                        withContext(Dispatchers.Main) { onChanged() }
-                    }
-                    onDismiss()
-                }) { Text("这里不该换") }
-                TextButton(onClick = {
-                    app.applicationScope.launch {
-                        service.setDisabled(bookId, replacement.zh, true)
-                        withContext(Dispatchers.Main) { onChanged() }
-                    }
-                    onDismiss()
-                }) { Text("这本书里都别换") }
-            }
+            TextButton(onClick = {
+                act("这一处已恢复原文") { service.excludeHere(bookId, chapterIndex, replacement) }
+            }) { Text("这里换得不对") }
         }
     }
 }
 
 /**
- * 母语阅读面板（设计文档 §5.6、§5.10）：开关、英文量、本书词表。
+ * 渐进学词面板（设计文档 §12.1、§12.2）：全局密度、额度和学习池，这本书暂停，本书词表。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun NativeSheet(book: BookEntity, onChanged: () -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
+    val service = app.nativeBookService
+    val settings by service.settings.collectAsState(initial = ProgressiveSettings())
     val glossary by remember(book.id) { app.bookRepository.observeGlossary(book.id) }.collectAsState(initial = emptyList())
-    val knownWords by app.knowledgeRepository.knownWords.collectAsState(initial = emptyList())
-    val known = remember(knownWords) { knownWords.mapTo(HashSet()) { it.lemma } }
+    val words by remember { service.observeWords() }.collectAsState(initial = emptyList())
+    val bySense = remember(words) { words.associateBy { it.senseId } }
+    val today = remember(words) { words.count { it.introducedDay == java.time.LocalDate.now().toEpochDay() } }
+    val active = remember(words) { words.count { it.state == ReadingWordState.Active.ordinal } }
 
-    fun set(enabled: Boolean, dose: Int) {
+    fun save(next: ProgressiveSettings) {
         app.applicationScope.launch {
-            app.bookRepository.setNative(book.id, enabled, dose)
-            // 打开时在后台把全书分一遍词，数出每个词跨了多少章，之后挑词优先反复出现的。
-            if (enabled) app.nativeBookService.spread(book.id)
+            service.saveSettings(next)
+            withContext(Dispatchers.Main) { onChanged() }
         }
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("母语阅读", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = "把你不熟悉的英文词换进中文里，同一个词全书反复出现",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = book.nativeEnabled, onCheckedChange = { set(it, book.englishDose) })
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(vertical = 12.dp),
-            ) {
-                Text("英文量", style = MaterialTheme.typography.titleSmall)
-                EnglishDose.entries.forEach { dose ->
+            Text("渐进学词", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "照常读故事，偶尔把一个词换成英文；同一个意思在这本书、别的书里按间隔再出现。点英文看原文和释义。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SettingRow("替换密度") {
+                ReplacementDensity.entries.forEach { density ->
                     FilterChip(
-                        selected = book.englishDose == dose.ordinal,
-                        onClick = { set(book.nativeEnabled, dose.ordinal) },
-                        label = { Text("${dose.labelZh} · 每章 ${dose.newWordsPerChapter} 个新词") },
-                        enabled = book.nativeEnabled,
+                        selected = settings.replacementDensity == density,
+                        onClick = { save(settings.copy(density = density.ordinal)) },
+                        label = { Text(density.labelZh) },
                     )
                 }
             }
-            Text("本书词表 · ${glossary.size} 个词", style = MaterialTheme.typography.titleSmall)
+            SettingRow("每天新词") {
+                listOf(2, 4, 6, ProgressiveRules.MAX_DAILY_NEW).forEach { n ->
+                    FilterChip(
+                        selected = settings.dailyNewCapped == n,
+                        onClick = { save(settings.copy(dailyNew = n)) },
+                        label = { Text("$n") },
+                        enabled = settings.enabled,
+                    )
+                }
+            }
+            SettingRow("同时在学") {
+                listOf(10, 15, 20, ProgressiveRules.MAX_POOL).forEach { n ->
+                    FilterChip(
+                        selected = settings.poolCapped == n,
+                        onClick = { save(settings.copy(poolSize = n)) },
+                        label = { Text("$n") },
+                        enabled = settings.enabled,
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                Text("这本书暂停", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Switch(
+                    checked = book.progressivePaused,
+                    onCheckedChange = { paused ->
+                        app.applicationScope.launch {
+                            service.setPaused(book.id, paused)
+                            withContext(Dispatchers.Main) { onChanged() }
+                        }
+                    },
+                    enabled = settings.enabled,
+                )
+            }
+            Text(
+                text = "今天新学 $today / ${settings.dailyNewCapped} · 学习池 $active / ${settings.poolCapped}（书和网页共用）",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            Text("本书词表 · ${glossary.size} 个词", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
             if (glossary.isEmpty()) {
                 Text(
-                    text = "打开母语阅读后，读到哪章就从哪章挑词。",
+                    text = if (settings.enabled) "读到合适的词时会出现在这里。" else "打开替换密度后开始。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 12.dp),
                 )
             }
             LazyColumn(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                items(glossary, key = { it.zh }) { word -> GlossaryRow(book.id, word, word.lemma.lowercase() in known, onChanged) }
+                items(glossary, key = { it.zh }) { row ->
+                    val pos = PartOfSpeech.parse(row.pos) ?: PartOfSpeech.Noun
+                    GlossaryRow(book.id, row, bySense[ProgressiveRules.senseId(row.lemma, pos, row.senseOrder)], onChanged)
+                }
             }
         }
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun GlossaryRow(bookId: Long, word: BookGlossaryEntity, isKnown: Boolean, onChanged: () -> Unit) {
-    /** 这一行现在为什么不换：熟词、虚化词、停用；都不是就显示支架阶段。 */
-    val status = when {
-        isKnown -> "熟词，不换"
-        word.zh in NativeWordPicker.GENERIC_WORDS -> "虚化词，不换"
-        word.disabled -> "已停用"
-        else -> ScaffoldStage.entries.getOrElse(word.stage) { ScaffoldStage.Introduced }.labelZh
+private fun SettingRow(label: String, chips: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(end = 12.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { chips() }
     }
-    val inactive = isKnown || word.disabled || word.zh in NativeWordPicker.GENERIC_WORDS
+}
+
+@Composable
+private fun GlossaryRow(bookId: Long, row: BookGlossaryEntity, word: ReadingWordEntity?, onChanged: () -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
+    val service = app.nativeBookService
+    val pos = PartOfSpeech.parse(row.pos) ?: PartOfSpeech.Noun
+    val state = word?.let { ReadingWordState.fromOrdinal(it.state) }
+    val status = when {
+        row.disabled -> "本书不换"
+        state == null -> "还没学"
+        else -> state.labelZh
+    }
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             InteractiveEnglishText(
-                text = "${word.lemma} · ${word.zh}",
+                text = "${row.lemma} · ${row.zh}",
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (inactive) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                color = if (row.disabled || state != ReadingWordState.Active) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = listOf(
-                    posLabelZh(word.pos),
-                    "第 ${word.introducedChapter + 1} 章引入",
-                    "见过 ${word.totalExposures} 次",
-                    "看过中文 ${word.reveals} 次",
+                text = listOfNotNull(
+                    posLabelZh(row.pos),
                     status,
+                    word?.let { "有效复现 ${it.effectiveCount} 次" },
+                    word?.let { "查过 ${it.lookups} 次" },
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        TextButton(onClick = {
-            app.applicationScope.launch {
-                val id = app.nativeBookService.addToVocabulary(word)
-                withContext(Dispatchers.Main) {
-                    if (id != null) WordEnrichmentWorker.enqueue(context, id)
-                    Toast.makeText(context, if (id != null) "已加入生词本" else "生词本里已经有这个词了", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }) { Text("加入生词本") }
-        // 改完重渲染当前章：去掉的词让位，补上新的候选。
-        if (!isKnown) {
+        if (state == ReadingWordState.Paused || state == ReadingWordState.KnownSelf) {
             TextButton(onClick = {
                 app.applicationScope.launch {
-                    app.nativeBookService.markKnown(word.lemma)
+                    service.resume(word!!.senseId)
                     withContext(Dispatchers.Main) { onChanged() }
                 }
-                Toast.makeText(context, "已加入熟词本", Toast.LENGTH_SHORT).show()
-            }) { Text("认识") }
+            }) { Text("重新学") }
         }
         TextButton(onClick = {
             app.applicationScope.launch {
-                app.nativeBookService.setDisabled(bookId, word.zh, !word.disabled)
+                service.setIgnoredInBook(bookId, row.zh, row.lemma, pos, row.senseOrder, row.introducedChapter, !row.disabled)
                 withContext(Dispatchers.Main) { onChanged() }
             }
-        }) { Text(if (word.disabled) "恢复" else "停用") }
+        }) { Text(if (row.disabled) "恢复" else "本书不换") }
     }
 }

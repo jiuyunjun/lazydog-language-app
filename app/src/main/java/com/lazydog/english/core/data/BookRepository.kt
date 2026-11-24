@@ -136,7 +136,11 @@ class BookRepository(
 
     // ---- 母语阅读（D-098 R4）----
 
-    suspend fun setNative(bookId: Long, enabled: Boolean, dose: Int) = dao.setNative(bookId, enabled, dose)
+    suspend fun setProgressivePaused(bookId: Long, paused: Boolean) = dao.setProgressivePaused(bookId, paused)
+
+    suspend fun allBooks(): List<BookEntity> = dao.allBooks()
+
+    suspend fun allGlossary(): List<BookGlossaryEntity> = dao.allGlossary()
 
     suspend fun glossary(bookId: Long): List<BookGlossaryEntity> = dao.glossary(bookId)
 

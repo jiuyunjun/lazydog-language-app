@@ -71,70 +71,27 @@ class NativeBookReadingTest {
             ZhMapping("x", lemma, PartOfSpeech.Verb, 0, rank, confident)
         assertTrue(NativeWordPicker.eligible(m("regret", 3773), learner))
         assertFalse(NativeWordPicker.eligible(m("fear", 3000), learner)) // 已熟悉
-        assertTrue(NativeWordPicker.eligible(m("answer", 767), learner)) // 还在学：窗口下界不管
+        assertFalse(NativeWordPicker.eligible(m("answer", 2000), learner)) // 生词本里正在学：不当新词引入
         assertFalse(NativeWordPicker.eligible(m("go", 35), learner)) // 太常见
         assertFalse(NativeWordPicker.eligible(m("repent", 15104), learner)) // 太生僻
         assertFalse(NativeWordPicker.eligible(m("regret", 3773, confident = false), learner))
     }
 
-    @Test
-    fun `picker prefers words that recur across the book and skips names`() {
-        val index = ZhEnIndex(
-            mapOf(
-                "后悔" to listOf(ZhEnIndex.Candidate("regret", PartOfSpeech.Verb, 0, 3773)),
-                "勇气" to listOf(ZhEnIndex.Candidate("courage", PartOfSpeech.Noun, 0, 3324)),
-                "林黛玉" to listOf(ZhEnIndex.Candidate("daiyu", PartOfSpeech.Noun, 0, 5000)),
-            ),
-        )
-        val tokens = segmenter.segment("林黛玉后悔了。勇气。勇气。")
-        val picked = NativeWordPicker.pick(tokens, index, learner, bookSpread = mapOf("后悔" to 30, "勇气" to 2), known = emptySet(), count = 1)
-        assertEquals(listOf("后悔"), picked.map { it.zh })
-        val again = NativeWordPicker.pick(tokens, index, learner, bookSpread = emptyMap(), known = setOf("后悔"), count = 5)
-        assertEquals(listOf("勇气"), again.map { it.zh })
+    private fun place(source: String, word: String, lemma: String): Placement {
+        val start = source.indexOf(word)
+        val mapping = ZhMapping(word, lemma, PartOfSpeech.Noun, 1, 3000, true)
+        return Placement(WordOccurrence(start, start + word.length, 0, mapping), introduces = false)
     }
 
     @Test
-    fun `generic function-like words are never picked`() {
-        val seg = ChineseSegmenter(
-            mapOf(
-                "就是" to ChineseSegmenter.Entry(9283, "d"),
-                "不会" to ChineseSegmenter.Entry(19515, "v"),
-                "勇气" to ChineseSegmenter.Entry(1537, "n"),
-            ),
-        )
-        val index = ZhEnIndex(
-            mapOf(
-                "就是" to listOf(ZhEnIndex.Candidate("namely", PartOfSpeech.Adverb, 0, 3000)),
-                "不会" to listOf(ZhEnIndex.Candidate("unable", PartOfSpeech.Adjective, 0, 2000)),
-                "勇气" to listOf(ZhEnIndex.Candidate("courage", PartOfSpeech.Noun, 0, 3324)),
-            ),
-        )
-        val picked = NativeWordPicker.pick(seg.segment("就是不会勇气"), index, learner, emptyMap(), emptySet(), count = 5)
-        assertEquals(listOf("勇气"), picked.map { it.zh })
-    }
-
-    @Test
-    fun `scaffold advances with exposures and falls back on reveal`() {
-        var word = GlossaryWord("后悔", "regret", PartOfSpeech.Verb, 1, introducedChapter = 0)
-        word = Scaffold.onExposure(Scaffold.onExposure(word))
-        assertEquals(ScaffoldStage.Hinted, word.stage)
-        repeat(3) { word = Scaffold.onExposure(word) }
-        assertEquals(ScaffoldStage.Independent, word.stage)
-        assertEquals(5, word.totalExposures)
-        word = Scaffold.onReveal(word)
-        assertEquals(ScaffoldStage.Hinted, word.stage)
-        assertEquals(0, word.exposuresInStage)
-    }
-
-    @Test
-    fun `renderer replaces whole words and keeps an offset map`() {
-        val source = "他非常后悔了。" + "这".repeat(50) + "他后悔。没有后悔药。"
-        val glossary = mapOf(
-            "后悔" to GlossaryWord("后悔", "regret", PartOfSpeech.Verb, 1, introducedChapter = 0),
-        )
-        val rendered = NativeChapterRenderer.render(source, segmenter.segment(source), glossary, chapterIndex = 0)
-        assertTrue(rendered.text.startsWith("他非常 regret 了。"))
-        assertTrue(rendered.text.endsWith("他 regret。没有后悔药。"))
+    fun `renderer replaces planned words and keeps an offset map`() {
+        val source = "他举起火把了。" + "这".repeat(50) + "他点火把。没有火把手。"
+        val first = place(source, "火把", "torch")
+        val secondStart = source.indexOf("火把", first.occurrence.end)
+        val second = first.copy(occurrence = first.occurrence.copy(start = secondStart, end = secondStart + 2))
+        val rendered = NativeChapterRenderer.render(source, listOf(second, first))
+        assertTrue(rendered.text.startsWith("他举起 torch 了。"))
+        assertTrue(rendered.text.endsWith("他点 torch。没有火把手。"))
         assertEquals(2, rendered.replacements.size)
         // 替换前后的位置能互相换算：「了」在原文第 5 个字。
         val le = rendered.text.indexOf("了")
@@ -142,19 +99,7 @@ class NativeBookReadingTest {
         assertEquals(le, rendered.toRendered(5))
         // 替换内部任何位置都回到原词起点。
         assertEquals(3, rendered.toSource(rendered.replacements[0].englishStart + 2))
-        assertEquals("regret", rendered.text.substring(rendered.replacements[0].englishStart, rendered.replacements[0].englishEnd))
-    }
-
-    @Test
-    fun `density keeps replacements apart and respects exclusions`() {
-        val source = "他后悔了。他后悔了。"
-        val word = GlossaryWord("后悔", "regret", PartOfSpeech.Verb, 1, introducedChapter = 0, stage = ScaffoldStage.Hinted)
-        val once = NativeChapterRenderer.render(source, segmenter.segment(source), mapOf("后悔" to word), 0)
-        assertEquals(1, once.replacements.size)
-        val excluded = word.copy(excluded = setOf(0 to 1))
-        val skipped = NativeChapterRenderer.render(source, segmenter.segment(source), mapOf("后悔" to excluded), 0)
-        assertEquals(listOf(6), skipped.replacements.map { it.sourceStart })
-        val later = NativeChapterRenderer.render(source, segmenter.segment(source), mapOf("后悔" to word.copy(introducedChapter = 3)), 0)
-        assertTrue(later.replacements.isEmpty())
+        assertEquals("torch", rendered.text.substring(rendered.replacements[0].englishStart, rendered.replacements[0].englishEnd))
+        assertEquals(ProgressiveRules.senseId("torch", PartOfSpeech.Noun, 1), rendered.replacements[0].senseId)
     }
 }

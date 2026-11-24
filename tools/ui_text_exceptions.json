@@ -2785,45 +2785,9 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
-    "text": "\"这里是「${replacement.zh}」\"",
-    "count": 1,
-    "reason": "替换处对应的中文；母语阅读的状态说明"
-  },
-  {
-    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
-    "text": "meaning",
-    "count": 1,
-    "reason": "内置词典的中文义项列表；释义说明，英文词本身用交互文本"
-  },
-  {
-    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
-    "text": "\"在这本书里见过 ${it.totalExposures} 次 · 当前${ScaffoldStage.entries.getOrElse(it.stage) { ScaffoldStage.Introduced }.labelZh}阶段\"",
-    "count": 1,
-    "reason": "曝光次数和支架阶段；界面元信息"
-  },
-  {
-    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
-    "text": "\"${dose.labelZh} · 每章 ${dose.newWordsPerChapter} 个新词\"",
-    "count": 1,
-    "reason": "英文量档位标签；界面标签"
-  },
-  {
-    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
     "text": "\"本书词表 · ${glossary.size} 个词\"",
     "count": 1,
     "reason": "本书词表标题；界面标签"
-  },
-  {
-    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
-    "text": "listOf( posLabelZh(word.pos), \"第 ${word.introducedChapter + 1} 章引入\", \"见过 ${word.totalExposures} 次\", \"看过中文 ${word.reveals} 次\", status, ).joinToString(\" · \")",
-    "count": 1,
-    "reason": "词表行的词性、引入章节、曝光、阶段；界面元信息"
-  },
-  {
-    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
-    "text": "if (word.disabled) \"恢复\" else \"停用\"",
-    "count": 1,
-    "reason": "停用或恢复按钮文字"
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/library/LibraryScreen.kt",
@@ -2848,5 +2812,65 @@
     "text": "\"「${record.detail.term}」已经会了？\"",
     "count": 1,
     "reason": "归档到熟词本的确认框标题"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
+    "text": "\"原文「${replacement.zh}」\"",
+    "count": 1,
+    "reason": "替换处对应的中文原文；渐进学词的状态说明"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
+    "text": "\"此处释义：${posLabelZh(replacement.pos.wire)} $meaning\"",
+    "count": 1,
+    "reason": "内置词典的中文义项；释义说明，英文词本身用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
+    "text": "\"${ReadingWordState.fromOrdinal(it.state).labelZh} · 有效复现 ${it.effectiveCount} 次 · 查过 ${it.lookups} 次\"",
+    "count": 1,
+    "reason": "义项学习状态和计数；界面元信息"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
+    "text": "density.labelZh",
+    "count": 1,
+    "reason": "替换密度档位标签；界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
+    "text": "\"$n\"",
+    "count": 2,
+    "reason": "每日新词、学习池的数字档位；界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
+    "text": "\"今天新学 $today / ${settings.dailyNewCapped} · 学习池 $active / ${settings.poolCapped}（书和网页共用）\"",
+    "count": 1,
+    "reason": "额度和学习池占用；界面元信息"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
+    "text": "if (settings.enabled) \"读到合适的词时会出现在这里。\" else \"打开替换密度后开始。\"",
+    "count": 1,
+    "reason": "空状态提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
+    "text": "label",
+    "count": 1,
+    "reason": "设置行标题；界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
+    "text": "listOfNotNull( posLabelZh(row.pos), status, word?.let { \"有效复现 ${it.effectiveCount} 次\" }, word?.let { \"查过 ${it.lookups} 次\" }, ).joinToString(\" · \")",
+    "count": 1,
+    "reason": "词表行的词性、状态、计数；界面元信息"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
+    "text": "if (row.disabled) \"恢复\" else \"本书不换\"",
+    "count": 1,
+    "reason": "本书不换或恢复按钮文字"
   }
 ]

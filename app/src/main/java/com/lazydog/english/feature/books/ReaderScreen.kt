@@ -92,7 +92,7 @@ import com.lazydog.english.domain.books.PageMode
 import com.lazydog.english.domain.books.ReaderSettings
 import com.lazydog.english.domain.books.RenderedChapter
 import com.lazydog.english.domain.books.RenderedReplacement
-import com.lazydog.english.domain.books.ScaffoldStage
+import com.lazydog.english.domain.books.ProgressiveRules
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -100,7 +100,7 @@ import kotlinx.coroutines.launch
  * 载入好的一章。[text] 是显示用的文本（母语阅读时是替换后的）；阅读位置一律记原文偏移，
  * 用 [rendered] 换算（设计文档 §5.9）。不开母语阅读时两者一样。
  */
-private data class LoadedChapter(val index: Int, val title: String, val rendered: RenderedChapter) {
+private data class LoadedChapter(val index: Int, val title: String, val source: String, val rendered: RenderedChapter) {
     val text: String get() = rendered.text
 
     /** 原文偏移 → 显示偏移；「从上一章末尾进来」的 Int.MAX_VALUE 落到末尾。 */
@@ -140,9 +140,10 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
     var tapped by remember { mutableStateOf<RenderedReplacement?>(null) }
     /** 纠错后重渲染这一章。 */
     var reloadTick by remember { mutableIntStateOf(0) }
-    /** 这次打开已经记过曝光的替换（章节:原文偏移），翻回来不重复记。 */
-    val exposed = remember { HashSet<String>() }
+    /** 当前屏的显示范围（章, 起, 止）：停够一秒才记有效展示、攒新词机会（设计文档 §12.3.2）。 */
+    var shownRange by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
     val nativeService = app.nativeBookService
+    val progressive by nativeService.settings.collectAsState(initial = null)
 
     LaunchedEffect(bookId) {
         chapters = repo.chapters(bookId)
@@ -153,7 +154,7 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
 
     val language = BookLanguage.fromWire(book?.language.orEmpty())
     val chapterIndex = locator?.chapter
-    LaunchedEffect(chapterIndex, chapters, language, book?.nativeEnabled, book?.englishDose, reloadTick) {
+    LaunchedEffect(chapterIndex, chapters, language, book?.progressivePaused, progressive, reloadTick) {
         val index = chapterIndex ?: return@LaunchedEffect
         val chapter = chapters.getOrNull(index) ?: return@LaunchedEffect
         val paragraphs = repo.chapterParagraphs(bookId, index)
@@ -162,10 +163,10 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
             return@LaunchedEffect
         }
         val source = ChapterText.build(chapter.title, paragraphs, language)
-        // 母语阅读：本地分词、挑词、替换（设计文档 §5）；没开或不是中文书就是原文。
+        // 渐进学词：本地分词、按额度和密度替换（设计文档 §12）；没开、本书暂停或不是中文书就是原文。
         val rendered = repo.book(bookId)?.let { nativeService.render(it, index, source, chapter.title.length) }
             ?: RenderedChapter.plain(source)
-        loaded = LoadedChapter(index, chapter.title, rendered)
+        loaded = LoadedChapter(index, chapter.title, source, rendered)
     }
 
     // 分词词典和反查表二十来 MB，离开阅读器就放掉。
@@ -233,11 +234,15 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
         if (index in chapters.indices) locator = BookLocator(index, offset)
     }
 
-    /** 母语阅读：这些替换上了屏，各记一次曝光（每次打开每处只记一次）。 */
-    fun recordExposures(chapterIndex: Int, replacements: List<RenderedReplacement>) {
-        val fresh = replacements.filter { exposed.add("$chapterIndex:${it.sourceStart}") }
-        if (fresh.isEmpty()) return
-        app.applicationScope.launch { nativeService.recordExposures(bookId, fresh.map { it.zh }) }
+    // 渐进学词：这一屏前台停够一秒才算有效展示（§12.3.2 末段）；翻走了就不算。去重在库里按原文实例做。
+    LaunchedEffect(shownRange, loaded) {
+        val (index, from, to) = shownRange ?: return@LaunchedEffect
+        val chapter = loaded?.takeIf { it.index == index } ?: return@LaunchedEffect
+        delay(ProgressiveRules.DWELL_MILLIS)
+        val onScreen = chapter.rendered.replacements.filter { it.start >= from && it.start < to }
+        val sourceFrom = chapter.rendered.toSource(from)
+        val sourceTo = chapter.rendered.toSource(to)
+        app.applicationScope.launch { nativeService.onPageDwelled(bookId, index, chapter.source, sourceFrom, sourceTo, onScreen) }
     }
 
     Box(
@@ -277,7 +282,7 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
                 onCenterTap = { menuVisible = !menuVisible },
                 registerTurn = { turnPage = it },
                 onReplacementTap = { tapped = it },
-                onExposed = { replacements -> recordExposures(chapter.index, replacements) },
+                onShown = { from, to -> shownRange = Triple(chapter.index, from, to) },
             )
             else -> ScrollChapter(
                 chapter = chapter,
@@ -289,7 +294,7 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
                 onTap = { menuVisible = !menuVisible },
                 onNextChapter = { goToChapter(chapter.index + 1) },
                 onReplacementTap = { tapped = it },
-                onExposed = { replacements -> recordExposures(chapter.index, replacements) },
+                onShown = { from, to -> shownRange = Triple(chapter.index, from, to) },
             )
         }
 
@@ -346,9 +351,10 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
     }
 
     tapped?.let { replacement ->
-        // 点开就看到了中文：算一次"没认出来"，退回上一阶段（§5.7）；已经在引入阶段的停在原地、重新计数。
+        // 点开看意思：确认这次展示，记一次查义；不降级（§12.4）。
         LaunchedEffect(replacement) {
-            app.applicationScope.launch { nativeService.recordReveal(bookId, replacement.zh) }
+            val chapter = loaded ?: return@LaunchedEffect
+            app.applicationScope.launch { nativeService.recordLookup(bookId, chapter.index, chapter.source, replacement) }
         }
         ReplacementSheet(
             bookId = bookId,
@@ -378,7 +384,8 @@ private fun PagedChapter(
     onCenterTap: () -> Unit,
     registerTurn: ((Int) -> Unit) -> Unit,
     onReplacementTap: (RenderedReplacement) -> Unit,
-    onExposed: (List<RenderedReplacement>) -> Unit,
+    /** 这一屏的显示范围（替换后的偏移）。 */
+    onShown: (Int, Int) -> Unit,
 ) {
     val colors = settings.theme.colors()
     val style = readerStyle(settings, colors.text)
@@ -417,7 +424,7 @@ private fun PagedChapter(
                             // 位置记原文偏移：替换和支架会改变显示文本的长度（设计文档 §5.9）。
                             onLocate(BookLocator(chapter.index, chapter.rendered.toSource(current.start)))
                             onVisibleText(chapter.text.substring(current.start, current.end))
-                            onExposed(chapter.rendered.replacements.filter { it.start >= current.start && it.start < current.end })
+                            onShown(current.start, current.end)
                         }
                     }
                 }
@@ -517,7 +524,8 @@ private fun ScrollChapter(
     onTap: () -> Unit,
     onNextChapter: () -> Unit,
     onReplacementTap: (RenderedReplacement) -> Unit,
-    onExposed: (List<RenderedReplacement>) -> Unit,
+    /** 这一屏的显示范围（替换后的偏移）。 */
+    onShown: (Int, Int) -> Unit,
 ) {
     val colors = settings.theme.colors()
     val style = readerStyle(settings, colors.text)
@@ -537,7 +545,7 @@ private fun ScrollChapter(
                 onVisibleText(lines.drop(line).take(3).joinToString("\n"))
                 val from = starts[line]
                 val to = starts.getOrElse(line + 3) { chapter.text.length }
-                onExposed(chapter.rendered.replacements.filter { it.start >= from && it.start < to })
+                onShown(from, to)
             }
         }
         LazyColumn(
@@ -686,7 +694,7 @@ private fun ReaderMenu(
                         if (showNative) {
                             TextButton(onClick = { onOpenSheet(ReaderSheet.Native) }) {
                                 Icon(Icons.Outlined.Translate, contentDescription = null)
-                                Text("母语", modifier = Modifier.padding(start = 4.dp))
+                                Text("学词", modifier = Modifier.padding(start = 4.dp))
                             }
                         }
                     }

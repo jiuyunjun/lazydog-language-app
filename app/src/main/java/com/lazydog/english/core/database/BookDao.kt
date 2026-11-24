@@ -37,10 +37,12 @@ data class BookEntity(
     @ColumnInfo(defaultValue = "0") val readingMillis: Long = 0,
     val addedAt: Long,
     @ColumnInfo(defaultValue = "0") val lastOpenedAt: Long = 0,
-    /** 中文书是否开母语阅读（D-098 R4）。英文书不用。 */
+    /** 旧版（R4）这本书是否开母语阅读；渐进学词（D-100）改成全局开关加按书暂停，这列只作迁移来源。 */
     @ColumnInfo(defaultValue = "0") val nativeEnabled: Boolean = false,
-    /** 英文量档位，`EnglishDose` 的序号；默认「中」。 */
+    /** 旧版英文量档位（R4），渐进学词（D-100）不再用；留作迁移来源和回退。 */
     @ColumnInfo(defaultValue = "1") val englishDose: Int = 1,
+    /** 渐进学词在这本书里暂停（D-100 §12.2）。开关本身是全局的。 */
+    @ColumnInfo(defaultValue = "0") val progressivePaused: Boolean = false,
 )
 
 /**
@@ -142,8 +144,8 @@ interface BookDao {
     @Query("DELETE FROM books WHERE id = :id")
     suspend fun deleteBook(id: Long)
 
-    @Query("UPDATE books SET nativeEnabled = :enabled, englishDose = :dose WHERE id = :id")
-    suspend fun setNative(id: Long, enabled: Boolean, dose: Int)
+    @Query("UPDATE books SET progressivePaused = :paused WHERE id = :id")
+    suspend fun setProgressivePaused(id: Long, paused: Boolean)
 
     @Query("SELECT * FROM book_glossary WHERE bookId = :bookId")
     suspend fun glossary(bookId: Long): List<BookGlossaryEntity>
