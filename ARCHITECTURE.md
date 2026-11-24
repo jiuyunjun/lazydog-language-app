@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "2.8"
+version: "2.9"
 updated: "2026-11-24"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -378,6 +378,16 @@ feature/library/ScanWordsScreen ──► core/ocr/LiveTextCamera ──► doma
   样式固定用逐行贪心断行、不断字，保证单独排一页和在整章里排出来的换行一致。
 - 阅读设置整份存 DataStore（`reader_settings`）。退出阅读器时补存进度和阅读时长用
   `LazyDogApplication.applicationScope`（页面作用域那时已取消）。
+
+### 在线书库（D-098 R3）
+
+- `core/network/BookCatalogClients`：`GutendexClient`（古腾堡，Gutendex JSON）、`WikisourceClient`（MediaWiki API：
+  检索、按「作品/」前缀列章节、逐章取解析后的 HTML）、`Ao3Client`（检索页 HTML，只列全年龄、已完结、英文）。
+  三个客户端用同一个如实的 UA；对方限流（429/503）时报"忙"，**不伪装浏览器去绕**。
+- `core/data/BookCatalogService`：检索、下载、进书架；维基文库逐章取并报进度，进书架前整本繁转简。
+  AO3 限流时让用户在浏览器里下好 EPUB 再走本地导入。
+- 繁转简：`assets/zh_t2s.txt`（OpenCC 逐字表，Apache-2.0，`tools/build_t2s.py` 生成），
+  转换规则 `domain/books/TraditionalToSimplified`，按码位逐字替换。
 
 ### 网上阅读材料（D-098 R1）
 

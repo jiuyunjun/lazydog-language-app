@@ -2686,5 +2686,83 @@
     "text": "label(option)",
     "count": 1,
     "reason": "排版设置选项标签（行距、主题、翻页方式等）"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "option.labelZh",
+    "count": 1,
+    "reason": "书库页签名称（古腾堡 / 维基文库 / AO3）；界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "source.noteZh",
+    "count": 1,
+    "reason": "书库说明一行；界面提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "if (source == CatalogSource.Wikisource) \"作品名，比如 西遊記\" else \"英文书名或作者，留空看最受欢迎的\"",
+    "count": 1,
+    "reason": "检索框占位提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "title",
+    "count": 1,
+    "reason": "维基文库推荐作品的标签名；导航标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "current.failure",
+    "count": 1,
+    "reason": "检索失败原因（连不上、限流等）；状态提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "state.entry.title",
+    "count": 1,
+    "reason": "下载进度对话框里的书名；状态提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "state.progress",
+    "count": 1,
+    "reason": "下载进度（第几章）；状态提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "\"${state.reason}。可以在浏览器里打开这本书，下载 EPUB，再回书架点「导入」。\"",
+    "count": 1,
+    "reason": "书库限流时的处理说明；操作提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "state.reason",
+    "count": 1,
+    "reason": "下载失败原因；状态提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "entry.title",
+    "count": 1,
+    "reason": "检索结果里的书名；书目信息，下载后正文在阅读器里用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "entry.author",
+    "count": 1,
+    "reason": "检索结果里的作者；书目信息"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "entry.summary",
+    "count": 1,
+    "reason": "检索结果里的简介；书目信息，用于挑书，不是学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "entry.meta",
+    "count": 1,
+    "reason": "检索结果里的下载量、字数、章节数；书目信息"
   }
 ]

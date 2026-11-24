@@ -8,7 +8,11 @@ import com.lazydog.english.core.ai.OpenAiContentGenerator
 import com.lazydog.english.core.backup.BackupFileStore
 import com.lazydog.english.core.backup.BackupRepository
 import com.lazydog.english.core.data.AssetDictionary
+import com.lazydog.english.core.data.BookCatalogService
 import com.lazydog.english.core.data.BookRepository
+import com.lazydog.english.core.network.Ao3Client
+import com.lazydog.english.core.network.GutendexClient
+import com.lazydog.english.core.network.WikisourceClient
 import com.lazydog.english.core.data.DictionaryBackfillWorker
 import com.lazydog.english.core.data.DictionaryNewWords
 import com.lazydog.english.core.data.AssetPhonemeCatalog
@@ -109,6 +113,11 @@ class LazyDogApplication : Application() {
 
     /** 读书：导入、书架、章节正文、进度、书签（D-098 R2）。 */
     val bookRepository: BookRepository by lazy { BookRepository(this, database) }
+
+    /** 在线书库：古腾堡、维基文库、AO3（D-098 R3）。 */
+    val bookCatalogService: BookCatalogService by lazy {
+        BookCatalogService(this, GutendexClient(), WikisourceClient(), Ao3Client(), bookRepository)
+    }
 
     /**
      * 联网检索。母语阅读写时效内容之前要先有可信事实（`母语阅读DESIGN.md` §36.7），

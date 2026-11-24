@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.20"
+version: "7.21"
 updated: "2026-11-24"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -55,6 +55,13 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
   - `LazyDogApplication` 加一个 `applicationScope`，只用于页面关闭时还要写完的那一下（存进度、阅读时长）。
   - 漂移自查：依赖方向不变（feature/books → core/data → core/books、domain/books）；不加依赖；只增表的自动迁移；
     分页是界面排版计算，放在 feature 层；切章、进度、设置规则在 domain；全局对象只加在 `LazyDogApplication`。
+- R3 实现记录（2026-11-24）：
+  - 维基文库的正文对 `variant=zh-cn` 不转换（实测只有界面字转了），所以在本地繁转简：加 OpenCC 逐字表作资源
+    （Apache-2.0，约 26 KB，`tools/build_t2s.py` 生成）。只用于维基文库下载的书；本地导入的繁体书不自动转。
+  - AO3 对自动下载回 429。如实的 UA 被限流时不伪装成浏览器去绕，改为让用户在浏览器里下载再导入——
+    这是站点的明确意图，绕过去等于违背它。
+  - 书库下载的书记来源和书库编号（`books.source` / `sourceId`），同一本不重复下；恢复备份后可据此重新下载（尚未做自动重下）。
+  - 漂移自查：依赖方向不变；客户端在 core/network、编排在 core/data、转换规则在 domain；不加依赖；无表结构变化。
 - 影响范围：新增三个包和五张表，一次只增不改的迁移；`feature/reading`、`ReadingRepository`、备份模型、
   `AI_CONTRACTS.md`（替换规划入参）、`ARCHITECTURE.md`（包结构与数据模型）都要改。按 R1～R5 分期提交，每期单独验收。
 

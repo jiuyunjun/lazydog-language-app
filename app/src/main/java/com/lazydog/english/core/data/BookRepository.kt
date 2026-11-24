@@ -95,6 +95,10 @@ class BookRepository(
 
     suspend fun book(id: Long): BookEntity? = dao.getBook(id)
 
+    /** 在线书库里这本已经下过了吗（按来源和书库编号认）。 */
+    suspend fun existing(source: BookSource, sourceId: String): Long? =
+        sourceId.takeIf { it.isNotBlank() }?.let { dao.findBySource(source.wire, it)?.id }
+
     suspend fun chapters(bookId: Long): List<BookChapterEntity> = dao.chapters(bookId)
 
     /** 一章的段落；正文文件不在（恢复备份后还没重新导入）返回 null。 */

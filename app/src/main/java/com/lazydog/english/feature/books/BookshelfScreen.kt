@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.FileOpen
+import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -66,7 +67,7 @@ private val COVER_COLORS = listOf(
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun BookshelfScreen(onExit: () -> Unit, onOpenBook: (Long) -> Unit) {
+fun BookshelfScreen(onExit: () -> Unit, onOpenBook: (Long) -> Unit, onOpenCatalog: () -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val scope = rememberCoroutineScope()
@@ -99,6 +100,10 @@ fun BookshelfScreen(onExit: () -> Unit, onOpenBook: (Long) -> Unit) {
                     IconButton(onClick = onExit) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回") }
                 },
                 actions = {
+                    TextButton(onClick = onOpenCatalog) {
+                        Icon(Icons.Outlined.TravelExplore, contentDescription = null)
+                        Text("书库", modifier = Modifier.padding(start = 4.dp))
+                    }
                     TextButton(onClick = { picker.launch(mimeTypes) }, enabled = !importing) {
                         Icon(Icons.Outlined.FileOpen, contentDescription = null)
                         Text("导入", modifier = Modifier.padding(start = 4.dp))
@@ -122,6 +127,7 @@ fun BookshelfScreen(onExit: () -> Unit, onOpenBook: (Long) -> Unit) {
                         textAlign = TextAlign.Center,
                     )
                     Button(onClick = { picker.launch(mimeTypes) }, enabled = !importing) { Text("导入电子书") }
+                    TextButton(onClick = onOpenCatalog) { Text("或者去书库找一本公版书") }
                 }
                 else -> LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 104.dp),

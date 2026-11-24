@@ -98,6 +98,7 @@ object Routes {
     const val WordDetail = "library/word/{itemId}"
     const val Books = "books"
     const val BookReader = "books/read/{bookId}"
+    const val BookCatalog = "books/catalog"
 
     /** [taskKey] 传 [DEFAULT_MODEL_KEY] 表示改的是默认模型。 */
     fun modelPick(taskKey: String) = "settings/models/$taskKey"
@@ -480,6 +481,15 @@ private fun AppNavHost(
         appScreen(Routes.Books, ask = AskPagePolicy.Disabled("书架")) {
             com.lazydog.english.feature.books.BookshelfScreen(
                 onExit = { navController.popOnce() },
+                onOpenBook = { id -> navController.navigate(Routes.bookReader(id)) },
+                onOpenCatalog = { navController.navigate(Routes.BookCatalog) },
+            )
+        }
+
+        appScreen(Routes.BookCatalog, ask = AskPagePolicy.Disabled("书库")) {
+            com.lazydog.english.feature.books.BookCatalogScreen(
+                onExit = { navController.popOnce() },
+                // 下完直接读；从阅读器返回回到书库，书架上也已经有这本了。
                 onOpenBook = { id -> navController.navigate(Routes.bookReader(id)) },
             )
         }
