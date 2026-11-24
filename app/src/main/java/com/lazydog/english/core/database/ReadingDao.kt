@@ -37,6 +37,17 @@ interface ReadingDao {
     @Query("SELECT * FROM reading_materials WHERE source = 'ai' ORDER BY createdAt DESC LIMIT :limit")
     suspend fun recentGenerated(limit: Int): List<ReadingMaterialEntity>
 
+    /** 同一篇网上文章只存一份：再点开就打开已存的那份，进度、喜欢、完成状态都在。 */
+    @Query("SELECT * FROM reading_materials WHERE sourceUrl = :url AND sourceUrl != '' LIMIT 1")
+    suspend fun findBySourceUrl(url: String): ReadingMaterialEntity?
+
+    /** 打开过的网上文章的地址，列表里标「读过」。 */
+    @Query("SELECT sourceUrl FROM reading_materials WHERE sourceUrl != ''")
+    fun observeSourceUrls(): Flow<List<String>>
+
+    @Query("UPDATE reading_materials SET questionsJson = :questionsJson WHERE id = :id")
+    suspend fun updateQuestions(id: Long, questionsJson: String)
+
     // ---- 备份 / 恢复（core/backup/BackupRepository）----
 
     @Query("SELECT * FROM reading_materials")

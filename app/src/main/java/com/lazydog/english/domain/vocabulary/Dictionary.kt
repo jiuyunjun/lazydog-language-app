@@ -71,6 +71,11 @@ data class DictionaryEntry(
     val senses: List<DictionarySense>,
     /** 推不出来的变形（went、gone、children），规则变形不在里面。 */
     val irregularForms: List<String>,
+    /**
+     * 词频排名（ECDICT 的 frq / bnc 取小的那个），越小越常用；0 表示没有排名。
+     * 这是原始语料排名，含功能词，和 `WordFrequencyIndex` 的"实词内部排名"不是一个口径。
+     */
+    val frequencyRank: Int = 0,
 ) {
     fun sensesOf(pos: PartOfSpeech): List<DictionarySense> = senses.filter { it.pos == pos }
 

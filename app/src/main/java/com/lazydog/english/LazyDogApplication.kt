@@ -22,6 +22,9 @@ import com.lazydog.english.core.data.ReadingRepository
 import com.lazydog.english.core.data.ScenarioSessionRepository
 import kotlinx.coroutines.flow.first
 import com.lazydog.english.core.data.UserPreferences
+import com.lazydog.english.core.data.WebReadingService
+import com.lazydog.english.core.network.SimpleWikipediaClient
+import com.lazydog.english.core.network.VoaLearningEnglishClient
 import com.lazydog.english.core.database.AppDatabase
 import com.lazydog.english.core.data.VocabularyImageRepository
 import com.lazydog.english.core.network.BraveImageSearchClient
@@ -112,6 +115,20 @@ class LazyDogApplication : Application() {
 
     /** 挑中的新闻去哪找原文、怎么抽正文（D-088）。 */
     val newsArticleLoader: NewsArticleLoader by lazy { NewsArticleLoader(search = webSearch, fetcher = HttpArticleFetcher()) }
+
+    /** 日常阅读的网上材料：VOA、简明维基、英文新闻原文（D-098 R1）。 */
+    val webReadingService: WebReadingService by lazy {
+        WebReadingService(
+            voa = VoaLearningEnglishClient(),
+            wiki = SimpleWikipediaClient(),
+            newsFeed = newsFeed,
+            newsLoader = newsArticleLoader,
+            dictionary = dictionary,
+            readings = readingRepository,
+            knowledge = knowledgeRepository,
+            preferences = userPreferences,
+        )
+    }
 
     /**
      * 图片检索用的是和联网检索同一个 Brave 密钥（`单词视觉记忆图片DESIGN.md` §16，D-071）。

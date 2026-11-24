@@ -11,6 +11,8 @@ import com.lazydog.english.domain.generation.SpanKind
 import com.lazydog.english.domain.generation.ReadingQuestion
 import com.lazydog.english.domain.generation.ReadingTargetGrammar
 import com.lazydog.english.domain.generation.ReadingTargetWord
+import com.lazydog.english.domain.reading.ReadingDifficulty
+import com.lazydog.english.domain.reading.WebReadingArticle
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.builtins.ListSerializer
@@ -101,6 +103,44 @@ class ReadingRepository(
     suspend fun updateNativeDocument(id: Long, document: NativeReadingDocument) {
         dao.updateNative(id, NativeReadingJson.encode(document))
     }
+
+    /**
+     * 存一篇网上取来的文章（D-098 R1）。正文是原文段落，空行分段；没有目标词和题目——
+     * 题目要读完点「出几道题」才按需生成。同一个地址已经存过就直接返回那一篇。
+     */
+    suspend fun saveWeb(article: WebReadingArticle, difficulty: ReadingDifficulty.Estimate?): Long {
+        dao.findBySourceUrl(article.url)?.let { return it.id }
+        return dao.insert(
+            ReadingMaterialEntity(
+                title = article.card.title,
+                body = article.paragraphs.joinToString("\n\n"),
+                source = article.card.source.wire,
+                topic = article.card.channel,
+                teaser = article.card.teaser,
+                category = article.card.channel,
+                sourceUrl = article.url,
+                attribution = article.attribution,
+                difficulty = difficulty?.level?.name.orEmpty(),
+                estimatedCefr = "",
+                targetWordsJson = "[]",
+                grammarJson = "[]",
+                questionsJson = "[]",
+                model = "",
+                promptVersion = 0,
+                schemaVersion = 0,
+                validationNotes = "",
+                createdAt = now().toEpochMilli(),
+            ),
+        )
+    }
+
+    suspend fun findBySourceUrl(url: String): ReadingMaterialEntity? = dao.findBySourceUrl(url)
+
+    val openedSourceUrls: Flow<List<String>> = dao.observeSourceUrls()
+
+    /** 读完按需生成的题目写回这篇（D-098 R1）。 */
+    suspend fun saveQuestions(id: Long, questions: List<ReadingQuestion>) =
+        dao.updateQuestions(id, ReadingJson.encodeQuestions(questions))
 
     suspend fun savePasted(title: String, body: String): Long = dao.insert(
         ReadingMaterialEntity(

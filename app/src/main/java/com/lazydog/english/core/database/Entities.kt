@@ -165,6 +165,12 @@ data class ReadingMaterialEntity(
      * `questionsJson` 一样——它只随「重新规划替换」整条替换，拆成十几列没有好处。
      */
     @ColumnInfo(defaultValue = "''") val nativeJson: String = "",
+    /** 网上取来的材料的原文地址（D-098 R1）。AI 写的、粘贴的为空。 */
+    @ColumnInfo(defaultValue = "''") val sourceUrl: String = "",
+    /** 出处，阅读页底部显示：「VOA Learning English」、媒体名、维基的许可。 */
+    @ColumnInfo(defaultValue = "''") val attribution: String = "",
+    /** 本地估的难度（`ReadingDifficulty.Level` 的 name）；没估过为空。和 [estimatedCefr] 分开：那个是 AI 自报的。 */
+    @ColumnInfo(defaultValue = "''") val difficulty: String = "",
     val estimatedCefr: String,
     val targetWordsJson: String,
     val grammarJson: String,

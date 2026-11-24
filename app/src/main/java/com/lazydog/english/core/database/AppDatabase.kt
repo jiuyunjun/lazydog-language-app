@@ -27,7 +27,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PerceptionAttemptEntity::class,
         ProductionAttemptEntity::class,
     ],
-    version = 23,
+    version = 24,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -59,6 +59,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 20, to = 21),
         // v23 只新增发音与音标的三张表（D-077），老表一列没动。
         AutoMigration(from = 22, to = 23),
+        // v24 给 reading_materials 加原文链接、出处、本地难度三列（都带默认值，D-098 R1）。
+        AutoMigration(from = 23, to = 24),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {

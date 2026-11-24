@@ -2,8 +2,8 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.17"
-updated: "2026-11-20"
+version: "7.18"
+updated: "2026-11-24"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -13,7 +13,7 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
 
 ## D-098：读书功能与网络阅读（架构变更请求）
 
-- 状态：**待确认**（2026-11-20 提出。产品方向已由用户定下：阅读材料改从网上取、AI 降为辅助；接入读书，
+- 状态：已确认（2026-11-24 用户说「继续分 milestone 实现」。2026-11-20 提出。产品方向已由用户定下：阅读材料改从网上取、AI 降为辅助；接入读书，
   对齐主流阅读 App；中文书母语阅读时同一生词反复替换。书源、母语读书的范围、日常阅读来源、翻页方式四项已选定，
   见 `读书与网络阅读DESIGN.md` §1。用户要求「先落实设计然后 push」，实现前还需确认本条的架构变更）。
 - 问题：阅读材料全靠 AI 现写，慢、贵，也不是真实语料；App 里没有地方读一整本书。
@@ -26,6 +26,8 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
      `domain/books`（进度定位、切章、复现替换、密度控制、支架阶段）。
   2. 新表 `books`、`book_chapters`、`book_bookmarks`、`book_glossary`、`book_chapter_spans`；
      `reading_materials` 加「原文链接」「出处」两列；数据库 23 → 24，只增不改。
+     （实现时拆开：R1 先做 `reading_materials` 的三列——原文链接、出处、本地难度——占 23 → 24；
+     书的五张表随 R2 进 24 → 25。）
   3. 书的正文存为 App 私有目录下的纯文本章节文件，不进数据库、不进备份。
   4. 新的网络客户端：Gutendex、维基文库、AO3、VOA RSS、Simple English Wikipedia，放在 `core/network`，各自失败互不影响。
   5. `planNativeReadingSpans` 加两个可选入参：书级词表、本章新引入词数上限（不传时行为不变）。

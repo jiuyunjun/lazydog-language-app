@@ -43,23 +43,23 @@ class AssetDictionary(
         if (clean.isEmpty()) return null
         return try {
             val head = database.rawQuery(
-                "SELECT lemma, ipa, ipa_source FROM words WHERE lemma = ? COLLATE NOCASE " +
+                "SELECT lemma, ipa, ipa_source, frq_rank FROM words WHERE lemma = ? COLLATE NOCASE " +
                     "ORDER BY lemma = ? DESC LIMIT 1",
                 arrayOf(clean, clean),
-            ).use { c -> if (c.moveToFirst()) Triple(c.getString(0), c.getString(1), c.getString(2)) else null }
+            ).use { c -> if (c.moveToFirst()) Head(c.getString(0), c.getString(1), c.getString(2), c.getInt(3)) else null }
                 ?: return null
             val senses = database.rawQuery(
                 "SELECT pos, sense_order, meaning_zh FROM senses WHERE lemma = ? ORDER BY rowid",
-                arrayOf(head.first),
+                arrayOf(head.lemma),
             ).use { c ->
                 buildList { while (c.moveToNext()) add(SenseRow(c.getString(0), c.getInt(1), c.getString(2))) }
             }
             // 和原形同形的（run 的过去分词 run）在变形表里，但不算"要额外记的形态"。
             val forms = database.rawQuery(
                 "SELECT form FROM forms WHERE lemma = ? AND irregular = 1 AND form <> lemma COLLATE NOCASE ORDER BY rowid",
-                arrayOf(head.first),
+                arrayOf(head.lemma),
             ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
-            assembleEntry(head.first, head.second, head.third, senses, forms)
+            assembleEntry(head.lemma, head.ipa, head.ipaSource, senses, forms)?.copy(frequencyRank = head.rank)
         } catch (e: Exception) {
             Log.w(TAG, "词典查询失败：$clean", e)
             null
@@ -134,6 +134,8 @@ class AssetDictionary(
         Log.w(TAG, "词典 meta 读不出来", e)
         emptyMap()
     }
+
+    private data class Head(val lemma: String, val ipa: String, val ipaSource: String, val rank: Int)
 
     internal data class SenseRow(val pos: String, val order: Int, val meaningZh: String)
 
