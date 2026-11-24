@@ -2,6 +2,13 @@ package com.lazydog.english.feature.books
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -500,6 +507,15 @@ private fun MissingContent(onExit: () -> Unit) {
 
 internal enum class ReaderSheet { Contents, Bookmarks, Settings }
 
+/**
+ * 菜单进出的节奏。默认的"展开 + 淡入"走的是偏软的弹簧，从点下去到菜单完全出来要大半秒，
+ * 读书时呼出菜单是很频繁的动作，拖沓很明显。改成短促的滑入加淡入：
+ * 进场 160ms、标准减速曲线；退场再快一点（120ms、加速曲线），让开得干脆。
+ */
+private fun <T> menuEnterSpec() = tween<T>(durationMillis = 160, easing = LinearOutSlowInEasing)
+
+private fun <T> menuExitSpec() = tween<T>(durationMillis = 120, easing = FastOutLinearInEasing)
+
 /** 呼出的菜单：上面返回、书名、加书签；下面章节进度和目录、书签、设置。 */
 @Composable
 private fun ReaderMenu(
@@ -516,7 +532,12 @@ private fun ReaderMenu(
     askAction: @Composable () -> Unit,
 ) {
     Box(Modifier.fillMaxSize()) {
-        AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopCenter)) {
+        AnimatedVisibility(
+            visible = visible,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = slideInVertically(menuEnterSpec()) { -it } + fadeIn(menuEnterSpec()),
+            exit = slideOutVertically(menuExitSpec()) { -it } + fadeOut(menuExitSpec()),
+        ) {
             Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -535,7 +556,12 @@ private fun ReaderMenu(
                 }
             }
         }
-        AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.BottomCenter)) {
+        AnimatedVisibility(
+            visible = visible,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(menuEnterSpec()) { it } + fadeIn(menuEnterSpec()),
+            exit = slideOutVertically(menuExitSpec()) { it } + fadeOut(menuExitSpec()),
+        ) {
             Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Text(
