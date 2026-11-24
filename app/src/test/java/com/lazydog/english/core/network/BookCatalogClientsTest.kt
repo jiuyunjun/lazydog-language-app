@@ -62,11 +62,28 @@ class BookCatalogClientsTest {
     }
 
     @Test
+    fun `wikisource header container is dropped and gives the chapter title`() {
+        val html = """<div class="mw-parser-output"><div id="headerContainer"><table><tbody><tr>
+            <td style="width:25%;"> </td>
+            <td style="width:50%;"><b>西遊記</b><br />第一回<br />靈根育孕源流出 心性修持大道生<br /><span>作者：</span><a>吳承恩</a></td>
+            <td style="width:25%;"><a>第二回<br />悟徹菩提真妙理</a></td><td>→</td></tr></tbody></table>
+            <table><tr><td><ul><li>姊妹计划: 数据项</li></ul></td></tr></table></div>
+            <p>詩曰：</p><p>混沌未分天地亂。</p>
+            <table class="ws-noexport noprint ws-footer"><tbody><tr><td><a href="#top">↑返回頂部</a></td>
+            <td><a>第二回﹕悟徹菩提真妙理<br />斷魔歸本合元神</a></td></tr></tbody></table></div>"""
+        val body = """{"parse":{"title":"西遊記/第001回","text":${kotlinx.serialization.json.JsonPrimitive(html)}}}"""
+        val chapter = WikisourceClient.parseChapter("西遊記/第001回", body)!!
+        assertEquals("第一回 靈根育孕源流出 心性修持大道生", chapter.title)
+        assertEquals(listOf("詩曰：", "混沌未分天地亂。"), chapter.paragraphs)
+    }
+
+    @Test
     fun `ao3 blurbs become entries`() {
         val html = """<ol class="work index group">
             <li id="work_304382" class="work blurb group work-304382" role="article">
               <div class="header module"><h4 class="heading"><a href="/works/304382">The Internet &amp; Me</a> by
-                <a rel="author" href="/users/a/pseuds/a">cyerus</a></h4></div>
+                <a rel="author" href="/users/a/pseuds/a">cyerus</a></h4>
+                <ul class="required-tags"><li><a><span class="rating-general-audience rating" title="General Audiences"><span class="text">General Audiences</span></span></a></li></ul></div>
               <blockquote class="userstuff summary"><p>John is real.</p><p>No one believes it.</p></blockquote>
               <dl class="stats"><dd class="language">English</dd><dd class="words">1,911</dd><dd class="chapters">1/1</dd></dl>
             </li>
@@ -78,8 +95,8 @@ class BookCatalogClientsTest {
         assertEquals("The Internet & Me", entry.title)
         assertEquals("cyerus", entry.author)
         assertEquals("John is real. No one believes it.", entry.summary)
-        assertEquals("1,911 词 · 1/1 章", entry.meta)
-        assertEquals("https://archiveofourown.org/works/304382", entry.webUrl)
+        assertEquals("全年龄 · 1,911 词 · 1/1 章", entry.meta)
+        assertEquals("https://archiveofourown.org/works/304382?view_adult=true", entry.webUrl)
     }
 
     @Test

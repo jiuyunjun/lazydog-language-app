@@ -1,5 +1,6 @@
 package com.lazydog.english.core.network
 
+import com.lazydog.english.domain.books.Ao3Rating
 import com.lazydog.english.domain.books.CatalogEntry
 import com.lazydog.english.domain.books.CatalogResult
 import com.lazydog.english.domain.books.CatalogSource
@@ -245,8 +246,16 @@ class WikisourceClient(private val base: String = BASE) {
          * 章节名取居中加粗的回目，没有就用子页面名。
          */
         internal fun parseChapter(page: String, body: String): ParsedChapter? {
-            val html = runCatching { json.decodeFromString(ParseResponse.serializer(), body) }.getOrNull()?.parse?.text ?: return null
+            val raw = runCatching { json.decodeFromString(ParseResponse.serializer(), body) }.getOrNull()?.parse?.text ?: return null
+            // 另一种页眉：`<div id="headerContainer">` 里一张表，中间一格是「书名 / 第一回 / 回目 / 作者」，
+            // 右边一格是下一回的链接。整块不是正文；中间那格的回目拿来当章节名。
+            val headerStart = raw.indexOf("<div id=\"headerContainer\"")
+            val headerEnd = if (headerStart >= 0) raw.indexOf("<p>", headerStart).takeIf { it > 0 } ?: -1 else -1
+            val headerTitle = if (headerEnd > 0) headerTitle(raw.substring(headerStart, headerEnd)) else null
+            val html = if (headerEnd > 0) raw.removeRange(headerStart, headerEnd) else raw
             val cleaned = html
+                // 维基文库自己标了「不导出」的表格（页脚的返回顶部、下一回链接）不是正文。
+                .replace(NO_EXPORT_TABLE, "")
                 .replace(REFERENCE_SUP, "")
                 .replace(REFERENCE_LIST, "")
                 .let { text -> text.indexOf("licenseContainer").takeIf { it > 0 }?.let { text.substring(0, text.lastIndexOf('<', it)) } ?: text }
@@ -257,11 +266,26 @@ class WikisourceClient(private val base: String = BASE) {
                 // 「註釋」「參考文獻」这类小节标题之后都是注释列表，不是正文。
                 .takeWhile { it !in NOTES_HEADINGS }
             if (paragraphs.isEmpty()) return null
-            return ParsedChapter(title = heading ?: page.substringAfterLast('/'), paragraphs = paragraphs)
+            return ParsedChapter(title = heading ?: headerTitle ?: page.substringAfterLast('/'), paragraphs = paragraphs)
+        }
+
+        /** 页眉中间那格按 `<br>` 分行：第一行是书名，「作者」那行以后不要，剩下的就是「第一回 回目」。 */
+        private fun headerTitle(header: String): String? {
+            val cell = HEADER_CENTER.find(header)?.groupValues?.get(1) ?: return null
+            return cell.split(BREAK)
+                .map(HtmlText::inline)
+                .filter { it.isNotBlank() }
+                .drop(1)
+                .takeWhile { !it.startsWith("作者") }
+                .joinToString(" ")
+                .takeIf { it.isNotBlank() }
         }
 
         private val REFERENCE_SUP = Regex("""<sup[^>]*class="[^"]*reference[^"]*"[^>]*>.*?</sup>""", RegexOption.DOT_MATCHES_ALL)
         private val REFERENCE_LIST = Regex("""<ol class="references">.*?</ol>""", RegexOption.DOT_MATCHES_ALL)
+        private val NO_EXPORT_TABLE = Regex("""<table[^>]*class="[^"]*ws-noexport[^"]*"[^>]*>.*?</table>""", RegexOption.DOT_MATCHES_ALL)
+        private val HEADER_CENTER = Regex("""<td style="width:50%;">(.*?)</td>""", RegexOption.DOT_MATCHES_ALL)
+        private val BREAK = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
         private val CENTER_HEADING = Regex("""<div class="center">\s*<b>(.*?)</b>""", RegexOption.DOT_MATCHES_ALL)
         private val NAVIGATION = Regex("回目录|回目錄|上一回|下一回|上一章|下一章|返回目录")
         private val NOTES_HEADINGS = setOf("註釋", "注釋", "注释", "腳註", "脚注", "參考文獻", "参考文献", "校勘記", "校勘记")
@@ -269,14 +293,15 @@ class WikisourceClient(private val base: String = BASE) {
 }
 
 /**
- * AO3（Archive of Our Own）：检索只列全年龄（General Audiences）、已完结、英文的作品，按 kudos 排。
+ * AO3（Archive of Our Own）：检索已完结、英文的作品，按 kudos 排；分级可选，默认全部。
  * 下载走站点官方的 EPUB 下载地址；AO3 会对自动程序限流（429），这时让用户在浏览器里下好再导入。
  */
 class Ao3Client(private val base: String = BASE) {
 
-    suspend fun search(query: String): CatalogResult = withContext(Dispatchers.IO) {
+    suspend fun search(query: String, rating: Ao3Rating = Ao3Rating.All): CatalogResult = withContext(Dispatchers.IO) {
         val url = "$base/works/search?work_search%5Bquery%5D=${CatalogHttp.encode(query.trim())}" +
-            "&work_search%5Blanguage_id%5D=en&work_search%5Brating_ids%5D%5B%5D=$GENERAL_AUDIENCES" +
+            "&work_search%5Blanguage_id%5D=en" +
+            (rating.id?.let { "&work_search%5Brating_ids%5D%5B%5D=$it" } ?: "") +
             "&work_search%5Bcomplete%5D=T&work_search%5Bsort_column%5D=kudos_count"
         when (val response = CatalogHttp.get(url, op = "AO3 检索")) {
             is CatalogHttp.Response.Ok -> parseSearch(String(response.bytes, Charsets.UTF_8))
@@ -287,7 +312,8 @@ class Ao3Client(private val base: String = BASE) {
     }
 
     suspend fun download(entry: CatalogEntry): CatalogDownload = withContext(Dispatchers.IO) {
-        when (val response = CatalogHttp.get("$base/downloads/${entry.id}/work.epub", op = "AO3 下载")) {
+        // 成人向作品要 view_adult=true，否则回的是"确认已成年"页面而不是文件。
+        when (val response = CatalogHttp.get("$base/downloads/${entry.id}/work.epub?view_adult=true", op = "AO3 下载")) {
             is CatalogHttp.Response.Ok -> if (isZip(response.bytes)) CatalogDownload.Epub(response.bytes)
             else CatalogDownload.Busy("AO3 没有给出 EPUB")
             is CatalogHttp.Response.Busy -> CatalogDownload.Busy("AO3 对自动下载限流了")
@@ -297,11 +323,11 @@ class Ao3Client(private val base: String = BASE) {
 
     companion object {
         const val BASE = "https://archiveofourown.org"
-        const val GENERAL_AUDIENCES = 10
 
         private val BLURB = Regex("""<li id="work_(\d+)" class="work blurb group[^"]*"[^>]*>(.*?)(?=<li id="work_\d+" class="work blurb|</ol>)""", RegexOption.DOT_MATCHES_ALL)
         private val TITLE = Regex("""<h4 class="heading">\s*<a href="/works/\d+">(.*?)</a>""", RegexOption.DOT_MATCHES_ALL)
         private val AUTHOR = Regex("""<a rel="author"[^>]*>(.*?)</a>""", RegexOption.DOT_MATCHES_ALL)
+        private val RATING = Regex("""<span class="rating-[^"]*" title="([^"]+)">""")
         private val SUMMARY = Regex("""<blockquote class="userstuff summary">(.*?)</blockquote>""", RegexOption.DOT_MATCHES_ALL)
 
         private fun field(block: String, name: String): String =
@@ -319,10 +345,11 @@ class Ao3Client(private val base: String = BASE) {
                 author = AUTHOR.findAll(block).map { HtmlText.inline(it.groupValues[1]) }.joinToString(" / "),
                 summary = SUMMARY.find(block)?.groupValues?.get(1)?.let { HtmlText.paragraphs(it).joinToString(" ") }.orEmpty(),
                 meta = listOf(
+                    RATING.find(block)?.groupValues?.get(1)?.let(Ao3Rating::labelOf)?.takeIf { it.isNotBlank() },
                     field(block, "words").takeIf { it.isNotBlank() }?.let { "$it 词" },
                     field(block, "chapters").takeIf { it.isNotBlank() }?.let { "$it 章" },
                 ).filterNotNull().joinToString(" · "),
-                webUrl = "$BASE/works/$id",
+                webUrl = "$BASE/works/$id?view_adult=true",
             )
         }.toList()
     }

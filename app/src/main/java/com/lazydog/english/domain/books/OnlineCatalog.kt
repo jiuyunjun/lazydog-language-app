@@ -7,7 +7,7 @@ package com.lazydog.english.domain.books
 enum class CatalogSource(val labelZh: String, val noteZh: String, val book: BookSource) {
     Gutenberg("古腾堡", "7 万多本英文公版书", BookSource.Gutenberg),
     Wikisource("维基文库", "中文公版作品，繁体会转成简体", BookSource.Wikisource),
-    Ao3("AO3", "作者公开发布的同人和原创，只列全年龄作品", BookSource.Ao3),
+    Ao3("AO3", "作者公开发布的同人和原创，已完结的英文作品", BookSource.Ao3),
 }
 
 /** 检索结果里的一本。[id] 是书库自己的编号或条目名，下载和去重都靠它。 */
@@ -22,6 +22,28 @@ data class CatalogEntry(
     /** 在浏览器里打开这本书的地址（AO3 下载被限流时让用户自己下）。 */
     val webUrl: String = "",
 )
+
+/** AO3 的作品分级。[id] 是 AO3 检索参数里的 rating_ids；[All] 不加这个参数。 */
+enum class Ao3Rating(val labelZh: String, val id: Int?) {
+    All("全部分级", null),
+    General("全年龄", 10),
+    Teen("青少年", 11),
+    Mature("成人向", 12),
+    Explicit("限制级", 13),
+    ;
+
+    companion object {
+        /** 结果页上分级的英文名 → 中文，用于结果卡片。 */
+        fun labelOf(english: String): String = when (english.trim()) {
+            "General Audiences" -> General.labelZh
+            "Teen And Up Audiences" -> Teen.labelZh
+            "Mature" -> Mature.labelZh
+            "Explicit" -> Explicit.labelZh
+            "Not Rated" -> "未分级"
+            else -> ""
+        }
+    }
+}
 
 data class CatalogResult(
     val entries: List<CatalogEntry> = emptyList(),

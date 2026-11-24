@@ -2764,5 +2764,11 @@
     "text": "entry.meta",
     "count": 1,
     "reason": "检索结果里的下载量、字数、章节数；书目信息"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "rating.labelZh",
+    "count": 1,
+    "reason": "AO3 分级筛选标签；界面标签"
   }
 ]

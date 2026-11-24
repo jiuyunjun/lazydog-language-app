@@ -7,6 +7,7 @@ import com.lazydog.english.core.network.Ao3Client
 import com.lazydog.english.core.network.CatalogDownload
 import com.lazydog.english.core.network.GutendexClient
 import com.lazydog.english.core.network.WikisourceClient
+import com.lazydog.english.domain.books.Ao3Rating
 import com.lazydog.english.domain.books.BookLanguage
 import com.lazydog.english.domain.books.CatalogEntry
 import com.lazydog.english.domain.books.CatalogResult
@@ -49,13 +50,13 @@ class BookCatalogService(
         data class Failure(val reason: String) : Downloaded
     }
 
-    suspend fun search(source: CatalogSource, query: String): CatalogResult = when (source) {
+    suspend fun search(source: CatalogSource, query: String, ao3Rating: Ao3Rating = Ao3Rating.All): CatalogResult = when (source) {
         CatalogSource.Gutenberg -> gutendex.search(query)
         CatalogSource.Wikisource -> wikisource.search(query).let { result ->
             // 标题给人看的转简体；id 仍是原标题，取章节要用它。
             result.copy(entries = result.entries.map { it.copy(title = t2sConvert(it.title), summary = t2sConvert(it.summary)) })
         }
-        CatalogSource.Ao3 -> ao3.search(query)
+        CatalogSource.Ao3 -> ao3.search(query, ao3Rating)
     }
 
     private suspend fun t2sConvert(text: String) = withContext(Dispatchers.Default) { t2s.convert(text) }

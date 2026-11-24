@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.BookCatalogService
+import com.lazydog.english.domain.books.Ao3Rating
 import com.lazydog.english.domain.books.CatalogEntry
 import com.lazydog.english.domain.books.CatalogResult
 import com.lazydog.english.domain.books.CatalogSource
@@ -76,15 +77,16 @@ fun BookCatalogScreen(onExit: () -> Unit, onOpenBook: (Long) -> Unit) {
     var source by rememberSaveable { mutableStateOf(CatalogSource.Gutenberg) }
     var query by rememberSaveable { mutableStateOf("") }
     var submitted by rememberSaveable { mutableStateOf("") }
+    var ao3Rating by rememberSaveable { mutableStateOf(Ao3Rating.All) }
     var refresh by remember { mutableIntStateOf(0) }
     var result by remember { mutableStateOf<CatalogResult?>(null) }
     var download by remember { mutableStateOf<DownloadState?>(null) }
 
     val waitingForQuery = source == CatalogSource.Wikisource && submitted.isBlank()
-    LaunchedEffect(source, submitted, refresh) {
+    LaunchedEffect(source, submitted, refresh, ao3Rating) {
         result = null
         if (waitingForQuery) return@LaunchedEffect
-        result = app.bookCatalogService.search(source, submitted)
+        result = app.bookCatalogService.search(source, submitted, ao3Rating)
     }
 
     fun search(text: String) {
@@ -153,6 +155,20 @@ fun BookCatalogScreen(onExit: () -> Unit, onOpenBook: (Long) -> Unit) {
                 keyboardActions = KeyboardActions(onSearch = { search(query) }),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             )
+            if (source == CatalogSource.Ao3) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Ao3Rating.entries.forEach { rating ->
+                        FilterChip(
+                            selected = ao3Rating == rating,
+                            onClick = { ao3Rating = rating },
+                            label = { Text(rating.labelZh) },
+                        )
+                    }
+                }
+            }
             if (source == CatalogSource.Wikisource) {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
