@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.24"
+version: "7.25"
 updated: "2026-11-24"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -74,6 +74,10 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
   - 表：`book_chapter_spans` 不再需要（本地替换可重算），R4 只加 `book_glossary`；词典库加 `zh_index` 表（不升包版本，
     义项没变）；新增资源 `zh_seg_dict.txt`（jieba 词典裁剪版，MIT）。都不加 Gradle 依赖。
   - 阅读位置、书签改记中文原文偏移（替换会改变文字长度），这是对 R2 阅读器的改动。
+  - 实现记录：反查表做成独立资源 `zh_en_index.txt`（带英文词频排名），没有进词典库的 `zh_index` 表——
+    这样不用重新生成 12 MB 的词典库，也不碰包版本。「已规划过的章节」和全书跨章统计存在书目录下的两个小 JSON 文件，
+    不进数据库（能重算、也不需要备份）。确定性阈值定为 0.15（实测 0.5 会把「后悔→regret」判成不确定）。
+    替换词的面板里英文用交互文本（双击可查），替换处单击打开面板、在别处单击仍按位置翻页。
 - 影响范围：新增三个包和五张表，一次只增不改的迁移；`feature/reading`、`ReadingRepository`、备份模型、
   `AI_CONTRACTS.md`（替换规划入参）、`ARCHITECTURE.md`（包结构与数据模型）都要改。按 R1～R5 分期提交，每期单独验收。
 

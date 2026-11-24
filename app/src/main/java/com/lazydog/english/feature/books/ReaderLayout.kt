@@ -13,7 +13,10 @@ import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextDecoration
 import com.lazydog.english.domain.books.ReaderSettings
+import com.lazydog.english.domain.books.RenderedReplacement
+import com.lazydog.english.domain.books.ScaffoldStage
 import com.lazydog.english.domain.books.ReaderTheme
 
 /** 一页：章节显示文本里的 [start]..[end)。 */
@@ -79,6 +82,46 @@ internal fun paginate(
         line = end
     }
     return pages
+}
+
+/** 替换上去的英文在这四种主题下的颜色：要和正文分得开，又不刺眼。 */
+internal fun ReaderTheme.accent(): Color = when (this) {
+    ReaderTheme.Light -> Color(0xFF1F5FAD)
+    ReaderTheme.Sepia -> Color(0xFF2F5E8C)
+    ReaderTheme.Dark -> Color(0xFF8AB4F8)
+    ReaderTheme.Black -> Color(0xFF7FA8E0)
+}
+
+/**
+ * 母语阅读的章节样式（设计文档 §5.7）：标题之外，替换上去的英文用强调色，
+ * 提示阶段加下划线（"点一下看中文"），引入阶段的中文括注缩小变淡。
+ */
+internal fun nativeAnnotated(
+    text: String,
+    titleLength: Int,
+    replacements: List<RenderedReplacement>,
+    theme: ReaderTheme,
+): AnnotatedString {
+    if (replacements.isEmpty()) return chapterAnnotated(text, titleLength)
+    val accent = theme.accent()
+    val muted = theme.colors().secondary
+    val spans = ArrayList<AnnotatedString.Range<SpanStyle>>()
+    if (titleLength > 0) spans += AnnotatedString.Range(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 1.25.em), 0, titleLength)
+    replacements.forEach { r ->
+        spans += AnnotatedString.Range(
+            SpanStyle(
+                color = accent,
+                fontWeight = FontWeight.Medium,
+                textDecoration = if (r.stage == ScaffoldStage.Hinted) TextDecoration.Underline else null,
+            ),
+            r.englishStart,
+            r.englishEnd,
+        )
+        if (r.englishEnd < r.end) {
+            spans += AnnotatedString.Range(SpanStyle(color = muted, fontSize = 0.8.em), r.englishEnd, r.end)
+        }
+    }
+    return AnnotatedString(text, spanStyles = spans)
 }
 
 /** 偏移落在哪一页。超出末尾的（"从上一章末尾进来"）落到最后一页。 */

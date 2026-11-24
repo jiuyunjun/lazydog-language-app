@@ -37,6 +37,39 @@ data class BookEntity(
     @ColumnInfo(defaultValue = "0") val readingMillis: Long = 0,
     val addedAt: Long,
     @ColumnInfo(defaultValue = "0") val lastOpenedAt: Long = 0,
+    /** 中文书是否开母语阅读（D-098 R4）。英文书不用。 */
+    @ColumnInfo(defaultValue = "0") val nativeEnabled: Boolean = false,
+    /** 英文量档位，`EnglishDose` 的序号；默认「中」。 */
+    @ColumnInfo(defaultValue = "1") val englishDose: Int = 1,
+)
+
+/**
+ * 书级词表（D-098 R4，设计文档 §5）：这本书里哪个中文词换成哪个英文词，以及支架撤到哪一步。
+ * 每本书一个中文词一行；随书级联删除。
+ */
+@Entity(
+    tableName = "book_glossary",
+    primaryKeys = ["bookId", "zh"],
+    foreignKeys = [ForeignKey(entity = BookEntity::class, parentColumns = ["id"], childColumns = ["bookId"], onDelete = ForeignKey.CASCADE)],
+)
+data class BookGlossaryEntity(
+    val bookId: Long,
+    val zh: String,
+    val lemma: String,
+    /** `PartOfSpeech.wire`。 */
+    val pos: String,
+    val senseOrder: Int,
+    /** `local`：本地反查定的；`ai`：AI 消歧定的。 */
+    val source: String,
+    val introducedChapter: Int,
+    /** `ScaffoldStage` 的序号。 */
+    val stage: Int,
+    val exposuresInStage: Int,
+    val totalExposures: Int,
+    val reveals: Int,
+    val disabled: Boolean,
+    /** 「这里不该换」的位置，`["章:偏移", …]`。 */
+    @ColumnInfo(defaultValue = "'[]'") val excludedJson: String = "[]",
 )
 
 @Entity(
@@ -108,6 +141,21 @@ interface BookDao {
 
     @Query("DELETE FROM books WHERE id = :id")
     suspend fun deleteBook(id: Long)
+
+    @Query("UPDATE books SET nativeEnabled = :enabled, englishDose = :dose WHERE id = :id")
+    suspend fun setNative(id: Long, enabled: Boolean, dose: Int)
+
+    @Query("SELECT * FROM book_glossary WHERE bookId = :bookId")
+    suspend fun glossary(bookId: Long): List<BookGlossaryEntity>
+
+    @Query("SELECT * FROM book_glossary WHERE bookId = :bookId ORDER BY introducedChapter, zh")
+    fun observeGlossary(bookId: Long): Flow<List<BookGlossaryEntity>>
+
+    @androidx.room.Upsert
+    suspend fun upsertGlossary(words: List<BookGlossaryEntity>)
+
+    @Query("SELECT * FROM book_glossary")
+    suspend fun allGlossary(): List<BookGlossaryEntity>
 
     @Query("SELECT * FROM book_bookmarks WHERE bookId = :bookId ORDER BY chapterIndex, chapterOffset")
     fun observeBookmarks(bookId: Long): Flow<List<BookBookmarkEntity>>

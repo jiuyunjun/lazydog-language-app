@@ -34,6 +34,7 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -51,6 +52,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -88,11 +90,22 @@ import com.lazydog.english.domain.books.BookLocator
 import com.lazydog.english.domain.books.ChapterText
 import com.lazydog.english.domain.books.PageMode
 import com.lazydog.english.domain.books.ReaderSettings
+import com.lazydog.english.domain.books.RenderedChapter
+import com.lazydog.english.domain.books.RenderedReplacement
+import com.lazydog.english.domain.books.ScaffoldStage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** 载入好的一章：显示文本和标题长度。 */
-private data class LoadedChapter(val index: Int, val title: String, val text: String)
+/**
+ * 载入好的一章。[text] 是显示用的文本（母语阅读时是替换后的）；阅读位置一律记原文偏移，
+ * 用 [rendered] 换算（设计文档 §5.9）。不开母语阅读时两者一样。
+ */
+private data class LoadedChapter(val index: Int, val title: String, val rendered: RenderedChapter) {
+    val text: String get() = rendered.text
+
+    /** 原文偏移 → 显示偏移；「从上一章末尾进来」的 Int.MAX_VALUE 落到末尾。 */
+    fun displayOffset(source: Int): Int = if (source == Int.MAX_VALUE) text.length else rendered.toRendered(source)
+}
 
 /** 点在左边这么多以内翻上一页，右边这么多以内翻下一页，中间呼出菜单。 */
 private const val TAP_EDGE = 0.3f
@@ -123,6 +136,13 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
     var sheet by remember { mutableStateOf<ReaderSheet?>(null) }
     /** 当前屏上的文字：加书签的摘录、摇一摇提问的上下文。 */
     var visibleText by remember { mutableStateOf("") }
+    /** 点到的那处替换（母语阅读）。 */
+    var tapped by remember { mutableStateOf<RenderedReplacement?>(null) }
+    /** 纠错后重渲染这一章。 */
+    var reloadTick by remember { mutableIntStateOf(0) }
+    /** 这次打开已经记过曝光的替换（章节:原文偏移），翻回来不重复记。 */
+    val exposed = remember { HashSet<String>() }
+    val nativeService = app.nativeBookService
 
     LaunchedEffect(bookId) {
         chapters = repo.chapters(bookId)
@@ -133,7 +153,7 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
 
     val language = BookLanguage.fromWire(book?.language.orEmpty())
     val chapterIndex = locator?.chapter
-    LaunchedEffect(chapterIndex, chapters, language) {
+    LaunchedEffect(chapterIndex, chapters, language, book?.nativeEnabled, book?.englishDose, reloadTick) {
         val index = chapterIndex ?: return@LaunchedEffect
         val chapter = chapters.getOrNull(index) ?: return@LaunchedEffect
         val paragraphs = repo.chapterParagraphs(bookId, index)
@@ -141,8 +161,15 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
             missing = true
             return@LaunchedEffect
         }
-        loaded = LoadedChapter(index, chapter.title, ChapterText.build(chapter.title, paragraphs, language))
+        val source = ChapterText.build(chapter.title, paragraphs, language)
+        // 母语阅读：本地分词、挑词、替换（设计文档 §5）；没开或不是中文书就是原文。
+        val rendered = repo.book(bookId)?.let { nativeService.render(it, index, source, chapter.title.length) }
+            ?: RenderedChapter.plain(source)
+        loaded = LoadedChapter(index, chapter.title, rendered)
     }
+
+    // 分词词典和反查表二十来 MB，离开阅读器就放掉。
+    DisposableEffect(Unit) { onDispose { nativeService.release() } }
 
     // 进度：停稳一会儿再写，离开页面时 DisposableEffect 再补一次。
     LaunchedEffect(locator) {
@@ -203,6 +230,13 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
         if (index in chapters.indices) locator = BookLocator(index, offset)
     }
 
+    /** 母语阅读：这些替换上了屏，各记一次曝光（每次打开每处只记一次）。 */
+    fun recordExposures(chapterIndex: Int, replacements: List<RenderedReplacement>) {
+        val fresh = replacements.filter { exposed.add("$chapterIndex:${it.sourceStart}") }
+        if (fresh.isEmpty()) return
+        app.applicationScope.launch { nativeService.recordExposures(bookId, fresh.map { it.zh }) }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -239,6 +273,8 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
                 onVisibleText = { visibleText = it },
                 onCenterTap = { menuVisible = !menuVisible },
                 registerTurn = { turnPage = it },
+                onReplacementTap = { tapped = it },
+                onExposed = { replacements -> recordExposures(chapter.index, replacements) },
             )
             else -> ScrollChapter(
                 chapter = chapter,
@@ -249,6 +285,8 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
                 onVisibleText = { visibleText = it },
                 onTap = { menuVisible = !menuVisible },
                 onNextChapter = { goToChapter(chapter.index + 1) },
+                onReplacementTap = { tapped = it },
+                onExposed = { replacements -> recordExposures(chapter.index, replacements) },
             )
         }
 
@@ -268,6 +306,7 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
             },
             onChapter = { goToChapter(it) },
             onOpenSheet = { sheet = it },
+            showNative = book?.let { nativeService.supports(it) } == true,
             // 没有摇一摇传感器的手机靠这个按钮提问。
             askAction = { AskTopBarAction() },
         )
@@ -299,7 +338,24 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
             onChange = { changed -> scope.launch { app.userPreferences.saveReaderSettings(changed) } },
             onDismiss = { sheet = null },
         )
+        ReaderSheet.Native -> book?.let { NativeSheet(book = it, onDismiss = { sheet = null }) }
         null -> Unit
+    }
+
+    tapped?.let { replacement ->
+        // 点开就看到了中文：提示、独立阶段算一次"没认出来"，退回上一阶段（§5.7）。引入阶段本来就写着中文，不算。
+        LaunchedEffect(replacement) {
+            if (replacement.stage != ScaffoldStage.Introduced) {
+                app.applicationScope.launch { nativeService.recordReveal(bookId, replacement.zh) }
+            }
+        }
+        ReplacementSheet(
+            bookId = bookId,
+            chapterIndex = loaded?.index ?: 0,
+            replacement = replacement,
+            onChanged = { reloadTick++ },
+            onDismiss = { tapped = null },
+        )
     }
 }
 
@@ -320,13 +376,17 @@ private fun PagedChapter(
     onVisibleText: (String) -> Unit,
     onCenterTap: () -> Unit,
     registerTurn: ((Int) -> Unit) -> Unit,
+    onReplacementTap: (RenderedReplacement) -> Unit,
+    onExposed: (List<RenderedReplacement>) -> Unit,
 ) {
     val colors = settings.theme.colors()
     val style = readerStyle(settings, colors.text)
     val measurer = rememberTextMeasurer(cacheSize = 0)
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
-    val annotated = remember(chapter) { chapterAnnotated(chapter.text, ChapterText.titleLength(chapter.title)) }
+    val annotated = remember(chapter, settings.theme) {
+        nativeAnnotated(chapter.text, ChapterText.titleLength(chapter.title), chapter.rendered.replacements, settings.theme)
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         val horizontal = settings.marginDp.dp
@@ -340,7 +400,7 @@ private fun PagedChapter(
         val lead = if (hasPrev) 1 else 0
 
         key(chapter.index, pages) {
-            val pagerState = rememberPagerState(initialPage = lead + pageIndexFor(pages, offset)) {
+            val pagerState = rememberPagerState(initialPage = lead + pageIndexFor(pages, chapter.displayOffset(offset))) {
                 pages.size + lead + (if (hasNext) 1 else 0)
             }
             /** 手指按下的横向位置（0..1），单击时据此决定翻页还是呼出菜单。 */
@@ -353,8 +413,10 @@ private fun PagedChapter(
                         hasNext && page == lead + pages.size -> onLocate(BookLocator(chapter.index + 1, 0))
                         else -> {
                             val current = pages[(page - lead).coerceIn(0, pages.lastIndex)]
-                            onLocate(BookLocator(chapter.index, current.start))
+                            // 位置记原文偏移：替换和支架会改变显示文本的长度（设计文档 §5.9）。
+                            onLocate(BookLocator(chapter.index, chapter.rendered.toSource(current.start)))
                             onVisibleText(chapter.text.substring(current.start, current.end))
+                            onExposed(chapter.rendered.replacements.filter { it.start >= current.start && it.start < current.end })
                         }
                     }
                 }
@@ -421,7 +483,12 @@ private fun PagedChapter(
                             style = style,
                             color = colors.text,
                             modifier = Modifier.fillMaxWidth().weight(1f),
-                            onSingleTapAt = { onTap() },
+                            // 点到替换上的英文就打开它的面板，别处按位置翻页或呼出菜单。
+                            onSingleTapAt = { at ->
+                                val hit = chapter.rendered.replacementAt(page.start + at)
+                                if (hit != null) onReplacementTap(hit) else onTap()
+                            },
+                            onLongPressAt = { at -> chapter.rendered.replacementAt(page.start + at)?.let(onReplacementTap) },
                         )
                         Box(Modifier.fillMaxWidth().height(bottom), contentAlignment = Alignment.CenterEnd) {
                             Text(
@@ -448,19 +515,28 @@ private fun ScrollChapter(
     onVisibleText: (String) -> Unit,
     onTap: () -> Unit,
     onNextChapter: () -> Unit,
+    onReplacementTap: (RenderedReplacement) -> Unit,
+    onExposed: (List<RenderedReplacement>) -> Unit,
 ) {
     val colors = settings.theme.colors()
     val style = readerStyle(settings, colors.text)
     val lines = remember(chapter) { chapter.text.split('\n') }
     val starts = remember(lines) { lines.runningFold(0) { acc, line -> acc + line.length + 1 }.dropLast(1) }
+    val annotated = remember(chapter, settings.theme) {
+        nativeAnnotated(chapter.text, ChapterText.titleLength(chapter.title), chapter.rendered.replacements, settings.theme)
+    }
     key(chapter.index) {
-        val initial = starts.indexOfLast { it <= offset }.coerceAtLeast(0)
+        val displayOffset = chapter.displayOffset(offset)
+        val initial = starts.indexOfLast { it <= displayOffset }.coerceAtLeast(0)
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = initial)
         LaunchedEffect(listState) {
             snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
                 val line = index.coerceIn(0, lines.lastIndex)
-                onLocate(BookLocator(chapter.index, starts[line]))
+                onLocate(BookLocator(chapter.index, chapter.rendered.toSource(starts[line])))
                 onVisibleText(lines.drop(line).take(3).joinToString("\n"))
+                val from = starts[line]
+                val to = starts.getOrElse(line + 3) { chapter.text.length }
+                onExposed(chapter.rendered.replacements.filter { it.start >= from && it.start < to })
             }
         }
         LazyColumn(
@@ -470,13 +546,18 @@ private fun ScrollChapter(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             itemsIndexed(lines) { index, line ->
+                val start = starts[index]
                 InteractiveEnglishText(
                     text = line,
-                    style = if (index == 0) style.copy(fontSize = style.fontSize * 1.25f) else style,
+                    annotations = annotated.subSequence(start, start + line.length),
+                    style = style,
                     color = colors.text,
-                    fontWeight = if (index == 0) androidx.compose.ui.text.font.FontWeight.Bold else null,
                     modifier = Modifier.fillMaxWidth(),
-                    onSingleTap = onTap,
+                    onSingleTapAt = { at ->
+                        val hit = chapter.rendered.replacementAt(start + at)
+                        if (hit != null) onReplacementTap(hit) else onTap()
+                    },
+                    onLongPressAt = { at -> chapter.rendered.replacementAt(start + at)?.let(onReplacementTap) },
                 )
             }
             if (hasNext) {
@@ -505,7 +586,7 @@ private fun MissingContent(onExit: () -> Unit) {
     }
 }
 
-internal enum class ReaderSheet { Contents, Bookmarks, Settings }
+internal enum class ReaderSheet { Contents, Bookmarks, Settings, Native }
 
 /**
  * 菜单进出的节奏。默认的"展开 + 淡入"走的是偏软的弹簧，从点下去到菜单完全出来要大半秒，
@@ -528,6 +609,8 @@ private fun ReaderMenu(
     onAddBookmark: () -> Unit,
     onChapter: (Int) -> Unit,
     onOpenSheet: (ReaderSheet) -> Unit,
+    /** 中文书才有「母语」按钮。 */
+    showNative: Boolean,
     /** 提问按钮：由页面传进来，页面级的提问声明要在页面函数里（tools/check_ui_capabilities.py）。 */
     askAction: @Composable () -> Unit,
 ) {
@@ -598,6 +681,12 @@ private fun ReaderMenu(
                         TextButton(onClick = { onOpenSheet(ReaderSheet.Settings) }) {
                             Icon(Icons.Outlined.TextFields, contentDescription = null)
                             Text("排版", modifier = Modifier.padding(start = 4.dp))
+                        }
+                        if (showNative) {
+                            TextButton(onClick = { onOpenSheet(ReaderSheet.Native) }) {
+                                Icon(Icons.Outlined.Translate, contentDescription = null)
+                                Text("母语", modifier = Modifier.padding(start = 4.dp))
+                            }
                         }
                     }
                 }

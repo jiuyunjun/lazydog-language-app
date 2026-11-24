@@ -9,6 +9,7 @@ import com.lazydog.english.core.database.ListeningMaterialEntity
 import com.lazydog.english.core.database.BookBookmarkEntity
 import com.lazydog.english.core.database.BookChapterEntity
 import com.lazydog.english.core.database.BookEntity
+import com.lazydog.english.core.database.BookGlossaryEntity
 import com.lazydog.english.core.database.ReadingMaterialEntity
 import com.lazydog.english.core.database.ScenarioSessionEntity
 import com.lazydog.english.core.database.SpellingAttemptEntity
@@ -268,6 +269,8 @@ data class BackupPayload(
     val books: List<BackupBook> = emptyList(),
     val bookChapters: List<BackupBookChapter> = emptyList(),
     val bookmarks: List<BackupBookmark> = emptyList(),
+    /** 书级词表（D-098 R4）。旧备份没有，恢复成空，母语阅读从头引入。 */
+    val bookGlossary: List<BackupBookGlossary> = emptyList(),
     val preferences: BackupPreferences = BackupPreferences(),
 )
 
@@ -289,6 +292,33 @@ data class BackupBook(
     val readingMillis: Long = 0,
     val addedAt: Long,
     val lastOpenedAt: Long = 0,
+    val nativeEnabled: Boolean = false,
+    val englishDose: Int = 1,
+)
+
+@Serializable
+data class BackupBookGlossary(
+    val bookId: Long,
+    val zh: String,
+    val lemma: String,
+    val pos: String,
+    val senseOrder: Int,
+    val source: String,
+    val introducedChapter: Int,
+    val stage: Int,
+    val exposuresInStage: Int,
+    val totalExposures: Int,
+    val reveals: Int,
+    val disabled: Boolean,
+    val excludedJson: String = "[]",
+)
+
+fun BookGlossaryEntity.toBackup() = BackupBookGlossary(
+    bookId, zh, lemma, pos, senseOrder, source, introducedChapter, stage, exposuresInStage, totalExposures, reveals, disabled, excludedJson,
+)
+
+fun BackupBookGlossary.toEntity() = BookGlossaryEntity(
+    bookId, zh, lemma, pos, senseOrder, source, introducedChapter, stage, exposuresInStage, totalExposures, reveals, disabled, excludedJson,
 )
 
 @Serializable
@@ -305,12 +335,12 @@ data class BackupBookmark(
 
 fun BookEntity.toBackup() = BackupBook(
     id, title, author, language, source, sourceId, coverFile, chapterCount, totalChars,
-    chapterIndex, chapterOffset, progress, readingMillis, addedAt, lastOpenedAt,
+    chapterIndex, chapterOffset, progress, readingMillis, addedAt, lastOpenedAt, nativeEnabled, englishDose,
 )
 
 fun BackupBook.toEntity() = BookEntity(
     id, title, author, language, source, sourceId, coverFile, chapterCount, totalChars,
-    chapterIndex, chapterOffset, progress, readingMillis, addedAt, lastOpenedAt,
+    chapterIndex, chapterOffset, progress, readingMillis, addedAt, lastOpenedAt, nativeEnabled, englishDose,
 )
 
 fun BookChapterEntity.toBackup() = BackupBookChapter(bookId, chapterIndex, title, charCount)

@@ -29,8 +29,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BookEntity::class,
         BookChapterEntity::class,
         BookBookmarkEntity::class,
+        BookGlossaryEntity::class,
     ],
-    version = 25,
+    version = 26,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -66,6 +67,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 23, to = 24),
         // v25 只新增书、章节、书签三张表（D-098 R2），老表一列没动。
         AutoMigration(from = 24, to = 25),
+        // v26 新增书级词表，books 加母语阅读开关和英文量两列（都有默认值，D-098 R4）。
+        AutoMigration(from = 25, to = 26),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {

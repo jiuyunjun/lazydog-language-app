@@ -10,6 +10,7 @@ import com.lazydog.english.core.database.AppDatabase
 import com.lazydog.english.core.database.BookBookmarkEntity
 import com.lazydog.english.core.database.BookChapterEntity
 import com.lazydog.english.core.database.BookEntity
+import com.lazydog.english.core.database.BookGlossaryEntity
 import com.lazydog.english.domain.books.BookLocator
 import com.lazydog.english.domain.books.BookSource
 import com.lazydog.english.domain.books.ParsedBook
@@ -132,6 +133,27 @@ class BookRepository(
     }
 
     suspend fun deleteBookmark(id: Long) = dao.deleteBookmark(id)
+
+    // ---- 母语阅读（D-098 R4）----
+
+    suspend fun setNative(bookId: Long, enabled: Boolean, dose: Int) = dao.setNative(bookId, enabled, dose)
+
+    suspend fun glossary(bookId: Long): List<BookGlossaryEntity> = dao.glossary(bookId)
+
+    fun observeGlossary(bookId: Long): Flow<List<BookGlossaryEntity>> = dao.observeGlossary(bookId)
+
+    suspend fun saveGlossary(words: List<BookGlossaryEntity>) {
+        if (words.isNotEmpty()) dao.upsertGlossary(words)
+    }
+
+    /** 书目录下的小文件（母语阅读的全书词频统计、已规划章节）；不存在返回 null。 */
+    suspend fun readBookFile(bookId: Long, name: String): String? = withContext(Dispatchers.IO) {
+        File(store.bookDir(bookId), name).takeIf { it.exists() }?.readText(Charsets.UTF_8)
+    }
+
+    suspend fun writeBookFile(bookId: Long, name: String, text: String) = withContext(Dispatchers.IO) {
+        File(store.bookDir(bookId).apply { mkdirs() }, name).writeText(text, Charsets.UTF_8)
+    }
 
     suspend fun delete(bookId: Long) = withContext(Dispatchers.IO) {
         dao.deleteBook(bookId)

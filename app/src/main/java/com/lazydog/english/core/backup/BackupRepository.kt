@@ -39,6 +39,7 @@ class BackupRepository(
             books = database.bookDao().allBooks().map { it.toBackup() },
             bookChapters = database.bookDao().allChapters().map { it.toBackup() },
             bookmarks = database.bookDao().allBookmarks().map { it.toBackup() },
+            bookGlossary = database.bookDao().allGlossary().map { it.toBackup() },
             preferences = BackupPreferences(
                 learningGoal = prefs.learningGoal.first(),
                 topics = prefs.topics.first(),
@@ -127,6 +128,7 @@ class BackupRepository(
             val bookIds = payload.books.mapTo(HashSet()) { it.id }
             bookDao.insertChapters(payload.bookChapters.filter { it.bookId in bookIds }.map { it.toEntity() })
             bookDao.insertBookmarks(payload.bookmarks.filter { it.bookId in bookIds }.map { it.toEntity() })
+            bookDao.upsertGlossary(payload.bookGlossary.filter { it.bookId in bookIds }.map { it.toEntity() })
         }
 
         val p = payload.preferences
