@@ -36,6 +36,7 @@ import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.domain.books.EnglishDose
+import com.lazydog.english.domain.books.NativeWordPicker
 import com.lazydog.english.domain.books.RenderedReplacement
 import com.lazydog.english.domain.books.ScaffoldStage
 import com.lazydog.english.domain.vocabulary.posLabelZh
@@ -141,10 +142,12 @@ internal fun ReplacementSheet(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun NativeSheet(book: BookEntity, onDismiss: () -> Unit) {
+internal fun NativeSheet(book: BookEntity, onChanged: () -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     val glossary by remember(book.id) { app.bookRepository.observeGlossary(book.id) }.collectAsState(initial = emptyList())
+    val knownWords by app.knowledgeRepository.knownWords.collectAsState(initial = emptyList())
+    val known = remember(knownWords) { knownWords.mapTo(HashSet()) { it.lemma } }
 
     fun set(enabled: Boolean, dose: Int) {
         app.applicationScope.launch {
@@ -192,14 +195,22 @@ internal fun NativeSheet(book: BookEntity, onDismiss: () -> Unit) {
                 )
             }
             LazyColumn(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                items(glossary, key = { it.zh }) { word -> GlossaryRow(book.id, word) }
+                items(glossary, key = { it.zh }) { word -> GlossaryRow(book.id, word, word.lemma.lowercase() in known, onChanged) }
             }
         }
     }
 }
 
 @Composable
-private fun GlossaryRow(bookId: Long, word: BookGlossaryEntity) {
+private fun GlossaryRow(bookId: Long, word: BookGlossaryEntity, isKnown: Boolean, onChanged: () -> Unit) {
+    /** 这一行现在为什么不换：熟词、虚化词、停用；都不是就显示支架阶段。 */
+    val status = when {
+        isKnown -> "熟词，不换"
+        word.zh in NativeWordPicker.GENERIC_WORDS -> "虚化词，不换"
+        word.disabled -> "已停用"
+        else -> ScaffoldStage.entries.getOrElse(word.stage) { ScaffoldStage.Introduced }.labelZh
+    }
+    val inactive = isKnown || word.disabled || word.zh in NativeWordPicker.GENERIC_WORDS
     val context = LocalContext.current
     val app = remember { context.applicationContext as LazyDogApplication }
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -207,7 +218,7 @@ private fun GlossaryRow(bookId: Long, word: BookGlossaryEntity) {
             InteractiveEnglishText(
                 text = "${word.lemma} · ${word.zh}",
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (word.disabled) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                color = if (inactive) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = listOf(
@@ -215,7 +226,7 @@ private fun GlossaryRow(bookId: Long, word: BookGlossaryEntity) {
                     "第 ${word.introducedChapter + 1} 章引入",
                     "见过 ${word.totalExposures} 次",
                     "看过中文 ${word.reveals} 次",
-                    if (word.disabled) "已停用" else ScaffoldStage.entries.getOrElse(word.stage) { ScaffoldStage.Introduced }.labelZh,
+                    status,
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -230,12 +241,21 @@ private fun GlossaryRow(bookId: Long, word: BookGlossaryEntity) {
                 }
             }
         }) { Text("加入生词本") }
+        // 改完重渲染当前章：去掉的词让位，补上新的候选。
+        if (!isKnown) {
+            TextButton(onClick = {
+                app.applicationScope.launch {
+                    app.nativeBookService.markKnown(word.lemma)
+                    withContext(Dispatchers.Main) { onChanged() }
+                }
+                Toast.makeText(context, "已加入熟词本", Toast.LENGTH_SHORT).show()
+            }) { Text("认识") }
+        }
         TextButton(onClick = {
-            app.applicationScope.launch { app.nativeBookService.markKnown(word.lemma) }
-            Toast.makeText(context, "已加入熟词本", Toast.LENGTH_SHORT).show()
-        }) { Text("认识") }
-        TextButton(onClick = {
-            app.applicationScope.launch { app.nativeBookService.setDisabled(bookId, word.zh, !word.disabled) }
+            app.applicationScope.launch {
+                app.nativeBookService.setDisabled(bookId, word.zh, !word.disabled)
+                withContext(Dispatchers.Main) { onChanged() }
+            }
         }) { Text(if (word.disabled) "恢复" else "停用") }
     }
 }

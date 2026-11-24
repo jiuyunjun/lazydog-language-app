@@ -226,6 +226,9 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
     /** 翻页由当前模式的视图注册进来，音量键和菜单按钮都走它。 */
     var turnPage by remember { mutableStateOf<(Int) -> Unit>({}) }
 
+    // 返回键先收起菜单，再退出阅读器。
+    androidx.activity.compose.BackHandler(enabled = menuVisible) { menuVisible = false }
+
     fun goToChapter(index: Int, offset: Int = 0) {
         if (index in chapters.indices) locator = BookLocator(index, offset)
     }
@@ -338,7 +341,7 @@ fun ReaderScreen(bookId: Long, onExit: () -> Unit) {
             onChange = { changed -> scope.launch { app.userPreferences.saveReaderSettings(changed) } },
             onDismiss = { sheet = null },
         )
-        ReaderSheet.Native -> book?.let { NativeSheet(book = it, onDismiss = { sheet = null }) }
+        ReaderSheet.Native -> book?.let { NativeSheet(book = it, onChanged = { reloadTick++ }, onDismiss = { sheet = null }) }
         null -> Unit
     }
 

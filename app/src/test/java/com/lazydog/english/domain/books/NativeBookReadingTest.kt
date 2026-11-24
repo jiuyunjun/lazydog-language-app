@@ -94,6 +94,26 @@ class NativeBookReadingTest {
     }
 
     @Test
+    fun `generic function-like words are never picked`() {
+        val seg = ChineseSegmenter(
+            mapOf(
+                "就是" to ChineseSegmenter.Entry(9283, "d"),
+                "不会" to ChineseSegmenter.Entry(19515, "v"),
+                "勇气" to ChineseSegmenter.Entry(1537, "n"),
+            ),
+        )
+        val index = ZhEnIndex(
+            mapOf(
+                "就是" to listOf(ZhEnIndex.Candidate("namely", PartOfSpeech.Adverb, 0, 3000)),
+                "不会" to listOf(ZhEnIndex.Candidate("unable", PartOfSpeech.Adjective, 0, 2000)),
+                "勇气" to listOf(ZhEnIndex.Candidate("courage", PartOfSpeech.Noun, 0, 3324)),
+            ),
+        )
+        val picked = NativeWordPicker.pick(seg.segment("就是不会勇气"), index, learner, emptyMap(), emptySet(), count = 5)
+        assertEquals(listOf("勇气"), picked.map { it.zh })
+    }
+
+    @Test
     fun `scaffold advances with exposures and falls back on reveal`() {
         var word = GlossaryWord("后悔", "regret", PartOfSpeech.Verb, 1, introducedChapter = 0)
         word = Scaffold.onExposure(Scaffold.onExposure(word))

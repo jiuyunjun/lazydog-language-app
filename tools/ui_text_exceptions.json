@@ -2815,7 +2815,7 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/books/NativeReaderSheets.kt",
-    "text": "listOf( posLabelZh(word.pos), \"第 ${word.introducedChapter + 1} 章引入\", \"见过 ${word.totalExposures} 次\", \"看过中文 ${word.reveals} 次\", if (word.disabled) \"已停用\" else ScaffoldStage.entries.getOrElse(word.stage) { ScaffoldStage.Introduced }.labelZh, ).joinToString(\" · \")",
+    "text": "listOf( posLabelZh(word.pos), \"第 ${word.introducedChapter + 1} 章引入\", \"见过 ${word.totalExposures} 次\", \"看过中文 ${word.reveals} 次\", status, ).joinToString(\" · \")",
     "count": 1,
     "reason": "词表行的词性、引入章节、曝光、阶段；界面元信息"
   },

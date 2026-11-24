@@ -69,8 +69,11 @@ class NativeBookService(
     fun supports(book: BookEntity): Boolean = BookLanguage.fromWire(book.language) == BookLanguage.Chinese
 
     /**
-     * 渲染一章：第一次打开这一章时先按英文量挑新词进词表（§5.6），再按词表全章替换（§5.7）。
-     * 资源读不出来时退回原文，书照样能读。
+     * 渲染一章：先把这一章的新词补足到英文量（§5.6），再按词表全章替换（§5.7）。
+     *
+     * 「补足」而不是"第一次打开时挑一次"：用户把这章的某个词标成熟词或停用以后，再打开（或纠错后重渲染）
+     * 要有新的候选补上来，这一章的英文量不该越读越少（用户 2026-11-24 要求）。
+     * 补的时候避开词表里已有的所有词（含停用的）和熟词本。资源读不出来时退回原文，书照样能读。
      */
     suspend fun render(book: BookEntity, chapterIndex: Int, source: String, titleLength: Int): RenderedChapter {
         if (!book.nativeEnabled || !supports(book)) return RenderedChapter.plain(source)
@@ -80,8 +83,14 @@ class NativeBookService(
             val tokens = withContext(Dispatchers.Default) { seg.segment(source).filter { it.start >= titleLength } }
             val glossary = glossaryLock.withLock {
                 val existing = books.glossary(book.id).associateBy { it.zh }
-                val planned = plannedChapters(book.id)
-                if (chapterIndex !in planned) {
+                val knownNow = knowledge.knownLemmas()
+                // 这一章引入、现在还在用的新词有几个：停用的、进了熟词本的不算。
+                val active = existing.values.count {
+                    it.introducedChapter == chapterIndex && !it.disabled && it.lemma.lowercase() !in knownNow &&
+                        it.zh !in NativeWordPicker.GENERIC_WORDS
+                }
+                val missing = EnglishDose.fromOrdinal(book.englishDose).newWordsPerChapter - active
+                if (missing > 0) {
                     val picked = NativeWordPicker.pick(
                         chapterTokens = tokens,
                         index = idx,
@@ -89,7 +98,7 @@ class NativeBookService(
                         // 全书统计还没算完就先按本章次数挑，不让第一章等整本书分完词。
                         bookSpread = cachedSpread(book.id).orEmpty(),
                         known = existing.keys,
-                        count = EnglishDose.fromOrdinal(book.englishDose).newWordsPerChapter,
+                        count = missing,
                     )
                     books.saveGlossary(
                         picked.map {
@@ -100,12 +109,14 @@ class NativeBookService(
                             )
                         },
                     )
-                    savePlanned(book.id, planned + chapterIndex)
                 }
                 // 熟词本里的词不再换（D-099），即使它之前已经进了这本书的词表。
                 val known = knowledge.knownLemmas()
+                // 旧版本挑进来的虚化词（就是、不会）也不再换，名额让给新候选。
                 books.glossary(book.id).associate { row ->
-                    row.zh to row.toDomain().let { if (it.lemma.lowercase() in known) it.copy(disabled = true) else it }
+                    row.zh to row.toDomain().let {
+                        if (it.lemma.lowercase() in known || it.zh in NativeWordPicker.GENERIC_WORDS) it.copy(disabled = true) else it
+                    }
                 }
             }
             withContext(Dispatchers.Default) { NativeChapterRenderer.render(source, tokens, glossary, chapterIndex) }
@@ -195,26 +206,15 @@ class NativeBookService(
     private suspend fun cachedSpread(bookId: Long): Map<String, Int>? =
         books.readBookFile(bookId, SPREAD_FILE)?.let { raw -> runCatching { json.decodeFromString(SPREAD_SERIALIZER, raw) }.getOrNull() }
 
-    private suspend fun plannedChapters(bookId: Long): Set<Int> =
-        books.readBookFile(bookId, PLANNED_FILE)
-            ?.let { raw -> runCatching { json.decodeFromString(PLANNED_SERIALIZER, raw) }.getOrNull() }
-            ?.toSet()
-            .orEmpty()
-
-    private suspend fun savePlanned(bookId: Long, planned: Set<Int>) =
-        books.writeBookFile(bookId, PLANNED_FILE, json.encodeToString(PLANNED_SERIALIZER, planned.sorted()))
-
     companion object {
         private const val TAG = "LazyDogNativeBook"
         private const val SEG_ASSET = "zh_seg_dict.txt"
         private const val INDEX_ASSET = "zh_en_index.txt"
         private const val SPREAD_FILE = "native_spread.json"
-        private const val PLANNED_FILE = "native_planned.json"
         const val SOURCE_LOCAL = "local"
 
         private val json = Json { ignoreUnknownKeys = true }
         private val SPREAD_SERIALIZER = MapSerializer(String.serializer(), Int.serializer())
-        private val PLANNED_SERIALIZER = ListSerializer(Int.serializer())
 
         fun BookGlossaryEntity.toDomain() = GlossaryWord(
             zh = zh,

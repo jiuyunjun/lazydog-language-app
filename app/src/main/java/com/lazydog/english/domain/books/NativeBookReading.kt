@@ -86,6 +86,21 @@ object NativeWordPicker {
     val REPLACEABLE_POS = setOf("n", "v", "a", "vn", "an", "ad", "d", "vd", "ag", "ng", "vg", "b", "z")
 
     /**
+     * 虚化的高频词：情态（不会、可以、应该）、语气和连接（就是、还是、只是、其实）、趋向补语（起来、出来）。
+     * 它们的意思跟着句子走，换成一个固定的英文词多半是错的——真机上「不会是脑溢血吧」被换成 unable、
+     * 「就是」被换成 namely。词频分不开它们（「就是」比「眼睛」「突然」还少见），所以直接列出来。
+     */
+    val GENERIC_WORDS = setOf(
+        "就是", "不是", "还是", "只是", "也是", "都是", "正是", "便是", "总是", "可是", "于是", "但是", "就要", "就会",
+        "不会", "不能", "不要", "不用", "不该", "可以", "可能", "应该", "能够", "需要", "必须", "愿意", "肯定", "一定",
+        "已经", "曾经", "正在", "马上", "立刻", "刚才", "刚刚", "现在", "以后", "之前", "之后", "然后", "后来",
+        "因为", "所以", "如果", "虽然", "而且", "并且", "或者", "然而", "不过", "其实", "确实", "当然", "终于", "毕竟",
+        "这样", "那样", "这么", "那么", "怎么", "什么", "为什么", "一样", "一些", "一下", "一点", "有点", "有些", "一直",
+        "起来", "出来", "下来", "过来", "回来", "上来", "下去", "过去", "出去", "进来", "进去",
+        "没有", "知道", "觉得", "看来", "好像", "似乎", "仿佛", "感觉", "认为", "以为", "表示", "时候", "东西", "事情",
+    )
+
+    /**
      * 这一章新引入哪些词（§5.5）。
      *
      * @param chapterTokens 本章分词结果。
@@ -104,7 +119,7 @@ object NativeWordPicker {
         val counts = chapterTokens.groupingBy { it.word }.eachCount()
         val posOf = chapterTokens.associate { it.word to it.pos }
         return counts.keys.asSequence()
-            .filter { it.length >= 2 && it !in known && posOf[it] in REPLACEABLE_POS }
+            .filter { it.length >= 2 && it !in known && it !in GENERIC_WORDS && posOf[it] in REPLACEABLE_POS }
             .mapNotNull { zh -> index.resolve(zh, posOf[zh].orEmpty())?.takeIf { eligible(it, learner) } }
             // 同一个英文词只引入一次：「害怕」「恐惧」都对上 fear 时只留更常出现的那个。
             .sortedWith(
