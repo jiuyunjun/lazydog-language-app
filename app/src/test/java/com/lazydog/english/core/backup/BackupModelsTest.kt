@@ -1,5 +1,6 @@
 package com.lazydog.english.core.backup
 
+import com.lazydog.english.core.database.BookEntity
 import com.lazydog.english.core.database.DrillMistakeEntity
 import com.lazydog.english.core.database.GrammarDetailEntity
 import com.lazydog.english.core.database.KnowledgeItemEntity
@@ -250,5 +251,22 @@ class BackupModelsTest {
         val fieldNames = BackupPreferences::class.java.declaredFields.map { it.name }
         assertEquals(false, fieldNames.any { it.contains("ApiKey", ignoreCase = true) })
         assertEquals(false, fieldNames.any { it.contains("SpeechKey", ignoreCase = true) })
+    }
+
+    @Test
+    fun `book keeps its id and progress through backup`() {
+        val book = BookEntity(
+            id = 7, title = "The Open Boat", author = "Stephen Crane", language = "en", source = "gutenberg",
+            sourceId = "29", chapterCount = 7, totalChars = 52000, chapterIndex = 3, chapterOffset = 812,
+            progress = 0.42, readingMillis = 90_000, addedAt = 1L, lastOpenedAt = 2L,
+        )
+        val json = Json.encodeToString(BackupBook.serializer(), book.toBackup())
+        assertEquals(book, Json.decodeFromString(BackupBook.serializer(), json).toEntity())
+    }
+
+    @Test
+    fun `old backups without books still decode`() {
+        val payload = Json { ignoreUnknownKeys = true }.decodeFromString(BackupPayload.serializer(), """{"exportedAt":1}""")
+        assertEquals(emptyList<BackupBook>(), payload.books)
     }
 }

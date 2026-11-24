@@ -26,8 +26,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PronunciationProgressEntity::class,
         PerceptionAttemptEntity::class,
         ProductionAttemptEntity::class,
+        BookEntity::class,
+        BookChapterEntity::class,
+        BookBookmarkEntity::class,
     ],
-    version = 24,
+    version = 25,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -61,6 +64,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 22, to = 23),
         // v24 给 reading_materials 加原文链接、出处、本地难度三列（都带默认值，D-098 R1）。
         AutoMigration(from = 23, to = 24),
+        // v25 只新增书、章节、书签三张表（D-098 R2），老表一列没动。
+        AutoMigration(from = 24, to = 25),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -82,6 +87,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun vocabularyImageDao(): VocabularyImageDao
 
     abstract fun pronunciationDao(): PronunciationDao
+
+    abstract fun bookDao(): BookDao
 
     companion object {
         fun create(context: Context): AppDatabase =

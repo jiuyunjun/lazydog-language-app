@@ -6,6 +6,9 @@ import com.lazydog.english.core.database.KnowledgeItemEntity
 import com.lazydog.english.core.database.LearningEventEntity
 import com.lazydog.english.core.database.ListeningAttemptEntity
 import com.lazydog.english.core.database.ListeningMaterialEntity
+import com.lazydog.english.core.database.BookBookmarkEntity
+import com.lazydog.english.core.database.BookChapterEntity
+import com.lazydog.english.core.database.BookEntity
 import com.lazydog.english.core.database.ReadingMaterialEntity
 import com.lazydog.english.core.database.ScenarioSessionEntity
 import com.lazydog.english.core.database.SpellingAttemptEntity
@@ -258,8 +261,62 @@ data class BackupPayload(
     val spellingAttempts: List<BackupSpellingAttempt> = emptyList(),
     /** 旧备份没有这一项，解码成空列表；恢复后页面按"还没生成过"处理，可以重新生成。 */
     val memoryHints: List<BackupMemoryHint> = emptyList(),
+    /**
+     * 书的元数据、章节目录、书签（D-098 R2）。正文文件不进备份：体积大，公版书可以按来源重新下载，
+     * 本地导入的要重新导入。旧备份没有，解码成空列表。
+     */
+    val books: List<BackupBook> = emptyList(),
+    val bookChapters: List<BackupBookChapter> = emptyList(),
+    val bookmarks: List<BackupBookmark> = emptyList(),
     val preferences: BackupPreferences = BackupPreferences(),
 )
+
+/** 书保留原 id：同一台设备上恢复时，正文文件还在 `filesDir/books/<id>/`，能直接接上。 */
+@Serializable
+data class BackupBook(
+    val id: Long,
+    val title: String,
+    val author: String,
+    val language: String,
+    val source: String,
+    val sourceId: String = "",
+    val coverFile: String = "",
+    val chapterCount: Int,
+    val totalChars: Int,
+    val chapterIndex: Int = 0,
+    val chapterOffset: Int = 0,
+    val progress: Double = 0.0,
+    val readingMillis: Long = 0,
+    val addedAt: Long,
+    val lastOpenedAt: Long = 0,
+)
+
+@Serializable
+data class BackupBookChapter(val bookId: Long, val chapterIndex: Int, val title: String, val charCount: Int)
+
+@Serializable
+data class BackupBookmark(
+    val bookId: Long,
+    val chapterIndex: Int,
+    val chapterOffset: Int,
+    val excerpt: String,
+    val createdAt: Long,
+)
+
+fun BookEntity.toBackup() = BackupBook(
+    id, title, author, language, source, sourceId, coverFile, chapterCount, totalChars,
+    chapterIndex, chapterOffset, progress, readingMillis, addedAt, lastOpenedAt,
+)
+
+fun BackupBook.toEntity() = BookEntity(
+    id, title, author, language, source, sourceId, coverFile, chapterCount, totalChars,
+    chapterIndex, chapterOffset, progress, readingMillis, addedAt, lastOpenedAt,
+)
+
+fun BookChapterEntity.toBackup() = BackupBookChapter(bookId, chapterIndex, title, charCount)
+fun BackupBookChapter.toEntity() = BookChapterEntity(bookId, chapterIndex, title, charCount)
+fun BookBookmarkEntity.toBackup() = BackupBookmark(bookId, chapterIndex, chapterOffset, excerpt, createdAt)
+fun BackupBookmark.toEntity() = BookBookmarkEntity(0, bookId, chapterIndex, chapterOffset, excerpt, createdAt)
 
 // ---- 实体 <-> 备份结构映射 ----
 

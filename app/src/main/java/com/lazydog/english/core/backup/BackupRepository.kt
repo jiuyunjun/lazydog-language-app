@@ -36,6 +36,9 @@ class BackupRepository(
             spellingProgress = spellingDao.getAllProgress().map { it.toBackup() },
             spellingAttempts = spellingDao.getAllAttempts().map { it.toBackup() },
             memoryHints = database.memoryHintDao().getAllHints().map { it.toBackup() },
+            books = database.bookDao().allBooks().map { it.toBackup() },
+            bookChapters = database.bookDao().allChapters().map { it.toBackup() },
+            bookmarks = database.bookDao().allBookmarks().map { it.toBackup() },
             preferences = BackupPreferences(
                 learningGoal = prefs.learningGoal.first(),
                 topics = prefs.topics.first(),
@@ -117,6 +120,13 @@ class BackupRepository(
                 // 知识项对不上也留着：错误画像本身不依赖那条语法还在不在库里。
                 mistakeDao.insert(mistake.toEntity(mistake.itemId?.let { idMap[it] }))
             }
+            // 书：删光重插，章节和书签跟着外键级联。正文文件不在备份里，见 BackupPayload.books。
+            val bookDao = database.bookDao()
+            bookDao.clearAll()
+            payload.books.forEach { bookDao.insertBook(it.toEntity()) }
+            val bookIds = payload.books.mapTo(HashSet()) { it.id }
+            bookDao.insertChapters(payload.bookChapters.filter { it.bookId in bookIds }.map { it.toEntity() })
+            bookDao.insertBookmarks(payload.bookmarks.filter { it.bookId in bookIds }.map { it.toEntity() })
         }
 
         val p = payload.preferences
