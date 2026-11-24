@@ -21,6 +21,9 @@ import com.lazydog.english.core.data.ProgressRepository
 import com.lazydog.english.core.data.PronunciationRepository
 import com.lazydog.english.core.data.ReadingRepository
 import com.lazydog.english.core.data.ScenarioSessionRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import com.lazydog.english.core.data.UserPreferences
 import com.lazydog.english.core.data.WebReadingService
@@ -52,6 +55,12 @@ import com.lazydog.english.domain.vocabulary.WordFrequencyIndex
  * 手工组装的应用级单例。依赖关系还很浅，先不上 Hilt（ARCHITECTURE.md §2）。
  */
 class LazyDogApplication : Application() {
+
+    /**
+     * 跟着进程活的协程作用域：页面关闭时还要写完的那一下（阅读器退出时存进度和阅读时长）放这里，
+     * 页面自己的作用域在离开时已经取消了。
+     */
+    val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()

@@ -1,5 +1,6 @@
 package com.lazydog.english.core.data
 
+import com.lazydog.english.domain.books.ReaderSettings
 import android.content.Context
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
@@ -72,6 +73,8 @@ class UserPreferences(private val context: Context) {
         val MaxNewWords = intPreferencesKey("max_new_words")
         /** 老卡回填做完的词典版本（D-095）。设备上的进度，不进备份。 */
         val DictionaryBackfillVersion = intPreferencesKey("dictionary_backfill_version")
+        /** 阅读器排版设置，整份存 JSON（D-098 R2）。 */
+        val ReaderSettingsJson = stringPreferencesKey("reader_settings")
         val ReminderTime = stringPreferencesKey("reminder_time")
         val ThemeMode = stringPreferencesKey("theme_mode")
         val CopyTone = stringPreferencesKey("copy_tone")
@@ -576,6 +579,18 @@ class UserPreferences(private val context: Context) {
             it[Keys.Topics] = topics
         }
     }
+
+    val readerSettings: Flow<ReaderSettings> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ReaderSettingsJson]
+            ?.let { runCatching { readerJson.decodeFromString(ReaderSettings.serializer(), it) }.getOrNull() }
+            ?: ReaderSettings()
+    }
+
+    suspend fun saveReaderSettings(settings: ReaderSettings) {
+        context.dataStore.edit { it[Keys.ReaderSettingsJson] = readerJson.encodeToString(ReaderSettings.serializer(), settings) }
+    }
+
+    private val readerJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
     val dictionaryBackfillVersion: Flow<Int> =
         context.dataStore.data.map { it[Keys.DictionaryBackfillVersion] ?: 0 }

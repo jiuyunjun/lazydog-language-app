@@ -1837,7 +1837,7 @@
   },
   {
     "file": "app/src/main/java/com/lazydog/english/feature/study/StudyScreen.kt",
-    "text": "buildString { when (item) { is RecentStudyItem.Reading -> { append(item.category) append(\" · ${item.readingMinutes} min\") if (item.cefr.isNotBlank()) append(\" · ${item.cefr}\") if (item.newWordCount > 0) append(\" · ${item.newWordCount} 个新词\") if (item.source != ReadingRepository.SOURCE_AI) append(\" · 粘贴导入\") } is RecentStudyItem.Scenario -> { append(formatDate(item.timestamp)) append(\" · \") append(if (item.stage == \"Finished\") \"情景演练 · 已完成\" else \"情景演练 · 继续\") } is RecentStudyItem.Listening -> { append(formatDate(item.timestamp)) append(\" · ${item.sceneZh.ifBlank { \"听力\" }}\") append(\" · 播过 ${item.playCount} 次 · ${item.meaningZh}\") } } }",
+    "text": "buildString { when (item) { is RecentStudyItem.Reading -> { append(item.category) append(\" · ${item.readingMinutes} min\") if (item.cefr.isNotBlank()) append(\" · ${item.cefr}\") if (item.newWordCount > 0) append(\" · ${item.newWordCount} 个新词\") when { WebReadingSource.fromWire(item.source) != null -> append(\" · ${WebReadingSource.fromWire(item.source)!!.labelZh}\") item.source != ReadingRepository.SOURCE_AI -> append(\" · 粘贴导入\") } } is RecentStudyItem.Scenario -> { append(formatDate(item.timestamp)) append(\" · \") append(if (item.stage == \"Finished\") \"情景演练 · 已完成\" else \"情景演练 · 继续\") } is RecentStudyItem.Listening -> { append(formatDate(item.timestamp)) append(\" · ${item.sceneZh.ifBlank { \"听力\" }}\") append(\" · 播过 ${item.playCount} 次 · ${item.meaningZh}\") } } }",
     "count": 1,
     "reason": "学习目录或历史条目的导航预览，整行单击进入内容页"
   },
@@ -2578,5 +2578,113 @@
     "text": "\"还没配置 DeepSeek 密钥：填进 LocalEnv.kt 的 DEEPSEEK_API_KEY（CI 用同名 secret）再重装。\"",
     "count": 1,
     "reason": "设置/引导的字段、选项、服务名称或状态，保留表单和按钮交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookshelfScreen.kt",
+    "text": "\"书架是空的。导入手机里的 EPUB 或 TXT 电子书，中文、英文都可以。\"",
+    "count": 1,
+    "reason": "书架空状态的操作提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookshelfScreen.kt",
+    "text": "text",
+    "count": 1,
+    "reason": "导入失败原因的对话框文字；状态提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookshelfScreen.kt",
+    "text": "\"删除《${book.title}》？\"",
+    "count": 1,
+    "reason": "删除确认对话框标题"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookshelfScreen.kt",
+    "text": "book.title",
+    "count": 2,
+    "reason": "书架上的书名（封面与书名行）；导航标签，正文在阅读器里用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookshelfScreen.kt",
+    "text": "listOf( BookLanguage.fromWire(book.language).labelZh, if (book.lastOpenedAt == 0L) \"未读\" else \"读到 $percent%\", ).joinToString(\" · \")",
+    "count": 1,
+    "reason": "书的语言与阅读进度；界面元信息"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderScreen.kt",
+    "text": "if (pageIndex < 0) \"上一章\" else \"下一章\"",
+    "count": 1,
+    "reason": "翻页哨兵页的提示文字；导航提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderScreen.kt",
+    "text": "chapter.title",
+    "count": 1,
+    "reason": "页眉章节名或目录里的章节名；导航标签，正文本身用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderScreen.kt",
+    "text": "\"${pageIndex + 1} / ${pages.size}\"",
+    "count": 1,
+    "reason": "页码；界面元信息"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderScreen.kt",
+    "text": "title",
+    "count": 1,
+    "reason": "阅读器菜单里的书名或排版设置项名称；界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderScreen.kt",
+    "text": "chapterTitle",
+    "count": 1,
+    "reason": "阅读器菜单里的当前章节名；导航标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderSheets.kt",
+    "text": "chapter.title",
+    "count": 1,
+    "reason": "页眉章节名或目录里的章节名；导航标签，正文本身用交互文本"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderSheets.kt",
+    "text": "chapters.getOrNull(bookmark.chapterIndex)?.title.orEmpty()",
+    "count": 1,
+    "reason": "书签列表里的章节名；导航标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderSheets.kt",
+    "text": "bookmark.excerpt",
+    "count": 1,
+    "reason": "书签摘录，仅用于在列表里认出是哪一处；点开回到正文再交互"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderSheets.kt",
+    "text": "\"A-\"",
+    "count": 1,
+    "reason": "字号减小按钮"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderSheets.kt",
+    "text": "settings.fontSizeSp.toString()",
+    "count": 1,
+    "reason": "当前字号数值"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderSheets.kt",
+    "text": "\"A+\"",
+    "count": 1,
+    "reason": "字号增大按钮"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderSheets.kt",
+    "text": "title",
+    "count": 1,
+    "reason": "阅读器菜单里的书名或排版设置项名称；界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/ReaderSheets.kt",
+    "text": "label(option)",
+    "count": 1,
+    "reason": "排版设置选项标签（行距、主题、翻页方式等）"
   }
 ]

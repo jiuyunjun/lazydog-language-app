@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.19"
+version: "7.20"
 updated: "2026-11-24"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -46,6 +46,15 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
   - 题目校验从文章校验里抽成 `validateQuestions`，两处共用。
   - 漂移自查：依赖方向不变；来源客户端放 `core/network`、编排放 `core/data`、难度规则放 `domain/reading`；
     无新依赖；只加列的自动迁移；页面只持有状态。
+- R2 实现记录（2026-11-24）：
+  - 表按期拆：R2 只建 `books`、`book_chapters`、`book_bookmarks`（v25）；书级词表和章节替换两张表随 R4 再加。
+  - 单击按位置分（左右三成翻页、中间菜单）：交互文本本来就等多击窗口过去才报单击，所以和双击查词、三击讲句不冲突；
+    按下位置由翻页容器在 Initial 阶段旁观记录，不吃掉事件。
+  - 段首缩进用字符（中文两个全角空格，英文两个 em 空格）而不是段落样式：一页从段落中间开始时段落样式会误缩进。
+    进度偏移按这份固定拼法的显示文本算。
+  - `LazyDogApplication` 加一个 `applicationScope`，只用于页面关闭时还要写完的那一下（存进度、阅读时长）。
+  - 漂移自查：依赖方向不变（feature/books → core/data → core/books、domain/books）；不加依赖；只增表的自动迁移；
+    分页是界面排版计算，放在 feature 层；切章、进度、设置规则在 domain；全局对象只加在 `LazyDogApplication`。
 - 影响范围：新增三个包和五张表，一次只增不改的迁移；`feature/reading`、`ReadingRepository`、备份模型、
   `AI_CONTRACTS.md`（替换规划入参）、`ARCHITECTURE.md`（包结构与数据模型）都要改。按 R1～R5 分期提交，每期单独验收。
 

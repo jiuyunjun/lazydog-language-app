@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.Abc
 import androidx.compose.material.icons.outlined.ContentPaste
@@ -45,6 +46,7 @@ import com.lazydog.english.core.designsystem.appCopy
 import com.lazydog.english.core.speech.PlaybackSource
 import com.lazydog.english.core.data.ReadingJson
 import com.lazydog.english.core.data.ReadingRepository
+import com.lazydog.english.domain.reading.WebReadingSource
 import com.lazydog.english.core.database.ListeningMaterialEntity
 import java.time.Instant
 import java.time.ZoneId
@@ -99,6 +101,7 @@ fun StudyScreen(
     onProofChallengeClick: () -> Unit,
     onReadingClick: () -> Unit,
     onNativeReadingClick: () -> Unit,
+    onBooksClick: () -> Unit,
     onPasteClick: () -> Unit,
     onScenarioClick: () -> Unit,
     onScenarioSessionClick: (Long) -> Unit,
@@ -138,8 +141,9 @@ fun StudyScreen(
         StudyEntry(Icons.Outlined.Abc, "单词", "复习到期 + AI 上新", onClick = onWordsClick),
         StudyEntry(Icons.AutoMirrored.Outlined.Rule, "语法", "让 AI 讲一个", onClick = onGrammarClick),
         StudyEntry(Icons.Outlined.Edit, "自己写一句", "中译英，判完记进错题", onClick = onProductionClick),
-        StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "生成一篇定制短文", onClick = onReadingClick),
+        StudyEntry(Icons.AutoMirrored.Outlined.Article, "阅读", "VOA、新闻、百科的真文章", onClick = onReadingClick),
         StudyEntry(Icons.Outlined.Translate, "母语阅读", "中文里长出英语", onClick = onNativeReadingClick),
+        StudyEntry(Icons.AutoMirrored.Outlined.MenuBook, "读书", "导入电子书，边读边查", onClick = onBooksClick),
         StudyEntry(Icons.Outlined.Mic, "朗读", "读一句，拿反馈", onClick = onSpeakingClick),
         StudyEntry(Icons.Outlined.Headphones, "听力", "先听声音，再猜意思", onClick = onListeningClick),
         StudyEntry(Icons.Outlined.Spellcheck, "拼写", "认得不算，写得出才算", onClick = onSpellingClick),
@@ -290,7 +294,11 @@ fun StudyScreen(
                                                 append(" · ${item.readingMinutes} min")
                                                 if (item.cefr.isNotBlank()) append(" · ${item.cefr}")
                                                 if (item.newWordCount > 0) append(" · ${item.newWordCount} 个新词")
-                                                if (item.source != ReadingRepository.SOURCE_AI) append(" · 粘贴导入")
+                                                when {
+                                                    WebReadingSource.fromWire(item.source) != null ->
+                                                        append(" · ${WebReadingSource.fromWire(item.source)!!.labelZh}")
+                                                    item.source != ReadingRepository.SOURCE_AI -> append(" · 粘贴导入")
+                                                }
                                             }
                                             is RecentStudyItem.Scenario -> {
                                                 append(formatDate(item.timestamp))

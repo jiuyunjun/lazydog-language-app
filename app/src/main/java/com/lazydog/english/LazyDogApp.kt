@@ -96,6 +96,8 @@ object Routes {
     const val NativeReading = "reading/native"
     const val NativeReadingOpen = "reading/native/open/{materialId}"
     const val WordDetail = "library/word/{itemId}"
+    const val Books = "books"
+    const val BookReader = "books/read/{bookId}"
 
     /** [taskKey] 传 [DEFAULT_MODEL_KEY] 表示改的是默认模型。 */
     fun modelPick(taskKey: String) = "settings/models/$taskKey"
@@ -103,6 +105,7 @@ object Routes {
     const val DEFAULT_MODEL_KEY = "default"
 
     fun readingOpen(materialId: Long) = "reading/open/$materialId"
+    fun bookReader(bookId: Long) = "books/read/$bookId"
     fun nativeReadingOpen(materialId: Long) = "reading/native/open/$materialId"
     fun wordDetail(itemId: Long) = "library/word/$itemId"
     fun scenarioOpen(sessionId: Long) = "scenario/open/$sessionId"
@@ -230,6 +233,7 @@ private fun AppNavHost(
                 onStartProofChallenge = { navController.navigate(Routes.ProofChallenge) },
                 onStartReading = { navController.navigate(Routes.ReadingGenerate) },
                 onStartNativeReading = { navController.navigate(Routes.NativeReading) },
+                onOpenBooks = { navController.navigate(Routes.Books) },
                 onStartReadingPaste = { navController.navigate(Routes.ReadingPaste) },
                 onStartScenario = { navController.navigate(Routes.Scenario) },
                 onOpenScenario = { id -> navController.navigate(Routes.scenarioOpen(id)) },
@@ -470,6 +474,24 @@ private fun AppNavHost(
                 mode = NativeReadingMode.Open(materialId),
                 onExit = { navController.popOnce() },
                 onNextStep = openNextStep,
+            )
+        }
+
+        appScreen(Routes.Books, ask = AskPagePolicy.Disabled("书架")) {
+            com.lazydog.english.feature.books.BookshelfScreen(
+                onExit = { navController.popOnce() },
+                onOpenBook = { id -> navController.navigate(Routes.bookReader(id)) },
+            )
+        }
+
+        appScreen(
+            route = Routes.BookReader,
+            ask = AskPagePolicy.Required,
+            arguments = listOf(navArgument("bookId") { type = NavType.LongType }),
+        ) { entry ->
+            com.lazydog.english.feature.books.ReaderScreen(
+                bookId = entry.arguments?.getLong("bookId") ?: 0L,
+                onExit = { navController.popOnce() },
             )
         }
 

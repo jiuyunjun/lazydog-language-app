@@ -2,7 +2,7 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "2.7"
+version: "2.8"
 updated: "2026-11-24"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
@@ -365,6 +365,19 @@ feature/library/ScanWordsScreen ──► core/ocr/LiveTextCamera ──► doma
   生成退回"让模型自己按等级选词"。词频是让选词更准，不是学习流程的前置条件。
 - 对外只给"档"不给排名数字：第 2870 名和第 3050 名之间的差别对"这个词值不值得学"
   没有意义，报出去是假精确。
+
+### 读书（D-098 R2）
+
+- `domain/books`：书、章节、阅读位置（章节 + 章内字符偏移）、TXT 切章、阅读设置、章节显示文本与进度计算（纯 Kotlin）。
+- `core/books`：`EpubParser`（container → OPF → spine → nav/NCX 目录 → XHTML 转段落，用 JVM 的 DOM 解析，不加依赖）、
+  `TextBookParser`（BOM / UTF-8 / GB18030 认编码）、`ChapterStore`（正文按章存 `filesDir/books/<id>/<章>.txt`）。
+- `core/data/BookRepository`：导入、书架、章节正文、进度、书签、删除；页面不碰文件和 DAO。
+- 表（v25，只新增）：`books`、`book_chapters`、`book_bookmarks`；章节和书签随书级联删除。
+  书、章节目录、书签进备份并保留书 id，正文文件不进备份。
+- `feature/books`：书架、阅读器、目录/书签/排版三个底部面板。分页用 `TextMeasurer` 按显示样式整章排一次再按行切；
+  样式固定用逐行贪心断行、不断字，保证单独排一页和在整章里排出来的换行一致。
+- 阅读设置整份存 DataStore（`reader_settings`）。退出阅读器时补存进度和阅读时长用
+  `LazyDogApplication.applicationScope`（页面作用域那时已取消）。
 
 ### 网上阅读材料（D-098 R1）
 
