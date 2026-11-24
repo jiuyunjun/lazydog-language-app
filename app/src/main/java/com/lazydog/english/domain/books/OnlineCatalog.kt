@@ -7,7 +7,7 @@ package com.lazydog.english.domain.books
 enum class CatalogSource(val labelZh: String, val noteZh: String, val book: BookSource) {
     Gutenberg("古腾堡", "7 万多本英文公版书", BookSource.Gutenberg),
     Wikisource("维基文库", "中文公版作品，繁体会转成简体", BookSource.Wikisource),
-    Ao3("AO3", "作者公开发布的同人和原创，已完结的英文作品", BookSource.Ao3),
+    Ao3("AO3", "作者公开发布的同人和原创，只列已完结的作品", BookSource.Ao3),
 }
 
 /** 检索结果里的一本。[id] 是书库自己的编号或条目名，下载和去重都靠它。 */
@@ -43,6 +43,14 @@ enum class Ao3Rating(val labelZh: String, val id: Int?) {
             else -> ""
         }
     }
+}
+
+/** AO3 的作品语言。[code] 是检索参数 language_id；[All] 不加这个参数。 */
+enum class Ao3Language(val labelZh: String, val code: String?) {
+    English("英文", "en"),
+    Chinese("中文", "zh"),
+    Japanese("日文", "ja"),
+    All("全部语言", null),
 }
 
 data class CatalogResult(

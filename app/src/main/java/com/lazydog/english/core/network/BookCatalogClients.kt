@@ -1,5 +1,6 @@
 package com.lazydog.english.core.network
 
+import com.lazydog.english.domain.books.Ao3Language
 import com.lazydog.english.domain.books.Ao3Rating
 import com.lazydog.english.domain.books.CatalogEntry
 import com.lazydog.english.domain.books.CatalogResult
@@ -293,14 +294,21 @@ class WikisourceClient(private val base: String = BASE) {
 }
 
 /**
- * AO3（Archive of Our Own）：检索已完结、英文的作品，按 kudos 排；分级可选，默认全部。
- * 下载走站点官方的 EPUB 下载地址；AO3 会对自动程序限流（429），这时让用户在浏览器里下好再导入。
+ * AO3（Archive of Our Own）：检索已完结的作品，按 kudos 排；语言和分级可选。
+ *
+ * 下载要先打开作品页取官方下载链接：链接里的文件名是截短的标题加时间戳
+ * （`/downloads/304382/The_Internet_Is_Not_Just.epub?updated_at=…`），自己拼的文件名会被重定向到 404。
+ * AO3 会对自动程序限流（429），这时让用户在浏览器里下好再导入。
  */
 class Ao3Client(private val base: String = BASE) {
 
-    suspend fun search(query: String, rating: Ao3Rating = Ao3Rating.All): CatalogResult = withContext(Dispatchers.IO) {
+    suspend fun search(
+        query: String,
+        rating: Ao3Rating = Ao3Rating.All,
+        language: Ao3Language = Ao3Language.English,
+    ): CatalogResult = withContext(Dispatchers.IO) {
         val url = "$base/works/search?work_search%5Bquery%5D=${CatalogHttp.encode(query.trim())}" +
-            "&work_search%5Blanguage_id%5D=en" +
+            (language.code?.let { "&work_search%5Blanguage_id%5D=$it" } ?: "") +
             (rating.id?.let { "&work_search%5Brating_ids%5D%5B%5D=$it" } ?: "") +
             "&work_search%5Bcomplete%5D=T&work_search%5Bsort_column%5D=kudos_count"
         when (val response = CatalogHttp.get(url, op = "AO3 检索")) {
@@ -312,8 +320,14 @@ class Ao3Client(private val base: String = BASE) {
     }
 
     suspend fun download(entry: CatalogEntry): CatalogDownload = withContext(Dispatchers.IO) {
-        // 成人向作品要 view_adult=true，否则回的是"确认已成年"页面而不是文件。
-        when (val response = CatalogHttp.get("$base/downloads/${entry.id}/work.epub?view_adult=true", op = "AO3 下载")) {
+        // 成人向作品要 view_adult=true，否则回的是"确认已成年"页面而没有下载菜单。
+        val page = when (val response = CatalogHttp.get("$base/works/${entry.id}?view_adult=true", op = "AO3 作品页")) {
+            is CatalogHttp.Response.Ok -> String(response.bytes, Charsets.UTF_8)
+            is CatalogHttp.Response.Busy -> return@withContext CatalogDownload.Busy("AO3 对自动访问限流了")
+            is CatalogHttp.Response.Failed -> return@withContext CatalogDownload.Failed("打不开作品页：${response.reason}")
+        }
+        val path = epubPathFrom(page, entry.id) ?: return@withContext CatalogDownload.Busy("作品页上没找到下载链接")
+        when (val response = CatalogHttp.get(base + path, op = "AO3 下载")) {
             is CatalogHttp.Response.Ok -> if (isZip(response.bytes)) CatalogDownload.Epub(response.bytes)
             else CatalogDownload.Busy("AO3 没有给出 EPUB")
             is CatalogHttp.Response.Busy -> CatalogDownload.Busy("AO3 对自动下载限流了")
@@ -327,6 +341,13 @@ class Ao3Client(private val base: String = BASE) {
         private val BLURB = Regex("""<li id="work_(\d+)" class="work blurb group[^"]*"[^>]*>(.*?)(?=<li id="work_\d+" class="work blurb|</ol>)""", RegexOption.DOT_MATCHES_ALL)
         private val TITLE = Regex("""<h4 class="heading">\s*<a href="/works/\d+">(.*?)</a>""", RegexOption.DOT_MATCHES_ALL)
         private val AUTHOR = Regex("""<a rel="author"[^>]*>(.*?)</a>""", RegexOption.DOT_MATCHES_ALL)
+        private val DOWNLOAD_LINK = Regex("""href="(?:https://archiveofourown\.org)?(/downloads/(\d+)/[^"?]+)\.\w+(\?updated_at=\d+)?"""")
+
+        /** 作品页上任一格式的官方下载链接 → 同名的 EPUB 链接。 */
+        internal fun epubPathFrom(html: String, id: String): String? =
+            DOWNLOAD_LINK.findAll(html).firstOrNull { it.groupValues[2] == id }
+                ?.let { "${it.groupValues[1]}.epub${it.groupValues[3]}" }
+
         private val RATING = Regex("""<span class="rating-[^"]*" title="([^"]+)">""")
         private val SUMMARY = Regex("""<blockquote class="userstuff summary">(.*?)</blockquote>""", RegexOption.DOT_MATCHES_ALL)
 

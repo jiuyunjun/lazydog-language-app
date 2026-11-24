@@ -2,7 +2,7 @@
 doc: "DECISIONS.md"
 tier: "L5 过程记录"
 status: "生效"
-version: "7.22"
+version: "7.23"
 updated: "2026-11-24"
 authority: "已确认的决定（D-0xx），含对专项设计的有意偏离"
 index: "DOCS.md"
@@ -62,6 +62,8 @@ maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tool
     这是站点的明确意图，绕过去等于违背它。
   - AO3 分级：一开始只列全年龄，用户要求「不仅列全年龄」后改为默认全部分级、可按分级筛选，结果卡片标出分级；
     成人向作品的页面和下载地址带 `view_adult=true`。
+  - AO3 下载：最初自己拼 `/downloads/<id>/work.epub`，真机上 301 → 302 → 404。改为先取作品页上的官方下载链接，
+    把扩展名换成 `.epub`。加语言筛选（默认英文），中文作品可留给 R4 的母语阅读。
   - 书库下载的书记来源和书库编号（`books.source` / `sourceId`），同一本不重复下；恢复备份后可据此重新下载（尚未做自动重下）。
   - 漂移自查：依赖方向不变；客户端在 core/network、编排在 core/data、转换规则在 domain；不加依赖；无表结构变化。
 - 影响范围：新增三个包和五张表，一次只增不改的迁移；`feature/reading`、`ReadingRepository`、备份模型、

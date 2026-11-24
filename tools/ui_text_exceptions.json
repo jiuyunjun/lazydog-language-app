@@ -2770,5 +2770,11 @@
     "text": "rating.labelZh",
     "count": 1,
     "reason": "AO3 分级筛选标签；界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/books/BookCatalogScreen.kt",
+    "text": "language.labelZh",
+    "count": 1,
+    "reason": "AO3 语言筛选标签；界面标签"
   }
 ]

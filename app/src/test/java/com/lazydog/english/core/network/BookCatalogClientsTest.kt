@@ -100,6 +100,19 @@ class BookCatalogClientsTest {
     }
 
     @Test
+    fun `ao3 epub link comes from the official download links`() {
+        val html = """<li class="download"><ul class="expandable secondary">
+            <li><a href="/downloads/304382/The_Internet_Is_Not_Just.azw3?updated_at=1778035595">AZW3</a></li>
+            <li><a href="https://archiveofourown.org/downloads/304382/The_Internet_Is_Not_Just.html?updated_at=1778035595">HTML</a></li>
+            </ul></li><a href="/downloads/999/Other.epub?updated_at=1">x</a>"""
+        assertEquals(
+            "/downloads/304382/The_Internet_Is_Not_Just.epub?updated_at=1778035595",
+            Ao3Client.epubPathFrom(html, "304382"),
+        )
+        assertNull(Ao3Client.epubPathFrom("<p>Adult content warning</p>", "304382"))
+    }
+
+    @Test
     fun `traditional characters convert and others stay`() {
         val t2s = TraditionalToSimplified.parse(sequenceOf("# header", "樓 楼", "夢 梦", "紅 红", "bad line here"))
         assertEquals("红楼梦 Chapter 1", t2s.convert("紅樓夢 Chapter 1"))

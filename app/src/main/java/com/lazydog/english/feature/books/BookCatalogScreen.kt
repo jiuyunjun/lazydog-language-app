@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lazydog.english.LazyDogApplication
 import com.lazydog.english.core.data.BookCatalogService
+import com.lazydog.english.domain.books.Ao3Language
 import com.lazydog.english.domain.books.Ao3Rating
 import com.lazydog.english.domain.books.CatalogEntry
 import com.lazydog.english.domain.books.CatalogResult
@@ -78,15 +79,16 @@ fun BookCatalogScreen(onExit: () -> Unit, onOpenBook: (Long) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     var submitted by rememberSaveable { mutableStateOf("") }
     var ao3Rating by rememberSaveable { mutableStateOf(Ao3Rating.All) }
+    var ao3Language by rememberSaveable { mutableStateOf(Ao3Language.English) }
     var refresh by remember { mutableIntStateOf(0) }
     var result by remember { mutableStateOf<CatalogResult?>(null) }
     var download by remember { mutableStateOf<DownloadState?>(null) }
 
     val waitingForQuery = source == CatalogSource.Wikisource && submitted.isBlank()
-    LaunchedEffect(source, submitted, refresh, ao3Rating) {
+    LaunchedEffect(source, submitted, refresh, ao3Rating, ao3Language) {
         result = null
         if (waitingForQuery) return@LaunchedEffect
-        result = app.bookCatalogService.search(source, submitted, ao3Rating)
+        result = app.bookCatalogService.search(source, submitted, ao3Rating, ao3Language)
     }
 
     fun search(text: String) {
@@ -156,6 +158,18 @@ fun BookCatalogScreen(onExit: () -> Unit, onOpenBook: (Long) -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             )
             if (source == CatalogSource.Ao3) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Ao3Language.entries.forEach { language ->
+                        FilterChip(
+                            selected = ao3Language == language,
+                            onClick = { ao3Language = language },
+                            label = { Text(language.labelZh) },
+                        )
+                    }
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
