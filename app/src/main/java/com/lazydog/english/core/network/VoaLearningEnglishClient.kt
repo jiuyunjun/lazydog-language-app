@@ -122,7 +122,7 @@ class VoaLearningEnglishClient(
             val rest = html.substring(start)
             val end = END_MARKERS.map { rest.indexOf(it) }.filter { it > 0 }.minOrNull() ?: rest.length
             return PARAGRAPH.findAll(rest.substring(0, end))
-                .map { decode(it.groupValues[1].replace(BREAK, " ").replace(TAG, "")).replace(SPACES, " ").trim() }
+                .map { HtmlText.inline(it.groupValues[1]) }
                 .filter { it.isNotEmpty() && JUNK.none { junk -> it.equals(junk, ignoreCase = true) } }
                 .toList()
         }
@@ -130,24 +130,5 @@ class VoaLearningEnglishClient(
         private val END_MARKERS = listOf("____", "Words in This Story", "id=\"comments\"")
         private val JUNK = listOf("No media source currently available", "See comments", "Share")
         private val PARAGRAPH = Regex("""<p\b[^>]*>(.*?)</p>""", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
-        private val BREAK = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
-        private val TAG = Regex("<[^>]+>")
-        private val SPACES = Regex("""[\s ]+""")
-        private val ENTITY = Regex("""&(#?[xX]?[0-9a-zA-Z]+);""")
-        private val NAMED = mapOf(
-            "nbsp" to " ", "amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'",
-            "ldquo" to "“", "rdquo" to "”", "lsquo" to "‘", "rsquo" to "’", "mdash" to "—", "ndash" to "–",
-            "hellip" to "…",
-        )
-
-        private fun decode(text: String): String = ENTITY.replace(text) { match ->
-            val name = match.groupValues[1]
-            when {
-                name.startsWith("#x") || name.startsWith("#X") ->
-                    name.drop(2).toIntOrNull(16)?.let { String(Character.toChars(it)) } ?: match.value
-                name.startsWith("#") -> name.drop(1).toIntOrNull()?.let { String(Character.toChars(it)) } ?: match.value
-                else -> NAMED[name] ?: match.value
-            }
-        }
     }
 }
