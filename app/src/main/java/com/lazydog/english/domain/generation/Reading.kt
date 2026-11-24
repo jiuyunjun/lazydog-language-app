@@ -83,6 +83,29 @@ data class ReadingQuestion(
     val evidenceFromText: String = "",
 )
 
+/** 给现成文章出题的请求。[body] 是全文；发给模型前按 [MAX_CHARS] 截。 */
+data class ReadingQuestionRequest(
+    val title: String,
+    val body: String,
+    val learnerLevel: String,
+) {
+    /** 太长的文章只给前面一段：题目考前半篇足够，整篇发过去又慢又贵。按段截，不切半句。 */
+    fun truncated(): ReadingQuestionRequest {
+        if (body.length <= MAX_CHARS) return this
+        val kept = StringBuilder()
+        for (paragraph in body.split("\n\n")) {
+            if (kept.isNotEmpty() && kept.length + paragraph.length > MAX_CHARS) break
+            if (kept.isNotEmpty()) kept.append("\n\n")
+            kept.append(paragraph)
+        }
+        return copy(body = kept.toString())
+    }
+
+    companion object {
+        const val MAX_CHARS = 6_000
+    }
+}
+
 data class GeneratedReading(
     val title: String,
     val body: String,

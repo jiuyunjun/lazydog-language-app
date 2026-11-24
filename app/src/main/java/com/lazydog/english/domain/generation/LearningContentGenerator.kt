@@ -188,6 +188,12 @@ interface LearningContentGenerator {
         onStage: ((GenerationStage) -> Unit)? = null,
     ): GenerationResult<List<LearningSpan>>
 
+    /**
+     * 给一篇现成的文章（网上取来的，D-098 R1）出理解题。读完点「出几道题」才调用，
+     * 返回前已通过 [ReadingValidation.validateQuestions]。
+     */
+    suspend fun generateReadingQuestions(request: ReadingQuestionRequest): GenerationResult<List<ReadingQuestion>>
+
     /** 生成渐进式阅读短文，返回前已通过 ReadingValidation。 */
     suspend fun generateReading(
         request: ReadingGenerationRequest,

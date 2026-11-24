@@ -82,6 +82,7 @@ import com.lazydog.english.domain.generation.ProofSentence
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
 import com.lazydog.english.domain.generation.ReadingQuestionKind
+import com.lazydog.english.domain.generation.ReadingQuestionRequest
 import com.lazydog.english.domain.generation.ReadingTargetGrammar
 import com.lazydog.english.domain.generation.ReadingTargetWord
 import com.lazydog.english.domain.generation.ReadingValidation
@@ -819,6 +820,28 @@ class OpenAiContentGenerator(
             SUGGEST_PROMPT_VERSION,
             if (dropped > 0) listOf("$dropped 条候选没通过校验") else emptyList(),
         )
+    }
+
+    override suspend fun generateReadingQuestions(
+        request: ReadingQuestionRequest,
+    ): GenerationResult<List<ReadingQuestion>> {
+        val outcome = complete(
+            systemPrompt = SYSTEM_PROMPT,
+            userPrompt = buildReadingQuestionsPrompt(request.truncated()),
+            task = AiTask.Reading,
+            op = "出题",
+        )
+        val content = when (outcome) {
+            is Completion.Error -> return GenerationResult.Failure(outcome.reason)
+            is Completion.Content -> outcome
+        }
+        val payload = decode<ReadingQuestionsPayload>(content.text)
+            ?: return GenerationResult.Failure("AI 返回的不是预期的 JSON 结构")
+        val questions = payload.comprehensionQuestions.map { it.toDomain() }
+        // 依据句按全文校验：截断只影响发给模型的部分，依据句一定落在那一部分里。
+        val checked = ReadingValidation.validateQuestions(request.body, questions)
+        checked.failure?.let { return GenerationResult.Failure("题目没通过检查：$it") }
+        return GenerationResult.Success(questions, content.model, READING_QUESTIONS_PROMPT_VERSION, checked.warnings)
     }
 
     override suspend fun chooseDictionarySenses(
@@ -1749,7 +1772,19 @@ class OpenAiContentGenerator(
         val explanationZh: String = "",
         val kind: String = "",
         val evidenceFromText: String = "",
-    )
+    ) {
+        fun toDomain() = ReadingQuestion(
+            promptZh = promptZh.trim(),
+            options = options,
+            answerIndex = answerIndex,
+            explanationZh = explanationZh.trim(),
+            kind = ReadingQuestionKind.normalize(kind),
+            evidenceFromText = evidenceFromText.trim(),
+        )
+    }
+
+    @Serializable
+    private data class ReadingQuestionsPayload(val comprehensionQuestions: List<ReadingQuestionPayload> = emptyList())
 
     @Serializable
     private data class ReadingPayload(
@@ -2381,6 +2416,7 @@ class OpenAiContentGenerator(
         const val WORDS_PROMPT_VERSION = 9
         const val WORD_EXPLANATION_PROMPT_VERSION = 6
         const val READING_PROMPT_VERSION = 4
+        const val READING_QUESTIONS_PROMPT_VERSION = 1
         const val NATIVE_READING_PROMPT_VERSION = 4
         const val NATIVE_NEWS_PROMPT_VERSION = 1
         const val NATIVE_NEWS_TRANSLATE_PROMPT_VERSION = 1
@@ -3359,17 +3395,7 @@ class OpenAiContentGenerator(
             appendLine("最多引入 ${request.maxNewWords} 个略高于当前水平的新词。")
             appendLine("targetVocabulary 里列出所有复习词（role=\"review\"）和引入的新词（role=\"new\"），")
             appendLine("exampleFromText 必须是正文里的原句；targetGrammar 的 exampleFromText 同样必须逐字来自正文。")
-            appendLine("出 3~4 道中文单选题，选项不重复，answerIndex 从 0 开始。题目 kind 分三种：")
-            appendLine("每题给 3~4 个选项，只有一个被正文和语境支持；干扰项来自合理误读，" +
-                "不用「以上都对」，不靠选项长短或原文关键词重复暗示答案。explanationZh 说明正文依据。")
-            appendLine("- \"${ReadingQuestionKind.Gist}\"：读懂大意或细节就能答。")
-            appendLine("- \"${ReadingQuestionKind.Form}\"：问某处为什么用这个形式（时态、语态、非谓语、比较级、" +
-                "冠词、介词等），比如\"这句为什么用 have been coming 而不是 come\"。")
-            appendLine("- \"${ReadingQuestionKind.Reference}\"：问某个代词或指代成分具体指什么。")
-            appendLine("其中必须至少有一道 ${ReadingQuestionKind.Form} 或 ${ReadingQuestionKind.Reference}：" +
-                "这个学习者词汇量够、但习惯靠认词猜大意，只出大意题练不到他真正缺的解析能力。")
-            appendLine("每道题都给 evidenceFromText：从正文逐字照抄与题目最相关的完整一句，让学习者作答前知道该看哪里。")
-            appendLine("form/reference 题绝对不能留空；gist 题只有在确实考查全文、找不到单句依据时才可留空字符串。")
+            appendQuestionRules()
             appendLine("输出前逐项自查：所有复习词确实在 body；所有 exampleFromText / evidenceFromText 都从最终 body 逐字复制；")
             appendLine("readerPayoff 与标题不同；至少一道 form/reference 题。不要先写这些字段再回头改 body。")
             appendLine("输出 JSON schema：")
@@ -3623,6 +3649,40 @@ class OpenAiContentGenerator(
             }
             appendLine("term 原样抄候选里的词，index 是义项序号。")
             appendLine("""输出 JSON schema：{"picks":[{"term":"...","index":0}]}""")
+        }
+
+        /**
+         * 理解题的出题要求。AI 写文章时随文出题和网上文章读完按需出题（D-098 R1）共用，
+         * 两边的题型、依据句和"至少一道形式/指代题"口径必须一致。
+         */
+        private fun StringBuilder.appendQuestionRules() {
+            appendLine("出 3~4 道中文单选题，选项不重复，answerIndex 从 0 开始。题目 kind 分三种：")
+            appendLine("每题给 3~4 个选项，只有一个被正文和语境支持；干扰项来自合理误读，" +
+                "不用「以上都对」，不靠选项长短或原文关键词重复暗示答案。explanationZh 说明正文依据。")
+            appendLine("- \"${ReadingQuestionKind.Gist}\"：读懂大意或细节就能答。")
+            appendLine("- \"${ReadingQuestionKind.Form}\"：问某处为什么用这个形式（时态、语态、非谓语、比较级、" +
+                "冠词、介词等），比如\"这句为什么用 have been coming 而不是 come\"。")
+            appendLine("- \"${ReadingQuestionKind.Reference}\"：问某个代词或指代成分具体指什么。")
+            appendLine("其中必须至少有一道 ${ReadingQuestionKind.Form} 或 ${ReadingQuestionKind.Reference}：" +
+                "这个学习者词汇量够、但习惯靠认词猜大意，只出大意题练不到他真正缺的解析能力。")
+            appendLine("每道题都给 evidenceFromText：从正文逐字照抄与题目最相关的完整一句，让学习者作答前知道该看哪里。")
+            appendLine("form/reference 题绝对不能留空；gist 题只有在确实考查全文、找不到单句依据时才可留空字符串。")
+        }
+
+        internal fun buildReadingQuestionsPrompt(request: ReadingQuestionRequest): String = buildString {
+            appendLine("下面是一篇真实的英文文章（不是为学习者写的），读者是水平 ${request.learnerLevel} 的中文母语学习者，他刚读完。")
+            appendLine("<title>${promptText(request.title)}</title>")
+            appendLine("<article>")
+            appendLine(promptText(request.body))
+            appendLine("</article>")
+            appendLine("只出理解题，不改写、不总结文章。题目只考这篇文章里写了的内容，不考常识。")
+            appendQuestionRules()
+            appendLine("输出前自查：每个 evidenceFromText 都从 <article> 里逐字复制；至少一道 form/reference 题。")
+            appendLine("输出 JSON schema：")
+            appendLine(
+                """{"comprehensionQuestions":[{"kind":"form","promptZh":"...","options":["..."],""" +
+                    """"answerIndex":0,"explanationZh":"...","evidenceFromText":"..."}]}""",
+            )
         }
 
         internal fun buildSuggestTargetsPrompt(request: LearningTargetRequest): String = buildString {

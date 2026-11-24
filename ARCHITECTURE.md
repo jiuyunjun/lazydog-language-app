@@ -2,8 +2,8 @@
 doc: "ARCHITECTURE.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "2.6"
-updated: "2026-11-20"
+version: "2.7"
+updated: "2026-11-24"
 authority: "架构硬约束、分层与依赖方向、包结构、数据模型、复习调度、服务与密钥"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -365,6 +365,18 @@ feature/library/ScanWordsScreen ──► core/ocr/LiveTextCamera ──► doma
   生成退回"让模型自己按等级选词"。词频是让选词更准，不是学习流程的前置条件。
 - 对外只给"档"不给排名数字：第 2870 名和第 3050 名之间的差别对"这个词值不值得学"
   没有意义，报出去是假精确。
+
+### 网上阅读材料（D-098 R1）
+
+日常阅读默认从网上取真实文章，AI 写一篇是次要入口（`读书与网络阅读DESIGN.md` §2）。
+
+- 来源客户端在 `core/network`：`VoaLearningEnglishClient`（栏目 RSS + 文章页 `div.wsw` 正文）、
+  `SimpleWikipediaClient`（MediaWiki API）；英文新闻复用 `NewsFeed` + `NewsArticleLoader`（美国版，需搜索服务密钥）。
+  每个来源单独失败，不影响别的来源。
+- `core/data/WebReadingService` 负责列表、打开（抓正文 → 估难度 → 存库），页面只持有状态。
+- 文章存在 `reading_materials`，`source` 记 `voa` / `news` / `wiki`；v24 新增 `sourceUrl`、`attribution`、
+  `difficulty` 三列（都有默认值，自动迁移）。同一地址只存一份。
+- 难度：`domain/reading/ReadingDifficulty` 按生词词次比例分三档，排名取内置词典，舒适区取能力窗口中点。
 
 ### 内置词典（DictionaryLookup，D-095）
 

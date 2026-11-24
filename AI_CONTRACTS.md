@@ -2,8 +2,8 @@
 doc: "AI_CONTRACTS.md"
 tier: "L3 技术契约"
 status: "生效"
-version: "12.6"
-updated: "2026-11-20"
+version: "12.7"
+updated: "2026-11-24"
 authority: "AI 调用边界、提示词与结构化输出契约、本地校验、失败处理"
 index: "DOCS.md"
 maintenance: "改本文须同步 DOCS.md 的版本表，校验命令 python tools/check_docs.py"
@@ -364,6 +364,18 @@ D-078（2026-10-28）：提问提示版本为 3，增加 `Pronunciation` 上下�
 
 分成两次调用而不是一次到底，是因为两者的失败方式不一样：候选给歪了是"再说一遍就行"，
 学习卡写坏了是"这一张不要"。混在一次里用户只能整体重来。
+
+### 网上文章按需出题（D-098 R1）
+
+日常阅读的文章改从网上取（VOA、新闻原文、简明维基），不再自带题目。读完点「出几道题」才调用
+`generateReadingQuestions(ReadingQuestionRequest)`，走 `AiTask.Reading`。
+
+- 入参：`title`、`body`（全文）、`learnerLevel`。发给模型前按段截到 6000 字符以内，不切半句。
+- 提示词把文章放在 `<article>` 标签里，说明这是真实文章、只出题不改写；出题要求和 AI 写文章时随文出题
+  **共用同一段**（`appendQuestionRules`），题型、依据句、"至少一道形式题或指代题"口径一致。
+- 输出：`{"comprehensionQuestions":[...]}`，字段同 §4 的理解题。
+- 本地校验：`ReadingValidation.validateQuestions`，按**全文**核对依据句；不通过整次失败，不给半套题。
+  通过的题写回这篇材料，下次打开直接有。
 
 ### 从词典义项里选（D-095）
 

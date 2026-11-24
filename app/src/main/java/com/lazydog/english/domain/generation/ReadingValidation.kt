@@ -113,9 +113,23 @@ object ReadingValidation {
         }
 
         // 理解题结构。
-        if (reading.comprehensionQuestions.isEmpty()) return fail("没有理解题")
-        if (reading.comprehensionQuestions.size > MAX_QUESTIONS) return fail("理解题太多")
-        for ((index, question) in reading.comprehensionQuestions.withIndex()) {
+        val questions = validateQuestions(reading.body, reading.comprehensionQuestions)
+        questions.failure?.let { return fail(it) }
+        warnings.addAll(questions.warnings)
+
+        return Outcome(failure = null, warnings = warnings)
+    }
+
+    /**
+     * 理解题的结构校验。AI 写文章时随文附带的题、以及网上文章读完按需出的题（D-098 R1）走同一套：
+     * 题干、选项数、不重复、答案在范围内；形式题和指代题的原文依据必须真的在正文里；
+     * 至少一道形式题或指代题。
+     */
+    fun validateQuestions(body: String, questions: List<ReadingQuestion>): Outcome {
+        val warnings = mutableListOf<String>()
+        if (questions.isEmpty()) return fail("没有理解题")
+        if (questions.size > MAX_QUESTIONS) return fail("理解题太多")
+        for ((index, question) in questions.withIndex()) {
             val label = "第 ${index + 1} 题"
             if (question.promptZh.isBlank()) return fail("$label 缺少题干")
             if (question.options.size !in 2..5) return fail("$label 选项数量不对")
@@ -127,17 +141,15 @@ object ReadingValidation {
                 if (question.evidenceFromText.isBlank()) {
                     return fail("$label 是${ReadingQuestionKind.labelZh(question.kind)}题却没给原文依据")
                 }
-                if (!bodyContainsNormalized(reading.body, question.evidenceFromText)) {
+                if (!bodyContainsNormalized(body, question.evidenceFromText)) {
                     return fail("$label 的原文依据不是正文内容")
                 }
             }
         }
-
         // 至少一道题必须把人赶回原文看形式，否则整篇又变成"靠认词猜大意"。
-        if (reading.comprehensionQuestions.none { it.kind in ReadingQuestionKind.anchored }) {
+        if (questions.none { it.kind in ReadingQuestionKind.anchored }) {
             return fail("缺少形式题或指代题：全是大意题，靠猜词就能做对")
         }
-
         return Outcome(failure = null, warnings = warnings)
     }
 

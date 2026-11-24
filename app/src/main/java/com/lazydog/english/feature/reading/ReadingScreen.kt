@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -50,6 +53,8 @@ import com.lazydog.english.core.designsystem.SpeakButton
 import com.lazydog.english.core.ask.ProvideAskContext
 import com.lazydog.english.core.data.ReadingJson
 import com.lazydog.english.core.data.ReadingRepository
+import com.lazydog.english.core.data.WebReadingService
+import com.lazydog.english.core.database.ReadingMaterialEntity
 import com.lazydog.english.core.data.displayPattern
 import com.lazydog.english.core.designsystem.InteractiveEnglishText
 import com.lazydog.english.core.designsystem.InteractiveTextHint
@@ -70,6 +75,10 @@ import com.lazydog.english.domain.generation.ReadingVoice
 import com.lazydog.english.domain.generation.ReadingGenerationRequest
 import com.lazydog.english.domain.generation.ReadingQuestion
 import com.lazydog.english.domain.generation.ReadingQuestionKind
+import com.lazydog.english.domain.generation.ReadingQuestionRequest
+import com.lazydog.english.domain.reading.ReadingDifficulty
+import com.lazydog.english.domain.reading.WebReadingCard
+import com.lazydog.english.domain.reading.WebReadingSource
 import com.lazydog.english.domain.generation.ReadingTargetWord
 import com.lazydog.english.domain.generation.ReadingValidation
 import com.lazydog.english.domain.planning.DailyStep
@@ -97,9 +106,38 @@ private data class MaterialView(
     val completed: Boolean,
     val liked: Boolean,
     val saved: Boolean,
+    /** 网上取来的文章的原文地址和出处（D-098 R1）；AI 写的、粘贴的为空。 */
+    val sourceUrl: String = "",
+    val attribution: String = "",
+    /** 本地估的难度（`ReadingDifficulty.Level` 的 name）。 */
+    val difficulty: String = "",
+) {
+    val webSource: WebReadingSource? get() = WebReadingSource.fromWire(source)
+}
+
+private fun ReadingMaterialEntity.toView() = MaterialView(
+    id = id,
+    title = title,
+    body = body,
+    readerPayoff = readerPayoff,
+    cefr = estimatedCefr,
+    source = source,
+    targetWords = ReadingJson.decodeWords(targetWordsJson),
+    questions = ReadingJson.decodeQuestions(questionsJson),
+    completed = completed,
+    liked = liked,
+    saved = saved,
+    sourceUrl = sourceUrl,
+    attribution = attribution,
+    difficulty = difficulty,
 )
 
 private sealed interface ReadingPhase {
+    /** 网上文章列表，日常阅读的默认入口（D-098 R1）。 */
+    data object Feed : ReadingPhase
+    /** 点了一篇，正在抓正文。 */
+    data class Opening(val title: String) : ReadingPhase
+    /** 让 AI 按主题写一篇（次要入口）。 */
     data object Setup : ReadingPhase
     data object PasteInput : ReadingPhase
     data object Generating : ReadingPhase
@@ -131,7 +169,7 @@ fun ReadingScreen(
     var phase by remember {
         mutableStateOf<ReadingPhase>(
             when (mode) {
-                ReadingMode.Generate -> ReadingPhase.Setup
+                ReadingMode.Generate -> ReadingPhase.Feed
                 ReadingMode.Paste -> ReadingPhase.PasteInput
                 is ReadingMode.Open -> ReadingPhase.Loading
             },
@@ -147,22 +185,50 @@ fun ReadingScreen(
             phase = if (entity == null) {
                 ReadingPhase.Failed("找不到这篇材料，可能已被删除")
             } else {
-                ReadingPhase.Viewing(
-                    MaterialView(
-                        id = entity.id,
-                        title = entity.title,
-                        body = entity.body,
-                        readerPayoff = entity.readerPayoff,
-                        cefr = entity.estimatedCefr,
-                        source = entity.source,
-                        targetWords = ReadingJson.decodeWords(entity.targetWordsJson),
-                        questions = ReadingJson.decodeQuestions(entity.questionsJson),
-                        completed = entity.completed,
-                        liked = entity.liked,
-                        saved = entity.saved,
-                    ),
-                )
+                ReadingPhase.Viewing(entity.toView())
             }
+        }
+    }
+
+    /** 点了一篇网上文章：抓正文、估难度、存库，然后打开（D-098 R1）。 */
+    fun openWeb(card: WebReadingCard) {
+        phase = ReadingPhase.Opening(card.title)
+        scope.launch {
+            phase = when (val opened = app.webReadingService.open(card)) {
+                is WebReadingService.Opened.Failure -> ReadingPhase.Failed(opened.reason)
+                is WebReadingService.Opened.Success -> readingRepo.get(opened.materialId)
+                    ?.let { ReadingPhase.Viewing(it.toView()) }
+                    ?: ReadingPhase.Failed("存好的文章没读出来")
+            }
+        }
+    }
+
+    /** 网上文章读完才按需出题：题目只为这一篇生成一次，存回去，下次打开直接有。 */
+    var questionsLoading by remember { mutableStateOf(false) }
+    var questionsError by remember { mutableStateOf<String?>(null) }
+    fun generateQuestions(material: MaterialView) {
+        if (questionsLoading) return
+        questionsLoading = true
+        questionsError = null
+        scope.launch {
+            val result = app.contentGenerator.generateReadingQuestions(
+                ReadingQuestionRequest(
+                    title = material.title,
+                    body = material.body,
+                    learnerLevel = app.userPreferences.readingLevelDescription.first(),
+                ),
+            )
+            when (result) {
+                is GenerationResult.Failure -> questionsError = result.reason
+                is GenerationResult.Success -> {
+                    readingRepo.saveQuestions(material.id, result.data)
+                    val current = (phase as? ReadingPhase.Viewing)?.material
+                    if (current?.id == material.id) {
+                        phase = ReadingPhase.Viewing(current.copy(questions = result.data))
+                    }
+                }
+            }
+            questionsLoading = false
         }
     }
 
@@ -285,7 +351,11 @@ fun ReadingScreen(
             TopAppBar(
                 title = { Text("阅读") },
                 navigationIcon = {
-                    IconButton(onClick = requestExit) {
+                    // 从「让 AI 写一篇」那页返回，回到文章列表，而不是直接退出阅读。
+                    IconButton(onClick = {
+                        if (mode == ReadingMode.Generate && phase == ReadingPhase.Setup) phase = ReadingPhase.Feed
+                        else requestExit()
+                    }) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                     }
                 },
@@ -299,6 +369,18 @@ fun ReadingScreen(
                 .padding(padding),
         ) {
             when (val p = phase) {
+                ReadingPhase.Feed -> WebReadingFeedView(
+                    onOpen = ::openWeb,
+                    onAiWrite = { phase = ReadingPhase.Setup },
+                )
+                is ReadingPhase.Opening -> CenterColumn {
+                    CircularProgressIndicator()
+                    Text(
+                        text = "正在取这篇的原文…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 ReadingPhase.Setup -> SetupView(onGenerate = ::generate)
                 ReadingPhase.PasteInput -> PasteView(onSave = ::savePasted)
                 ReadingPhase.Generating ->
@@ -312,7 +394,7 @@ fun ReadingScreen(
                         textAlign = TextAlign.Center,
                     )
                     if (mode == ReadingMode.Generate) {
-                        Button(onClick = { phase = ReadingPhase.Setup }) { Text("回去重试") }
+                        Button(onClick = { phase = ReadingPhase.Feed }) { Text("回到文章列表") }
                     }
                     TextButton(onClick = onExit) { Text("退出") }
                 }
@@ -320,6 +402,9 @@ fun ReadingScreen(
                     material = p.material,
                     onNextStep = onNextStep,
                     onExit = onExit,
+                    questionsLoading = questionsLoading,
+                    questionsError = questionsError,
+                    onGenerateQuestions = { generateQuestions(p.material) },
                     onQuestionAnswered = { question, selectedIndex ->
                         askQuestionContext = question.toAskContext(selectedIndex, p.material)
                     },
@@ -335,6 +420,12 @@ fun ReadingScreen(
                             p.material.targetWords.filter { it.role == "review" }.forEach { target ->
                                 vocab.firstOrNull { it.detail.term.equals(target.term, ignoreCase = true) }
                                     ?.let { app.knowledgeRepository.recordExposure(it.item.id, "reading") }
+                            }
+                            // 网上文章没有指定的复习词：词库里在正文中出现过的词，各记一次语境遇见。
+                            if (p.material.webSource != null) {
+                                val words = WORD_PATTERN.findAll(p.material.body).mapTo(HashSet()) { it.value.lowercase() }
+                                vocab.filter { it.detail.term.lowercase() in words }
+                                    .forEach { app.knowledgeRepository.recordExposure(it.item.id, "reading") }
                             }
                         }
                     },
@@ -528,6 +619,9 @@ private fun MaterialContent(
     onExit: () -> Unit,
     onQuestionAnswered: (ReadingQuestion, Int) -> Unit,
     onQuestionsCompleted: () -> Unit,
+    questionsLoading: Boolean = false,
+    questionsError: String? = null,
+    onGenerateQuestions: () -> Unit = {},
 ) {
     val firstQuestion = remember(material.id, material.questions) {
         material.questions.firstOrNull { it.kind == ReadingQuestionKind.Gist }
@@ -553,7 +647,14 @@ private fun MaterialContent(
         InteractiveEnglishText(material.title, style = MaterialTheme.typography.headlineSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (material.cefr.isNotBlank()) Tag("难度 ${material.cefr}")
-            Tag(if (material.source == ReadingRepository.SOURCE_AI) "AI 定制" else "粘贴导入")
+            ReadingDifficulty.Level.entries.firstOrNull { it.name == material.difficulty }?.let { Tag("对你${it.labelZh}") }
+            Tag(
+                when {
+                    material.webSource != null -> material.webSource!!.labelZh
+                    material.source == ReadingRepository.SOURCE_AI -> "AI 定制"
+                    else -> "粘贴导入"
+                },
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SpeakButton(PlaybackSource.sentence(material.body), contentDescription = "朗读全文")
@@ -563,6 +664,35 @@ private fun MaterialContent(
             text = material.body,
             style = MaterialTheme.typography.bodyLarge.copy(lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.3),
         )
+        if (material.sourceUrl.isNotBlank()) SourceLine(material)
+
+        // 网上文章不自带题目：读完再决定做不做（D-098 R1，AI 只在这里按需出题）。
+        if (material.webSource != null && material.questions.isEmpty() && !exercisesCompleted) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onGenerateQuestions,
+                    enabled = !questionsLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (questionsLoading) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text("正在出题…", modifier = Modifier.padding(start = 8.dp))
+                    } else {
+                        Text("读完了，出几道题")
+                    }
+                }
+                questionsError?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+                TextButton(
+                    onClick = {
+                        exercisesCompleted = true
+                        onQuestionsCompleted()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("读完了，不做题") }
+            }
+        }
 
         if (firstQuestion != null) {
             Text("先确认一件事", style = MaterialTheme.typography.titleMedium)
@@ -603,7 +733,7 @@ private fun MaterialContent(
             }
         }
 
-        if (material.source == ReadingRepository.SOURCE_AI && exercisesCompleted) {
+        if ((material.source == ReadingRepository.SOURCE_AI || material.webSource != null) && exercisesCompleted) {
             ReadingFeedback(material)
         }
 
@@ -617,6 +747,28 @@ private fun MaterialContent(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
+    }
+}
+
+/** 正文里的英文词，读完时拿来和词库对照。 */
+private val WORD_PATTERN = Regex("[A-Za-z]+")
+
+/** 出处一行：「来自 VOA Learning English · 查看原文」。原文在系统浏览器里打开。 */
+@Composable
+private fun SourceLine(material: MaterialView) {
+    val context = LocalContext.current
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(
+            text = "来自 ${material.attribution.ifBlank { material.webSource?.labelZh.orEmpty() }}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = {
+            runCatching {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(material.sourceUrl)))
+            }
+        }) { Text("查看原文") }
     }
 }
 

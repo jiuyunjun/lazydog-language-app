@@ -1254,6 +1254,54 @@
     "reason": "界面标签、操作提示或状态；不是供查词讲句的学习正文"
   },
   {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "it",
+    "count": 1,
+    "reason": "按需出题失败的错误提示（D-098 R1）；状态文字，不是学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/ReadingScreen.kt",
+    "text": "\"来自 ${material.attribution.ifBlank { material.webSource?.labelZh.orEmpty() }}\"",
+    "count": 1,
+    "reason": "文章出处行（D-098 R1）；来源名称不是学习正文"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/WebReadingFeed.kt",
+    "text": "option.labelZh",
+    "count": 1,
+    "reason": "来源页签名称（VOA 慢速英语 / 新闻原文 / 简明维基）；界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/WebReadingFeed.kt",
+    "text": "\"英文关键词，比如 volcano；留空随机来一批\"",
+    "count": 1,
+    "reason": "维基检索框的占位提示；操作提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/WebReadingFeed.kt",
+    "text": "current.failure",
+    "count": 1,
+    "reason": "列表加载失败的原因（连不上、没配密钥等）；状态文字"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/WebReadingFeed.kt",
+    "text": "\"让 AI 按主题写一篇\"",
+    "count": 1,
+    "reason": "次要入口按钮文字；操作提示"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/WebReadingFeed.kt",
+    "text": "label(option)",
+    "count": 1,
+    "reason": "栏目或新闻分类的筛选标签；界面标签"
+  },
+  {
+    "file": "app/src/main/java/com/lazydog/english/feature/reading/WebReadingFeed.kt",
+    "text": "meta",
+    "count": 1,
+    "reason": "文章卡片的栏目、时间、读过状态；界面元信息，英文标题和引子另用交互文本"
+  },
+  {
     "file": "app/src/main/java/com/lazydog/english/feature/scenario/ScenarioScreen.kt",
     "text": "\"$number ${item.titleZh}\"",
     "count": 1,

@@ -400,6 +400,44 @@ class OpenAiContentGeneratorTest {
         exampleEn = "She runs a small bakery.",
     )
 
+    private val webArticle = com.lazydog.english.domain.generation.ReadingQuestionRequest(
+        title = "The Open Boat",
+        body = "Four men sat in a small boat.\n\nThey had been rowing for hours, and they were tired.",
+        learnerLevel = "B1",
+    )
+
+    @Test
+    fun `reading questions for a web article are validated against the article`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody(
+                    """{"comprehensionQuestions":[{"kind":"form","promptZh":"为什么用 had been rowing？","options":["持续到过去某时","现在还在划"],""" +
+                        """"answerIndex":0,"explanationZh":"过去完成进行时","evidenceFromText":"They had been rowing for hours, and they were tired."}]}""",
+                ),
+            ),
+        )
+
+        val result = generator().generateReadingQuestions(webArticle) as GenerationResult.Success
+
+        assertEquals(1, result.data.size)
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body.contains("Four men sat in a small boat."))
+    }
+
+    @Test
+    fun `reading questions with invented evidence are rejected`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                chatBody(
+                    """{"comprehensionQuestions":[{"kind":"reference","promptZh":"they 指谁？","options":["四个人","鲨鱼"],""" +
+                        """"answerIndex":0,"explanationZh":"","evidenceFromText":"The sharks were waiting."}]}""",
+                ),
+            ),
+        )
+
+        assertTrue(generator().generateReadingQuestions(webArticle) is GenerationResult.Failure)
+    }
+
     @Test
     fun `sense choice separates explicit none from missing answers`() = runBlocking {
         server.enqueue(
